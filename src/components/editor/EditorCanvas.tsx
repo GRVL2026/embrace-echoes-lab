@@ -62,7 +62,23 @@ export function EditorCanvas() {
     return null;
   }, [state.doors, state.rooms, state.zoom]);
 
-  // Convert screen coords to world coords (cm)
+  // Find pillar under a world point
+  const findPillarAtPoint = useCallback((world: Point): Pillar | null => {
+    for (const pillar of state.pillars) {
+      const dx = world.x - pillar.position.x;
+      const dy = world.y - pillar.position.y;
+      if (pillar.shape === "round") {
+        const r = pillar.width / 2;
+        if (dx * dx + dy * dy <= r * r + 100) return pillar;
+      } else {
+        const hw = pillar.width / 2 + 5;
+        const hd = pillar.depth / 2 + 5;
+        if (Math.abs(dx) <= hw && Math.abs(dy) <= hd) return pillar;
+      }
+    }
+    return null;
+  }, [state.pillars]);
+
   const screenToWorld = useCallback(
     (sx: number, sy: number): Point => {
       const canvas = canvasRef.current;

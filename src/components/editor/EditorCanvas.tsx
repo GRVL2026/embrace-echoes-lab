@@ -531,6 +531,29 @@ export function EditorCanvas() {
     }
   };
 
+  // Dimension edit handler
+  const handleDimensionConfirm = (newValueCm: number) => {
+    if (!editingDimension || newValueCm <= 0) {
+      setEditingDimension(null);
+      return;
+    }
+    const room = state.rooms.find((r) => r.id === editingDimension.roomId);
+    if (!room) { setEditingDimension(null); return; }
+    const i = editingDimension.edgeIndex;
+    const p = room.points[i];
+    const next = room.points[(i + 1) % room.points.length];
+    const dx = next.x - p.x, dy = next.y - p.y;
+    const oldLen = Math.sqrt(dx * dx + dy * dy);
+    if (oldLen === 0) { setEditingDimension(null); return; }
+    const scale = newValueCm / oldLen;
+    const newNext = { x: p.x + dx * scale, y: p.y + dy * scale };
+    const snapped = snapPoint(newNext);
+    const newPoints = [...room.points];
+    newPoints[(i + 1) % room.points.length] = snapped;
+    dispatch({ type: "UPDATE_ROOM", id: room.id, room: { points: newPoints } });
+    setEditingDimension(null);
+  };
+
   // Door dialog handlers
   const handleDoorConfirm = (result: { width: number; positionRatio: number; openDirection: Door["openDirection"]; openDirectionRight?: Door["openDirection"]; openSide: Door["openSide"]; leafCount: Door["leafCount"] }) => {
     if (!doorDialog) return;

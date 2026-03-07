@@ -4,10 +4,59 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Upload, Package, Play, Trash2, Check, X } from "lucide-react";
+import { Upload, Package, Play, Trash2, Check, X, FileSpreadsheet } from "lucide-react";
 import type { GameEquipment, CatalogJSON } from "@/types/equipment";
 import { DEFAULT_SAFETY_ZONE } from "@/types/equipment";
 import { autoPlaceEquipment } from "@/lib/placement";
+
+/** Parse a CSV string into GameEquipment[] */
+function parseCSV(text: string): GameEquipment[] {
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+  if (lines.length < 2) throw new Error("Le CSV doit contenir au moins un en-tête et une ligne de données");
+
+  // Parse header
+  const headers = lines[0].split(/[;,\t]/).map(h => h.trim().toLowerCase());
+  const nameIdx = headers.findIndex(h => ["name", "nom"].includes(h));
+  const catIdx = headers.findIndex(h => ["category", "catégorie", "categorie", "cat"].includes(h));
+  const wIdx = headers.findIndex(h => ["width", "largeur", "w"].includes(h));
+  const dIdx = headers.findIndex(h => ["depth", "profondeur", "d"].includes(h));
+  const hIdx = headers.findIndex(h => ["height", "hauteur", "h"].includes(h));
+  const szIdx = headers.findIndex(h => ["safetyzone", "safety_zone", "zone_securite", "securite"].includes(h));
+  const colorIdx = headers.findIndex(h => ["color", "couleur"].includes(h));
+  const iconIdx = headers.findIndex(h => ["icon", "icone", "emoji"].includes(h));
+  const pmrIdx = headers.findIndex(h => ["pmraccessible", "pmr", "accessible"].includes(h));
+  const modelIdx = headers.findIndex(h => ["model3d", "model", "modele3d", "modele", "glb"].includes(h));
+
+  if (nameIdx === -1) throw new Error("Colonne 'name' (ou 'nom') requise dans le CSV");
+
+  // Detect separator used in data lines
+  const separator = lines[0].includes('\t') ? '\t' : lines[0].includes(';') ? ';' : ',';
+
+  const items: GameEquipment[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(separator).map(c => c.trim());
+    const name = cols[nameIdx] || `Jeu ${i}`;
+    if (!name) continue;
+
+    const pmrRaw = pmrIdx >= 0 ? cols[pmrIdx]?.toLowerCase() : "";
+    items.push({
+      id: crypto.randomUUID(),
+      name,
+      category: catIdx >= 0 ? (cols[catIdx] || "autre") : "autre",
+      width: wIdx >= 0 ? (Number(cols[wIdx]) || 100) : 100,
+      depth: dIdx >= 0 ? (Number(cols[dIdx]) || 100) : 100,
+      height: hIdx >= 0 ? (Number(cols[hIdx]) || 200) : 200,
+      safetyZone: szIdx >= 0 ? (Number(cols[szIdx]) || DEFAULT_SAFETY_ZONE) : DEFAULT_SAFETY_ZONE,
+      color: colorIdx >= 0 ? cols[colorIdx] || undefined : undefined,
+      icon: iconIdx >= 0 ? cols[iconIdx] || undefined : undefined,
+      pmrAccessible: ["true", "oui", "1", "yes"].includes(pmrRaw),
+      model3d: modelIdx >= 0 ? cols[modelIdx] || undefined : undefined,
+    });
+  }
+
+  if (items.length === 0) throw new Error("Aucun jeu trouvé dans le CSV");
+  return items;
+}
 
 // Color palette for equipment categories
 const CATEGORY_COLORS: Record<string, string> = {
@@ -30,20 +79,27 @@ export function CatalogPanel() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleImportCatalog = (file: File) => {
+  const handleImportFile = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const json = JSON.parse(e.target?.result as string);
+        const text = e.target?.result as string;
         let items: GameEquipment[] = [];
 
-        // Support both { catalog: [...] } and direct array
-        if (Array.isArray(json)) {
-          items = json;
-        } else if (json.catalog && Array.isArray(json.catalog)) {
-          items = json.catalog;
+        const isCSV = file.name.toLowerCase().endsWith(".csv");
+
+        if (isCSV) {
+          items = parseCSV(text);
         } else {
-          throw new Error("Format invalide. Attendu: { catalog: [...] } ou un tableau.");
+          // JSON parsing
+          const json = JSON.parse(text);
+          if (Array.isArray(json)) {
+            items = json;
+          } else if (json.catalog && Array.isArray(json.catalog)) {
+            items = json.catalog;
+          } else {
+            throw new Error("Format invalide. Attendu: { catalog: [...] } ou un tableau.");
+          }
         }
 
         // Validate and normalize
@@ -58,12 +114,14 @@ export function CatalogPanel() {
           color: item.color || getCategoryColor(item.category || "default"),
           icon: item.icon,
           pmrAccessible: item.pmrAccessible ?? false,
+          model3d: item.model3d,
         }));
 
         setCatalog(prev => [...prev, ...validated]);
-        toast.success(`${validated.length} jeu${validated.length > 1 ? "x" : ""} importé${validated.length > 1 ? "s" : ""}`);
+        const fmt = isCSV ? "CSV" : "JSON";
+        toast.success(`${validated.length} jeu${validated.length > 1 ? "x" : ""} importé${validated.length > 1 ? "s" : ""} (${fmt})`);
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Erreur de parsing JSON");
+        toast.error(err instanceof Error ? err.message : "Erreur de parsing");
       }
     };
     reader.readAsText(file);
@@ -146,11 +204,11 @@ export function CatalogPanel() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".json"
+            accept=".json,.csv"
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) handleImportCatalog(file);
+              if (file) handleImportFile(file);
               if (fileInputRef.current) fileInputRef.current.value = "";
             }}
           />

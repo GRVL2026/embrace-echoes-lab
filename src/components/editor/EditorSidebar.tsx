@@ -6,6 +6,7 @@ import { useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { Door } from "@/types/editor";
+import { CatalogPanel } from "./CatalogPanel";
 
 type AIPlanDoor = {
   edgeIndex: number;
@@ -305,6 +306,9 @@ export function EditorSidebar() {
           )}
         </div>
       </ScrollArea>
+
+      {/* Catalog panel */}
+      <CatalogPanel />
     </div>
   );
 }

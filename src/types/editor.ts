@@ -56,6 +56,7 @@ export type EditorState = {
   showDimensions: boolean;
   showAngles: boolean;
   showPillarDistances: boolean;
+  placedEquipments: import("@/types/equipment").PlacedEquipment[];
 };
 
 export const INITIAL_EDITOR_STATE: EditorState = {
@@ -63,6 +64,7 @@ export const INITIAL_EDITOR_STATE: EditorState = {
   rooms: [],
   doors: [],
   pillars: [],
+  placedEquipments: [],
   zoom: 1,
   panOffset: { x: 0, y: 0 },
   gridSize: 20,

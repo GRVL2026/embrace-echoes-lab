@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer, useCallback, type ReactNode } from "react";
 import { type EditorState, type EditorTool, type Point, type Room, type Door, type Pillar, INITIAL_EDITOR_STATE } from "@/types/editor";
+import type { PlacedEquipment } from "@/types/equipment";
 
 type EditorAction =
   | { type: "SET_TOOL"; tool: EditorTool }
@@ -15,6 +16,11 @@ type EditorAction =
   | { type: "ADD_PILLAR"; pillar: Pillar }
   | { type: "UPDATE_PILLAR"; id: string; pillar: Partial<Pillar> }
   | { type: "DELETE_PILLAR"; id: string }
+  | { type: "ADD_PLACED_EQUIPMENT"; equipment: PlacedEquipment }
+  | { type: "ADD_PLACED_EQUIPMENTS"; equipments: PlacedEquipment[] }
+  | { type: "UPDATE_PLACED_EQUIPMENT"; id: string; equipment: Partial<PlacedEquipment> }
+  | { type: "DELETE_PLACED_EQUIPMENT"; id: string }
+  | { type: "CLEAR_PLACED_EQUIPMENTS" }
   | { type: "TOGGLE_SNAP" }
   | { type: "TOGGLE_PILLAR_DISTANCES" }
   | { type: "TOGGLE_DIMENSIONS" }
@@ -28,6 +34,8 @@ const UNDOABLE_ACTIONS = new Set([
   "ADD_ROOM", "DELETE_WALL",
   "ADD_DOOR", "DELETE_DOOR",
   "ADD_PILLAR", "DELETE_PILLAR",
+  "ADD_PLACED_EQUIPMENT", "ADD_PLACED_EQUIPMENTS",
+  "DELETE_PLACED_EQUIPMENT", "CLEAR_PLACED_EQUIPMENTS",
 ]);
 
 const MAX_UNDO_HISTORY = 50;
@@ -103,6 +111,21 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       };
     case "DELETE_PILLAR":
       return { ...state, pillars: state.pillars.filter((p) => p.id !== action.id) };
+    case "ADD_PLACED_EQUIPMENT":
+      return { ...state, placedEquipments: [...state.placedEquipments, action.equipment] };
+    case "ADD_PLACED_EQUIPMENTS":
+      return { ...state, placedEquipments: [...state.placedEquipments, ...action.equipments] };
+    case "UPDATE_PLACED_EQUIPMENT":
+      return {
+        ...state,
+        placedEquipments: state.placedEquipments.map((e) =>
+          e.id === action.id ? { ...e, ...action.equipment } : e
+        ),
+      };
+    case "DELETE_PLACED_EQUIPMENT":
+      return { ...state, placedEquipments: state.placedEquipments.filter((e) => e.id !== action.id) };
+    case "CLEAR_PLACED_EQUIPMENTS":
+      return { ...state, placedEquipments: [] };
     case "TOGGLE_SNAP":
       return { ...state, snapToGrid: !state.snapToGrid };
     case "TOGGLE_DIMENSIONS":

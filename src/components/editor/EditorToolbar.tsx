@@ -9,6 +9,7 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCcw,
+  Locate,
 } from "lucide-react";
 import { useEditor } from "@/contexts/EditorContext";
 import { Button } from "@/components/ui/button";

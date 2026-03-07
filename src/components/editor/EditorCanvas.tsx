@@ -418,6 +418,28 @@ export function EditorCanvas() {
       const world = screenToWorld(e.clientX, e.clientY);
       const snapped = snapPoint(world);
 
+      // If we have points, check if clicking near the LAST point → validate & stop
+      if (drawingPoints.length >= 2) {
+        const last = drawingPoints[drawingPoints.length - 1];
+        const distToLast = Math.sqrt((snapped.x - last.x) ** 2 + (snapped.y - last.y) ** 2);
+        if (distToLast < 30) {
+          const id = crypto.randomUUID();
+          dispatch({
+            type: "ADD_ROOM",
+            room: {
+              id,
+              points: [...drawingPoints],
+              walls: [],
+              name: `Mur ${state.rooms.length + 1}`,
+              isClosed: false,
+            },
+          });
+          setDrawingPoints([]);
+          return;
+        }
+      }
+
+      // Check if clicking near the FIRST point (3+ points) → close polygon
       if (drawingPoints.length >= 3) {
         const first = drawingPoints[0];
         const dist = Math.sqrt((snapped.x - first.x) ** 2 + (snapped.y - first.y) ** 2);
@@ -430,6 +452,7 @@ export function EditorCanvas() {
               points: [...drawingPoints],
               walls: [],
               name: `Salle ${state.rooms.length + 1}`,
+              isClosed: true,
             },
           });
           setDrawingPoints([]);

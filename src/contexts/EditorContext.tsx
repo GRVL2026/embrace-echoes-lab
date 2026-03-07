@@ -20,9 +20,10 @@ type EditorAction =
   | { type: "RESET" };
 
 // Actions that modify geometry and should be undoable
+// Only snapshot on meaningful user actions (wall/door creation/deletion)
 const UNDOABLE_ACTIONS = new Set([
-  "ADD_ROOM", "UPDATE_ROOM", "DELETE_ROOM", "DELETE_WALL",
-  "ADD_DOOR", "UPDATE_DOOR", "DELETE_DOOR", "RESET",
+  "ADD_ROOM", "DELETE_WALL",
+  "ADD_DOOR", "DELETE_DOOR",
 ]);
 
 const MAX_UNDO_HISTORY = 50;

@@ -93,6 +93,15 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       };
     case "DELETE_DOOR":
       return { ...state, doors: state.doors.filter((d) => d.id !== action.id) };
+    case "ADD_PILLAR":
+      return { ...state, pillars: [...state.pillars, action.pillar] };
+    case "UPDATE_PILLAR":
+      return {
+        ...state,
+        pillars: state.pillars.map((p) => (p.id === action.id ? { ...p, ...action.pillar } : p)),
+      };
+    case "DELETE_PILLAR":
+      return { ...state, pillars: state.pillars.filter((p) => p.id !== action.id) };
     case "TOGGLE_SNAP":
       return { ...state, snapToGrid: !state.snapToGrid };
     case "TOGGLE_DIMENSIONS":

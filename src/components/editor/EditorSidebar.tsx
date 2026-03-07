@@ -6,7 +6,9 @@ import { useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { Door } from "@/types/editor";
+import type { GameEquipment } from "@/types/equipment";
 import { CatalogPanel } from "./CatalogPanel";
+import { ProjectMenu } from "./ProjectMenu";
 
 type AIPlanDoor = {
   edgeIndex: number;
@@ -28,6 +30,7 @@ export function EditorSidebar() {
   const { state, dispatch } = useEditor();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [catalog, setCatalog] = useState<GameEquipment[]>([]);
 
   const handleImportPlan = async (file: File) => {
     if (!file.type.startsWith("image/")) {
@@ -114,13 +117,16 @@ export function EditorSidebar() {
   return (
     <div className="flex w-72 flex-col border-l border-border bg-card/50 backdrop-blur-sm">
       {/* Header */}
-      <div className="border-b border-border p-4">
-        <h2 className="font-display text-lg font-bold text-foreground">Salles</h2>
-        <p className="text-xs text-muted-foreground mt-1">
-          {state.rooms.length === 0 && state.pillars.length === 0
-            ? "Dessinez ou importez un plan"
-            : `${state.rooms.length} salle${state.rooms.length > 1 ? "s" : ""}${state.pillars.length > 0 ? ` · ${state.pillars.length} poteau${state.pillars.length > 1 ? "x" : ""}` : ""}`}
-        </p>
+      <div className="border-b border-border p-4 flex items-center justify-between">
+        <div>
+          <h2 className="font-display text-lg font-bold text-foreground">Salles</h2>
+          <p className="text-xs text-muted-foreground mt-1">
+            {state.rooms.length === 0 && state.pillars.length === 0
+              ? "Dessinez ou importez un plan"
+              : `${state.rooms.length} salle${state.rooms.length > 1 ? "s" : ""}${state.pillars.length > 0 ? ` · ${state.pillars.length} poteau${state.pillars.length > 1 ? "x" : ""}` : ""}`}
+          </p>
+        </div>
+        <ProjectMenu catalog={catalog} onLoadCatalog={setCatalog} />
       </div>
 
       {/* Import button */}
@@ -308,7 +314,7 @@ export function EditorSidebar() {
       </ScrollArea>
 
       {/* Catalog panel */}
-      <CatalogPanel />
+      <CatalogPanel catalog={catalog} setCatalog={setCatalog} />
     </div>
   );
 }

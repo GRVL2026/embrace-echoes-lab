@@ -27,7 +27,8 @@ type EditorAction =
   | { type: "TOGGLE_ANGLES" }
   | { type: "SET_GRID_SIZE"; size: number }
   | { type: "UNDO" }
-  | { type: "RESET" };
+  | { type: "RESET" }
+  | { type: "LOAD_STATE"; state: Partial<EditorState> };
 
 // Actions that modify geometry and should be undoable
 const UNDOABLE_ACTIONS = new Set([
@@ -138,6 +139,8 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       return { ...state, gridSize: action.size };
     case "RESET":
       return INITIAL_EDITOR_STATE;
+    case "LOAD_STATE":
+      return { ...state, ...action.state };
     default:
       return state;
   }

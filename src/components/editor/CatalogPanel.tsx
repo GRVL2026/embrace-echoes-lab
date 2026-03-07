@@ -73,9 +73,13 @@ function getCategoryColor(category: string): string {
   return CATEGORY_COLORS[category.toLowerCase()] || CATEGORY_COLORS.default;
 }
 
-export function CatalogPanel() {
+type CatalogPanelProps = {
+  catalog: GameEquipment[];
+  setCatalog: React.Dispatch<React.SetStateAction<GameEquipment[]>>;
+};
+
+export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   const { state, dispatch } = useEditor();
-  const [catalog, setCatalog] = useState<GameEquipment[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 

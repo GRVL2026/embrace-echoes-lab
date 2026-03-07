@@ -10,6 +10,7 @@ type EditorAction =
   | { type: "DELETE_ROOM"; id: string }
   | { type: "DELETE_WALL"; roomId: string; edgeIndex: number }
   | { type: "ADD_DOOR"; door: Door }
+  | { type: "UPDATE_DOOR"; id: string; door: Partial<Door> }
   | { type: "DELETE_DOOR"; id: string }
   | { type: "TOGGLE_SNAP" }
   | { type: "TOGGLE_DIMENSIONS" }

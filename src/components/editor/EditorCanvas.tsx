@@ -88,16 +88,21 @@ export function EditorCanvas() {
             const midX = ((p.x + next.x) / 2) * CM_TO_PX;
             const midY = ((p.y + next.y) / 2) * CM_TO_PX;
             ctx.save();
-            ctx.font = `${12 / state.zoom}px Inter`;
+            const label = dist >= 100 ? `${(dist / 100).toFixed(2)}m` : `${Math.round(dist)}cm`;
+            const angle = Math.atan2(dy, dx);
+            // Large perpendicular offset to place label beside the wall
+            const offsetDist = 18 / state.zoom;
+            const offsetX = Math.sin(angle) * offsetDist;
+            const offsetY = -Math.cos(angle) * offsetDist;
+            // Rotate text to follow wall direction
+            ctx.translate(midX + offsetX, midY + offsetY);
+            const textAngle = angle > Math.PI / 2 || angle < -Math.PI / 2 ? angle + Math.PI : angle;
+            ctx.rotate(textAngle);
+            ctx.font = `${11 / state.zoom}px Inter`;
             ctx.fillStyle = "hsl(48, 100%, 50%)";
             ctx.textAlign = "center";
             ctx.textBaseline = "bottom";
-            const label = dist >= 100 ? `${(dist / 100).toFixed(2)}m` : `${Math.round(dist)}cm`;
-            // Offset perpendicular to wall
-            const angle = Math.atan2(dy, dx);
-            const offsetX = Math.sin(angle) * 14 / state.zoom;
-            const offsetY = -Math.cos(angle) * 14 / state.zoom;
-            ctx.fillText(label, midX + offsetX, midY + offsetY);
+            ctx.fillText(label, 0, -2 / state.zoom);
             ctx.restore();
           });
         }
@@ -136,11 +141,21 @@ export function EditorCanvas() {
           if (dist > 5) {
             const midX = ((lastP.x + snapped.x) / 2) * CM_TO_PX;
             const midY = ((lastP.y + snapped.y) / 2) * CM_TO_PX;
+            const label = dist >= 100 ? `${(dist / 100).toFixed(2)}m` : `${Math.round(dist)}cm`;
+            const angle = Math.atan2(dy, dx);
+            const offsetDist = 18 / state.zoom;
+            const oX = Math.sin(angle) * offsetDist;
+            const oY = -Math.cos(angle) * offsetDist;
+            ctx.save();
+            ctx.translate(midX + oX, midY + oY);
+            const textAngle = angle > Math.PI / 2 || angle < -Math.PI / 2 ? angle + Math.PI : angle;
+            ctx.rotate(textAngle);
             ctx.font = `bold ${13 / state.zoom}px Inter`;
             ctx.fillStyle = "hsl(75, 100%, 50%)";
             ctx.textAlign = "center";
-            const label = dist >= 100 ? `${(dist / 100).toFixed(2)}m` : `${Math.round(dist)}cm`;
-            ctx.fillText(label, midX, midY - 8 / state.zoom);
+            ctx.textBaseline = "bottom";
+            ctx.fillText(label, 0, -2 / state.zoom);
+            ctx.restore();
           }
         }
 

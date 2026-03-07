@@ -535,6 +535,16 @@ export function EditorCanvas() {
       return;
     }
 
+    // Handle pending vertex click → detect drag threshold
+    if (pendingVertexClick && !draggingVertex) {
+      const dx = e.clientX - pendingVertexClick.startX;
+      const dy = e.clientY - pendingVertexClick.startY;
+      if (Math.sqrt(dx * dx + dy * dy) > 5) {
+        setDraggingVertex({ roomId: pendingVertexClick.roomId, pointIndex: pendingVertexClick.pointIndex });
+        setHasVertexDragged(true);
+      }
+    }
+
     // Handle pending door click → detect drag threshold
     if (pendingDoorClick && !draggingDoor) {
       const dx = e.clientX - pendingDoorClick.startX;

@@ -16,6 +16,7 @@ type EditorAction =
   | { type: "UPDATE_PILLAR"; id: string; pillar: Partial<Pillar> }
   | { type: "DELETE_PILLAR"; id: string }
   | { type: "TOGGLE_SNAP" }
+  | { type: "TOGGLE_PILLAR_DISTANCES" }
   | { type: "TOGGLE_DIMENSIONS" }
   | { type: "TOGGLE_ANGLES" }
   | { type: "SET_GRID_SIZE"; size: number }

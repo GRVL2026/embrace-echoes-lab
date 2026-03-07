@@ -275,6 +275,22 @@ export function EditorCanvas() {
     const world = screenToWorld(e.clientX, e.clientY);
     setMousePos(world);
 
+    // Eraser hover detection
+    if (state.tool === "eraser") {
+      const threshold = 15 / state.zoom;
+      let found: { roomId: string; edgeIndex: number } | null = null;
+      for (const room of state.rooms) {
+        const idx = findNearestEdge(world, room.points, threshold);
+        if (idx >= 0) {
+          found = { roomId: room.id, edgeIndex: idx };
+          break;
+        }
+      }
+      setHoveredWall(found);
+    } else if (hoveredWall) {
+      setHoveredWall(null);
+    }
+
     if (isPanning) {
       const dx = e.clientX - lastPanPos.x;
       const dy = e.clientY - lastPanPos.y;

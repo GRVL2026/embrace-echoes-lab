@@ -415,12 +415,18 @@ export function EditorCanvas() {
       }
     }
 
-    // Check if clicking on a pillar with select tool → open dialog
+    // Check if clicking on a pillar with select tool → pending (click=dialog, drag=move)
     if (e.button === 0 && state.tool === "select") {
       const world = screenToWorld(e.clientX, e.clientY);
       const clickedPillar = findPillarAtPoint(world);
       if (clickedPillar) {
-        setPillarDialog({ open: true, pillarId: clickedPillar.id });
+        // Check if clicking on rotation handle
+        if (isOnRotationHandle(world, clickedPillar, state.zoom)) {
+          setRotatingPillar(clickedPillar.id);
+          return;
+        }
+        setPendingPillarClick({ pillarId: clickedPillar.id, startX: e.clientX, startY: e.clientY });
+        setHasPillarDragged(false);
         return;
       }
     }

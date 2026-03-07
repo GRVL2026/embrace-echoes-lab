@@ -11,6 +11,15 @@ import {
   Undo2,
   Locate,
   Triangle,
+  Columns,
+} from "lucide-react";
+  Grid3X3,
+  Ruler,
+  ZoomIn,
+  ZoomOut,
+  Undo2,
+  Locate,
+  Triangle,
 } from "lucide-react";
 import { useEditor } from "@/contexts/EditorContext";
 import { Button } from "@/components/ui/button";

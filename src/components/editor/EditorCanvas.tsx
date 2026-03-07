@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useCallback, useState } from "react";
 import { useEditor } from "@/contexts/EditorContext";
 import { CM_TO_PX, type Point, type Door, type Pillar } from "@/types/editor";
 import { DoorDialog } from "./DoorDialog";
+import { PillarDialog } from "./PillarDialog";
 
 export function EditorCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -36,6 +37,12 @@ export function EditorCanvas() {
     edgeIndex: number;
     wallLength: number;
     editingDoorId?: string;
+  } | null>(null);
+
+  // Pillar dialog state
+  const [pillarDialog, setPillarDialog] = useState<{
+    open: boolean;
+    pillarId: string;
   } | null>(null);
 
   // Find door under a world point
@@ -405,6 +412,16 @@ export function EditorCanvas() {
       }
     }
 
+    // Check if clicking on a pillar with select tool → open dialog
+    if (e.button === 0 && state.tool === "select") {
+      const world = screenToWorld(e.clientX, e.clientY);
+      const clickedPillar = findPillarAtPoint(world);
+      if (clickedPillar) {
+        setPillarDialog({ open: true, pillarId: clickedPillar.id });
+        return;
+      }
+    }
+
     // Check if clicking on a vertex — select/door: immediate drag; wall tool: pending (click=resume, hold+move=drag)
     if (e.button === 0 && (state.tool === "select" || state.tool === "door" || state.tool === "wall")) {
       const world = screenToWorld(e.clientX, e.clientY);
@@ -452,25 +469,27 @@ export function EditorCanvas() {
       return;
     }
 
-    // Pillar tool: place pillar on click
+    // Pillar tool: place pillar on click or open dialog
     if (state.tool === "pillar" && e.button === 0) {
       const world = screenToWorld(e.clientX, e.clientY);
       const snapped = snapPoint(world);
-      // Check if clicking on existing pillar → start dragging
+      // Check if clicking on existing pillar → open dialog
       const clickedPillar = findPillarAtPoint(snapped);
       if (clickedPillar) {
-        setDraggingPillar(clickedPillar.id);
+        setPillarDialog({ open: true, pillarId: clickedPillar.id });
         return;
       }
-      // Place new pillar
+      // Place new pillar then open dialog
       const pillar: Pillar = {
         id: crypto.randomUUID(),
         position: snapped,
         shape: "square",
         width: 30,
         depth: 30,
+        height: 250,
       };
       dispatch({ type: "ADD_PILLAR", pillar });
+      setPillarDialog({ open: true, pillarId: pillar.id });
       return;
     }
 
@@ -959,6 +978,27 @@ export function EditorCanvas() {
           onCancel={() => setDoorDialog(null)}
         />
       )}
+
+      {/* Pillar dialog */}
+      {pillarDialog && (() => {
+        const p = state.pillars.find((pl) => pl.id === pillarDialog.pillarId);
+        if (!p) return null;
+        return (
+          <PillarDialog
+            open={pillarDialog.open}
+            pillar={p}
+            onConfirm={(updates) => {
+              dispatch({ type: "UPDATE_PILLAR", id: p.id, pillar: updates });
+              setPillarDialog(null);
+            }}
+            onDelete={() => {
+              dispatch({ type: "DELETE_PILLAR", id: p.id });
+              setPillarDialog(null);
+            }}
+            onCancel={() => setPillarDialog(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

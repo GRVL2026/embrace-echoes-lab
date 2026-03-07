@@ -37,7 +37,8 @@ export type Pillar = {
   position: Point; // center position in cm
   shape: PillarShape;
   width: number; // in cm (diameter for round)
-  depth: number; // in cm (same as width for round)
+  depth: number; // in cm (ignored for round)
+  height: number; // in cm
 };
 
 export type EditorTool = "select" | "wall" | "door" | "pillar" | "pan" | "eraser";

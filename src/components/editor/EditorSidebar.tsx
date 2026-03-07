@@ -30,6 +30,7 @@ export function EditorSidebar() {
   const { state, dispatch } = useEditor();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [catalog, setCatalog] = useState<GameEquipment[]>([]);
 
   const handleImportPlan = async (file: File) => {
     if (!file.type.startsWith("image/")) {

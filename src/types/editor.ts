@@ -59,6 +59,7 @@ export const INITIAL_EDITOR_STATE: EditorState = {
   tool: "wall",
   rooms: [],
   doors: [],
+  pillars: [],
   zoom: 1,
   panOffset: { x: 0, y: 0 },
   gridSize: 20,

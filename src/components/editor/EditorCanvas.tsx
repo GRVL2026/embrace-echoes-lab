@@ -91,24 +91,18 @@ export function EditorCanvas() {
 
   // Check if world point is on a pillar's rotation handle
   const isOnRotationHandle = useCallback((world: Point, pillar: Pillar, zoom: number): boolean => {
-    const handleDist = pillar.shape === "round"
-      ? (pillar.width / 2 + 25 / zoom)
-      : (Math.max(pillar.width, pillar.depth) / 2 + 25 / zoom);
+    const handleDistCm = pillar.shape === "round"
+      ? (pillar.width / 2 + 20 / zoom)
+      : (Math.max(pillar.width, pillar.depth) / 2 + 20 / zoom);
     const rad = (pillar.rotation || 0) * Math.PI / 180;
-    const hx = pillar.position.x + Math.sin(rad) * (-handleDist);
-    const hy = pillar.position.y + Math.cos(rad) * handleDist * (-1);
-    // Actually place handle above the pillar (negative Y in screen = "above")
-    const handleX = pillar.position.x + Math.sin(-rad) * 0 + Math.cos(-rad) * 0;
-    const handleY = pillar.position.y - handleDist;
-    // Rotate handle position around pillar center
+    // Handle is at (0, -handleDistCm) in local space, rotated
     const cosR = Math.cos(rad), sinR = Math.sin(rad);
-    const relX = 0, relY = -handleDist;
-    const rotX = relX * cosR - relY * sinR;
-    const rotY = relX * sinR + relY * cosR;
-    const finalX = pillar.position.x + rotX;
-    const finalY = pillar.position.y + rotY;
-    const dx = world.x - finalX;
-    const dy = world.y - finalY;
+    const rotX = handleDistCm * sinR; // 0*cos - (-h)*sin = h*sin
+    const rotY = -handleDistCm * cosR; // 0*sin + (-h)*cos = -h*cos
+    const hx = pillar.position.x + rotX;
+    const hy = pillar.position.y + rotY;
+    const dx = world.x - hx;
+    const dy = world.y - hy;
     return dx * dx + dy * dy < (12 / zoom) * (12 / zoom);
   }, []);
 

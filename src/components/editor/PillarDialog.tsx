@@ -25,6 +25,7 @@ export function PillarDialog({ open, pillar, onConfirm, onDelete, onCancel }: Pi
   const [width, setWidth] = useState(pillar.width);
   const [depth, setDepth] = useState(pillar.depth);
   const [height, setHeight] = useState(pillar.height);
+  const [rotation, setRotation] = useState(pillar.rotation || 0);
   const [sizeMode, setSizeMode] = useState<"diameter" | "perimeter">("diameter");
 
   useEffect(() => {
@@ -32,6 +33,7 @@ export function PillarDialog({ open, pillar, onConfirm, onDelete, onCancel }: Pi
     setWidth(pillar.width);
     setDepth(pillar.depth);
     setHeight(pillar.height);
+    setRotation(pillar.rotation || 0);
   }, [pillar]);
 
   // For round pillars: convert perimeter ↔ diameter
@@ -54,6 +56,7 @@ export function PillarDialog({ open, pillar, onConfirm, onDelete, onCancel }: Pi
       width,
       depth: shape === "round" ? width : depth,
       height,
+      rotation,
     });
   };
 

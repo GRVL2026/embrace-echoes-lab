@@ -454,6 +454,7 @@ export function EditorCanvas() {
 
     setPendingDoorClick(null);
     setHasDragged(false);
+    if (draggingVertex) setDraggingVertex(null);
     if (draggingDoor) setDraggingDoor(null);
   };
 

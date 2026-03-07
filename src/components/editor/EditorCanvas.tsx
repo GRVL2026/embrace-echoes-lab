@@ -16,6 +16,14 @@ export function EditorCanvas() {
   const [pendingDoorClick, setPendingDoorClick] = useState<{ doorId: string; startX: number; startY: number } | null>(null);
   const [hasDragged, setHasDragged] = useState(false);
   const [draggingVertex, setDraggingVertex] = useState<{ roomId: string; pointIndex: number } | null>(null);
+  const [editingDimension, setEditingDimension] = useState<{
+    roomId: string;
+    edgeIndex: number;
+    screenX: number;
+    screenY: number;
+    currentValue: number; // in cm
+  } | null>(null);
+  const dimensionInputRef = useRef<HTMLInputElement>(null);
 
   // Door dialog state
   const [doorDialog, setDoorDialog] = useState<{
@@ -264,12 +272,53 @@ export function EditorCanvas() {
     return bestIdx;
   }, []);
 
+  // Find if clicking on a dimension label
+  const findDimensionAtPoint = useCallback((screenX: number, screenY: number): { roomId: string; edgeIndex: number; screenX: number; screenY: number; currentValue: number } | null => {
+    const world = screenToWorld(screenX, screenY);
+    const threshold = 15 / state.zoom;
+    for (const room of state.rooms) {
+      for (let i = 0; i < room.points.length; i++) {
+        const p = room.points[i];
+        const next = room.points[(i + 1) % room.points.length];
+        const dx = next.x - p.x, dy = next.y - p.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const midX = (p.x + next.x) / 2;
+        const midY = (p.y + next.y) / 2;
+        const angle = Math.atan2(dy, dx);
+        const offsetDist = 18 / state.zoom;
+        const labelX = midX + Math.sin(angle) * offsetDist;
+        const labelY = midY - Math.cos(angle) * offsetDist;
+        const dToLabel = Math.sqrt((world.x - labelX) ** 2 + (world.y - labelY) ** 2);
+        if (dToLabel < threshold) {
+          // Convert label position to screen coords
+          const canvas = canvasRef.current;
+          if (!canvas) continue;
+          const rect = canvas.getBoundingClientRect();
+          const sx = labelX * CM_TO_PX * state.zoom + state.panOffset.x + rect.left;
+          const sy = labelY * CM_TO_PX * state.zoom + state.panOffset.y + rect.top;
+          return { roomId: room.id, edgeIndex: i, screenX: sx, screenY: sy, currentValue: dist };
+        }
+      }
+    }
+    return null;
+  }, [state.rooms, state.zoom, state.panOffset, screenToWorld]);
+
   // Mouse handlers
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button === 1 || (e.button === 0 && state.tool === "pan")) {
       setIsPanning(true);
       setLastPanPos({ x: e.clientX, y: e.clientY });
       return;
+    }
+
+    // Check if clicking on a dimension label (any tool)
+    if (e.button === 0 && state.showDimensions && !editingDimension) {
+      const dim = findDimensionAtPoint(e.clientX, e.clientY);
+      if (dim) {
+        setEditingDimension(dim);
+        setTimeout(() => dimensionInputRef.current?.focus(), 0);
+        return;
+      }
     }
 
     // Check if clicking on a vertex (select tool) — start vertex drag
@@ -482,6 +531,29 @@ export function EditorCanvas() {
     }
   };
 
+  // Dimension edit handler
+  const handleDimensionConfirm = (newValueCm: number) => {
+    if (!editingDimension || newValueCm <= 0) {
+      setEditingDimension(null);
+      return;
+    }
+    const room = state.rooms.find((r) => r.id === editingDimension.roomId);
+    if (!room) { setEditingDimension(null); return; }
+    const i = editingDimension.edgeIndex;
+    const p = room.points[i];
+    const next = room.points[(i + 1) % room.points.length];
+    const dx = next.x - p.x, dy = next.y - p.y;
+    const oldLen = Math.sqrt(dx * dx + dy * dy);
+    if (oldLen === 0) { setEditingDimension(null); return; }
+    const scale = newValueCm / oldLen;
+    const newNext = { x: p.x + dx * scale, y: p.y + dy * scale };
+    const snapped = snapPoint(newNext);
+    const newPoints = [...room.points];
+    newPoints[(i + 1) % room.points.length] = snapped;
+    dispatch({ type: "UPDATE_ROOM", id: room.id, room: { points: newPoints } });
+    setEditingDimension(null);
+  };
+
   // Door dialog handlers
   const handleDoorConfirm = (result: { width: number; positionRatio: number; openDirection: Door["openDirection"]; openDirectionRight?: Door["openDirection"]; openSide: Door["openSide"]; leafCount: Door["leafCount"] }) => {
     if (!doorDialog) return;
@@ -584,6 +656,47 @@ export function EditorCanvas() {
       {state.tool === "door" && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 rounded-md border border-border bg-card/80 backdrop-blur-sm px-4 py-2 text-sm text-muted-foreground neon-border">
           Cliquez sur un mur pour ajouter une porte.
+        </div>
+      )}
+
+      {/* Dimension inline edit */}
+      {editingDimension && (
+        <div
+          className="absolute z-50"
+          style={{
+            left: editingDimension.screenX - (containerRef.current?.getBoundingClientRect().left ?? 0) - 40,
+            top: editingDimension.screenY - (containerRef.current?.getBoundingClientRect().top ?? 0) - 16,
+          }}
+        >
+          <input
+            ref={dimensionInputRef}
+            type="text"
+            defaultValue={editingDimension.currentValue >= 100
+              ? (editingDimension.currentValue / 100).toFixed(2)
+              : Math.round(editingDimension.currentValue).toString()
+            }
+            className="w-20 rounded border border-primary bg-card px-2 py-0.5 text-xs text-primary text-center font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const raw = (e.target as HTMLInputElement).value.trim();
+                let cm: number;
+                if (raw.endsWith("m") && !raw.endsWith("cm")) {
+                  cm = parseFloat(raw) * 100;
+                } else if (raw.endsWith("cm")) {
+                  cm = parseFloat(raw);
+                } else {
+                  // If current was shown in meters, interpret as meters; else cm
+                  const val = parseFloat(raw);
+                  cm = editingDimension.currentValue >= 100 ? val * 100 : val;
+                }
+                if (!isNaN(cm) && cm > 0) handleDimensionConfirm(cm);
+                else setEditingDimension(null);
+              } else if (e.key === "Escape") {
+                setEditingDimension(null);
+              }
+            }}
+            onBlur={() => setEditingDimension(null)}
+          />
         </div>
       )}
 

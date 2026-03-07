@@ -180,6 +180,20 @@ export function PillarDialog({ open, pillar, onConfirm, onDelete, onCancel }: Pi
               className="font-mono"
             />
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="pillar-rotation">Rotation (°)</Label>
+            <Input
+              id="pillar-rotation"
+              type="number"
+              min={-180}
+              max={180}
+              step={1}
+              value={Math.round(rotation)}
+              onChange={(e) => setRotation(Number(e.target.value))}
+              className="font-mono"
+            />
+          </div>
         </div>
 
         <DialogFooter className="flex justify-between sm:justify-between">

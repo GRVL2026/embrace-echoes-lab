@@ -224,6 +224,9 @@ export function EditorCanvas() {
       // Draw doors
       drawDoors(ctx, state);
 
+      // Draw pillars
+      drawPillars(ctx, state, hoveredPillar);
+
       // Draw current drawing
       if (drawingPoints.length > 0) {
         ctx.beginPath();

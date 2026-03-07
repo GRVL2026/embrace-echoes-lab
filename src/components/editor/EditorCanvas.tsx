@@ -89,7 +89,29 @@ export function EditorCanvas() {
     return null;
   }, [state.pillars]);
 
-  const screenToWorld = useCallback(
+  // Check if world point is on a pillar's rotation handle
+  const isOnRotationHandle = useCallback((world: Point, pillar: Pillar, zoom: number): boolean => {
+    const handleDist = pillar.shape === "round"
+      ? (pillar.width / 2 + 25 / zoom)
+      : (Math.max(pillar.width, pillar.depth) / 2 + 25 / zoom);
+    const rad = (pillar.rotation || 0) * Math.PI / 180;
+    const hx = pillar.position.x + Math.sin(rad) * (-handleDist);
+    const hy = pillar.position.y + Math.cos(rad) * handleDist * (-1);
+    // Actually place handle above the pillar (negative Y in screen = "above")
+    const handleX = pillar.position.x + Math.sin(-rad) * 0 + Math.cos(-rad) * 0;
+    const handleY = pillar.position.y - handleDist;
+    // Rotate handle position around pillar center
+    const cosR = Math.cos(rad), sinR = Math.sin(rad);
+    const relX = 0, relY = -handleDist;
+    const rotX = relX * cosR - relY * sinR;
+    const rotY = relX * sinR + relY * cosR;
+    const finalX = pillar.position.x + rotX;
+    const finalY = pillar.position.y + rotY;
+    const dx = world.x - finalX;
+    const dy = world.y - finalY;
+    return dx * dx + dy * dy < (12 / zoom) * (12 / zoom);
+  }, []);
+
     (sx: number, sy: number): Point => {
       const canvas = canvasRef.current;
       if (!canvas) return { x: 0, y: 0 };

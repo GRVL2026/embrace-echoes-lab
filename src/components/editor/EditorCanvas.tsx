@@ -356,6 +356,18 @@ export function EditorCanvas() {
     const world = screenToWorld(e.clientX, e.clientY);
     setMousePos(world);
 
+    // Handle vertex dragging
+    if (draggingVertex) {
+      const snapped = snapPoint(world);
+      const room = state.rooms.find((r) => r.id === draggingVertex.roomId);
+      if (room) {
+        const newPoints = [...room.points];
+        newPoints[draggingVertex.pointIndex] = snapped;
+        dispatch({ type: "UPDATE_ROOM", id: draggingVertex.roomId, room: { points: newPoints } });
+      }
+      return;
+    }
+
     // Handle pending door click → detect drag threshold
     if (pendingDoorClick && !draggingDoor) {
       const dx = e.clientX - pendingDoorClick.startX;

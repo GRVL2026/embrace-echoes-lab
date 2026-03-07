@@ -56,6 +56,7 @@ export type EditorState = {
   showDimensions: boolean;
   showAngles: boolean;
   showPillarDistances: boolean;
+  placedEquipments: import("@/types/equipment").PlacedEquipment[];
 };
 
 export const INITIAL_EDITOR_STATE: EditorState = {

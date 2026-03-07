@@ -12,7 +12,9 @@ export function EditorCanvas() {
   const [drawingPoints, setDrawingPoints] = useState<Point[]>([]);
   const [mousePos, setMousePos] = useState<Point>({ x: 0, y: 0 });
   const [hoveredWall, setHoveredWall] = useState<{ roomId: string; edgeIndex: number } | null>(null);
-  const [draggingDoor, setDraggingDoor] = useState<string | null>(null); // door id being dragged
+  const [draggingDoor, setDraggingDoor] = useState<string | null>(null);
+  const [pendingDoorClick, setPendingDoorClick] = useState<{ doorId: string; startX: number; startY: number } | null>(null);
+  const [hasDragged, setHasDragged] = useState(false);
 
   // Door dialog state
   const [doorDialog, setDoorDialog] = useState<{
@@ -20,6 +22,7 @@ export function EditorCanvas() {
     roomId: string;
     edgeIndex: number;
     wallLength: number;
+    editingDoorId?: string;
   } | null>(null);
 
   // Find door under a world point
@@ -268,12 +271,13 @@ export function EditorCanvas() {
       return;
     }
 
-    // Check if clicking on an existing door (any tool except eraser) — start drag
+    // Check if clicking on an existing door (any tool except eraser) — prepare for click or drag
     if (e.button === 0 && state.tool !== "eraser") {
       const world = screenToWorld(e.clientX, e.clientY);
       const clickedDoor = findDoorAtPoint(world);
       if (clickedDoor) {
-        setDraggingDoor(clickedDoor.id);
+        setPendingDoorClick({ doorId: clickedDoor.id, startX: e.clientX, startY: e.clientY });
+        setHasDragged(false);
         return;
       }
     }
@@ -335,6 +339,16 @@ export function EditorCanvas() {
     const world = screenToWorld(e.clientX, e.clientY);
     setMousePos(world);
 
+    // Handle pending door click → detect drag threshold
+    if (pendingDoorClick && !draggingDoor) {
+      const dx = e.clientX - pendingDoorClick.startX;
+      const dy = e.clientY - pendingDoorClick.startY;
+      if (Math.sqrt(dx * dx + dy * dy) > 5) {
+        setDraggingDoor(pendingDoorClick.doorId);
+        setHasDragged(true);
+      }
+    }
+
     // Handle door dragging
     if (draggingDoor) {
       const door = state.doors.find((d) => d.id === draggingDoor);
@@ -343,10 +357,10 @@ export function EditorCanvas() {
         if (room && door.edgeIndex < room.points.length) {
           const a = room.points[door.edgeIndex];
           const b = room.points[(door.edgeIndex + 1) % room.points.length];
-          const dx = b.x - a.x, dy = b.y - a.y;
-          const wallLen = Math.sqrt(dx * dx + dy * dy);
+          const ddx = b.x - a.x, ddy = b.y - a.y;
+          const wallLen = Math.sqrt(ddx * ddx + ddy * ddy);
           if (wallLen > 0) {
-            const ux = dx / wallLen, uy = dy / wallLen;
+            const ux = ddx / wallLen, uy = ddy / wallLen;
             const proj = (world.x - a.x) * ux + (world.y - a.y) * uy;
             const halfW = door.width / 2;
             const clampedRatio = Math.max(halfW / wallLen, Math.min(1 - halfW / wallLen, proj / wallLen));
@@ -387,6 +401,30 @@ export function EditorCanvas() {
 
   const handleMouseUp = () => {
     setIsPanning(false);
+
+    // If we had a pending door click and didn't drag → open settings
+    if (pendingDoorClick && !hasDragged) {
+      const door = state.doors.find((d) => d.id === pendingDoorClick.doorId);
+      if (door) {
+        const room = state.rooms.find((r) => r.id === door.roomId);
+        if (room && door.edgeIndex < room.points.length) {
+          const a = room.points[door.edgeIndex];
+          const b = room.points[(door.edgeIndex + 1) % room.points.length];
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const wallLength = Math.sqrt(dx * dx + dy * dy);
+          setDoorDialog({
+            open: true,
+            roomId: door.roomId,
+            edgeIndex: door.edgeIndex,
+            wallLength,
+            editingDoorId: door.id,
+          });
+        }
+      }
+    }
+
+    setPendingDoorClick(null);
+    setHasDragged(false);
     if (draggingDoor) setDraggingDoor(null);
   };
 
@@ -417,18 +455,35 @@ export function EditorCanvas() {
   // Door dialog handlers
   const handleDoorConfirm = (result: { width: number; positionRatio: number; openDirection: Door["openDirection"]; openDirectionRight?: Door["openDirection"]; openSide: Door["openSide"]; leafCount: Door["leafCount"] }) => {
     if (!doorDialog) return;
-    const door: Door = {
-      id: crypto.randomUUID(),
-      roomId: doorDialog.roomId,
-      edgeIndex: doorDialog.edgeIndex,
-      positionRatio: result.positionRatio,
-      width: result.width,
-      openDirection: result.openDirection,
-      openDirectionRight: result.openDirectionRight,
-      openSide: result.openSide,
-      leafCount: result.leafCount,
-    };
-    dispatch({ type: "ADD_DOOR", door });
+    if (doorDialog.editingDoorId) {
+      // Update existing door
+      dispatch({
+        type: "UPDATE_DOOR",
+        id: doorDialog.editingDoorId,
+        door: {
+          width: result.width,
+          positionRatio: result.positionRatio,
+          openDirection: result.openDirection,
+          openDirectionRight: result.openDirectionRight,
+          openSide: result.openSide,
+          leafCount: result.leafCount,
+        },
+      });
+    } else {
+      // Create new door
+      const door: Door = {
+        id: crypto.randomUUID(),
+        roomId: doorDialog.roomId,
+        edgeIndex: doorDialog.edgeIndex,
+        positionRatio: result.positionRatio,
+        width: result.width,
+        openDirection: result.openDirection,
+        openDirectionRight: result.openDirectionRight,
+        openSide: result.openSide,
+        leafCount: result.leafCount,
+      };
+      dispatch({ type: "ADD_DOOR", door });
+    }
     setDoorDialog(null);
   };
 
@@ -507,6 +562,7 @@ export function EditorCanvas() {
         <DoorDialog
           open={doorDialog.open}
           wallLength={doorDialog.wallLength}
+          initialValues={doorDialog.editingDoorId ? state.doors.find((d) => d.id === doorDialog.editingDoorId) : undefined}
           onConfirm={handleDoorConfirm}
           onCancel={() => setDoorDialog(null)}
         />

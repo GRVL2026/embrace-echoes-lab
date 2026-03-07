@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { DoorOpenDirection, DoorOpenSide, DoorLeafCount } from "@/types/editor";
+import type { DoorOpenDirection, DoorOpenSide, DoorLeafCount, Door } from "@/types/editor";
 import { cn } from "@/lib/utils";
 
 interface DoorDialogResult {
@@ -23,18 +23,39 @@ interface DoorDialogResult {
 
 interface DoorDialogProps {
   open: boolean;
-  wallLength: number; // cm
+  wallLength: number;
+  initialValues?: Door;
   onConfirm: (result: DoorDialogResult) => void;
   onCancel: () => void;
 }
 
-export function DoorDialog({ open, wallLength, onConfirm, onCancel }: DoorDialogProps) {
+export function DoorDialog({ open, wallLength, initialValues, onConfirm, onCancel }: DoorDialogProps) {
   const [width, setWidth] = useState(80);
   const [position, setPosition] = useState(Math.round(wallLength / 2));
   const [direction, setDirection] = useState<DoorOpenDirection>("left");
   const [directionRight, setDirectionRight] = useState<DoorOpenDirection>("right");
   const [openSide, setOpenSide] = useState<DoorOpenSide>("interior");
   const [leafCount, setLeafCount] = useState<DoorLeafCount>("single");
+
+  // Pre-fill values when editing an existing door
+  useEffect(() => {
+    if (initialValues) {
+      setWidth(initialValues.width);
+      const centerDist = initialValues.positionRatio * wallLength;
+      setPosition(Math.round(centerDist - initialValues.width / 2));
+      setDirection(initialValues.openDirection);
+      setDirectionRight(initialValues.openDirectionRight || "right");
+      setOpenSide(initialValues.openSide);
+      setLeafCount(initialValues.leafCount);
+    } else {
+      setWidth(80);
+      setPosition(Math.round(wallLength / 2));
+      setDirection("left");
+      setDirectionRight("right");
+      setOpenSide("interior");
+      setLeafCount("single");
+    }
+  }, [initialValues, wallLength]);
 
   const maxPosition = Math.max(0, wallLength - width);
 
@@ -55,7 +76,9 @@ export function DoorDialog({ open, wallLength, onConfirm, onCancel }: DoorDialog
     <Dialog open={open} onOpenChange={(o) => !o && onCancel()}>
       <DialogContent className="sm:max-w-md bg-card border-border">
         <DialogHeader>
-          <DialogTitle className="text-foreground">Ajouter une porte</DialogTitle>
+          <DialogTitle className="text-foreground">
+            {initialValues ? "Modifier la porte" : "Ajouter une porte"}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
@@ -63,7 +86,6 @@ export function DoorDialog({ open, wallLength, onConfirm, onCancel }: DoorDialog
             Longueur du mur : <span className="font-mono text-foreground">{Math.round(wallLength)}cm</span>
           </div>
 
-          {/* Width */}
           <div className="space-y-2">
             <Label htmlFor="door-width">Largeur de la porte (cm)</Label>
             <Input
@@ -77,7 +99,6 @@ export function DoorDialog({ open, wallLength, onConfirm, onCancel }: DoorDialog
             />
           </div>
 
-          {/* Position */}
           <div className="space-y-2">
             <Label htmlFor="door-position">Position depuis le début du mur (cm)</Label>
             <Input
@@ -100,7 +121,6 @@ export function DoorDialog({ open, wallLength, onConfirm, onCancel }: DoorDialog
             </div>
           </div>
 
-          {/* Leaf count */}
           <div className="space-y-2">
             <Label>Type de porte</Label>
             <div className="flex gap-2">
@@ -125,7 +145,6 @@ export function DoorDialog({ open, wallLength, onConfirm, onCancel }: DoorDialog
             </div>
           </div>
 
-          {/* Open side */}
           <div className="space-y-2">
             <Label>Ouverture vers</Label>
             <div className="flex gap-2">
@@ -150,7 +169,6 @@ export function DoorDialog({ open, wallLength, onConfirm, onCancel }: DoorDialog
             </div>
           </div>
 
-          {/* Open direction(s) */}
           <div className="space-y-2">
             <Label>
               {leafCount === "single" ? "Sens d'ouverture" : "Sens battant gauche"}
@@ -209,7 +227,7 @@ export function DoorDialog({ open, wallLength, onConfirm, onCancel }: DoorDialog
             Annuler
           </Button>
           <Button onClick={handleConfirm} disabled={width > wallLength}>
-            Ajouter
+            {initialValues ? "Modifier" : "Ajouter"}
           </Button>
         </DialogFooter>
       </DialogContent>

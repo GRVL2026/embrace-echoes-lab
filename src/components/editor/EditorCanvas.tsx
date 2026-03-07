@@ -177,11 +177,52 @@ export function EditorCanvas() {
     draw();
   });
 
+  // Check if point is inside a polygon (ray casting)
+  const pointInPolygon = useCallback((point: Point, polygon: Point[]): boolean => {
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const xi = polygon[i].x, yi = polygon[i].y;
+      const xj = polygon[j].x, yj = polygon[j].y;
+      const intersect = ((yi > point.y) !== (yj > point.y)) &&
+        (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }, []);
+
+  // Check if point is near any edge of a polygon
+  const pointNearEdge = useCallback((point: Point, polygon: Point[], threshold: number): boolean => {
+    for (let i = 0; i < polygon.length; i++) {
+      const a = polygon[i];
+      const b = polygon[(i + 1) % polygon.length];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len === 0) continue;
+      const t = Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / (len * len)));
+      const projX = a.x + t * dx, projY = a.y + t * dy;
+      const dist = Math.sqrt((point.x - projX) ** 2 + (point.y - projY) ** 2);
+      if (dist < threshold) return true;
+    }
+    return false;
+  }, []);
+
   // Mouse handlers
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button === 1 || (e.button === 0 && state.tool === "pan")) {
       setIsPanning(true);
       setLastPanPos({ x: e.clientX, y: e.clientY });
+      return;
+    }
+
+    if (state.tool === "eraser" && e.button === 0) {
+      const world = screenToWorld(e.clientX, e.clientY);
+      const threshold = 20 / state.zoom; // tolerance in cm
+      for (const room of state.rooms) {
+        if (pointInPolygon(world, room.points) || pointNearEdge(world, room.points, threshold)) {
+          dispatch({ type: "DELETE_ROOM", id: room.id });
+          return;
+        }
+      }
       return;
     }
 

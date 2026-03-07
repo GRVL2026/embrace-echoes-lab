@@ -12,6 +12,7 @@ export function EditorCanvas() {
   const [drawingPoints, setDrawingPoints] = useState<Point[]>([]);
   const [mousePos, setMousePos] = useState<Point>({ x: 0, y: 0 });
   const [hoveredWall, setHoveredWall] = useState<{ roomId: string; edgeIndex: number } | null>(null);
+  const [draggingDoor, setDraggingDoor] = useState<string | null>(null); // door id being dragged
 
   // Door dialog state
   const [doorDialog, setDoorDialog] = useState<{
@@ -20,6 +21,30 @@ export function EditorCanvas() {
     edgeIndex: number;
     wallLength: number;
   } | null>(null);
+
+  // Find door under a world point
+  const findDoorAtPoint = useCallback((world: Point): Door | null => {
+    for (const door of state.doors) {
+      const room = state.rooms.find((r) => r.id === door.roomId);
+      if (!room || door.edgeIndex >= room.points.length) continue;
+      const a = room.points[door.edgeIndex];
+      const b = room.points[(door.edgeIndex + 1) % room.points.length];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const wallLen = Math.sqrt(dx * dx + dy * dy);
+      if (wallLen === 0) continue;
+      const ux = dx / wallLen, uy = dy / wallLen;
+      const centerDist = door.positionRatio * wallLen;
+      const halfW = door.width / 2;
+      // Project world point onto wall line
+      const px = world.x - a.x, py = world.y - a.y;
+      const proj = px * ux + py * uy; // distance along wall
+      const perpDist = Math.abs(px * (-uy) + py * ux); // distance from wall
+      if (proj >= centerDist - halfW && proj <= centerDist + halfW && perpDist < 15 / state.zoom) {
+        return door;
+      }
+    }
+    return null;
+  }, [state.doors, state.rooms, state.zoom]);
 
   // Convert screen coords to world coords (cm)
   const screenToWorld = useCallback(
@@ -243,6 +268,16 @@ export function EditorCanvas() {
       return;
     }
 
+    // Check if clicking on an existing door (any tool except eraser) — start drag
+    if (e.button === 0 && state.tool !== "eraser") {
+      const world = screenToWorld(e.clientX, e.clientY);
+      const clickedDoor = findDoorAtPoint(world);
+      if (clickedDoor) {
+        setDraggingDoor(clickedDoor.id);
+        return;
+      }
+    }
+
     if (state.tool === "eraser" && e.button === 0) {
       if (hoveredWall) {
         dispatch({ type: "DELETE_WALL", roomId: hoveredWall.roomId, edgeIndex: hoveredWall.edgeIndex });
@@ -300,6 +335,29 @@ export function EditorCanvas() {
     const world = screenToWorld(e.clientX, e.clientY);
     setMousePos(world);
 
+    // Handle door dragging
+    if (draggingDoor) {
+      const door = state.doors.find((d) => d.id === draggingDoor);
+      if (door) {
+        const room = state.rooms.find((r) => r.id === door.roomId);
+        if (room && door.edgeIndex < room.points.length) {
+          const a = room.points[door.edgeIndex];
+          const b = room.points[(door.edgeIndex + 1) % room.points.length];
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const wallLen = Math.sqrt(dx * dx + dy * dy);
+          if (wallLen > 0) {
+            const ux = dx / wallLen, uy = dy / wallLen;
+            const proj = (world.x - a.x) * ux + (world.y - a.y) * uy;
+            const halfW = door.width / 2;
+            const clampedRatio = Math.max(halfW / wallLen, Math.min(1 - halfW / wallLen, proj / wallLen));
+            dispatch({ type: "UPDATE_DOOR", id: draggingDoor, door: { positionRatio: clampedRatio } });
+          }
+        }
+      }
+      return;
+    }
+
+
     // Hover detection for eraser and door tools
     if (state.tool === "eraser" || state.tool === "door") {
       const threshold = 15 / state.zoom;
@@ -329,6 +387,7 @@ export function EditorCanvas() {
 
   const handleMouseUp = () => {
     setIsPanning(false);
+    if (draggingDoor) setDraggingDoor(null);
   };
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -393,7 +452,9 @@ export function EditorCanvas() {
   const eraserCursor = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23ff4444' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21'/%3E%3Cpath d='M22 21H7'/%3E%3Cpath d='m5 11 9 9'/%3E%3C/svg%3E") 4 20, auto`;
 
   const cursorStyle =
-    state.tool === "pan" || isPanning
+    draggingDoor
+      ? "cursor-grabbing"
+      : state.tool === "pan" || isPanning
       ? "cursor-grab"
       : state.tool === "wall"
       ? "cursor-crosshair"

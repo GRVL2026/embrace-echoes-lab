@@ -10,6 +10,7 @@ type EditorAction =
   | { type: "DELETE_ROOM"; id: string }
   | { type: "DELETE_WALL"; roomId: string; edgeIndex: number }
   | { type: "ADD_DOOR"; door: Door }
+  | { type: "UPDATE_DOOR"; id: string; door: Partial<Door> }
   | { type: "DELETE_DOOR"; id: string }
   | { type: "TOGGLE_SNAP" }
   | { type: "TOGGLE_DIMENSIONS" }
@@ -67,6 +68,11 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
     }
     case "ADD_DOOR":
       return { ...state, doors: [...state.doors, action.door] };
+    case "UPDATE_DOOR":
+      return {
+        ...state,
+        doors: state.doors.map((d) => (d.id === action.id ? { ...d, ...action.door } : d)),
+      };
     case "DELETE_DOOR":
       return { ...state, doors: state.doors.filter((d) => d.id !== action.id) };
     case "TOGGLE_SNAP":

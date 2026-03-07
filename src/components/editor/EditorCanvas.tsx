@@ -620,8 +620,30 @@ export function EditorCanvas() {
         } else if (isFirst) {
           setDrawingPoints([...room.points].reverse());
           dispatch({ type: "DELETE_ROOM", id: room.id });
+        } else {
+          // Interior point: split into two parts
+          // Part 1: points[0..idx] → save as a room
+          // Part 2: points[idx..end] reversed → becomes drawingPoints (resume from idx)
+          const part1 = room.points.slice(0, idx + 1);
+          const part2 = room.points.slice(idx);
+          // Save part1 as a new open room if it has at least 2 points
+          if (part1.length >= 2) {
+            dispatch({
+              type: "ADD_ROOM",
+              room: {
+                id: crypto.randomUUID(),
+                points: part1,
+                walls: [],
+                name: room.name,
+                isClosed: false,
+              },
+            });
+          }
+          // Delete original room
+          dispatch({ type: "DELETE_ROOM", id: room.id });
+          // Resume drawing from part2 (keep order so we continue from the end)
+          setDrawingPoints(part2);
         }
-        // Interior points: no resume, just release
       }
     }
 

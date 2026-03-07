@@ -295,6 +295,11 @@ export function EditorCanvas() {
         drawPillarDistances(ctx, state);
       }
 
+      // Draw placed equipments
+      if (state.placedEquipments.length > 0) {
+        drawPlacedEquipments(ctx, state.placedEquipments, state.zoom);
+      }
+
       // Draw current drawing
       if (drawingPoints.length > 0) {
         ctx.beginPath();

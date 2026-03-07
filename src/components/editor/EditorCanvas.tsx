@@ -118,9 +118,11 @@ export function EditorCanvas() {
         room.points.forEach((p, i) => {
           if (i > 0) ctx.lineTo(p.x * CM_TO_PX, p.y * CM_TO_PX);
         });
-        ctx.closePath();
-        ctx.fillStyle = "hsla(263, 85%, 68%, 0.05)";
-        ctx.fill();
+        if (room.isClosed) {
+          ctx.closePath();
+          ctx.fillStyle = "hsla(263, 85%, 68%, 0.05)";
+          ctx.fill();
+        }
         ctx.strokeStyle = "hsl(263, 85%, 68%)";
         ctx.lineWidth = 2 / state.zoom;
         ctx.stroke();
@@ -139,7 +141,9 @@ export function EditorCanvas() {
 
         // Draw wall dimensions
         if (state.showDimensions) {
-          room.points.forEach((p, i) => {
+          const edgeCount = room.isClosed ? room.points.length : room.points.length - 1;
+          for (let i = 0; i < edgeCount; i++) {
+            const p = room.points[i];
             const next = room.points[(i + 1) % room.points.length];
             const dx = next.x - p.x;
             const dy = next.y - p.y;
@@ -161,7 +165,7 @@ export function EditorCanvas() {
             ctx.textBaseline = "bottom";
             ctx.fillText(label, 0, -2 / state.zoom);
             ctx.restore();
-          });
+          }
         }
 
         // Draw vertices
@@ -172,9 +176,12 @@ export function EditorCanvas() {
           ctx.fill();
         });
 
-        // Draw angles at vertices
+        // Draw angles at vertices (only for closed rooms or interior vertices of open polylines)
         if (state.showAngles && room.points.length >= 3) {
-          room.points.forEach((p, i) => {
+          const startIdx = room.isClosed ? 0 : 1;
+          const endIdx = room.isClosed ? room.points.length : room.points.length - 1;
+          for (let i = startIdx; i < endIdx; i++) {
+            const p = room.points[i];
             const prev = room.points[(i - 1 + room.points.length) % room.points.length];
             const next = room.points[(i + 1) % room.points.length];
             const v1x = prev.x - p.x, v1y = prev.y - p.y;
@@ -182,11 +189,10 @@ export function EditorCanvas() {
             const dot = v1x * v2x + v1y * v2y;
             const len1 = Math.sqrt(v1x * v1x + v1y * v1y);
             const len2 = Math.sqrt(v2x * v2x + v2y * v2y);
-            if (len1 === 0 || len2 === 0) return;
+            if (len1 === 0 || len2 === 0) continue;
             const cosA = Math.max(-1, Math.min(1, dot / (len1 * len2)));
             const angleDeg = Math.round(Math.acos(cosA) * (180 / Math.PI));
 
-            // Draw small arc
             const arcR = 20 / state.zoom * CM_TO_PX;
             const a1 = Math.atan2(v1y, v1x);
             const a2 = Math.atan2(v2y, v2x);
@@ -196,7 +202,6 @@ export function EditorCanvas() {
             ctx.lineWidth = 1.5 / state.zoom;
             ctx.stroke();
 
-            // Label
             const bisectX = (v1x / len1 + v2x / len2);
             const bisectY = (v1y / len1 + v2y / len2);
             const bisectLen = Math.sqrt(bisectX * bisectX + bisectY * bisectY) || 1;
@@ -208,7 +213,7 @@ export function EditorCanvas() {
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.fillText(`${angleDeg}°`, lx, ly);
-          });
+          }
         }
       });
 
@@ -268,6 +273,21 @@ export function EditorCanvas() {
           ctx.stroke();
         });
 
+        // Snap indicator near last point (validate/stop drawing)
+        if (drawingPoints.length >= 2) {
+          const last = drawingPoints[drawingPoints.length - 1];
+          const dToLast = Math.sqrt(
+            (snapped.x - last.x) ** 2 + (snapped.y - last.y) ** 2
+          );
+          if (dToLast < 30) {
+            ctx.beginPath();
+            ctx.arc(last.x * CM_TO_PX, last.y * CM_TO_PX, 10 / state.zoom, 0, Math.PI * 2);
+            ctx.strokeStyle = "hsl(120, 80%, 50%)";
+            ctx.lineWidth = 2 / state.zoom;
+            ctx.stroke();
+          }
+        }
+
         // Snap indicator near first point (close polygon)
         if (drawingPoints.length >= 3) {
           const first = drawingPoints[0];
@@ -291,10 +311,11 @@ export function EditorCanvas() {
   });
 
   // Find nearest edge index of a polygon (returns -1 if none within threshold)
-  const findNearestEdge = useCallback((point: Point, polygon: Point[], threshold: number): number => {
+  const findNearestEdge = useCallback((point: Point, polygon: Point[], threshold: number, isClosed = true): number => {
     let bestDist = Infinity;
     let bestIdx = -1;
-    for (let i = 0; i < polygon.length; i++) {
+    const edgeCount = isClosed ? polygon.length : polygon.length - 1;
+    for (let i = 0; i < edgeCount; i++) {
       const a = polygon[i];
       const b = polygon[(i + 1) % polygon.length];
       const dx = b.x - a.x, dy = b.y - a.y;
@@ -316,7 +337,8 @@ export function EditorCanvas() {
     const world = screenToWorld(screenX, screenY);
     const threshold = 15 / state.zoom;
     for (const room of state.rooms) {
-      for (let i = 0; i < room.points.length; i++) {
+      const edgeCount = room.isClosed ? room.points.length : room.points.length - 1;
+      for (let i = 0; i < edgeCount; i++) {
         const p = room.points[i];
         const next = room.points[(i + 1) % room.points.length];
         const dx = next.x - p.x, dy = next.y - p.y;
@@ -418,6 +440,28 @@ export function EditorCanvas() {
       const world = screenToWorld(e.clientX, e.clientY);
       const snapped = snapPoint(world);
 
+      // If we have points, check if clicking near the LAST point → validate & stop
+      if (drawingPoints.length >= 2) {
+        const last = drawingPoints[drawingPoints.length - 1];
+        const distToLast = Math.sqrt((snapped.x - last.x) ** 2 + (snapped.y - last.y) ** 2);
+        if (distToLast < 30) {
+          const id = crypto.randomUUID();
+          dispatch({
+            type: "ADD_ROOM",
+            room: {
+              id,
+              points: [...drawingPoints],
+              walls: [],
+              name: `Mur ${state.rooms.length + 1}`,
+              isClosed: false,
+            },
+          });
+          setDrawingPoints([]);
+          return;
+        }
+      }
+
+      // Check if clicking near the FIRST point (3+ points) → close polygon
       if (drawingPoints.length >= 3) {
         const first = drawingPoints[0];
         const dist = Math.sqrt((snapped.x - first.x) ** 2 + (snapped.y - first.y) ** 2);
@@ -430,6 +474,7 @@ export function EditorCanvas() {
               points: [...drawingPoints],
               walls: [],
               name: `Salle ${state.rooms.length + 1}`,
+              isClosed: true,
             },
           });
           setDrawingPoints([]);
@@ -494,7 +539,7 @@ export function EditorCanvas() {
       const threshold = 15 / state.zoom;
       let found: { roomId: string; edgeIndex: number } | null = null;
       for (const room of state.rooms) {
-        const idx = findNearestEdge(world, room.points, threshold);
+        const idx = findNearestEdge(world, room.points, threshold, room.isClosed);
         if (idx >= 0) {
           found = { roomId: room.id, edgeIndex: idx };
           break;

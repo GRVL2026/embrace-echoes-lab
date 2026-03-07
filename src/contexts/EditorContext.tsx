@@ -10,6 +10,7 @@ type EditorAction =
   | { type: "DELETE_ROOM"; id: string }
   | { type: "DELETE_WALL"; roomId: string; edgeIndex: number }
   | { type: "ADD_DOOR"; door: Door }
+  | { type: "DELETE_DOOR"; id: string }
   | { type: "TOGGLE_SNAP" }
   | { type: "TOGGLE_DIMENSIONS" }
   | { type: "SET_GRID_SIZE"; size: number }
@@ -31,25 +32,43 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         rooms: state.rooms.map((r) => (r.id === action.id ? { ...r, ...action.room } : r)),
       };
     case "DELETE_ROOM":
-      return { ...state, rooms: state.rooms.filter((r) => r.id !== action.id) };
+      return {
+        ...state,
+        rooms: state.rooms.filter((r) => r.id !== action.id),
+        doors: state.doors.filter((d) => d.roomId !== action.id),
+      };
     case "DELETE_WALL": {
       const room = state.rooms.find((r) => r.id === action.roomId);
       if (!room) return state;
-      // Remove the point at edgeIndex (collapses that edge)
       const newPoints = room.points.filter((_, i) => i !== action.edgeIndex);
-      // If fewer than 3 points remain, delete the entire room
       if (newPoints.length < 3) {
-        return { ...state, rooms: state.rooms.filter((r) => r.id !== action.roomId) };
+        return {
+          ...state,
+          rooms: state.rooms.filter((r) => r.id !== action.roomId),
+          doors: state.doors.filter((d) => d.roomId !== action.roomId),
+        };
       }
+      // Re-index doors on this room
+      const updatedDoors = state.doors
+        .filter((d) => !(d.roomId === action.roomId && d.edgeIndex === action.edgeIndex))
+        .map((d) => {
+          if (d.roomId === action.roomId && d.edgeIndex > action.edgeIndex) {
+            return { ...d, edgeIndex: d.edgeIndex - 1 };
+          }
+          return d;
+        });
       return {
         ...state,
         rooms: state.rooms.map((r) =>
           r.id === action.roomId ? { ...r, points: newPoints } : r
         ),
+        doors: updatedDoors,
       };
     }
     case "ADD_DOOR":
       return { ...state, doors: [...state.doors, action.door] };
+    case "DELETE_DOOR":
+      return { ...state, doors: state.doors.filter((d) => d.id !== action.id) };
     case "TOGGLE_SNAP":
       return { ...state, snapToGrid: !state.snapToGrid };
     case "TOGGLE_DIMENSIONS":

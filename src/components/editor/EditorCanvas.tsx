@@ -118,9 +118,11 @@ export function EditorCanvas() {
         room.points.forEach((p, i) => {
           if (i > 0) ctx.lineTo(p.x * CM_TO_PX, p.y * CM_TO_PX);
         });
-        ctx.closePath();
-        ctx.fillStyle = "hsla(263, 85%, 68%, 0.05)";
-        ctx.fill();
+        if (room.isClosed) {
+          ctx.closePath();
+          ctx.fillStyle = "hsla(263, 85%, 68%, 0.05)";
+          ctx.fill();
+        }
         ctx.strokeStyle = "hsl(263, 85%, 68%)";
         ctx.lineWidth = 2 / state.zoom;
         ctx.stroke();

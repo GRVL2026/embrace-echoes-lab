@@ -449,7 +449,7 @@ export function EditorCanvas() {
       const snapped = snapPoint(world);
       const vertexThreshold = 15; // in cm
 
-      // If we have points, check if clicking near the LAST point → validate & stop
+      // If we have points, check if clicking near the LAST drawing point → validate & stop
       if (drawingPoints.length >= 2) {
         const last = drawingPoints[drawingPoints.length - 1];
         const distToLast = Math.sqrt((snapped.x - last.x) ** 2 + (snapped.y - last.y) ** 2);
@@ -470,7 +470,7 @@ export function EditorCanvas() {
         }
       }
 
-      // Check if clicking near the FIRST point (3+ points) → close polygon
+      // Check if clicking near the FIRST drawing point (3+ points) → close polygon
       if (drawingPoints.length >= 3) {
         const first = drawingPoints[0];
         const dist = Math.sqrt((snapped.x - first.x) ** 2 + (snapped.y - first.y) ** 2);
@@ -491,7 +491,32 @@ export function EditorCanvas() {
         }
       }
 
-
+      // If currently drawing, check if clicking on ANY existing room vertex → connect to it & validate
+      if (drawingPoints.length >= 1) {
+        for (const room of state.rooms) {
+          for (let i = 0; i < room.points.length; i++) {
+            const p = room.points[i];
+            const dist = Math.sqrt((snapped.x - p.x) ** 2 + (snapped.y - p.y) ** 2);
+            if (dist < vertexThreshold) {
+              // Connect: add this point to drawing, then save
+              const finalPoints = [...drawingPoints, p];
+              const id = crypto.randomUUID();
+              dispatch({
+                type: "ADD_ROOM",
+                room: {
+                  id,
+                  points: finalPoints,
+                  walls: [],
+                  name: `Mur ${state.rooms.length + 1}`,
+                  isClosed: false,
+                },
+              });
+              setDrawingPoints([]);
+              return;
+            }
+          }
+        }
+      }
 
       setDrawingPoints((prev) => [...prev, snapped]);
     }

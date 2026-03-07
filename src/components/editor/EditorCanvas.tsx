@@ -766,6 +766,11 @@ export function EditorCanvas() {
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return;
+      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+        e.preventDefault();
+        dispatch({ type: "UNDO" });
+        return;
+      }
       switch (e.key.toLowerCase()) {
         case "v": dispatch({ type: "SET_TOOL", tool: "select" }); break;
         case "w": dispatch({ type: "SET_TOOL", tool: "wall" }); break;

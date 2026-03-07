@@ -141,7 +141,9 @@ export function EditorCanvas() {
 
         // Draw wall dimensions
         if (state.showDimensions) {
-          room.points.forEach((p, i) => {
+          const edgeCount = room.isClosed ? room.points.length : room.points.length - 1;
+          for (let i = 0; i < edgeCount; i++) {
+            const p = room.points[i];
             const next = room.points[(i + 1) % room.points.length];
             const dx = next.x - p.x;
             const dy = next.y - p.y;
@@ -163,7 +165,7 @@ export function EditorCanvas() {
             ctx.textBaseline = "bottom";
             ctx.fillText(label, 0, -2 / state.zoom);
             ctx.restore();
-          });
+          }
         }
 
         // Draw vertices

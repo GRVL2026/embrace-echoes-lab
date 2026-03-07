@@ -79,6 +79,18 @@ export function EditorCanvas() {
         ctx.lineWidth = 2 / state.zoom;
         ctx.stroke();
 
+        // Highlight hovered wall for eraser
+        if (hoveredWall && hoveredWall.roomId === room.id) {
+          const a = room.points[hoveredWall.edgeIndex];
+          const b = room.points[(hoveredWall.edgeIndex + 1) % room.points.length];
+          ctx.beginPath();
+          ctx.moveTo(a.x * CM_TO_PX, a.y * CM_TO_PX);
+          ctx.lineTo(b.x * CM_TO_PX, b.y * CM_TO_PX);
+          ctx.strokeStyle = "hsl(0, 85%, 60%)";
+          ctx.lineWidth = 4 / state.zoom;
+          ctx.stroke();
+        }
+
         // Draw wall dimensions
         if (state.showDimensions) {
           room.points.forEach((p, i) => {

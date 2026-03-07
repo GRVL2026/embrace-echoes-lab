@@ -8,9 +8,10 @@ export type Wall = {
 
 export type Room = {
   id: string;
-  points: Point[]; // closed polygon
+  points: Point[]; // polygon (closed or open polyline)
   walls: Wall[];
   name: string;
+  isClosed: boolean; // true = closed polygon, false = open polyline
 };
 
 export type DoorOpenDirection = "left" | "right"; // hinge side relative to wall direction

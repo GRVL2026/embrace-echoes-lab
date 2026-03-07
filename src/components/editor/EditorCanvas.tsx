@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useCallback, useState } from "react";
 import { useEditor } from "@/contexts/EditorContext";
 import { CM_TO_PX, type Point, type Door, type Pillar } from "@/types/editor";
 import { DoorDialog } from "./DoorDialog";
+import { PillarDialog } from "./PillarDialog";
 
 export function EditorCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);

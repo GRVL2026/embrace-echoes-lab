@@ -236,13 +236,9 @@ export function EditorCanvas() {
     }
 
     if (state.tool === "eraser" && e.button === 0) {
-      const world = screenToWorld(e.clientX, e.clientY);
-      const threshold = 20 / state.zoom; // tolerance in cm
-      for (const room of state.rooms) {
-        if (pointInPolygon(world, room.points) || pointNearEdge(world, room.points, threshold)) {
-          dispatch({ type: "DELETE_ROOM", id: room.id });
-          return;
-        }
+      if (hoveredWall) {
+        dispatch({ type: "DELETE_WALL", roomId: hoveredWall.roomId, edgeIndex: hoveredWall.edgeIndex });
+        setHoveredWall(null);
       }
       return;
     }

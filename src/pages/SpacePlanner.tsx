@@ -18,7 +18,7 @@ const SpacePlanner = () => {
           <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-6">
             <div className="flex items-center gap-3">
               <h1 className="font-display text-xl font-bold tracking-tight">
-                <span className="text-primary text-glow-purple">Arcade</span>
+                <span className="text-primary text-glow-purple">Arcade</span>{" "}
                 <span className="text-secondary text-glow-green">Planner</span>
               </h1>
               <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">

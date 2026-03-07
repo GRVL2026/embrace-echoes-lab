@@ -314,7 +314,7 @@ export function EditorSidebar() {
       </ScrollArea>
 
       {/* Catalog panel */}
-      <CatalogPanel />
+      <CatalogPanel catalog={catalog} setCatalog={setCatalog} />
     </div>
   );
 }

@@ -374,7 +374,7 @@ export function EditorCanvas() {
   const inlineCursor = state.tool === "eraser" && !isPanning ? { cursor: eraserCursor } : undefined;
 
   return (
-    <div ref={containerRef} className={`relative flex-1 overflow-hidden ${cursorClass}`}>
+    <div ref={containerRef} className={`relative flex-1 overflow-hidden ${cursorStyle}`} style={inlineCursor}>
       <canvas
         ref={canvasRef}
         onMouseDown={handleMouseDown}

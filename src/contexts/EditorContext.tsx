@@ -12,6 +12,9 @@ type EditorAction =
   | { type: "ADD_DOOR"; door: Door }
   | { type: "UPDATE_DOOR"; id: string; door: Partial<Door> }
   | { type: "DELETE_DOOR"; id: string }
+  | { type: "ADD_PILLAR"; pillar: Pillar }
+  | { type: "UPDATE_PILLAR"; id: string; pillar: Partial<Pillar> }
+  | { type: "DELETE_PILLAR"; id: string }
   | { type: "TOGGLE_SNAP" }
   | { type: "TOGGLE_DIMENSIONS" }
   | { type: "TOGGLE_ANGLES" }
@@ -20,10 +23,10 @@ type EditorAction =
   | { type: "RESET" };
 
 // Actions that modify geometry and should be undoable
-// Only snapshot on meaningful user actions (wall/door creation/deletion)
 const UNDOABLE_ACTIONS = new Set([
   "ADD_ROOM", "DELETE_WALL",
   "ADD_DOOR", "DELETE_DOOR",
+  "ADD_PILLAR", "DELETE_PILLAR",
 ]);
 
 const MAX_UNDO_HISTORY = 50;

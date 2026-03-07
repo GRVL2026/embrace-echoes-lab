@@ -839,6 +839,7 @@ export function EditorCanvas() {
         case "v": dispatch({ type: "SET_TOOL", tool: "select" }); break;
         case "w": dispatch({ type: "SET_TOOL", tool: "wall" }); break;
         case "d": dispatch({ type: "SET_TOOL", tool: "door" }); break;
+        case "p": dispatch({ type: "SET_TOOL", tool: "pillar" }); break;
         case "h": dispatch({ type: "SET_TOOL", tool: "pan" }); break;
         case "e": dispatch({ type: "SET_TOOL", tool: "eraser" }); break;
         case "escape": setDrawingPoints([]); break;

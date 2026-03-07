@@ -40,6 +40,7 @@ export type EditorState = {
   gridSize: number; // in cm, default 20
   snapToGrid: boolean;
   showDimensions: boolean;
+  showAngles: boolean;
 };
 
 export const INITIAL_EDITOR_STATE: EditorState = {
@@ -51,6 +52,7 @@ export const INITIAL_EDITOR_STATE: EditorState = {
   gridSize: 20,
   snapToGrid: true,
   showDimensions: true,
+  showAngles: false,
 };
 
 // 1 meter = 100cm, 1cm = 2px at zoom 1

@@ -1607,3 +1607,55 @@ function drawPillarDistances(
     });
   });
 }
+
+// Draw placed equipments on the canvas
+function drawPlacedEquipments(
+  ctx: CanvasRenderingContext2D,
+  equipments: PlacedEquipment[],
+  zoom: number,
+) {
+  equipments.forEach((eq) => {
+    const cx = eq.position.x * CM_TO_PX;
+    const cy = eq.position.y * CM_TO_PX;
+    const w = eq.width * CM_TO_PX;
+    const d = eq.depth * CM_TO_PX;
+    const rot = (eq.rotation || 0) * Math.PI / 180;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rot);
+
+    // Safety zone (dashed outline)
+    const szW = (eq.width + eq.safetyZone * 2) * CM_TO_PX;
+    const szD = (eq.depth + eq.safetyZone * 2) * CM_TO_PX;
+    ctx.strokeStyle = "hsla(48, 100%, 50%, 0.25)";
+    ctx.lineWidth = 1 / zoom;
+    ctx.setLineDash([6 / zoom, 4 / zoom]);
+    ctx.strokeRect(-szW / 2, -szD / 2, szW, szD);
+    ctx.setLineDash([]);
+
+    // Equipment body
+    ctx.fillStyle = eq.color.replace(")", ", 0.3)").replace("hsl(", "hsla(");
+    ctx.fillRect(-w / 2, -d / 2, w, d);
+    ctx.strokeStyle = eq.color;
+    ctx.lineWidth = 2 / zoom;
+    ctx.strokeRect(-w / 2, -d / 2, w, d);
+
+    // Label
+    ctx.fillStyle = eq.color;
+    ctx.font = `bold ${Math.max(10, 11 / zoom)}px Inter`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    // Truncate name if too long
+    const maxChars = Math.floor(w / (7 / zoom * CM_TO_PX) * 2);
+    const label = eq.name.length > maxChars ? eq.name.slice(0, maxChars - 1) + "…" : eq.name;
+    ctx.fillText(label, 0, 0);
+
+    // Dimensions below
+    ctx.font = `${9 / zoom}px Inter`;
+    ctx.fillStyle = "hsla(48, 100%, 50%, 0.7)";
+    ctx.fillText(`${eq.width}×${eq.depth}cm`, 0, d / 2 + 12 / zoom);
+
+    ctx.restore();
+  });
+}

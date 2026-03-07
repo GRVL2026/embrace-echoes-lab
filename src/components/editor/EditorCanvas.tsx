@@ -16,6 +16,8 @@ export function EditorCanvas() {
   const [pendingDoorClick, setPendingDoorClick] = useState<{ doorId: string; startX: number; startY: number } | null>(null);
   const [hasDragged, setHasDragged] = useState(false);
   const [draggingVertex, setDraggingVertex] = useState<{ roomId: string; pointIndex: number } | null>(null);
+  const [pendingVertexClick, setPendingVertexClick] = useState<{ roomId: string; pointIndex: number; startX: number; startY: number } | null>(null);
+  const [hasVertexDragged, setHasVertexDragged] = useState(false);
   const [editingDimension, setEditingDimension] = useState<{
     roomId: string;
     edgeIndex: number;
@@ -382,9 +384,8 @@ export function EditorCanvas() {
       }
     }
 
-    // Check if clicking on a vertex (select tool) — start vertex drag
-    // For wall tool: only drag if currently drawing (not resuming from endpoint)
-    if (e.button === 0 && (state.tool === "select" || state.tool === "door")) {
+    // Check if clicking on a vertex — select/door: immediate drag; wall tool: pending (click=resume, hold+move=drag)
+    if (e.button === 0 && (state.tool === "select" || state.tool === "door" || state.tool === "wall")) {
       const world = screenToWorld(e.clientX, e.clientY);
       const vertexThreshold = 10 / state.zoom;
       for (const room of state.rooms) {
@@ -392,21 +393,12 @@ export function EditorCanvas() {
           const p = room.points[i];
           const dist = Math.sqrt((world.x - p.x) ** 2 + (world.y - p.y) ** 2);
           if (dist < vertexThreshold) {
-            setDraggingVertex({ roomId: room.id, pointIndex: i });
-            return;
-          }
-        }
-      }
-    }
-    // For wall tool: only allow vertex drag on interior points (not endpoints), and only when not drawing
-    if (e.button === 0 && state.tool === "wall" && drawingPoints.length > 0) {
-      const world = screenToWorld(e.clientX, e.clientY);
-      const vertexThreshold = 10 / state.zoom;
-      for (const room of state.rooms) {
-        for (let i = 0; i < room.points.length; i++) {
-          const p = room.points[i];
-          const dist = Math.sqrt((world.x - p.x) ** 2 + (world.y - p.y) ** 2);
-          if (dist < vertexThreshold) {
+            if (state.tool === "wall" && drawingPoints.length === 0) {
+              // Pending: wait to see if user drags or just clicks
+              setPendingVertexClick({ roomId: room.id, pointIndex: i, startX: e.clientX, startY: e.clientY });
+              setHasVertexDragged(false);
+              return;
+            }
             setDraggingVertex({ roomId: room.id, pointIndex: i });
             return;
           }
@@ -499,29 +491,7 @@ export function EditorCanvas() {
         }
       }
 
-      // If NOT currently drawing, check if clicking on an endpoint of an existing room → resume from it
-      if (drawingPoints.length === 0) {
-        for (const room of state.rooms) {
-          if (room.points.length < 2) continue;
-          const firstPt = room.points[0];
-          const lastPt = room.points[room.points.length - 1];
-          const dFirst = Math.sqrt((snapped.x - firstPt.x) ** 2 + (snapped.y - firstPt.y) ** 2);
-          const dLast = Math.sqrt((snapped.x - lastPt.x) ** 2 + (snapped.y - lastPt.y) ** 2);
 
-          if (dLast < vertexThreshold) {
-            // Resume from end: keep points as-is, remove old room
-            setDrawingPoints([...room.points]);
-            dispatch({ type: "DELETE_ROOM", id: room.id });
-            return;
-          }
-          if (dFirst < vertexThreshold) {
-            // Resume from start: reverse points so we continue from "first" which becomes the end
-            setDrawingPoints([...room.points].reverse());
-            dispatch({ type: "DELETE_ROOM", id: room.id });
-            return;
-          }
-        }
-      }
 
       setDrawingPoints((prev) => [...prev, snapped]);
     }
@@ -541,6 +511,16 @@ export function EditorCanvas() {
         dispatch({ type: "UPDATE_ROOM", id: draggingVertex.roomId, room: { points: newPoints } });
       }
       return;
+    }
+
+    // Handle pending vertex click → detect drag threshold
+    if (pendingVertexClick && !draggingVertex) {
+      const dx = e.clientX - pendingVertexClick.startX;
+      const dy = e.clientY - pendingVertexClick.startY;
+      if (Math.sqrt(dx * dx + dy * dy) > 5) {
+        setDraggingVertex({ roomId: pendingVertexClick.roomId, pointIndex: pendingVertexClick.pointIndex });
+        setHasVertexDragged(true);
+      }
     }
 
     // Handle pending door click → detect drag threshold
@@ -627,6 +607,26 @@ export function EditorCanvas() {
       }
     }
 
+    // If we had a pending vertex click and didn't drag → resume drawing from that point
+    if (pendingVertexClick && !hasVertexDragged) {
+      const room = state.rooms.find((r) => r.id === pendingVertexClick.roomId);
+      if (room && room.points.length >= 2) {
+        const idx = pendingVertexClick.pointIndex;
+        const isFirst = idx === 0;
+        const isLast = idx === room.points.length - 1;
+        if (isLast) {
+          setDrawingPoints([...room.points]);
+          dispatch({ type: "DELETE_ROOM", id: room.id });
+        } else if (isFirst) {
+          setDrawingPoints([...room.points].reverse());
+          dispatch({ type: "DELETE_ROOM", id: room.id });
+        }
+        // Interior points: no resume, just release
+      }
+    }
+
+    setPendingVertexClick(null);
+    setHasVertexDragged(false);
     setPendingDoorClick(null);
     setHasDragged(false);
     if (draggingVertex) setDraggingVertex(null);

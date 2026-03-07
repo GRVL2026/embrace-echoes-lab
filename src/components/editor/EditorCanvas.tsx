@@ -524,7 +524,7 @@ export function EditorCanvas() {
       const threshold = 15 / state.zoom;
       let found: { roomId: string; edgeIndex: number } | null = null;
       for (const room of state.rooms) {
-        const idx = findNearestEdge(world, room.points, threshold);
+        const idx = findNearestEdge(world, room.points, threshold, room.isClosed);
         if (idx >= 0) {
           found = { roomId: room.id, edgeIndex: idx };
           break;

@@ -629,6 +629,12 @@ export function EditorCanvas() {
       return;
     }
 
+    // Handle pillar dragging
+    if (draggingPillar) {
+      const snapped = snapPoint(world);
+      dispatch({ type: "UPDATE_PILLAR", id: draggingPillar, pillar: { position: snapped } });
+      return;
+    }
 
     // Hover detection for eraser and door tools
     if (state.tool === "eraser" || state.tool === "door") {
@@ -644,6 +650,14 @@ export function EditorCanvas() {
       setHoveredWall(found);
     } else if (hoveredWall) {
       setHoveredWall(null);
+    }
+
+    // Hover detection for pillars (eraser + pillar tool)
+    if (state.tool === "eraser" || state.tool === "pillar" || state.tool === "select") {
+      const p = findPillarAtPoint(world);
+      setHoveredPillar(p ? p.id : null);
+    } else if (hoveredPillar) {
+      setHoveredPillar(null);
     }
 
     if (isPanning) {

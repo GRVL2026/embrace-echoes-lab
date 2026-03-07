@@ -290,6 +290,11 @@ export function EditorCanvas() {
       // Draw pillars
       drawPillars(ctx, state, hoveredPillar);
 
+      // Draw pillar-to-wall distances
+      if (state.showPillarDistances && state.pillars.length > 0 && state.rooms.length > 0) {
+        drawPillarDistances(ctx, state);
+      }
+
       // Draw current drawing
       if (drawingPoints.length > 0) {
         ctx.beginPath();

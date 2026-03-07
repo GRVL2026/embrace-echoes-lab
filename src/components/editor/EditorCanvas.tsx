@@ -663,6 +663,16 @@ export function EditorCanvas() {
       }
     }
 
+    // Handle pending pillar click → detect drag threshold
+    if (pendingPillarClick && !draggingPillar) {
+      const dx = e.clientX - pendingPillarClick.startX;
+      const dy = e.clientY - pendingPillarClick.startY;
+      if (Math.sqrt(dx * dx + dy * dy) > 5) {
+        setDraggingPillar(pendingPillarClick.pillarId);
+        setHasPillarDragged(true);
+      }
+    }
+
     // Handle door dragging
     if (draggingDoor) {
       const door = state.doors.find((d) => d.id === draggingDoor);
@@ -689,6 +699,21 @@ export function EditorCanvas() {
     if (draggingPillar) {
       const snapped = snapPoint(world);
       dispatch({ type: "UPDATE_PILLAR", id: draggingPillar, pillar: { position: snapped } });
+      return;
+    }
+
+    // Handle pillar rotation
+    if (rotatingPillar) {
+      const pillar = state.pillars.find((p) => p.id === rotatingPillar);
+      if (pillar) {
+        const angle = Math.atan2(world.x - pillar.position.x, -(world.y - pillar.position.y));
+        let degrees = angle * 180 / Math.PI;
+        // Snap to 15° increments if grid snap is on
+        if (state.snapToGrid) {
+          degrees = Math.round(degrees / 15) * 15;
+        }
+        dispatch({ type: "UPDATE_PILLAR", id: rotatingPillar, pillar: { rotation: degrees } });
+      }
       return;
     }
 

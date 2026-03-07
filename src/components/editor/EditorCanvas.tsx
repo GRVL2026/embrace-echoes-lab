@@ -270,12 +270,13 @@ export function EditorCanvas() {
       return;
     }
 
-    // Check if clicking on an existing door (any tool except eraser) — start drag
+    // Check if clicking on an existing door (any tool except eraser) — prepare for click or drag
     if (e.button === 0 && state.tool !== "eraser") {
       const world = screenToWorld(e.clientX, e.clientY);
       const clickedDoor = findDoorAtPoint(world);
       if (clickedDoor) {
-        setDraggingDoor(clickedDoor.id);
+        setPendingDoorClick({ doorId: clickedDoor.id, startX: e.clientX, startY: e.clientY });
+        setHasDragged(false);
         return;
       }
     }

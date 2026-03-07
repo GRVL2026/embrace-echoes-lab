@@ -139,6 +139,8 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       return { ...state, gridSize: action.size };
     case "RESET":
       return INITIAL_EDITOR_STATE;
+    case "LOAD_STATE":
+      return { ...state, ...action.state };
     default:
       return state;
   }

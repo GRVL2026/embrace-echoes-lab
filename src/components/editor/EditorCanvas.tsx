@@ -12,6 +12,7 @@ export function EditorCanvas() {
   const [drawingPoints, setDrawingPoints] = useState<Point[]>([]);
   const [mousePos, setMousePos] = useState<Point>({ x: 0, y: 0 });
   const [hoveredWall, setHoveredWall] = useState<{ roomId: string; edgeIndex: number } | null>(null);
+  const [draggingDoor, setDraggingDoor] = useState<string | null>(null); // door id being dragged
 
   // Door dialog state
   const [doorDialog, setDoorDialog] = useState<{
@@ -20,6 +21,30 @@ export function EditorCanvas() {
     edgeIndex: number;
     wallLength: number;
   } | null>(null);
+
+  // Find door under a world point
+  const findDoorAtPoint = useCallback((world: Point): Door | null => {
+    for (const door of state.doors) {
+      const room = state.rooms.find((r) => r.id === door.roomId);
+      if (!room || door.edgeIndex >= room.points.length) continue;
+      const a = room.points[door.edgeIndex];
+      const b = room.points[(door.edgeIndex + 1) % room.points.length];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const wallLen = Math.sqrt(dx * dx + dy * dy);
+      if (wallLen === 0) continue;
+      const ux = dx / wallLen, uy = dy / wallLen;
+      const centerDist = door.positionRatio * wallLen;
+      const halfW = door.width / 2;
+      // Project world point onto wall line
+      const px = world.x - a.x, py = world.y - a.y;
+      const proj = px * ux + py * uy; // distance along wall
+      const perpDist = Math.abs(px * (-uy) + py * ux); // distance from wall
+      if (proj >= centerDist - halfW && proj <= centerDist + halfW && perpDist < 15 / state.zoom) {
+        return door;
+      }
+    }
+    return null;
+  }, [state.doors, state.rooms, state.zoom]);
 
   // Convert screen coords to world coords (cm)
   const screenToWorld = useCallback(

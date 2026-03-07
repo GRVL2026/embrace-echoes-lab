@@ -171,6 +171,45 @@ export function EditorCanvas() {
           ctx.fillStyle = "hsl(75, 100%, 50%)";
           ctx.fill();
         });
+
+        // Draw angles at vertices
+        if (state.showAngles && room.points.length >= 3) {
+          room.points.forEach((p, i) => {
+            const prev = room.points[(i - 1 + room.points.length) % room.points.length];
+            const next = room.points[(i + 1) % room.points.length];
+            const v1x = prev.x - p.x, v1y = prev.y - p.y;
+            const v2x = next.x - p.x, v2y = next.y - p.y;
+            const dot = v1x * v2x + v1y * v2y;
+            const len1 = Math.sqrt(v1x * v1x + v1y * v1y);
+            const len2 = Math.sqrt(v2x * v2x + v2y * v2y);
+            if (len1 === 0 || len2 === 0) return;
+            const cosA = Math.max(-1, Math.min(1, dot / (len1 * len2)));
+            const angleDeg = Math.round(Math.acos(cosA) * (180 / Math.PI));
+
+            // Draw small arc
+            const arcR = 20 / state.zoom * CM_TO_PX;
+            const a1 = Math.atan2(v1y, v1x);
+            const a2 = Math.atan2(v2y, v2x);
+            ctx.beginPath();
+            ctx.arc(p.x * CM_TO_PX, p.y * CM_TO_PX, arcR, a1, a2, false);
+            ctx.strokeStyle = "hsla(30, 100%, 60%, 0.6)";
+            ctx.lineWidth = 1.5 / state.zoom;
+            ctx.stroke();
+
+            // Label
+            const bisectX = (v1x / len1 + v2x / len2);
+            const bisectY = (v1y / len1 + v2y / len2);
+            const bisectLen = Math.sqrt(bisectX * bisectX + bisectY * bisectY) || 1;
+            const labelDist = 30 / state.zoom;
+            const lx = (p.x + bisectX / bisectLen * labelDist) * CM_TO_PX;
+            const ly = (p.y + bisectY / bisectLen * labelDist) * CM_TO_PX;
+            ctx.font = `bold ${10 / state.zoom}px Inter`;
+            ctx.fillStyle = "hsl(30, 100%, 60%)";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(`${angleDeg}°`, lx, ly);
+          });
+        }
       });
 
       // Draw doors

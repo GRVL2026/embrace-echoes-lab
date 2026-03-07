@@ -14,6 +14,7 @@ type EditorAction =
   | { type: "DELETE_DOOR"; id: string }
   | { type: "TOGGLE_SNAP" }
   | { type: "TOGGLE_DIMENSIONS" }
+  | { type: "TOGGLE_ANGLES" }
   | { type: "SET_GRID_SIZE"; size: number }
   | { type: "RESET" };
 
@@ -79,6 +80,8 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       return { ...state, snapToGrid: !state.snapToGrid };
     case "TOGGLE_DIMENSIONS":
       return { ...state, showDimensions: !state.showDimensions };
+    case "TOGGLE_ANGLES":
+      return { ...state, showAngles: !state.showAngles };
     case "SET_GRID_SIZE":
       return { ...state, gridSize: action.size };
     case "RESET":

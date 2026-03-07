@@ -659,6 +659,47 @@ export function EditorCanvas() {
         </div>
       )}
 
+      {/* Dimension inline edit */}
+      {editingDimension && (
+        <div
+          className="absolute z-50"
+          style={{
+            left: editingDimension.screenX - (containerRef.current?.getBoundingClientRect().left ?? 0) - 40,
+            top: editingDimension.screenY - (containerRef.current?.getBoundingClientRect().top ?? 0) - 16,
+          }}
+        >
+          <input
+            ref={dimensionInputRef}
+            type="text"
+            defaultValue={editingDimension.currentValue >= 100
+              ? (editingDimension.currentValue / 100).toFixed(2)
+              : Math.round(editingDimension.currentValue).toString()
+            }
+            className="w-20 rounded border border-primary bg-card px-2 py-0.5 text-xs text-primary text-center font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const raw = (e.target as HTMLInputElement).value.trim();
+                let cm: number;
+                if (raw.endsWith("m") && !raw.endsWith("cm")) {
+                  cm = parseFloat(raw) * 100;
+                } else if (raw.endsWith("cm")) {
+                  cm = parseFloat(raw);
+                } else {
+                  // If current was shown in meters, interpret as meters; else cm
+                  const val = parseFloat(raw);
+                  cm = editingDimension.currentValue >= 100 ? val * 100 : val;
+                }
+                if (!isNaN(cm) && cm > 0) handleDimensionConfirm(cm);
+                else setEditingDimension(null);
+              } else if (e.key === "Escape") {
+                setEditingDimension(null);
+              }
+            }}
+            onBlur={() => setEditingDimension(null)}
+          />
+        </div>
+      )}
+
       {/* Door dialog */}
       {doorDialog && (
         <DoorDialog

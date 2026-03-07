@@ -268,6 +268,16 @@ export function EditorCanvas() {
       return;
     }
 
+    // Check if clicking on an existing door (any tool except eraser) — start drag
+    if (e.button === 0 && state.tool !== "eraser") {
+      const world = screenToWorld(e.clientX, e.clientY);
+      const clickedDoor = findDoorAtPoint(world);
+      if (clickedDoor) {
+        setDraggingDoor(clickedDoor.id);
+        return;
+      }
+    }
+
     if (state.tool === "eraser" && e.button === 0) {
       if (hoveredWall) {
         dispatch({ type: "DELETE_WALL", roomId: hoveredWall.roomId, edgeIndex: hoveredWall.edgeIndex });

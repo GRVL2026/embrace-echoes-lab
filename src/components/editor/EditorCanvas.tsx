@@ -457,7 +457,7 @@ export function EditorCanvas() {
 // Draw doors with arc opening indicator
 function drawDoors(
   ctx: CanvasRenderingContext2D,
-  state: { rooms: { id: string; points: Point[] }[]; doors: Door[]; zoom: number }
+  state: { rooms: { id: string; points: Point[] }[]; doors: Door[]; zoom: number; showDimensions?: boolean }
 ) {
   const { rooms, doors, zoom } = state;
 
@@ -471,16 +471,12 @@ function drawDoors(
     const wallLen = Math.sqrt(dx * dx + dy * dy);
     if (wallLen === 0) return;
 
-    // Unit vector along wall
     const ux = dx / wallLen, uy = dy / wallLen;
-    // Perpendicular (inward — left of direction)
+    // Perpendicular: left of wall direction = interior
     const nx = -uy, ny = ux;
 
-    // Door center position along wall
     const centerDist = door.positionRatio * wallLen;
     const halfW = door.width / 2;
-
-    // Door start and end points on the wall
     const startDist = centerDist - halfW;
     const endDist = centerDist + halfW;
 
@@ -489,16 +485,17 @@ function drawDoors(
     const ex = (a.x + ux * endDist) * CM_TO_PX;
     const ey = (a.y + uy * endDist) * CM_TO_PX;
 
-    // Clear wall segment (draw background color over it)
     ctx.save();
-    ctx.strokeStyle = "hsl(240, 60%, 4.7%)"; // background color
+
+    // Clear wall segment
+    ctx.strokeStyle = "hsl(240, 60%, 4.7%)";
     ctx.lineWidth = 4 / zoom;
     ctx.beginPath();
     ctx.moveTo(sx, sy);
     ctx.lineTo(ex, ey);
     ctx.stroke();
 
-    // Draw door lines (the "leaf" edges)
+    // Draw door line
     ctx.strokeStyle = "hsl(200, 85%, 60%)";
     ctx.lineWidth = 2 / zoom;
     ctx.beginPath();
@@ -506,51 +503,33 @@ function drawDoors(
     ctx.lineTo(ex, ey);
     ctx.stroke();
 
-    // Draw arc
-    const arcRadius = door.width * CM_TO_PX;
-    // Hinge point depends on open direction
-    const hingePx = door.openDirection === "left" ? { x: sx, y: sy } : { x: ex, y: ey };
-    
-    // Determine arc angles
+    // Side multiplier: interior = left of wall dir (positive perp), exterior = opposite
+    const sideMul = door.openSide === "interior" ? 1 : -1;
     const wallAngle = Math.atan2(dy, dx);
-    const perpAngle = door.openDirection === "left"
-      ? wallAngle - Math.PI / 2
-      : wallAngle + Math.PI / 2;
-    
-    let startAngle: number, endAngle: number;
-    if (door.openDirection === "left") {
-      startAngle = wallAngle;
-      endAngle = wallAngle - Math.PI / 2;
+
+    if (door.leafCount === "single") {
+      drawDoorArc(ctx, zoom, door.openDirection, wallAngle, sideMul, sx, sy, ex, ey, door.width);
     } else {
-      startAngle = wallAngle + Math.PI / 2;
-      endAngle = wallAngle;
+      // Double door: split at center
+      const cx = (sx + ex) / 2;
+      const cy = (sy + ey) / 2;
+      // Left leaf: from sx,sy to cx,cy
+      drawDoorArc(ctx, zoom, door.openDirection, wallAngle, sideMul, sx, sy, cx, cy, door.width / 2);
+      // Right leaf: from cx,cy to ex,ey
+      const rightDir = door.openDirectionRight || "right";
+      drawDoorArc(ctx, zoom, rightDir, wallAngle, sideMul, cx, cy, ex, ey, door.width / 2);
     }
 
-    ctx.beginPath();
-    ctx.arc(hingePx.x, hingePx.y, arcRadius, startAngle, endAngle, door.openDirection === "left");
-    ctx.strokeStyle = "hsla(200, 85%, 60%, 0.5)";
-    ctx.lineWidth = 1.5 / zoom;
-    ctx.setLineDash([4 / zoom, 3 / zoom]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Draw hinge dot
-    ctx.beginPath();
-    ctx.arc(hingePx.x, hingePx.y, 3 / zoom, 0, Math.PI * 2);
-    ctx.fillStyle = "hsl(200, 85%, 60%)";
-    ctx.fill();
-
-    // Draw dimension labels: left segment, door, right segment
-    const wallAngleForText = Math.atan2(dy, dx);
+    // Draw dimension labels
+    const wallAngleForText = wallAngle;
     const textAngle = wallAngleForText > Math.PI / 2 || wallAngleForText < -Math.PI / 2
       ? wallAngleForText + Math.PI : wallAngleForText;
     const labelOffset = 16 / zoom;
     const perpOffX = Math.sin(wallAngleForText) * labelOffset;
     const perpOffY = -Math.cos(wallAngleForText) * labelOffset;
-
     const formatDim = (cm: number) => cm >= 100 ? `${(cm / 100).toFixed(2)}m` : `${Math.round(cm)}cm`;
 
-    // Left segment (from wall start to door start)
+    // Left segment
     const leftLen = startDist;
     if (leftLen > 5) {
       const lmx = (a.x + ux * leftLen / 2) * CM_TO_PX;
@@ -570,7 +549,7 @@ function drawDoors(
     const dmx = (sx + ex) / 2;
     const dmy = (sy + ey) / 2;
     ctx.save();
-    ctx.translate(dmx - perpOffX, dmy - perpOffY); // opposite side
+    ctx.translate(dmx - perpOffX, dmy - perpOffY);
     ctx.rotate(textAngle);
     ctx.font = `bold ${10 / zoom}px Inter`;
     ctx.fillStyle = "hsl(200, 85%, 60%)";
@@ -579,7 +558,7 @@ function drawDoors(
     ctx.fillText(formatDim(door.width), 0, 2 / zoom);
     ctx.restore();
 
-    // Right segment (from door end to wall end)
+    // Right segment
     const rightLen = wallLen - endDist;
     if (rightLen > 5) {
       const rmx = (a.x + ux * (endDist + rightLen / 2)) * CM_TO_PX;
@@ -597,6 +576,50 @@ function drawDoors(
 
     ctx.restore();
   });
+}
+
+// Draw a single door leaf arc
+function drawDoorArc(
+  ctx: CanvasRenderingContext2D,
+  zoom: number,
+  openDir: "left" | "right",
+  wallAngle: number,
+  sideMul: number, // 1 = interior (left of wall), -1 = exterior
+  sx: number, sy: number, // leaf start
+  ex: number, ey: number, // leaf end
+  leafWidth: number,
+) {
+  const arcRadius = leafWidth * CM_TO_PX;
+  // Hinge is on the side specified by openDir
+  const hingePx = openDir === "left" ? { x: sx, y: sy } : { x: ex, y: ey };
+
+  // Arc sweeps from wall direction into the perpendicular (interior or exterior)
+  let startAngle: number, endAngle: number;
+  const perpOffset = (Math.PI / 2) * sideMul;
+
+  if (openDir === "left") {
+    startAngle = wallAngle;
+    endAngle = wallAngle - perpOffset;
+  } else {
+    startAngle = wallAngle + perpOffset;
+    endAngle = wallAngle;
+  }
+
+  const counterClockwise = (openDir === "left") === (sideMul === 1);
+
+  ctx.beginPath();
+  ctx.arc(hingePx.x, hingePx.y, arcRadius, startAngle, endAngle, counterClockwise);
+  ctx.strokeStyle = "hsla(200, 85%, 60%, 0.5)";
+  ctx.lineWidth = 1.5 / zoom;
+  ctx.setLineDash([4 / zoom, 3 / zoom]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Hinge dot
+  ctx.beginPath();
+  ctx.arc(hingePx.x, hingePx.y, 3 / zoom, 0, Math.PI * 2);
+  ctx.fillStyle = "hsl(200, 85%, 60%)";
+  ctx.fill();
 }
 
 // Draw the background grid

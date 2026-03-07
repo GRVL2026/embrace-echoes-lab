@@ -19,6 +19,9 @@ export function EditorCanvas() {
   const [draggingVertex, setDraggingVertex] = useState<{ roomId: string; pointIndex: number } | null>(null);
   const [pendingVertexClick, setPendingVertexClick] = useState<{ roomId: string; pointIndex: number; startX: number; startY: number } | null>(null);
   const [draggingPillar, setDraggingPillar] = useState<string | null>(null);
+  const [rotatingPillar, setRotatingPillar] = useState<string | null>(null);
+  const [pendingPillarClick, setPendingPillarClick] = useState<{ pillarId: string; startX: number; startY: number } | null>(null);
+  const [hasPillarDragged, setHasPillarDragged] = useState(false);
   const [hoveredPillar, setHoveredPillar] = useState<string | null>(null);
   const [hasVertexDragged, setHasVertexDragged] = useState(false);
   const [editingDimension, setEditingDimension] = useState<{

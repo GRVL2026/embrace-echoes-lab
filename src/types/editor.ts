@@ -13,11 +13,15 @@ export type Room = {
   name: string;
 };
 
+export type DoorOpenDirection = "left" | "right"; // relative to wall direction
+
 export type Door = {
   id: string;
-  position: Point;
+  roomId: string;
+  edgeIndex: number; // which edge of the room polygon
+  positionRatio: number; // 0–1 along the wall
   width: number; // in cm
-  wallId: string;
+  openDirection: DoorOpenDirection;
 };
 
 export type EditorTool = "select" | "wall" | "door" | "pan" | "eraser";

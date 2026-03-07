@@ -746,9 +746,9 @@ export function EditorCanvas() {
       setHoveredWall(null);
     }
 
-    // Hover detection for pillars (eraser + pillar tool)
+    // Hover detection for pillars (eraser + pillar tool + select) — include handle zone
     if (state.tool === "eraser" || state.tool === "pillar" || state.tool === "select") {
-      const p = findPillarAtPoint(world);
+      const p = findPillarAtPoint(world, true);
       setHoveredPillar(p ? p.id : null);
     } else if (hoveredPillar) {
       setHoveredPillar(null);

@@ -81,6 +81,35 @@ export function EditorToolbar() {
         <TooltipContent side="right">Afficher dimensions</TooltipContent>
       </Tooltip>
 
+      {/* Scale toggle: m ↔ cm */}
+      <Tooltip delayDuration={200}>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "h-10 w-10 font-mono text-xs font-bold",
+              state.gridSize === 1
+                ? "bg-accent/20 text-accent"
+                : "text-muted-foreground"
+            )}
+            onClick={() =>
+              dispatch({
+                type: "SET_GRID_SIZE",
+                size: state.gridSize === 1 ? 20 : 1,
+              })
+            }
+          >
+            {state.gridSize === 1 ? "cm" : "m"}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">
+          {state.gridSize === 1
+            ? "Échelle centimètre (1cm) — cliquer pour mètre"
+            : "Échelle mètre (20cm) — cliquer pour centimètre"}
+        </TooltipContent>
+      </Tooltip>
+
       <Separator className="my-1 w-6" />
 
       <Tooltip delayDuration={200}>

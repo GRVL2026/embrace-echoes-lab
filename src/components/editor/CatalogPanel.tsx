@@ -79,20 +79,27 @@ export function CatalogPanel() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleImportCatalog = (file: File) => {
+  const handleImportFile = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const json = JSON.parse(e.target?.result as string);
+        const text = e.target?.result as string;
         let items: GameEquipment[] = [];
 
-        // Support both { catalog: [...] } and direct array
-        if (Array.isArray(json)) {
-          items = json;
-        } else if (json.catalog && Array.isArray(json.catalog)) {
-          items = json.catalog;
+        const isCSV = file.name.toLowerCase().endsWith(".csv");
+
+        if (isCSV) {
+          items = parseCSV(text);
         } else {
-          throw new Error("Format invalide. Attendu: { catalog: [...] } ou un tableau.");
+          // JSON parsing
+          const json = JSON.parse(text);
+          if (Array.isArray(json)) {
+            items = json;
+          } else if (json.catalog && Array.isArray(json.catalog)) {
+            items = json.catalog;
+          } else {
+            throw new Error("Format invalide. Attendu: { catalog: [...] } ou un tableau.");
+          }
         }
 
         // Validate and normalize
@@ -107,12 +114,14 @@ export function CatalogPanel() {
           color: item.color || getCategoryColor(item.category || "default"),
           icon: item.icon,
           pmrAccessible: item.pmrAccessible ?? false,
+          model3d: item.model3d,
         }));
 
         setCatalog(prev => [...prev, ...validated]);
-        toast.success(`${validated.length} jeu${validated.length > 1 ? "x" : ""} importé${validated.length > 1 ? "s" : ""}`);
+        const fmt = isCSV ? "CSV" : "JSON";
+        toast.success(`${validated.length} jeu${validated.length > 1 ? "x" : ""} importé${validated.length > 1 ? "s" : ""} (${fmt})`);
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Erreur de parsing JSON");
+        toast.error(err instanceof Error ? err.message : "Erreur de parsing");
       }
     };
     reader.readAsText(file);

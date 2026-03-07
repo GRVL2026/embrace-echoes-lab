@@ -322,7 +322,8 @@ export function EditorCanvas() {
     const world = screenToWorld(screenX, screenY);
     const threshold = 15 / state.zoom;
     for (const room of state.rooms) {
-      for (let i = 0; i < room.points.length; i++) {
+      const edgeCount = room.isClosed ? room.points.length : room.points.length - 1;
+      for (let i = 0; i < edgeCount; i++) {
         const p = room.points[i];
         const next = room.points[(i + 1) % room.points.length];
         const dx = next.x - p.x, dy = next.y - p.y;

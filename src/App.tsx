@@ -5,10 +5,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import SpacePlanner from "./pages/SpacePlanner";
 import NotFound from "./pages/NotFound";
+import { forwardRef } from "react";
 
 const queryClient = new QueryClient();
 
-const App = () => (
+const App = forwardRef(() => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
@@ -21,6 +22,8 @@ const App = () => (
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
-);
+));
+
+App.displayName = "App";
 
 export default App;

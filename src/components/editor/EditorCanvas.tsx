@@ -629,6 +629,26 @@ export function EditorCanvas() {
       }
     }
 
+    // If we had a pending vertex click and didn't drag → resume drawing from that point
+    if (pendingVertexClick && !hasVertexDragged) {
+      const room = state.rooms.find((r) => r.id === pendingVertexClick.roomId);
+      if (room && room.points.length >= 2) {
+        const idx = pendingVertexClick.pointIndex;
+        const isFirst = idx === 0;
+        const isLast = idx === room.points.length - 1;
+        if (isLast) {
+          setDrawingPoints([...room.points]);
+          dispatch({ type: "DELETE_ROOM", id: room.id });
+        } else if (isFirst) {
+          setDrawingPoints([...room.points].reverse());
+          dispatch({ type: "DELETE_ROOM", id: room.id });
+        }
+        // Interior points: no resume, just release
+      }
+    }
+
+    setPendingVertexClick(null);
+    setHasVertexDragged(false);
     setPendingDoorClick(null);
     setHasDragged(false);
     if (draggingVertex) setDraggingVertex(null);

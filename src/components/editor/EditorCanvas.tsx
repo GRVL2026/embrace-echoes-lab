@@ -400,6 +400,30 @@ export function EditorCanvas() {
 
   const handleMouseUp = () => {
     setIsPanning(false);
+
+    // If we had a pending door click and didn't drag → open settings
+    if (pendingDoorClick && !hasDragged) {
+      const door = state.doors.find((d) => d.id === pendingDoorClick.doorId);
+      if (door) {
+        const room = state.rooms.find((r) => r.id === door.roomId);
+        if (room && door.edgeIndex < room.points.length) {
+          const a = room.points[door.edgeIndex];
+          const b = room.points[(door.edgeIndex + 1) % room.points.length];
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const wallLength = Math.sqrt(dx * dx + dy * dy);
+          setDoorDialog({
+            open: true,
+            roomId: door.roomId,
+            edgeIndex: door.edgeIndex,
+            wallLength,
+            editingDoorId: door.id,
+          });
+        }
+      }
+    }
+
+    setPendingDoorClick(null);
+    setHasDragged(false);
     if (draggingDoor) setDraggingDoor(null);
   };
 

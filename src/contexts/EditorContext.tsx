@@ -111,6 +111,21 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       };
     case "DELETE_PILLAR":
       return { ...state, pillars: state.pillars.filter((p) => p.id !== action.id) };
+    case "ADD_PLACED_EQUIPMENT":
+      return { ...state, placedEquipments: [...state.placedEquipments, action.equipment] };
+    case "ADD_PLACED_EQUIPMENTS":
+      return { ...state, placedEquipments: [...state.placedEquipments, ...action.equipments] };
+    case "UPDATE_PLACED_EQUIPMENT":
+      return {
+        ...state,
+        placedEquipments: state.placedEquipments.map((e) =>
+          e.id === action.id ? { ...e, ...action.equipment } : e
+        ),
+      };
+    case "DELETE_PLACED_EQUIPMENT":
+      return { ...state, placedEquipments: state.placedEquipments.filter((e) => e.id !== action.id) };
+    case "CLEAR_PLACED_EQUIPMENTS":
+      return { ...state, placedEquipments: [] };
     case "TOGGLE_SNAP":
       return { ...state, snapToGrid: !state.snapToGrid };
     case "TOGGLE_DIMENSIONS":

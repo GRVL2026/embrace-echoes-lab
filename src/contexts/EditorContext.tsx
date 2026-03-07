@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, type ReactNode } from "react";
+import React, { createContext, useContext, useReducer, useCallback, type ReactNode } from "react";
 import { type EditorState, type EditorTool, type Point, type Room, type Door, INITIAL_EDITOR_STATE } from "@/types/editor";
 
 type EditorAction =
@@ -16,7 +16,21 @@ type EditorAction =
   | { type: "TOGGLE_DIMENSIONS" }
   | { type: "TOGGLE_ANGLES" }
   | { type: "SET_GRID_SIZE"; size: number }
+  | { type: "UNDO" }
   | { type: "RESET" };
+
+// Actions that modify geometry and should be undoable
+const UNDOABLE_ACTIONS = new Set([
+  "ADD_ROOM", "UPDATE_ROOM", "DELETE_ROOM", "DELETE_WALL",
+  "ADD_DOOR", "UPDATE_DOOR", "DELETE_DOOR", "RESET",
+]);
+
+const MAX_UNDO_HISTORY = 50;
+
+type UndoableState = {
+  current: EditorState;
+  history: EditorState[]; // past states (most recent last)
+};
 
 function editorReducer(state: EditorState, action: EditorAction): EditorState {
   switch (action.type) {
@@ -50,7 +64,6 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
           doors: state.doors.filter((d) => d.roomId !== action.roomId),
         };
       }
-      // Re-index doors on this room
       const updatedDoors = state.doors
         .filter((d) => !(d.roomId === action.roomId && d.edgeIndex === action.edgeIndex))
         .map((d) => {
@@ -91,17 +104,60 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
   }
 }
 
+function undoReducer(undoState: UndoableState, action: EditorAction): UndoableState {
+  if (action.type === "UNDO") {
+    if (undoState.history.length === 0) return undoState;
+    const previous = undoState.history[undoState.history.length - 1];
+    // Restore previous state but keep current view settings (zoom, pan, tool, toggles)
+    return {
+      current: {
+        ...previous,
+        tool: undoState.current.tool,
+        zoom: undoState.current.zoom,
+        panOffset: undoState.current.panOffset,
+        snapToGrid: undoState.current.snapToGrid,
+        showDimensions: undoState.current.showDimensions,
+        showAngles: undoState.current.showAngles,
+        gridSize: undoState.current.gridSize,
+      },
+      history: undoState.history.slice(0, -1),
+    };
+  }
+
+  const newState = editorReducer(undoState.current, action);
+
+  // Only push to history for undoable actions
+  if (UNDOABLE_ACTIONS.has(action.type)) {
+    const newHistory = [...undoState.history, undoState.current].slice(-MAX_UNDO_HISTORY);
+    return { current: newState, history: newHistory };
+  }
+
+  return { current: newState, history: undoState.history };
+}
+
 type EditorContextType = {
   state: EditorState;
   dispatch: React.Dispatch<EditorAction>;
+  canUndo: boolean;
 };
 
 // eslint-disable-next-line react-refresh/only-export-components
 const EditorContext = createContext<EditorContextType | null>(null);
 
 export function EditorProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(editorReducer, INITIAL_EDITOR_STATE);
-  return <EditorContext.Provider value={{ state, dispatch }}>{children}</EditorContext.Provider>;
+  const [undoState, rawDispatch] = useReducer(undoReducer, {
+    current: INITIAL_EDITOR_STATE,
+    history: [],
+  });
+
+  const canUndo = undoState.history.length > 0;
+
+  const value = React.useMemo(
+    () => ({ state: undoState.current, dispatch: rawDispatch, canUndo }),
+    [undoState, canUndo]
+  );
+
+  return <EditorContext.Provider value={value}>{children}</EditorContext.Provider>;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components

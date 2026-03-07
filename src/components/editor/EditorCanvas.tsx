@@ -478,17 +478,20 @@ export function EditorCanvas() {
       return;
     }
 
-    // Pillar tool: place pillar on click or open dialog
+    // Pillar tool: place or interact with pillar
     if (state.tool === "pillar" && e.button === 0) {
       const world = screenToWorld(e.clientX, e.clientY);
       const snapped = snapPoint(world);
-      // Check if clicking on existing pillar → open dialog
       const clickedPillar = findPillarAtPoint(snapped);
       if (clickedPillar) {
-        setPillarDialog({ open: true, pillarId: clickedPillar.id });
+        if (isOnRotationHandle(world, clickedPillar, state.zoom)) {
+          setRotatingPillar(clickedPillar.id);
+          return;
+        }
+        setPendingPillarClick({ pillarId: clickedPillar.id, startX: e.clientX, startY: e.clientY });
+        setHasPillarDragged(false);
         return;
       }
-      // Place new pillar then open dialog
       const pillar: Pillar = {
         id: crypto.randomUUID(),
         position: snapped,
@@ -496,6 +499,7 @@ export function EditorCanvas() {
         width: 30,
         depth: 30,
         height: 250,
+        rotation: 0,
       };
       dispatch({ type: "ADD_PILLAR", pillar });
       setPillarDialog({ open: true, pillarId: pillar.id });

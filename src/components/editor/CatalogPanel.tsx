@@ -204,11 +204,11 @@ export function CatalogPanel() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".json"
+            accept=".json,.csv"
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) handleImportCatalog(file);
+              if (file) handleImportFile(file);
               if (fileInputRef.current) fileInputRef.current.value = "";
             }}
           />

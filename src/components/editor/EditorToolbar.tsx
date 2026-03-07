@@ -99,6 +99,20 @@ export function EditorToolbar() {
         <TooltipContent side="right">Afficher angles</TooltipContent>
       </Tooltip>
 
+      <Tooltip delayDuration={200}>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn("h-10 w-10", state.showPillarDistances && "bg-accent/20 text-accent")}
+            onClick={() => dispatch({ type: "TOGGLE_PILLAR_DISTANCES" })}
+          >
+            <Columns className="h-5 w-5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">Distances murs-poteaux</TooltipContent>
+      </Tooltip>
+
       {/* Scale toggle: m ↔ cm */}
       <Tooltip delayDuration={200}>
         <TooltipTrigger asChild>

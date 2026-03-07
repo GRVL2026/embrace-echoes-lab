@@ -11,6 +11,7 @@ import {
   Undo2,
   Locate,
   Triangle,
+  Columns,
 } from "lucide-react";
 import { useEditor } from "@/contexts/EditorContext";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ const tools: { id: EditorTool; label: string; icon: React.ElementType; shortcut:
   { id: "select", label: "Sélectionner", icon: MousePointer2, shortcut: "V" },
   { id: "wall", label: "Dessiner murs", icon: PenTool, shortcut: "W" },
   { id: "door", label: "Ajouter porte", icon: DoorOpen, shortcut: "D" },
+  { id: "pillar", label: "Ajouter poteau", icon: Columns, shortcut: "P" },
   { id: "pan", label: "Déplacer vue", icon: Hand, shortcut: "H" },
   { id: "eraser", label: "Effacer", icon: Eraser, shortcut: "E" },
 ];

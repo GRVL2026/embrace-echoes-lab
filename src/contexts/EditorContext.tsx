@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useCallback, type ReactNode } from "react";
-import { type EditorState, type EditorTool, type Point, type Room, type Door, INITIAL_EDITOR_STATE } from "@/types/editor";
+import { type EditorState, type EditorTool, type Point, type Room, type Door, type Pillar, INITIAL_EDITOR_STATE } from "@/types/editor";
 
 type EditorAction =
   | { type: "SET_TOOL"; tool: EditorTool }
@@ -12,6 +12,9 @@ type EditorAction =
   | { type: "ADD_DOOR"; door: Door }
   | { type: "UPDATE_DOOR"; id: string; door: Partial<Door> }
   | { type: "DELETE_DOOR"; id: string }
+  | { type: "ADD_PILLAR"; pillar: Pillar }
+  | { type: "UPDATE_PILLAR"; id: string; pillar: Partial<Pillar> }
+  | { type: "DELETE_PILLAR"; id: string }
   | { type: "TOGGLE_SNAP" }
   | { type: "TOGGLE_DIMENSIONS" }
   | { type: "TOGGLE_ANGLES" }
@@ -20,10 +23,10 @@ type EditorAction =
   | { type: "RESET" };
 
 // Actions that modify geometry and should be undoable
-// Only snapshot on meaningful user actions (wall/door creation/deletion)
 const UNDOABLE_ACTIONS = new Set([
   "ADD_ROOM", "DELETE_WALL",
   "ADD_DOOR", "DELETE_DOOR",
+  "ADD_PILLAR", "DELETE_PILLAR",
 ]);
 
 const MAX_UNDO_HISTORY = 50;
@@ -90,6 +93,15 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       };
     case "DELETE_DOOR":
       return { ...state, doors: state.doors.filter((d) => d.id !== action.id) };
+    case "ADD_PILLAR":
+      return { ...state, pillars: [...state.pillars, action.pillar] };
+    case "UPDATE_PILLAR":
+      return {
+        ...state,
+        pillars: state.pillars.map((p) => (p.id === action.id ? { ...p, ...action.pillar } : p)),
+      };
+    case "DELETE_PILLAR":
+      return { ...state, pillars: state.pillars.filter((p) => p.id !== action.id) };
     case "TOGGLE_SNAP":
       return { ...state, snapToGrid: !state.snapToGrid };
     case "TOGGLE_DIMENSIONS":

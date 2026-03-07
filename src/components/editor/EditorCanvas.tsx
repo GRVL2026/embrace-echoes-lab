@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useCallback, useState } from "react";
 import { useEditor } from "@/contexts/EditorContext";
-import { CM_TO_PX, type Point, type Door } from "@/types/editor";
+import { CM_TO_PX, type Point, type Door, type Pillar } from "@/types/editor";
 import { DoorDialog } from "./DoorDialog";
 
 export function EditorCanvas() {
@@ -17,6 +17,8 @@ export function EditorCanvas() {
   const [hasDragged, setHasDragged] = useState(false);
   const [draggingVertex, setDraggingVertex] = useState<{ roomId: string; pointIndex: number } | null>(null);
   const [pendingVertexClick, setPendingVertexClick] = useState<{ roomId: string; pointIndex: number; startX: number; startY: number } | null>(null);
+  const [draggingPillar, setDraggingPillar] = useState<string | null>(null);
+  const [hoveredPillar, setHoveredPillar] = useState<string | null>(null);
   const [hasVertexDragged, setHasVertexDragged] = useState(false);
   const [editingDimension, setEditingDimension] = useState<{
     roomId: string;
@@ -60,7 +62,23 @@ export function EditorCanvas() {
     return null;
   }, [state.doors, state.rooms, state.zoom]);
 
-  // Convert screen coords to world coords (cm)
+  // Find pillar under a world point
+  const findPillarAtPoint = useCallback((world: Point): Pillar | null => {
+    for (const pillar of state.pillars) {
+      const dx = world.x - pillar.position.x;
+      const dy = world.y - pillar.position.y;
+      if (pillar.shape === "round") {
+        const r = pillar.width / 2;
+        if (dx * dx + dy * dy <= r * r + 100) return pillar;
+      } else {
+        const hw = pillar.width / 2 + 5;
+        const hd = pillar.depth / 2 + 5;
+        if (Math.abs(dx) <= hw && Math.abs(dy) <= hd) return pillar;
+      }
+    }
+    return null;
+  }, [state.pillars]);
+
   const screenToWorld = useCallback(
     (sx: number, sy: number): Point => {
       const canvas = canvasRef.current;
@@ -221,6 +239,9 @@ export function EditorCanvas() {
 
       // Draw doors
       drawDoors(ctx, state);
+
+      // Draw pillars
+      drawPillars(ctx, state, hoveredPillar);
 
       // Draw current drawing
       if (drawingPoints.length > 0) {
@@ -418,10 +439,38 @@ export function EditorCanvas() {
     }
 
     if (state.tool === "eraser" && e.button === 0) {
+      // Check pillar first
+      if (hoveredPillar) {
+        dispatch({ type: "DELETE_PILLAR", id: hoveredPillar });
+        setHoveredPillar(null);
+        return;
+      }
       if (hoveredWall) {
         dispatch({ type: "DELETE_WALL", roomId: hoveredWall.roomId, edgeIndex: hoveredWall.edgeIndex });
         setHoveredWall(null);
       }
+      return;
+    }
+
+    // Pillar tool: place pillar on click
+    if (state.tool === "pillar" && e.button === 0) {
+      const world = screenToWorld(e.clientX, e.clientY);
+      const snapped = snapPoint(world);
+      // Check if clicking on existing pillar → start dragging
+      const clickedPillar = findPillarAtPoint(snapped);
+      if (clickedPillar) {
+        setDraggingPillar(clickedPillar.id);
+        return;
+      }
+      // Place new pillar
+      const pillar: Pillar = {
+        id: crypto.randomUUID(),
+        position: snapped,
+        shape: "square",
+        width: 30,
+        depth: 30,
+      };
+      dispatch({ type: "ADD_PILLAR", pillar });
       return;
     }
 
@@ -580,6 +629,12 @@ export function EditorCanvas() {
       return;
     }
 
+    // Handle pillar dragging
+    if (draggingPillar) {
+      const snapped = snapPoint(world);
+      dispatch({ type: "UPDATE_PILLAR", id: draggingPillar, pillar: { position: snapped } });
+      return;
+    }
 
     // Hover detection for eraser and door tools
     if (state.tool === "eraser" || state.tool === "door") {
@@ -595,6 +650,14 @@ export function EditorCanvas() {
       setHoveredWall(found);
     } else if (hoveredWall) {
       setHoveredWall(null);
+    }
+
+    // Hover detection for pillars (eraser + pillar tool)
+    if (state.tool === "eraser" || state.tool === "pillar" || state.tool === "select") {
+      const p = findPillarAtPoint(world);
+      setHoveredPillar(p ? p.id : null);
+    } else if (hoveredPillar) {
+      setHoveredPillar(null);
     }
 
     if (isPanning) {
@@ -678,6 +741,7 @@ export function EditorCanvas() {
     setHasDragged(false);
     if (draggingVertex) setDraggingVertex(null);
     if (draggingDoor) setDraggingDoor(null);
+    if (draggingPillar) setDraggingPillar(null);
   };
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -775,6 +839,7 @@ export function EditorCanvas() {
         case "v": dispatch({ type: "SET_TOOL", tool: "select" }); break;
         case "w": dispatch({ type: "SET_TOOL", tool: "wall" }); break;
         case "d": dispatch({ type: "SET_TOOL", tool: "door" }); break;
+        case "p": dispatch({ type: "SET_TOOL", tool: "pillar" }); break;
         case "h": dispatch({ type: "SET_TOOL", tool: "pan" }); break;
         case "e": dispatch({ type: "SET_TOOL", tool: "eraser" }); break;
         case "escape": setDrawingPoints([]); break;
@@ -787,7 +852,7 @@ export function EditorCanvas() {
   const eraserCursor = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23ff4444' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21'/%3E%3Cpath d='M22 21H7'/%3E%3Cpath d='m5 11 9 9'/%3E%3C/svg%3E") 4 20, auto`;
 
   const cursorStyle =
-    draggingVertex || draggingDoor
+    draggingVertex || draggingDoor || draggingPillar
       ? "cursor-grabbing"
       : state.tool === "pan" || isPanning
       ? "cursor-grab"
@@ -797,6 +862,8 @@ export function EditorCanvas() {
       ? ""
       : state.tool === "door"
       ? "cursor-pointer"
+      : state.tool === "pillar"
+      ? "cursor-crosshair"
       : "cursor-default";
 
   const inlineCursor = state.tool === "eraser" && !isPanning ? { cursor: eraserCursor } : undefined;
@@ -836,8 +903,12 @@ export function EditorCanvas() {
           Cliquez sur un mur pour ajouter une porte.
         </div>
       )}
+      {state.tool === "pillar" && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 rounded-md border border-border bg-card/80 backdrop-blur-sm px-4 py-2 text-sm text-muted-foreground neon-border">
+          Cliquez pour placer un poteau. Glissez un poteau existant pour le déplacer.
+        </div>
+      )}
 
-      {/* Dimension inline edit */}
       {editingDimension && (
         <div
           className="absolute z-50"
@@ -1143,4 +1214,77 @@ function drawGrid(
       ctx.fillText(`${meters}m`, 4 / zoom, y * pxPerCell);
     }
   }
+}
+
+// Draw pillars
+function drawPillars(
+  ctx: CanvasRenderingContext2D,
+  state: { pillars: Pillar[]; zoom: number; showDimensions?: boolean },
+  hoveredPillarId: string | null
+) {
+  const { pillars, zoom } = state;
+
+  pillars.forEach((pillar) => {
+    const cx = pillar.position.x * CM_TO_PX;
+    const cy = pillar.position.y * CM_TO_PX;
+    const isHovered = pillar.id === hoveredPillarId;
+
+    ctx.save();
+
+    if (pillar.shape === "round") {
+      const r = (pillar.width / 2) * CM_TO_PX;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fillStyle = isHovered ? "hsla(30, 80%, 50%, 0.3)" : "hsla(30, 60%, 40%, 0.2)";
+      ctx.fill();
+      ctx.strokeStyle = isHovered ? "hsl(0, 85%, 60%)" : "hsl(30, 80%, 50%)";
+      ctx.lineWidth = 2 / zoom;
+      ctx.stroke();
+
+      // Cross pattern
+      ctx.beginPath();
+      ctx.moveTo(cx - r * 0.6, cy - r * 0.6);
+      ctx.lineTo(cx + r * 0.6, cy + r * 0.6);
+      ctx.moveTo(cx + r * 0.6, cy - r * 0.6);
+      ctx.lineTo(cx - r * 0.6, cy + r * 0.6);
+      ctx.strokeStyle = isHovered ? "hsla(0, 85%, 60%, 0.5)" : "hsla(30, 80%, 50%, 0.4)";
+      ctx.lineWidth = 1 / zoom;
+      ctx.stroke();
+    } else {
+      const hw = (pillar.width / 2) * CM_TO_PX;
+      const hd = (pillar.depth / 2) * CM_TO_PX;
+      ctx.fillStyle = isHovered ? "hsla(30, 80%, 50%, 0.3)" : "hsla(30, 60%, 40%, 0.2)";
+      ctx.fillRect(cx - hw, cy - hd, hw * 2, hd * 2);
+      ctx.strokeStyle = isHovered ? "hsl(0, 85%, 60%)" : "hsl(30, 80%, 50%)";
+      ctx.lineWidth = 2 / zoom;
+      ctx.strokeRect(cx - hw, cy - hd, hw * 2, hd * 2);
+
+      // Cross pattern
+      ctx.beginPath();
+      ctx.moveTo(cx - hw, cy - hd);
+      ctx.lineTo(cx + hw, cy + hd);
+      ctx.moveTo(cx + hw, cy - hd);
+      ctx.lineTo(cx - hw, cy + hd);
+      ctx.strokeStyle = isHovered ? "hsla(0, 85%, 60%, 0.5)" : "hsla(30, 80%, 50%, 0.4)";
+      ctx.lineWidth = 1 / zoom;
+      ctx.stroke();
+    }
+
+    // Dimension label
+    if (state.showDimensions) {
+      const label = pillar.shape === "round"
+        ? `Ø${pillar.width}cm`
+        : `${pillar.width}×${pillar.depth}cm`;
+      ctx.font = `${10 / zoom}px Inter`;
+      ctx.fillStyle = "hsl(30, 80%, 50%)";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      const yOffset = pillar.shape === "round"
+        ? (pillar.width / 2) * CM_TO_PX + 6 / zoom
+        : (pillar.depth / 2) * CM_TO_PX + 6 / zoom;
+      ctx.fillText(label, cx, cy + yOffset);
+    }
+
+    ctx.restore();
+  });
 }

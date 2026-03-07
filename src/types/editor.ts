@@ -69,6 +69,7 @@ export const INITIAL_EDITOR_STATE: EditorState = {
   snapToGrid: true,
   showDimensions: true,
   showAngles: false,
+  showPillarDistances: false,
 };
 
 // 1 meter = 100cm, 1cm = 2px at zoom 1

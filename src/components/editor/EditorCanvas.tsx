@@ -12,7 +12,9 @@ export function EditorCanvas() {
   const [drawingPoints, setDrawingPoints] = useState<Point[]>([]);
   const [mousePos, setMousePos] = useState<Point>({ x: 0, y: 0 });
   const [hoveredWall, setHoveredWall] = useState<{ roomId: string; edgeIndex: number } | null>(null);
-  const [draggingDoor, setDraggingDoor] = useState<string | null>(null); // door id being dragged
+  const [draggingDoor, setDraggingDoor] = useState<string | null>(null);
+  const [pendingDoorClick, setPendingDoorClick] = useState<{ doorId: string; startX: number; startY: number } | null>(null);
+  const [hasDragged, setHasDragged] = useState(false);
 
   // Door dialog state
   const [doorDialog, setDoorDialog] = useState<{

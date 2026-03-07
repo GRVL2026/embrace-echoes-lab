@@ -30,12 +30,23 @@ export type Door = {
   leafCount: DoorLeafCount;
 };
 
-export type EditorTool = "select" | "wall" | "door" | "pan" | "eraser";
+export type PillarShape = "square" | "round";
+
+export type Pillar = {
+  id: string;
+  position: Point; // center position in cm
+  shape: PillarShape;
+  width: number; // in cm (diameter for round)
+  depth: number; // in cm (same as width for round)
+};
+
+export type EditorTool = "select" | "wall" | "door" | "pillar" | "pan" | "eraser";
 
 export type EditorState = {
   tool: EditorTool;
   rooms: Room[];
   doors: Door[];
+  pillars: Pillar[];
   zoom: number;
   panOffset: Point;
   gridSize: number; // in cm, default 20

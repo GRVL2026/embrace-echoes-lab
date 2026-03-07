@@ -233,20 +233,28 @@ export function EditorCanvas() {
   };
 
   const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const newZoom = state.zoom * delta;
+    // Only zoom on pinch (ctrlKey), pan on regular two-finger scroll
+    if (e.ctrlKey) {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      const newZoom = state.zoom * delta;
 
-    // Zoom toward mouse
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    const newPanX = mx - (mx - state.panOffset.x) * delta;
-    const newPanY = my - (my - state.panOffset.y) * delta;
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const newPanX = mx - (mx - state.panOffset.x) * delta;
+      const newPanY = my - (my - state.panOffset.y) * delta;
 
-    dispatch({ type: "SET_ZOOM", zoom: newZoom });
-    dispatch({ type: "SET_PAN", offset: { x: newPanX, y: newPanY } });
+      dispatch({ type: "SET_ZOOM", zoom: newZoom });
+      dispatch({ type: "SET_PAN", offset: { x: newPanX, y: newPanY } });
+    } else {
+      e.preventDefault();
+      dispatch({
+        type: "SET_PAN",
+        offset: { x: state.panOffset.x - e.deltaX, y: state.panOffset.y - e.deltaY },
+      });
+    }
   };
 
   // Keyboard shortcuts

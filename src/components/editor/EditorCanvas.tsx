@@ -311,6 +311,16 @@ export function EditorCanvas() {
       return;
     }
 
+    // Check if clicking on a dimension label (any tool)
+    if (e.button === 0 && state.showDimensions && !editingDimension) {
+      const dim = findDimensionAtPoint(e.clientX, e.clientY);
+      if (dim) {
+        setEditingDimension(dim);
+        setTimeout(() => dimensionInputRef.current?.focus(), 0);
+        return;
+      }
+    }
+
     // Check if clicking on a vertex (select tool) — start vertex drag
     if (e.button === 0 && (state.tool === "select" || state.tool === "wall" || state.tool === "door")) {
       const world = screenToWorld(e.clientX, e.clientY);

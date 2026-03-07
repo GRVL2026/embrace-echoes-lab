@@ -206,8 +206,10 @@ export function EditorCanvas() {
     return inside;
   }, []);
 
-  // Check if point is near any edge of a polygon
-  const pointNearEdge = useCallback((point: Point, polygon: Point[], threshold: number): boolean => {
+  // Find nearest edge index of a polygon (returns -1 if none within threshold)
+  const findNearestEdge = useCallback((point: Point, polygon: Point[], threshold: number): number => {
+    let bestDist = Infinity;
+    let bestIdx = -1;
     for (let i = 0; i < polygon.length; i++) {
       const a = polygon[i];
       const b = polygon[(i + 1) % polygon.length];
@@ -217,9 +219,12 @@ export function EditorCanvas() {
       const t = Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / (len * len)));
       const projX = a.x + t * dx, projY = a.y + t * dy;
       const dist = Math.sqrt((point.x - projX) ** 2 + (point.y - projY) ** 2);
-      if (dist < threshold) return true;
+      if (dist < threshold && dist < bestDist) {
+        bestDist = dist;
+        bestIdx = i;
+      }
     }
-    return false;
+    return bestIdx;
   }, []);
 
   // Mouse handlers

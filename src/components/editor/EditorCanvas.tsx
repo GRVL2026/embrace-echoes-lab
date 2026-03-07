@@ -112,6 +112,8 @@ export function EditorCanvas() {
     return dx * dx + dy * dy < (12 / zoom) * (12 / zoom);
   }, []);
 
+  // Convert screen coords to world coords (cm)
+  const screenToWorld = useCallback(
     (sx: number, sy: number): Point => {
       const canvas = canvasRef.current;
       if (!canvas) return { x: 0, y: 0 };

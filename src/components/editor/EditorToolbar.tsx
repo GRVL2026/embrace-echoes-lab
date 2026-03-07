@@ -142,35 +142,54 @@ export function EditorToolbar() {
       </Tooltip>
 
       <Tooltip delayDuration={200}>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-10 w-10"
-            onClick={() => {
-              // Center on rooms bounding box, or reset to origin
-              if (state.rooms.length > 0) {
-                const allPts = state.rooms.flatMap((r) => r.points);
-                const minX = Math.min(...allPts.map((p) => p.x));
-                const maxX = Math.max(...allPts.map((p) => p.x));
-                const minY = Math.min(...allPts.map((p) => p.y));
-                const maxY = Math.max(...allPts.map((p) => p.y));
-                const cx = ((minX + maxX) / 2) * 3.7795275591 * state.zoom;
-                const cy = ((minY + maxY) / 2) * 3.7795275591 * state.zoom;
-                // Approximate canvas center (half viewport)
-                const vw = window.innerWidth / 2;
-                const vh = window.innerHeight / 2;
-                dispatch({ type: "SET_PAN", offset: { x: vw - cx, y: vh - cy } });
-              } else {
-                dispatch({ type: "SET_PAN", offset: { x: window.innerWidth / 3, y: window.innerHeight / 3 } });
-              }
-            }}
-          >
-            <Locate className="h-5 w-5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="right">Recentrer la vue</TooltipContent>
-      </Tooltip>
+         <TooltipTrigger asChild>
+           <Button
+             variant="ghost"
+             size="icon"
+             className="h-10 w-10"
+             onClick={() => {
+               // Center and fit all rooms in view
+               if (state.rooms.length > 0) {
+                 const allPts = state.rooms.flatMap((r) => r.points);
+                 const minX = Math.min(...allPts.map((p) => p.x));
+                 const maxX = Math.max(...allPts.map((p) => p.x));
+                 const minY = Math.min(...allPts.map((p) => p.y));
+                 const maxY = Math.max(...allPts.map((p) => p.y));
+                 
+                 // Calculate plan dimensions in cm
+                 const planWidth = maxX - minX;
+                 const planHeight = maxY - minY;
+                 const padding = 50; // 50cm padding around plan
+                 
+                 // Get viewport size (excluding toolbar)
+                 const vw = window.innerWidth - 100; // Account for toolbar width
+                 const vh = window.innerHeight;
+                 
+                 // Calculate zoom to fit plan with padding
+                 const CM_TO_PX = 2;
+                 const zoomX = vw / ((planWidth + padding * 2) * CM_TO_PX);
+                 const zoomY = vh / ((planHeight + padding * 2) * CM_TO_PX);
+                 const newZoom = Math.min(zoomX, zoomY, 1); // Don't zoom beyond 100%
+                 
+                 // Calculate center position
+                 const cx = ((minX + maxX) / 2) * CM_TO_PX;
+                 const cy = ((minY + maxY) / 2) * CM_TO_PX;
+                 const px = vw / 2 - cx * newZoom;
+                 const py = vh / 2 - cy * newZoom;
+                 
+                 dispatch({ type: "SET_ZOOM", zoom: newZoom });
+                 dispatch({ type: "SET_PAN", offset: { x: px, y: py } });
+               } else {
+                 dispatch({ type: "SET_ZOOM", zoom: 1 });
+                 dispatch({ type: "SET_PAN", offset: { x: window.innerWidth / 3, y: window.innerHeight / 3 } });
+               }
+             }}
+           >
+             <Locate className="h-5 w-5" />
+           </Button>
+         </TooltipTrigger>
+         <TooltipContent side="right">Recentrer la vue</TooltipContent>
+       </Tooltip>
 
       <Separator className="my-1 w-6" />
 

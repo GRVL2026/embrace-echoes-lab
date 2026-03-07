@@ -387,6 +387,7 @@ export function EditorCanvas() {
 
   const handleMouseUp = () => {
     setIsPanning(false);
+    if (draggingDoor) setDraggingDoor(null);
   };
 
   const handleWheel = (e: React.WheelEvent) => {

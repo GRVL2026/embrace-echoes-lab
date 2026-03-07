@@ -455,7 +455,7 @@ export function EditorCanvas() {
     // Check if clicking on a pillar with select tool → pending (click=dialog, drag=move)
     if (e.button === 0 && state.tool === "select") {
       const world = screenToWorld(e.clientX, e.clientY);
-      const clickedPillar = findPillarAtPoint(world);
+      const clickedPillar = findPillarAtPoint(world, true);
       if (clickedPillar) {
         // Check if clicking on rotation handle
         if (isOnRotationHandle(world, clickedPillar, state.zoom)) {

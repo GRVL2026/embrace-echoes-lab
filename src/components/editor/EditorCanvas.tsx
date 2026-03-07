@@ -412,6 +412,16 @@ export function EditorCanvas() {
       }
     }
 
+    // Check if clicking on a pillar with select tool → open dialog
+    if (e.button === 0 && state.tool === "select") {
+      const world = screenToWorld(e.clientX, e.clientY);
+      const clickedPillar = findPillarAtPoint(world);
+      if (clickedPillar) {
+        setPillarDialog({ open: true, pillarId: clickedPillar.id });
+        return;
+      }
+    }
+
     // Check if clicking on a vertex — select/door: immediate drag; wall tool: pending (click=resume, hold+move=drag)
     if (e.button === 0 && (state.tool === "select" || state.tool === "door" || state.tool === "wall")) {
       const world = screenToWorld(e.clientX, e.clientY);

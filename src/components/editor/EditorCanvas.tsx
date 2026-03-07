@@ -272,6 +272,37 @@ export function EditorCanvas() {
     return bestIdx;
   }, []);
 
+  // Find if clicking on a dimension label
+  const findDimensionAtPoint = useCallback((screenX: number, screenY: number): { roomId: string; edgeIndex: number; screenX: number; screenY: number; currentValue: number } | null => {
+    const world = screenToWorld(screenX, screenY);
+    const threshold = 15 / state.zoom;
+    for (const room of state.rooms) {
+      for (let i = 0; i < room.points.length; i++) {
+        const p = room.points[i];
+        const next = room.points[(i + 1) % room.points.length];
+        const dx = next.x - p.x, dy = next.y - p.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const midX = (p.x + next.x) / 2;
+        const midY = (p.y + next.y) / 2;
+        const angle = Math.atan2(dy, dx);
+        const offsetDist = 18 / state.zoom;
+        const labelX = midX + Math.sin(angle) * offsetDist;
+        const labelY = midY - Math.cos(angle) * offsetDist;
+        const dToLabel = Math.sqrt((world.x - labelX) ** 2 + (world.y - labelY) ** 2);
+        if (dToLabel < threshold) {
+          // Convert label position to screen coords
+          const canvas = canvasRef.current;
+          if (!canvas) continue;
+          const rect = canvas.getBoundingClientRect();
+          const sx = labelX * CM_TO_PX * state.zoom + state.panOffset.x + rect.left;
+          const sy = labelY * CM_TO_PX * state.zoom + state.panOffset.y + rect.top;
+          return { roomId: room.id, edgeIndex: i, screenX: sx, screenY: sy, currentValue: dist };
+        }
+      }
+    }
+    return null;
+  }, [state.rooms, state.zoom, state.panOffset, screenToWorld]);
+
   // Mouse handlers
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button === 1 || (e.button === 0 && state.tool === "pan")) {

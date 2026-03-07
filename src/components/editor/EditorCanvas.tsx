@@ -72,22 +72,41 @@ export function EditorCanvas() {
     return null;
   }, [state.doors, state.rooms, state.zoom]);
 
-  // Find pillar under a world point
-  const findPillarAtPoint = useCallback((world: Point): Pillar | null => {
+  // Find pillar under a world point (includes rotation handle zone for hovered pillar)
+  const findPillarAtPoint = useCallback((world: Point, includeHandle = false): Pillar | null => {
     for (const pillar of state.pillars) {
       const dx = world.x - pillar.position.x;
       const dy = world.y - pillar.position.y;
+      // Un-rotate the point into the pillar's local space
+      const rad = -(pillar.rotation || 0) * Math.PI / 180;
+      const cosR = Math.cos(rad), sinR = Math.sin(rad);
+      const lx = dx * cosR - dy * sinR;
+      const ly = dx * sinR + dy * cosR;
+
       if (pillar.shape === "round") {
-        const r = pillar.width / 2;
-        if (dx * dx + dy * dy <= r * r + 100) return pillar;
+        const r = pillar.width / 2 + 5;
+        if (lx * lx + ly * ly <= r * r) return pillar;
       } else {
         const hw = pillar.width / 2 + 5;
         const hd = pillar.depth / 2 + 5;
-        if (Math.abs(dx) <= hw && Math.abs(dy) <= hd) return pillar;
+        if (Math.abs(lx) <= hw && Math.abs(ly) <= hd) return pillar;
+      }
+
+      // Also check rotation handle zone (so hover persists when moving to handle)
+      if (includeHandle) {
+        const handleDistCm = pillar.shape === "round"
+          ? (pillar.width / 2 + 20 / state.zoom)
+          : (Math.max(pillar.width, pillar.depth) / 2 + 20 / state.zoom);
+        // Handle is at (0, -handleDistCm) in local space
+        const hdx = lx;
+        const hdy = ly + handleDistCm;
+        if (hdx * hdx + hdy * hdy < (14 / state.zoom) * (14 / state.zoom)) return pillar;
+        // Also check the stem line between pillar and handle
+        if (Math.abs(lx) < 5 / state.zoom && ly < 0 && ly > -handleDistCm) return pillar;
       }
     }
     return null;
-  }, [state.pillars]);
+  }, [state.pillars, state.zoom]);
 
   // Check if world point is on a pillar's rotation handle
   const isOnRotationHandle = useCallback((world: Point, pillar: Pillar, zoom: number): boolean => {
@@ -436,7 +455,7 @@ export function EditorCanvas() {
     // Check if clicking on a pillar with select tool → pending (click=dialog, drag=move)
     if (e.button === 0 && state.tool === "select") {
       const world = screenToWorld(e.clientX, e.clientY);
-      const clickedPillar = findPillarAtPoint(world);
+      const clickedPillar = findPillarAtPoint(world, true);
       if (clickedPillar) {
         // Check if clicking on rotation handle
         if (isOnRotationHandle(world, clickedPillar, state.zoom)) {
@@ -500,7 +519,7 @@ export function EditorCanvas() {
     if (state.tool === "pillar" && e.button === 0) {
       const world = screenToWorld(e.clientX, e.clientY);
       const snapped = snapPoint(world);
-      const clickedPillar = findPillarAtPoint(snapped);
+      const clickedPillar = findPillarAtPoint(world, true);
       if (clickedPillar) {
         if (isOnRotationHandle(world, clickedPillar, state.zoom)) {
           setRotatingPillar(clickedPillar.id);
@@ -727,9 +746,9 @@ export function EditorCanvas() {
       setHoveredWall(null);
     }
 
-    // Hover detection for pillars (eraser + pillar tool)
+    // Hover detection for pillars (eraser + pillar tool + select) — include handle zone
     if (state.tool === "eraser" || state.tool === "pillar" || state.tool === "select") {
-      const p = findPillarAtPoint(world);
+      const p = findPillarAtPoint(world, true);
       setHoveredPillar(p ? p.id : null);
     } else if (hoveredPillar) {
       setHoveredPillar(null);

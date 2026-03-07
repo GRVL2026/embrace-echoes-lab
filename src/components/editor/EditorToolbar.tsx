@@ -214,12 +214,13 @@ export function EditorToolbar() {
             variant="ghost"
             size="icon"
             className="h-10 w-10 text-destructive"
-            onClick={() => dispatch({ type: "RESET" })}
+            disabled={!canUndo}
+            onClick={() => dispatch({ type: "UNDO" })}
           >
-            <RotateCcw className="h-5 w-5" />
+            <Undo2 className="h-5 w-5" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="right">Réinitialiser</TooltipContent>
+        <TooltipContent side="right">Annuler (Ctrl+Z)</TooltipContent>
       </Tooltip>
     </div>
   );

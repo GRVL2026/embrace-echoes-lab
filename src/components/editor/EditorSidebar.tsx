@@ -306,6 +306,9 @@ export function EditorSidebar() {
           )}
         </div>
       </ScrollArea>
+
+      {/* Catalog panel */}
+      <CatalogPanel />
     </div>
   );
 }

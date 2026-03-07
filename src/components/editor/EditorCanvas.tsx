@@ -537,6 +537,61 @@ function drawDoors(
     ctx.fillStyle = "hsl(200, 85%, 60%)";
     ctx.fill();
 
+    // Draw dimension labels: left segment, door, right segment
+    const wallAngleForText = Math.atan2(dy, dx);
+    const textAngle = wallAngleForText > Math.PI / 2 || wallAngleForText < -Math.PI / 2
+      ? wallAngleForText + Math.PI : wallAngleForText;
+    const labelOffset = 16 / zoom;
+    const perpOffX = Math.sin(wallAngleForText) * labelOffset;
+    const perpOffY = -Math.cos(wallAngleForText) * labelOffset;
+
+    const formatDim = (cm: number) => cm >= 100 ? `${(cm / 100).toFixed(2)}m` : `${Math.round(cm)}cm`;
+
+    // Left segment (from wall start to door start)
+    const leftLen = startDist;
+    if (leftLen > 5) {
+      const lmx = (a.x + ux * leftLen / 2) * CM_TO_PX;
+      const lmy = (a.y + uy * leftLen / 2) * CM_TO_PX;
+      ctx.save();
+      ctx.translate(lmx + perpOffX, lmy + perpOffY);
+      ctx.rotate(textAngle);
+      ctx.font = `${10 / zoom}px Inter`;
+      ctx.fillStyle = "hsl(48, 100%, 50%)";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(formatDim(leftLen), 0, -2 / zoom);
+      ctx.restore();
+    }
+
+    // Door width label
+    const dmx = (sx + ex) / 2;
+    const dmy = (sy + ey) / 2;
+    ctx.save();
+    ctx.translate(dmx - perpOffX, dmy - perpOffY); // opposite side
+    ctx.rotate(textAngle);
+    ctx.font = `bold ${10 / zoom}px Inter`;
+    ctx.fillStyle = "hsl(200, 85%, 60%)";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillText(formatDim(door.width), 0, 2 / zoom);
+    ctx.restore();
+
+    // Right segment (from door end to wall end)
+    const rightLen = wallLen - endDist;
+    if (rightLen > 5) {
+      const rmx = (a.x + ux * (endDist + rightLen / 2)) * CM_TO_PX;
+      const rmy = (a.y + uy * (endDist + rightLen / 2)) * CM_TO_PX;
+      ctx.save();
+      ctx.translate(rmx + perpOffX, rmy + perpOffY);
+      ctx.rotate(textAngle);
+      ctx.font = `${10 / zoom}px Inter`;
+      ctx.fillStyle = "hsl(48, 100%, 50%)";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(formatDim(rightLen), 0, -2 / zoom);
+      ctx.restore();
+    }
+
     ctx.restore();
   });
 }

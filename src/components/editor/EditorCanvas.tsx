@@ -16,6 +16,8 @@ export function EditorCanvas() {
   const [pendingDoorClick, setPendingDoorClick] = useState<{ doorId: string; startX: number; startY: number } | null>(null);
   const [hasDragged, setHasDragged] = useState(false);
   const [draggingVertex, setDraggingVertex] = useState<{ roomId: string; pointIndex: number } | null>(null);
+  const [pendingVertexClick, setPendingVertexClick] = useState<{ roomId: string; pointIndex: number; startX: number; startY: number } | null>(null);
+  const [hasVertexDragged, setHasVertexDragged] = useState(false);
   const [editingDimension, setEditingDimension] = useState<{
     roomId: string;
     edgeIndex: number;

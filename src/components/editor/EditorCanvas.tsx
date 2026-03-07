@@ -815,14 +815,21 @@ export function EditorCanvas() {
         }
       }
     }
+    // If we had a pending pillar click and didn't drag → open dialog
+    if (pendingPillarClick && !hasPillarDragged) {
+      setPillarDialog({ open: true, pillarId: pendingPillarClick.pillarId });
+    }
 
     setPendingVertexClick(null);
     setHasVertexDragged(false);
     setPendingDoorClick(null);
     setHasDragged(false);
+    setPendingPillarClick(null);
+    setHasPillarDragged(false);
     if (draggingVertex) setDraggingVertex(null);
     if (draggingDoor) setDraggingDoor(null);
     if (draggingPillar) setDraggingPillar(null);
+    if (rotatingPillar) setRotatingPillar(null);
   };
 
   const handleWheel = (e: React.WheelEvent) => {

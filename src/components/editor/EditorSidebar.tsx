@@ -116,9 +116,9 @@ export function EditorSidebar() {
       <div className="border-b border-border p-4">
         <h2 className="font-display text-lg font-bold text-foreground">Salles</h2>
         <p className="text-xs text-muted-foreground mt-1">
-          {state.rooms.length === 0
+          {state.rooms.length === 0 && state.pillars.length === 0
             ? "Dessinez ou importez un plan"
-            : `${state.rooms.length} salle${state.rooms.length > 1 ? "s" : ""}`}
+            : `${state.rooms.length} salle${state.rooms.length > 1 ? "s" : ""}${state.pillars.length > 0 ? ` · ${state.pillars.length} poteau${state.pillars.length > 1 ? "x" : ""}` : ""}`}
         </p>
       </div>
 

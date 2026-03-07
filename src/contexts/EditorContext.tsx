@@ -16,6 +16,11 @@ type EditorAction =
   | { type: "ADD_PILLAR"; pillar: Pillar }
   | { type: "UPDATE_PILLAR"; id: string; pillar: Partial<Pillar> }
   | { type: "DELETE_PILLAR"; id: string }
+  | { type: "ADD_PLACED_EQUIPMENT"; equipment: PlacedEquipment }
+  | { type: "ADD_PLACED_EQUIPMENTS"; equipments: PlacedEquipment[] }
+  | { type: "UPDATE_PLACED_EQUIPMENT"; id: string; equipment: Partial<PlacedEquipment> }
+  | { type: "DELETE_PLACED_EQUIPMENT"; id: string }
+  | { type: "CLEAR_PLACED_EQUIPMENTS" }
   | { type: "TOGGLE_SNAP" }
   | { type: "TOGGLE_PILLAR_DISTANCES" }
   | { type: "TOGGLE_DIMENSIONS" }

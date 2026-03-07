@@ -236,6 +236,42 @@ export function EditorSidebar() {
               </div>
             );
           })}
+
+          {/* Pillars section */}
+          {state.pillars.length > 0 && (
+            <div className="mt-4">
+              <h3 className="font-display text-sm font-semibold text-foreground mb-2">Poteaux</h3>
+              {state.pillars.map((pillar) => (
+                <div
+                  key={pillar.id}
+                  className="rounded-lg border border-border bg-surface p-3 transition-colors hover:border-primary/40 mb-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-display font-semibold text-sm text-foreground">
+                      {pillar.shape === "round" ? "Poteau rond" : "Poteau carré"}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive/60 hover:text-destructive"
+                      onClick={() => dispatch({ type: "DELETE_PILLAR", id: pillar.id })}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    <span className="text-accent">
+                      {pillar.shape === "round"
+                        ? `Ø${pillar.width}cm`
+                        : `${pillar.width}×${pillar.depth}cm`}
+                    </span>
+                    {" · "}
+                    <span>{Math.round(pillar.position.x)}cm, {Math.round(pillar.position.y)}cm</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </ScrollArea>
     </div>

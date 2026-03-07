@@ -10,6 +10,7 @@ export type GameEquipment = {
   color?: string;  // display color (HSL)
   icon?: string;   // optional emoji or icon name
   pmrAccessible?: boolean; // requires extra clearance for PMR
+  model3d?: string; // URL to a .glb/.gltf 3D model file
 };
 
 /** An equipment placed on the plan */

@@ -10,6 +10,7 @@ export function EditorCanvas() {
   const [lastPanPos, setLastPanPos] = useState<Point>({ x: 0, y: 0 });
   const [drawingPoints, setDrawingPoints] = useState<Point[]>([]);
   const [mousePos, setMousePos] = useState<Point>({ x: 0, y: 0 });
+  const [hoveredWall, setHoveredWall] = useState<{ roomId: string; edgeIndex: number } | null>(null);
 
   // Convert screen coords to world coords (cm)
   const screenToWorld = useCallback(

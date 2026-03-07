@@ -1,0 +1,131 @@
+import {
+  MousePointer2,
+  PenTool,
+  DoorOpen,
+  Hand,
+  Eraser,
+  Grid3X3,
+  Ruler,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+} from "lucide-react";
+import { useEditor } from "@/contexts/EditorContext";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import type { EditorTool } from "@/types/editor";
+
+const tools: { id: EditorTool; label: string; icon: React.ElementType; shortcut: string }[] = [
+  { id: "select", label: "Sélectionner", icon: MousePointer2, shortcut: "V" },
+  { id: "wall", label: "Dessiner murs", icon: PenTool, shortcut: "W" },
+  { id: "door", label: "Ajouter porte", icon: DoorOpen, shortcut: "D" },
+  { id: "pan", label: "Déplacer vue", icon: Hand, shortcut: "H" },
+  { id: "eraser", label: "Effacer", icon: Eraser, shortcut: "E" },
+];
+
+export function EditorToolbar() {
+  const { state, dispatch } = useEditor();
+
+  return (
+    <div className="flex flex-col items-center gap-1 rounded-lg border border-border bg-card/80 backdrop-blur-sm p-2 neon-border">
+      {tools.map((tool) => (
+        <Tooltip key={tool.id} delayDuration={200}>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "h-10 w-10 transition-all",
+                state.tool === tool.id && "bg-primary/20 text-primary glow-purple"
+              )}
+              onClick={() => dispatch({ type: "SET_TOOL", tool: tool.id })}
+            >
+              <tool.icon className="h-5 w-5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            <p>{tool.label} <kbd className="ml-1 text-xs text-muted-foreground">{tool.shortcut}</kbd></p>
+          </TooltipContent>
+        </Tooltip>
+      ))}
+
+      <Separator className="my-1 w-6" />
+
+      <Tooltip delayDuration={200}>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn("h-10 w-10", state.snapToGrid && "bg-secondary/20 text-secondary")}
+            onClick={() => dispatch({ type: "TOGGLE_SNAP" })}
+          >
+            <Grid3X3 className="h-5 w-5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">Snap grille</TooltipContent>
+      </Tooltip>
+
+      <Tooltip delayDuration={200}>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn("h-10 w-10", state.showDimensions && "bg-accent/20 text-accent")}
+            onClick={() => dispatch({ type: "TOGGLE_DIMENSIONS" })}
+          >
+            <Ruler className="h-5 w-5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">Afficher dimensions</TooltipContent>
+      </Tooltip>
+
+      <Separator className="my-1 w-6" />
+
+      <Tooltip delayDuration={200}>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10"
+            onClick={() => dispatch({ type: "SET_ZOOM", zoom: state.zoom * 1.25 })}
+          >
+            <ZoomIn className="h-5 w-5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">Zoom +</TooltipContent>
+      </Tooltip>
+
+      <Tooltip delayDuration={200}>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10"
+            onClick={() => dispatch({ type: "SET_ZOOM", zoom: state.zoom / 1.25 })}
+          >
+            <ZoomOut className="h-5 w-5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">Zoom −</TooltipContent>
+      </Tooltip>
+
+      <Separator className="my-1 w-6" />
+
+      <Tooltip delayDuration={200}>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 text-destructive"
+            onClick={() => dispatch({ type: "RESET" })}
+          >
+            <RotateCcw className="h-5 w-5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">Réinitialiser</TooltipContent>
+      </Tooltip>
+    </div>
+  );
+}

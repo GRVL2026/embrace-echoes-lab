@@ -423,10 +423,38 @@ export function EditorCanvas() {
     }
 
     if (state.tool === "eraser" && e.button === 0) {
+      // Check pillar first
+      if (hoveredPillar) {
+        dispatch({ type: "DELETE_PILLAR", id: hoveredPillar });
+        setHoveredPillar(null);
+        return;
+      }
       if (hoveredWall) {
         dispatch({ type: "DELETE_WALL", roomId: hoveredWall.roomId, edgeIndex: hoveredWall.edgeIndex });
         setHoveredWall(null);
       }
+      return;
+    }
+
+    // Pillar tool: place pillar on click
+    if (state.tool === "pillar" && e.button === 0) {
+      const world = screenToWorld(e.clientX, e.clientY);
+      const snapped = snapPoint(world);
+      // Check if clicking on existing pillar → start dragging
+      const clickedPillar = findPillarAtPoint(snapped);
+      if (clickedPillar) {
+        setDraggingPillar(clickedPillar.id);
+        return;
+      }
+      // Place new pillar
+      const pillar: Pillar = {
+        id: crypto.randomUUID(),
+        position: snapped,
+        shape: "square",
+        width: 30,
+        depth: 30,
+      };
+      dispatch({ type: "ADD_PILLAR", pillar });
       return;
     }
 

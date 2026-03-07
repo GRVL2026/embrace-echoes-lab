@@ -519,7 +519,7 @@ export function EditorCanvas() {
     if (state.tool === "pillar" && e.button === 0) {
       const world = screenToWorld(e.clientX, e.clientY);
       const snapped = snapPoint(world);
-      const clickedPillar = findPillarAtPoint(snapped);
+      const clickedPillar = findPillarAtPoint(world, true);
       if (clickedPillar) {
         if (isOnRotationHandle(world, clickedPillar, state.zoom)) {
           setRotatingPillar(clickedPillar.id);

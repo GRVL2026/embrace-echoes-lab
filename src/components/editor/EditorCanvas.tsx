@@ -338,6 +338,16 @@ export function EditorCanvas() {
     const world = screenToWorld(e.clientX, e.clientY);
     setMousePos(world);
 
+    // Handle pending door click → detect drag threshold
+    if (pendingDoorClick && !draggingDoor) {
+      const dx = e.clientX - pendingDoorClick.startX;
+      const dy = e.clientY - pendingDoorClick.startY;
+      if (Math.sqrt(dx * dx + dy * dy) > 5) {
+        setDraggingDoor(pendingDoorClick.doorId);
+        setHasDragged(true);
+      }
+    }
+
     // Handle door dragging
     if (draggingDoor) {
       const door = state.doors.find((d) => d.id === draggingDoor);
@@ -346,10 +356,10 @@ export function EditorCanvas() {
         if (room && door.edgeIndex < room.points.length) {
           const a = room.points[door.edgeIndex];
           const b = room.points[(door.edgeIndex + 1) % room.points.length];
-          const dx = b.x - a.x, dy = b.y - a.y;
-          const wallLen = Math.sqrt(dx * dx + dy * dy);
+          const ddx = b.x - a.x, ddy = b.y - a.y;
+          const wallLen = Math.sqrt(ddx * ddx + ddy * ddy);
           if (wallLen > 0) {
-            const ux = dx / wallLen, uy = dy / wallLen;
+            const ux = ddx / wallLen, uy = ddy / wallLen;
             const proj = (world.x - a.x) * ux + (world.y - a.y) * uy;
             const halfW = door.width / 2;
             const clampedRatio = Math.max(halfW / wallLen, Math.min(1 - halfW / wallLen, proj / wallLen));

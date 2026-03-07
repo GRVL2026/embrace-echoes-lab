@@ -15,6 +15,7 @@ export function EditorCanvas() {
   const [draggingDoor, setDraggingDoor] = useState<string | null>(null);
   const [pendingDoorClick, setPendingDoorClick] = useState<{ doorId: string; startX: number; startY: number } | null>(null);
   const [hasDragged, setHasDragged] = useState(false);
+  const [draggingVertex, setDraggingVertex] = useState<{ roomId: string; pointIndex: number } | null>(null);
 
   // Door dialog state
   const [doorDialog, setDoorDialog] = useState<{

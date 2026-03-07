@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useCallback, useState } from "react";
 import { useEditor } from "@/contexts/EditorContext";
-import { CM_TO_PX, type Point } from "@/types/editor";
+import { CM_TO_PX, type Point, type Door, type DoorOpenDirection } from "@/types/editor";
+import { DoorDialog } from "./DoorDialog";
 
 export function EditorCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -11,6 +12,14 @@ export function EditorCanvas() {
   const [drawingPoints, setDrawingPoints] = useState<Point[]>([]);
   const [mousePos, setMousePos] = useState<Point>({ x: 0, y: 0 });
   const [hoveredWall, setHoveredWall] = useState<{ roomId: string; edgeIndex: number } | null>(null);
+
+  // Door dialog state
+  const [doorDialog, setDoorDialog] = useState<{
+    open: boolean;
+    roomId: string;
+    edgeIndex: number;
+    wallLength: number;
+  } | null>(null);
 
   // Convert screen coords to world coords (cm)
   const screenToWorld = useCallback(
@@ -79,14 +88,14 @@ export function EditorCanvas() {
         ctx.lineWidth = 2 / state.zoom;
         ctx.stroke();
 
-        // Highlight hovered wall for eraser
+        // Highlight hovered wall for eraser or door tool
         if (hoveredWall && hoveredWall.roomId === room.id) {
           const a = room.points[hoveredWall.edgeIndex];
           const b = room.points[(hoveredWall.edgeIndex + 1) % room.points.length];
           ctx.beginPath();
           ctx.moveTo(a.x * CM_TO_PX, a.y * CM_TO_PX);
           ctx.lineTo(b.x * CM_TO_PX, b.y * CM_TO_PX);
-          ctx.strokeStyle = "hsl(0, 85%, 60%)";
+          ctx.strokeStyle = state.tool === "eraser" ? "hsl(0, 85%, 60%)" : "hsl(200, 85%, 60%)";
           ctx.lineWidth = 4 / state.zoom;
           ctx.stroke();
         }
@@ -103,11 +112,9 @@ export function EditorCanvas() {
             ctx.save();
             const label = dist >= 100 ? `${(dist / 100).toFixed(2)}m` : `${Math.round(dist)}cm`;
             const angle = Math.atan2(dy, dx);
-            // Large perpendicular offset to place label beside the wall
             const offsetDist = 18 / state.zoom;
             const offsetX = Math.sin(angle) * offsetDist;
             const offsetY = -Math.cos(angle) * offsetDist;
-            // Rotate text to follow wall direction
             ctx.translate(midX + offsetX, midY + offsetY);
             const textAngle = angle > Math.PI / 2 || angle < -Math.PI / 2 ? angle + Math.PI : angle;
             ctx.rotate(textAngle);
@@ -129,6 +136,9 @@ export function EditorCanvas() {
         });
       });
 
+      // Draw doors
+      drawDoors(ctx, state);
+
       // Draw current drawing
       if (drawingPoints.length > 0) {
         ctx.beginPath();
@@ -136,7 +146,6 @@ export function EditorCanvas() {
         drawingPoints.forEach((p, i) => {
           if (i > 0) ctx.lineTo(p.x * CM_TO_PX, p.y * CM_TO_PX);
         });
-        // Line to current mouse
         const snapped = snapPoint(mousePos);
         ctx.lineTo(snapped.x * CM_TO_PX, snapped.y * CM_TO_PX);
         ctx.strokeStyle = "hsl(75, 100%, 50%)";
@@ -205,19 +214,6 @@ export function EditorCanvas() {
     draw();
   });
 
-  // Check if point is inside a polygon (ray casting)
-  const pointInPolygon = useCallback((point: Point, polygon: Point[]): boolean => {
-    let inside = false;
-    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-      const xi = polygon[i].x, yi = polygon[i].y;
-      const xj = polygon[j].x, yj = polygon[j].y;
-      const intersect = ((yi > point.y) !== (yj > point.y)) &&
-        (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
-      if (intersect) inside = !inside;
-    }
-    return inside;
-  }, []);
-
   // Find nearest edge index of a polygon (returns -1 if none within threshold)
   const findNearestEdge = useCallback((point: Point, polygon: Point[], threshold: number): number => {
     let bestDist = Infinity;
@@ -255,16 +251,33 @@ export function EditorCanvas() {
       return;
     }
 
+    if (state.tool === "door" && e.button === 0) {
+      if (hoveredWall) {
+        const room = state.rooms.find((r) => r.id === hoveredWall.roomId);
+        if (room) {
+          const a = room.points[hoveredWall.edgeIndex];
+          const b = room.points[(hoveredWall.edgeIndex + 1) % room.points.length];
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const wallLength = Math.sqrt(dx * dx + dy * dy);
+          setDoorDialog({
+            open: true,
+            roomId: hoveredWall.roomId,
+            edgeIndex: hoveredWall.edgeIndex,
+            wallLength,
+          });
+        }
+      }
+      return;
+    }
+
     if (state.tool === "wall" && e.button === 0) {
       const world = screenToWorld(e.clientX, e.clientY);
       const snapped = snapPoint(world);
 
-      // Check if closing the polygon
       if (drawingPoints.length >= 3) {
         const first = drawingPoints[0];
         const dist = Math.sqrt((snapped.x - first.x) ** 2 + (snapped.y - first.y) ** 2);
         if (dist < 30) {
-          // Close and create room
           const id = crypto.randomUUID();
           dispatch({
             type: "ADD_ROOM",
@@ -287,8 +300,8 @@ export function EditorCanvas() {
     const world = screenToWorld(e.clientX, e.clientY);
     setMousePos(world);
 
-    // Eraser hover detection
-    if (state.tool === "eraser") {
+    // Hover detection for eraser and door tools
+    if (state.tool === "eraser" || state.tool === "door") {
       const threshold = 15 / state.zoom;
       let found: { roomId: string; edgeIndex: number } | null = null;
       for (const room of state.rooms) {
@@ -319,7 +332,6 @@ export function EditorCanvas() {
   };
 
   const handleWheel = (e: React.WheelEvent) => {
-    // Only zoom on pinch (ctrlKey), pan on regular two-finger scroll
     if (e.ctrlKey) {
       e.preventDefault();
       const delta = e.deltaY > 0 ? 0.9 : 1.1;
@@ -341,6 +353,21 @@ export function EditorCanvas() {
         offset: { x: state.panOffset.x - e.deltaX, y: state.panOffset.y - e.deltaY },
       });
     }
+  };
+
+  // Door dialog handlers
+  const handleDoorConfirm = (width: number, positionRatio: number, openDirection: DoorOpenDirection) => {
+    if (!doorDialog) return;
+    const door: Door = {
+      id: crypto.randomUUID(),
+      roomId: doorDialog.roomId,
+      edgeIndex: doorDialog.edgeIndex,
+      positionRatio,
+      width,
+      openDirection,
+    };
+    dispatch({ type: "ADD_DOOR", door });
+    setDoorDialog(null);
   };
 
   // Keyboard shortcuts
@@ -369,6 +396,8 @@ export function EditorCanvas() {
       ? "cursor-crosshair"
       : state.tool === "eraser"
       ? ""
+      : state.tool === "door"
+      ? "cursor-pointer"
       : "cursor-default";
 
   const inlineCursor = state.tool === "eraser" && !isPanning ? { cursor: eraserCursor } : undefined;
@@ -392,7 +421,7 @@ export function EditorCanvas() {
       <div className="absolute bottom-4 left-4 rounded-md border border-border bg-card/80 backdrop-blur-sm px-3 py-1.5 text-xs font-mono text-muted-foreground neon-border">
         {Math.round(mousePos.x)}cm × {Math.round(mousePos.y)}cm
       </div>
-      {/* Drawing hint */}
+      {/* Drawing hints */}
       {state.tool === "wall" && drawingPoints.length === 0 && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 rounded-md border border-border bg-card/80 backdrop-blur-sm px-4 py-2 text-sm text-muted-foreground neon-border">
           Cliquez pour placer les points du mur. <kbd className="ml-1 text-primary">Échap</kbd> pour annuler.
@@ -403,8 +432,113 @@ export function EditorCanvas() {
           Cliquez près du premier point pour fermer la salle.
         </div>
       )}
+      {state.tool === "door" && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 rounded-md border border-border bg-card/80 backdrop-blur-sm px-4 py-2 text-sm text-muted-foreground neon-border">
+          Cliquez sur un mur pour ajouter une porte.
+        </div>
+      )}
+
+      {/* Door dialog */}
+      {doorDialog && (
+        <DoorDialog
+          open={doorDialog.open}
+          wallLength={doorDialog.wallLength}
+          onConfirm={handleDoorConfirm}
+          onCancel={() => setDoorDialog(null)}
+        />
+      )}
     </div>
   );
+}
+
+// Draw doors with arc opening indicator
+function drawDoors(
+  ctx: CanvasRenderingContext2D,
+  state: { rooms: { id: string; points: Point[] }[]; doors: Door[]; zoom: number }
+) {
+  const { rooms, doors, zoom } = state;
+
+  doors.forEach((door) => {
+    const room = rooms.find((r) => r.id === door.roomId);
+    if (!room || door.edgeIndex >= room.points.length) return;
+
+    const a = room.points[door.edgeIndex];
+    const b = room.points[(door.edgeIndex + 1) % room.points.length];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const wallLen = Math.sqrt(dx * dx + dy * dy);
+    if (wallLen === 0) return;
+
+    // Unit vector along wall
+    const ux = dx / wallLen, uy = dy / wallLen;
+    // Perpendicular (inward — left of direction)
+    const nx = -uy, ny = ux;
+
+    // Door center position along wall
+    const centerDist = door.positionRatio * wallLen;
+    const halfW = door.width / 2;
+
+    // Door start and end points on the wall
+    const startDist = centerDist - halfW;
+    const endDist = centerDist + halfW;
+
+    const sx = (a.x + ux * startDist) * CM_TO_PX;
+    const sy = (a.y + uy * startDist) * CM_TO_PX;
+    const ex = (a.x + ux * endDist) * CM_TO_PX;
+    const ey = (a.y + uy * endDist) * CM_TO_PX;
+
+    // Clear wall segment (draw background color over it)
+    ctx.save();
+    ctx.strokeStyle = "hsl(240, 60%, 4.7%)"; // background color
+    ctx.lineWidth = 4 / zoom;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+
+    // Draw door lines (the "leaf" edges)
+    ctx.strokeStyle = "hsl(200, 85%, 60%)";
+    ctx.lineWidth = 2 / zoom;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+
+    // Draw arc
+    const arcRadius = door.width * CM_TO_PX;
+    // Hinge point depends on open direction
+    const hingePx = door.openDirection === "left" ? { x: sx, y: sy } : { x: ex, y: ey };
+    
+    // Determine arc angles
+    const wallAngle = Math.atan2(dy, dx);
+    const perpAngle = door.openDirection === "left"
+      ? wallAngle - Math.PI / 2
+      : wallAngle + Math.PI / 2;
+    
+    let startAngle: number, endAngle: number;
+    if (door.openDirection === "left") {
+      startAngle = wallAngle;
+      endAngle = wallAngle - Math.PI / 2;
+    } else {
+      startAngle = wallAngle + Math.PI / 2;
+      endAngle = wallAngle;
+    }
+
+    ctx.beginPath();
+    ctx.arc(hingePx.x, hingePx.y, arcRadius, startAngle, endAngle, door.openDirection === "left");
+    ctx.strokeStyle = "hsla(200, 85%, 60%, 0.5)";
+    ctx.lineWidth = 1.5 / zoom;
+    ctx.setLineDash([4 / zoom, 3 / zoom]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Draw hinge dot
+    ctx.beginPath();
+    ctx.arc(hingePx.x, hingePx.y, 3 / zoom, 0, Math.PI * 2);
+    ctx.fillStyle = "hsl(200, 85%, 60%)";
+    ctx.fill();
+
+    ctx.restore();
+  });
 }
 
 // Draw the background grid
@@ -417,7 +551,6 @@ function drawGrid(
   const { zoom, panOffset, gridSize } = state;
   const pxPerCell = gridSize * CM_TO_PX;
 
-  // Visible area in world coords
   const startX = Math.floor(-panOffset.x / (zoom * pxPerCell)) - 1;
   const startY = Math.floor(-panOffset.y / (zoom * pxPerCell)) - 1;
   const endX = Math.ceil((canvasWidth - panOffset.x) / (zoom * pxPerCell)) + 1;

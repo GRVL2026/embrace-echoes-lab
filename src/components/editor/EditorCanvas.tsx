@@ -141,11 +141,21 @@ export function EditorCanvas() {
           if (dist > 5) {
             const midX = ((lastP.x + snapped.x) / 2) * CM_TO_PX;
             const midY = ((lastP.y + snapped.y) / 2) * CM_TO_PX;
+            const label = dist >= 100 ? `${(dist / 100).toFixed(2)}m` : `${Math.round(dist)}cm`;
+            const angle = Math.atan2(dy, dx);
+            const offsetDist = 18 / state.zoom;
+            const oX = Math.sin(angle) * offsetDist;
+            const oY = -Math.cos(angle) * offsetDist;
+            ctx.save();
+            ctx.translate(midX + oX, midY + oY);
+            const textAngle = angle > Math.PI / 2 || angle < -Math.PI / 2 ? angle + Math.PI : angle;
+            ctx.rotate(textAngle);
             ctx.font = `bold ${13 / state.zoom}px Inter`;
             ctx.fillStyle = "hsl(75, 100%, 50%)";
             ctx.textAlign = "center";
-            const label = dist >= 100 ? `${(dist / 100).toFixed(2)}m` : `${Math.round(dist)}cm`;
-            ctx.fillText(label, midX, midY - 8 / state.zoom);
+            ctx.textBaseline = "bottom";
+            ctx.fillText(label, 0, -2 / state.zoom);
+            ctx.restore();
           }
         }
 

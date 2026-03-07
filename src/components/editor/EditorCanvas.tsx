@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useCallback, useState } from "react";
 import { useEditor } from "@/contexts/EditorContext";
-import { CM_TO_PX, type Point, type Door } from "@/types/editor";
+import { CM_TO_PX, type Point, type Door, type Pillar } from "@/types/editor";
 import { DoorDialog } from "./DoorDialog";
 
 export function EditorCanvas() {

@@ -1215,3 +1215,76 @@ function drawGrid(
     }
   }
 }
+
+// Draw pillars
+function drawPillars(
+  ctx: CanvasRenderingContext2D,
+  state: { pillars: Pillar[]; zoom: number; showDimensions?: boolean },
+  hoveredPillarId: string | null
+) {
+  const { pillars, zoom } = state;
+
+  pillars.forEach((pillar) => {
+    const cx = pillar.position.x * CM_TO_PX;
+    const cy = pillar.position.y * CM_TO_PX;
+    const isHovered = pillar.id === hoveredPillarId;
+
+    ctx.save();
+
+    if (pillar.shape === "round") {
+      const r = (pillar.width / 2) * CM_TO_PX;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fillStyle = isHovered ? "hsla(30, 80%, 50%, 0.3)" : "hsla(30, 60%, 40%, 0.2)";
+      ctx.fill();
+      ctx.strokeStyle = isHovered ? "hsl(0, 85%, 60%)" : "hsl(30, 80%, 50%)";
+      ctx.lineWidth = 2 / zoom;
+      ctx.stroke();
+
+      // Cross pattern
+      ctx.beginPath();
+      ctx.moveTo(cx - r * 0.6, cy - r * 0.6);
+      ctx.lineTo(cx + r * 0.6, cy + r * 0.6);
+      ctx.moveTo(cx + r * 0.6, cy - r * 0.6);
+      ctx.lineTo(cx - r * 0.6, cy + r * 0.6);
+      ctx.strokeStyle = isHovered ? "hsla(0, 85%, 60%, 0.5)" : "hsla(30, 80%, 50%, 0.4)";
+      ctx.lineWidth = 1 / zoom;
+      ctx.stroke();
+    } else {
+      const hw = (pillar.width / 2) * CM_TO_PX;
+      const hd = (pillar.depth / 2) * CM_TO_PX;
+      ctx.fillStyle = isHovered ? "hsla(30, 80%, 50%, 0.3)" : "hsla(30, 60%, 40%, 0.2)";
+      ctx.fillRect(cx - hw, cy - hd, hw * 2, hd * 2);
+      ctx.strokeStyle = isHovered ? "hsl(0, 85%, 60%)" : "hsl(30, 80%, 50%)";
+      ctx.lineWidth = 2 / zoom;
+      ctx.strokeRect(cx - hw, cy - hd, hw * 2, hd * 2);
+
+      // Cross pattern
+      ctx.beginPath();
+      ctx.moveTo(cx - hw, cy - hd);
+      ctx.lineTo(cx + hw, cy + hd);
+      ctx.moveTo(cx + hw, cy - hd);
+      ctx.lineTo(cx - hw, cy + hd);
+      ctx.strokeStyle = isHovered ? "hsla(0, 85%, 60%, 0.5)" : "hsla(30, 80%, 50%, 0.4)";
+      ctx.lineWidth = 1 / zoom;
+      ctx.stroke();
+    }
+
+    // Dimension label
+    if (state.showDimensions) {
+      const label = pillar.shape === "round"
+        ? `Ø${pillar.width}cm`
+        : `${pillar.width}×${pillar.depth}cm`;
+      ctx.font = `${10 / zoom}px Inter`;
+      ctx.fillStyle = "hsl(30, 80%, 50%)";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      const yOffset = pillar.shape === "round"
+        ? (pillar.width / 2) * CM_TO_PX + 6 / zoom
+        : (pillar.depth / 2) * CM_TO_PX + 6 / zoom;
+      ctx.fillText(label, cx, cy + yOffset);
+    }
+
+    ctx.restore();
+  });
+}

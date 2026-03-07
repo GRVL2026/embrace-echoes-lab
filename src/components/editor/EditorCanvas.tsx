@@ -1499,9 +1499,41 @@ function drawPillarDistances(
   pillars.forEach((pillar) => {
     const px = pillar.position.x;
     const py = pillar.position.y;
+    const rot = (pillar.rotation || 0) * Math.PI / 180;
+
+    // Compute pillar edge point closest to a given direction
+    function pillarEdgePoint(dirX: number, dirY: number): { ex: number; ey: number } {
+      const len = Math.sqrt(dirX * dirX + dirY * dirY);
+      if (len === 0) return { ex: px, ey: py };
+      const ndx = dirX / len, ndy = dirY / len;
+
+      if (pillar.shape === "round") {
+        const radius = pillar.width / 2;
+        return { ex: px + ndx * radius, ey: py + ndy * radius };
+      }
+
+      // Rectangular: transform direction into pillar local space (unrotate)
+      const cosR = Math.cos(-rot), sinR = Math.sin(-rot);
+      const ldx = ndx * cosR - ndy * sinR;
+      const ldy = ndx * sinR + ndy * cosR;
+
+      const hw = pillar.width / 2, hd = pillar.depth / 2;
+      // Ray-box intersection from center in local space
+      let tMin = Infinity;
+      if (Math.abs(ldx) > 1e-9) {
+        const t = (ldx > 0 ? hw : -hw) / ldx;
+        if (t > 0) tMin = Math.min(tMin, t);
+      }
+      if (Math.abs(ldy) > 1e-9) {
+        const t = (ldy > 0 ? hd : -hd) / ldy;
+        if (t > 0) tMin = Math.min(tMin, t);
+      }
+      if (!isFinite(tMin)) return { ex: px, ey: py };
+      return { ex: px + ndx * tMin, ey: py + ndy * tMin };
+    }
 
     // Find closest point on each edge, keep the 4 nearest
-    const distances: { dist: number; projX: number; projY: number }[] = [];
+    const distances: { dist: number; projX: number; projY: number; edgeX: number; edgeY: number }[] = [];
 
     edges.forEach((e) => {
       const dx = e.bx - e.ax, dy = e.by - e.ay;
@@ -1510,8 +1542,11 @@ function drawPillarDistances(
       const t = Math.max(0, Math.min(1, ((px - e.ax) * dx + (py - e.ay) * dy) / len2));
       const projX = e.ax + t * dx;
       const projY = e.ay + t * dy;
-      const dist = Math.sqrt((px - projX) ** 2 + (py - projY) ** 2);
-      distances.push({ dist, projX, projY });
+      // Direction from pillar center to wall projection
+      const dirX = projX - px, dirY = projY - py;
+      const { ex, ey } = pillarEdgePoint(dirX, dirY);
+      const dist = Math.sqrt((ex - projX) ** 2 + (ey - projY) ** 2);
+      distances.push({ dist, projX, projY, edgeX: ex, edgeY: ey });
     });
 
     distances.sort((a, b) => a.dist - b.dist);
@@ -1528,14 +1563,14 @@ function drawPillarDistances(
     });
 
     unique.forEach((d) => {
-      const pcx = px * CM_TO_PX;
-      const pcy = py * CM_TO_PX;
+      const ecx = d.edgeX * CM_TO_PX;
+      const ecy = d.edgeY * CM_TO_PX;
       const wpx = d.projX * CM_TO_PX;
       const wpy = d.projY * CM_TO_PX;
 
-      // Dashed line from pillar center to wall
+      // Dashed line from pillar edge to wall
       ctx.beginPath();
-      ctx.moveTo(pcx, pcy);
+      ctx.moveTo(ecx, ecy);
       ctx.lineTo(wpx, wpy);
       ctx.strokeStyle = "hsla(180, 70%, 50%, 0.5)";
       ctx.lineWidth = 1 / zoom;
@@ -1544,14 +1579,14 @@ function drawPillarDistances(
       ctx.setLineDash([]);
 
       // Distance label at midpoint
-      const mx = (pcx + wpx) / 2;
-      const my = (pcy + wpy) / 2;
+      const mx = (ecx + wpx) / 2;
+      const my = (ecy + wpy) / 2;
       const label = d.dist >= 100
         ? `${(d.dist / 100).toFixed(2)}m`
         : `${Math.round(d.dist)}cm`;
 
       ctx.save();
-      const angle = Math.atan2(wpy - pcy, wpx - pcx);
+      const angle = Math.atan2(wpy - ecy, wpx - ecx);
       const textAngle = angle > Math.PI / 2 || angle < -Math.PI / 2 ? angle + Math.PI : angle;
       const offX = Math.sin(angle) * (10 / zoom);
       const offY = -Math.cos(angle) * (10 / zoom);

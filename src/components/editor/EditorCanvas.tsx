@@ -383,9 +383,25 @@ export function EditorCanvas() {
     }
 
     // Check if clicking on a vertex (select tool) — start vertex drag
-    if (e.button === 0 && (state.tool === "select" || state.tool === "wall" || state.tool === "door")) {
+    // For wall tool: only drag if currently drawing (not resuming from endpoint)
+    if (e.button === 0 && (state.tool === "select" || state.tool === "door")) {
       const world = screenToWorld(e.clientX, e.clientY);
-      const vertexThreshold = 10 / state.zoom; // in cm
+      const vertexThreshold = 10 / state.zoom;
+      for (const room of state.rooms) {
+        for (let i = 0; i < room.points.length; i++) {
+          const p = room.points[i];
+          const dist = Math.sqrt((world.x - p.x) ** 2 + (world.y - p.y) ** 2);
+          if (dist < vertexThreshold) {
+            setDraggingVertex({ roomId: room.id, pointIndex: i });
+            return;
+          }
+        }
+      }
+    }
+    // For wall tool: only allow vertex drag on interior points (not endpoints), and only when not drawing
+    if (e.button === 0 && state.tool === "wall" && drawingPoints.length > 0) {
+      const world = screenToWorld(e.clientX, e.clientY);
+      const vertexThreshold = 10 / state.zoom;
       for (const room of state.rooms) {
         for (let i = 0; i < room.points.length; i++) {
           const p = room.points[i];

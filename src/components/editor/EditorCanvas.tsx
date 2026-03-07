@@ -176,9 +176,12 @@ export function EditorCanvas() {
           ctx.fill();
         });
 
-        // Draw angles at vertices
+        // Draw angles at vertices (only for closed rooms or interior vertices of open polylines)
         if (state.showAngles && room.points.length >= 3) {
-          room.points.forEach((p, i) => {
+          const startIdx = room.isClosed ? 0 : 1;
+          const endIdx = room.isClosed ? room.points.length : room.points.length - 1;
+          for (let i = startIdx; i < endIdx; i++) {
+            const p = room.points[i];
             const prev = room.points[(i - 1 + room.points.length) % room.points.length];
             const next = room.points[(i + 1) % room.points.length];
             const v1x = prev.x - p.x, v1y = prev.y - p.y;
@@ -186,11 +189,10 @@ export function EditorCanvas() {
             const dot = v1x * v2x + v1y * v2y;
             const len1 = Math.sqrt(v1x * v1x + v1y * v1y);
             const len2 = Math.sqrt(v2x * v2x + v2y * v2y);
-            if (len1 === 0 || len2 === 0) return;
+            if (len1 === 0 || len2 === 0) continue;
             const cosA = Math.max(-1, Math.min(1, dot / (len1 * len2)));
             const angleDeg = Math.round(Math.acos(cosA) * (180 / Math.PI));
 
-            // Draw small arc
             const arcR = 20 / state.zoom * CM_TO_PX;
             const a1 = Math.atan2(v1y, v1x);
             const a2 = Math.atan2(v2y, v2x);
@@ -200,7 +202,6 @@ export function EditorCanvas() {
             ctx.lineWidth = 1.5 / state.zoom;
             ctx.stroke();
 
-            // Label
             const bisectX = (v1x / len1 + v2x / len2);
             const bisectY = (v1y / len1 + v2y / len2);
             const bisectLen = Math.sqrt(bisectX * bisectX + bisectY * bisectY) || 1;
@@ -212,7 +213,7 @@ export function EditorCanvas() {
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.fillText(`${angleDeg}°`, lx, ly);
-          });
+          }
         }
       });
 

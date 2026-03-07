@@ -39,6 +39,7 @@ export type Pillar = {
   width: number; // in cm (diameter for round)
   depth: number; // in cm (ignored for round)
   height: number; // in cm
+  rotation: number; // in degrees
 };
 
 export type EditorTool = "select" | "wall" | "door" | "pillar" | "pan" | "eraser";

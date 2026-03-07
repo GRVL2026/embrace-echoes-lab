@@ -19,6 +19,9 @@ export function EditorCanvas() {
   const [draggingVertex, setDraggingVertex] = useState<{ roomId: string; pointIndex: number } | null>(null);
   const [pendingVertexClick, setPendingVertexClick] = useState<{ roomId: string; pointIndex: number; startX: number; startY: number } | null>(null);
   const [draggingPillar, setDraggingPillar] = useState<string | null>(null);
+  const [rotatingPillar, setRotatingPillar] = useState<string | null>(null);
+  const [pendingPillarClick, setPendingPillarClick] = useState<{ pillarId: string; startX: number; startY: number } | null>(null);
+  const [hasPillarDragged, setHasPillarDragged] = useState(false);
   const [hoveredPillar, setHoveredPillar] = useState<string | null>(null);
   const [hasVertexDragged, setHasVertexDragged] = useState(false);
   const [editingDimension, setEditingDimension] = useState<{
@@ -86,6 +89,24 @@ export function EditorCanvas() {
     return null;
   }, [state.pillars]);
 
+  // Check if world point is on a pillar's rotation handle
+  const isOnRotationHandle = useCallback((world: Point, pillar: Pillar, zoom: number): boolean => {
+    const handleDistCm = pillar.shape === "round"
+      ? (pillar.width / 2 + 20 / zoom)
+      : (Math.max(pillar.width, pillar.depth) / 2 + 20 / zoom);
+    const rad = (pillar.rotation || 0) * Math.PI / 180;
+    // Handle is at (0, -handleDistCm) in local space, rotated
+    const cosR = Math.cos(rad), sinR = Math.sin(rad);
+    const rotX = handleDistCm * sinR; // 0*cos - (-h)*sin = h*sin
+    const rotY = -handleDistCm * cosR; // 0*sin + (-h)*cos = -h*cos
+    const hx = pillar.position.x + rotX;
+    const hy = pillar.position.y + rotY;
+    const dx = world.x - hx;
+    const dy = world.y - hy;
+    return dx * dx + dy * dy < (12 / zoom) * (12 / zoom);
+  }, []);
+
+  // Convert screen coords to world coords (cm)
   const screenToWorld = useCallback(
     (sx: number, sy: number): Point => {
       const canvas = canvasRef.current;
@@ -412,12 +433,18 @@ export function EditorCanvas() {
       }
     }
 
-    // Check if clicking on a pillar with select tool → open dialog
+    // Check if clicking on a pillar with select tool → pending (click=dialog, drag=move)
     if (e.button === 0 && state.tool === "select") {
       const world = screenToWorld(e.clientX, e.clientY);
       const clickedPillar = findPillarAtPoint(world);
       if (clickedPillar) {
-        setPillarDialog({ open: true, pillarId: clickedPillar.id });
+        // Check if clicking on rotation handle
+        if (isOnRotationHandle(world, clickedPillar, state.zoom)) {
+          setRotatingPillar(clickedPillar.id);
+          return;
+        }
+        setPendingPillarClick({ pillarId: clickedPillar.id, startX: e.clientX, startY: e.clientY });
+        setHasPillarDragged(false);
         return;
       }
     }
@@ -469,17 +496,20 @@ export function EditorCanvas() {
       return;
     }
 
-    // Pillar tool: place pillar on click or open dialog
+    // Pillar tool: place or interact with pillar
     if (state.tool === "pillar" && e.button === 0) {
       const world = screenToWorld(e.clientX, e.clientY);
       const snapped = snapPoint(world);
-      // Check if clicking on existing pillar → open dialog
       const clickedPillar = findPillarAtPoint(snapped);
       if (clickedPillar) {
-        setPillarDialog({ open: true, pillarId: clickedPillar.id });
+        if (isOnRotationHandle(world, clickedPillar, state.zoom)) {
+          setRotatingPillar(clickedPillar.id);
+          return;
+        }
+        setPendingPillarClick({ pillarId: clickedPillar.id, startX: e.clientX, startY: e.clientY });
+        setHasPillarDragged(false);
         return;
       }
-      // Place new pillar then open dialog
       const pillar: Pillar = {
         id: crypto.randomUUID(),
         position: snapped,
@@ -487,6 +517,7 @@ export function EditorCanvas() {
         width: 30,
         depth: 30,
         height: 250,
+        rotation: 0,
       };
       dispatch({ type: "ADD_PILLAR", pillar });
       setPillarDialog({ open: true, pillarId: pillar.id });
@@ -626,6 +657,16 @@ export function EditorCanvas() {
       }
     }
 
+    // Handle pending pillar click → detect drag threshold
+    if (pendingPillarClick && !draggingPillar) {
+      const dx = e.clientX - pendingPillarClick.startX;
+      const dy = e.clientY - pendingPillarClick.startY;
+      if (Math.sqrt(dx * dx + dy * dy) > 5) {
+        setDraggingPillar(pendingPillarClick.pillarId);
+        setHasPillarDragged(true);
+      }
+    }
+
     // Handle door dragging
     if (draggingDoor) {
       const door = state.doors.find((d) => d.id === draggingDoor);
@@ -652,6 +693,21 @@ export function EditorCanvas() {
     if (draggingPillar) {
       const snapped = snapPoint(world);
       dispatch({ type: "UPDATE_PILLAR", id: draggingPillar, pillar: { position: snapped } });
+      return;
+    }
+
+    // Handle pillar rotation
+    if (rotatingPillar) {
+      const pillar = state.pillars.find((p) => p.id === rotatingPillar);
+      if (pillar) {
+        const angle = Math.atan2(world.x - pillar.position.x, -(world.y - pillar.position.y));
+        let degrees = angle * 180 / Math.PI;
+        // Snap to 15° increments if grid snap is on
+        if (state.snapToGrid) {
+          degrees = Math.round(degrees / 15) * 15;
+        }
+        dispatch({ type: "UPDATE_PILLAR", id: rotatingPillar, pillar: { rotation: degrees } });
+      }
       return;
     }
 
@@ -753,14 +809,21 @@ export function EditorCanvas() {
         }
       }
     }
+    // If we had a pending pillar click and didn't drag → open dialog
+    if (pendingPillarClick && !hasPillarDragged) {
+      setPillarDialog({ open: true, pillarId: pendingPillarClick.pillarId });
+    }
 
     setPendingVertexClick(null);
     setHasVertexDragged(false);
     setPendingDoorClick(null);
     setHasDragged(false);
+    setPendingPillarClick(null);
+    setHasPillarDragged(false);
     if (draggingVertex) setDraggingVertex(null);
     if (draggingDoor) setDraggingDoor(null);
     if (draggingPillar) setDraggingPillar(null);
+    if (rotatingPillar) setRotatingPillar(null);
   };
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -871,7 +934,9 @@ export function EditorCanvas() {
   const eraserCursor = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23ff4444' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21'/%3E%3Cpath d='M22 21H7'/%3E%3Cpath d='m5 11 9 9'/%3E%3C/svg%3E") 4 20, auto`;
 
   const cursorStyle =
-    draggingVertex || draggingDoor || draggingPillar
+    rotatingPillar
+      ? "cursor-alias"
+      : draggingVertex || draggingDoor || draggingPillar
       ? "cursor-grabbing"
       : state.tool === "pan" || isPanning
       ? "cursor-grab"
@@ -1268,13 +1333,16 @@ function drawPillars(
     const cx = pillar.position.x * CM_TO_PX;
     const cy = pillar.position.y * CM_TO_PX;
     const isHovered = pillar.id === hoveredPillarId;
+    const rad = (pillar.rotation || 0) * Math.PI / 180;
 
     ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rad);
 
     if (pillar.shape === "round") {
       const r = (pillar.width / 2) * CM_TO_PX;
       ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
       ctx.fillStyle = isHovered ? "hsla(30, 80%, 50%, 0.3)" : "hsla(30, 60%, 40%, 0.2)";
       ctx.fill();
       ctx.strokeStyle = isHovered ? "hsl(0, 85%, 60%)" : "hsl(30, 80%, 50%)";
@@ -1283,10 +1351,10 @@ function drawPillars(
 
       // Cross pattern
       ctx.beginPath();
-      ctx.moveTo(cx - r * 0.6, cy - r * 0.6);
-      ctx.lineTo(cx + r * 0.6, cy + r * 0.6);
-      ctx.moveTo(cx + r * 0.6, cy - r * 0.6);
-      ctx.lineTo(cx - r * 0.6, cy + r * 0.6);
+      ctx.moveTo(-r * 0.6, -r * 0.6);
+      ctx.lineTo(r * 0.6, r * 0.6);
+      ctx.moveTo(r * 0.6, -r * 0.6);
+      ctx.lineTo(-r * 0.6, r * 0.6);
       ctx.strokeStyle = isHovered ? "hsla(0, 85%, 60%, 0.5)" : "hsla(30, 80%, 50%, 0.4)";
       ctx.lineWidth = 1 / zoom;
       ctx.stroke();
@@ -1294,23 +1362,23 @@ function drawPillars(
       const hw = (pillar.width / 2) * CM_TO_PX;
       const hd = (pillar.depth / 2) * CM_TO_PX;
       ctx.fillStyle = isHovered ? "hsla(30, 80%, 50%, 0.3)" : "hsla(30, 60%, 40%, 0.2)";
-      ctx.fillRect(cx - hw, cy - hd, hw * 2, hd * 2);
+      ctx.fillRect(-hw, -hd, hw * 2, hd * 2);
       ctx.strokeStyle = isHovered ? "hsl(0, 85%, 60%)" : "hsl(30, 80%, 50%)";
       ctx.lineWidth = 2 / zoom;
-      ctx.strokeRect(cx - hw, cy - hd, hw * 2, hd * 2);
+      ctx.strokeRect(-hw, -hd, hw * 2, hd * 2);
 
       // Cross pattern
       ctx.beginPath();
-      ctx.moveTo(cx - hw, cy - hd);
-      ctx.lineTo(cx + hw, cy + hd);
-      ctx.moveTo(cx + hw, cy - hd);
-      ctx.lineTo(cx - hw, cy + hd);
+      ctx.moveTo(-hw, -hd);
+      ctx.lineTo(hw, hd);
+      ctx.moveTo(hw, -hd);
+      ctx.lineTo(-hw, hd);
       ctx.strokeStyle = isHovered ? "hsla(0, 85%, 60%, 0.5)" : "hsla(30, 80%, 50%, 0.4)";
       ctx.lineWidth = 1 / zoom;
       ctx.stroke();
     }
 
-    // Dimension label
+    // Dimension label (below pillar)
     if (state.showDimensions) {
       const label = pillar.shape === "round"
         ? `Ø${pillar.width}cm`
@@ -1322,7 +1390,62 @@ function drawPillars(
       const yOffset = pillar.shape === "round"
         ? (pillar.width / 2) * CM_TO_PX + 6 / zoom
         : (pillar.depth / 2) * CM_TO_PX + 6 / zoom;
-      ctx.fillText(label, cx, cy + yOffset);
+      ctx.fillText(label, 0, yOffset);
+    }
+
+    // Rotation handle (above pillar, connected by a line)
+    if (isHovered) {
+      const handleDist = pillar.shape === "round"
+        ? (pillar.width / 2) * CM_TO_PX + 20 / zoom
+        : (Math.max(pillar.width, pillar.depth) / 2) * CM_TO_PX + 20 / zoom;
+      
+      // Line from top of pillar to handle
+      ctx.beginPath();
+      ctx.moveTo(0, -(pillar.shape === "round" ? (pillar.width / 2) * CM_TO_PX : (pillar.depth / 2) * CM_TO_PX));
+      ctx.lineTo(0, -handleDist);
+      ctx.strokeStyle = "hsla(263, 85%, 68%, 0.6)";
+      ctx.lineWidth = 1.5 / zoom;
+      ctx.stroke();
+
+      // Handle circle
+      ctx.beginPath();
+      ctx.arc(0, -handleDist, 6 / zoom, 0, Math.PI * 2);
+      ctx.fillStyle = "hsl(263, 85%, 68%)";
+      ctx.fill();
+      ctx.strokeStyle = "hsl(263, 85%, 90%)";
+      ctx.lineWidth = 1.5 / zoom;
+      ctx.stroke();
+
+      // Rotation arrow icon inside handle
+      ctx.beginPath();
+      const r = 3.5 / zoom;
+      ctx.arc(0, -handleDist, r, -Math.PI * 0.7, Math.PI * 0.5);
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = 1.2 / zoom;
+      ctx.stroke();
+      // Arrow tip
+      const tipAngle = Math.PI * 0.5;
+      const tipX = Math.cos(tipAngle) * r;
+      const tipY = -handleDist + Math.sin(tipAngle) * r;
+      ctx.beginPath();
+      ctx.moveTo(tipX - 2 / zoom, tipY - 1.5 / zoom);
+      ctx.lineTo(tipX, tipY);
+      ctx.lineTo(tipX + 1.5 / zoom, tipY - 2 / zoom);
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = 1.2 / zoom;
+      ctx.stroke();
+    }
+
+    // Rotation angle label
+    if (isHovered && pillar.rotation && Math.abs(pillar.rotation) > 0.5) {
+      ctx.font = `bold ${9 / zoom}px Inter`;
+      ctx.fillStyle = "hsl(263, 85%, 68%)";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      const labelY = pillar.shape === "round"
+        ? -(pillar.width / 2) * CM_TO_PX - 28 / zoom
+        : -(Math.max(pillar.width, pillar.depth) / 2) * CM_TO_PX - 28 / zoom;
+      ctx.fillText(`${Math.round(pillar.rotation)}°`, 0, labelY);
     }
 
     ctx.restore();

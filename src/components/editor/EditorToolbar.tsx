@@ -8,7 +8,7 @@ import {
   Ruler,
   ZoomIn,
   ZoomOut,
-  RotateCcw,
+  Undo2,
   Locate,
   Triangle,
 } from "lucide-react";

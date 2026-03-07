@@ -22,6 +22,7 @@ export function EditorCanvas() {
     roomId: string;
     edgeIndex: number;
     wallLength: number;
+    editingDoorId?: string;
   } | null>(null);
 
   // Find door under a world point

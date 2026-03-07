@@ -272,6 +272,22 @@ export function EditorCanvas() {
       return;
     }
 
+    // Check if clicking on a vertex (select tool) — start vertex drag
+    if (e.button === 0 && (state.tool === "select" || state.tool === "wall" || state.tool === "door")) {
+      const world = screenToWorld(e.clientX, e.clientY);
+      const vertexThreshold = 10 / state.zoom; // in cm
+      for (const room of state.rooms) {
+        for (let i = 0; i < room.points.length; i++) {
+          const p = room.points[i];
+          const dist = Math.sqrt((world.x - p.x) ** 2 + (world.y - p.y) ** 2);
+          if (dist < vertexThreshold) {
+            setDraggingVertex({ roomId: room.id, pointIndex: i });
+            return;
+          }
+        }
+      }
+    }
+
     // Check if clicking on an existing door (any tool except eraser) — prepare for click or drag
     if (e.button === 0 && state.tool !== "eraser") {
       const world = screenToWorld(e.clientX, e.clientY);

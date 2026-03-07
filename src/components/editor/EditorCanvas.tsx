@@ -562,6 +562,7 @@ export function EditorCanvas() {
         <DoorDialog
           open={doorDialog.open}
           wallLength={doorDialog.wallLength}
+          initialValues={doorDialog.editingDoorId ? state.doors.find((d) => d.id === doorDialog.editingDoorId) : undefined}
           onConfirm={handleDoorConfirm}
           onCancel={() => setDoorDialog(null)}
         />

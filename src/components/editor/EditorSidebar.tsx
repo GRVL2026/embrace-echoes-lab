@@ -182,6 +182,32 @@ export function EditorSidebar() {
               area = Math.abs(area) / 2 / 10000;
             }
 
+            // Calculate pillar area inside this room (in m²)
+            let pillarArea = 0;
+            if (room.isClosed) {
+              state.pillars.forEach((pillar) => {
+                const { x: testX, y: testY } = pillar.position;
+                let inside = false;
+                for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+                  const xi = pts[i].x, yi = pts[i].y;
+                  const xj = pts[j].x, yj = pts[j].y;
+                  if (((yi > testY) !== (yj > testY)) && (testX < (xj - xi) * (testY - yi) / (yj - yi) + xi)) {
+                    inside = !inside;
+                  }
+                }
+                if (inside) {
+                  if (pillar.shape === "round") {
+                    const r = pillar.width / 2;
+                    pillarArea += Math.PI * r * r / 10000;
+                  } else {
+                    pillarArea += (pillar.width * pillar.depth) / 10000;
+                  }
+                }
+              });
+            }
+
+            const netArea = area - pillarArea;
+
             // Calculate perimeter
             let perimeter = 0;
             const edgeCount = room.isClosed ? pts.length : pts.length - 1;
@@ -214,9 +240,14 @@ export function EditorSidebar() {
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                   {room.isClosed && (
-                    <div>
-                      <span className="text-accent">{area.toFixed(1)}</span> m²
-                    </div>
+                    <>
+                      <div>
+                        <span className="text-accent">{area.toFixed(1)}</span> m² brut
+                      </div>
+                      <div>
+                        <span className="text-accent">{netArea.toFixed(1)}</span> m² net
+                      </div>
+                    </>
                   )}
                   <div>
                     <span className="text-accent">

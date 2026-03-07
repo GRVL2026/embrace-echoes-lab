@@ -452,25 +452,27 @@ export function EditorCanvas() {
       return;
     }
 
-    // Pillar tool: place pillar on click
+    // Pillar tool: place pillar on click or open dialog
     if (state.tool === "pillar" && e.button === 0) {
       const world = screenToWorld(e.clientX, e.clientY);
       const snapped = snapPoint(world);
-      // Check if clicking on existing pillar → start dragging
+      // Check if clicking on existing pillar → open dialog
       const clickedPillar = findPillarAtPoint(snapped);
       if (clickedPillar) {
-        setDraggingPillar(clickedPillar.id);
+        setPillarDialog({ open: true, pillarId: clickedPillar.id });
         return;
       }
-      // Place new pillar
+      // Place new pillar then open dialog
       const pillar: Pillar = {
         id: crypto.randomUUID(),
         position: snapped,
         shape: "square",
         width: 30,
         depth: 30,
+        height: 250,
       };
       dispatch({ type: "ADD_PILLAR", pillar });
+      setPillarDialog({ open: true, pillarId: pillar.id });
       return;
     }
 

@@ -55,6 +55,7 @@ export type EditorState = {
   snapToGrid: boolean;
   showDimensions: boolean;
   showAngles: boolean;
+  showPillarDistances: boolean;
 };
 
 export const INITIAL_EDITOR_STATE: EditorState = {

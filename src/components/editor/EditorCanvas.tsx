@@ -273,6 +273,21 @@ export function EditorCanvas() {
           ctx.stroke();
         });
 
+        // Snap indicator near last point (validate/stop drawing)
+        if (drawingPoints.length >= 2) {
+          const last = drawingPoints[drawingPoints.length - 1];
+          const dToLast = Math.sqrt(
+            (snapped.x - last.x) ** 2 + (snapped.y - last.y) ** 2
+          );
+          if (dToLast < 30) {
+            ctx.beginPath();
+            ctx.arc(last.x * CM_TO_PX, last.y * CM_TO_PX, 10 / state.zoom, 0, Math.PI * 2);
+            ctx.strokeStyle = "hsl(120, 80%, 50%)";
+            ctx.lineWidth = 2 / state.zoom;
+            ctx.stroke();
+          }
+        }
+
         // Snap indicator near first point (close polygon)
         if (drawingPoints.length >= 3) {
           const first = drawingPoints[0];

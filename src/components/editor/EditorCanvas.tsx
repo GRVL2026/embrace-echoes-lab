@@ -356,15 +356,18 @@ export function EditorCanvas() {
   };
 
   // Door dialog handlers
-  const handleDoorConfirm = (width: number, positionRatio: number, openDirection: DoorOpenDirection) => {
+  const handleDoorConfirm = (result: { width: number; positionRatio: number; openDirection: Door["openDirection"]; openDirectionRight?: Door["openDirection"]; openSide: Door["openSide"]; leafCount: Door["leafCount"] }) => {
     if (!doorDialog) return;
     const door: Door = {
       id: crypto.randomUUID(),
       roomId: doorDialog.roomId,
       edgeIndex: doorDialog.edgeIndex,
-      positionRatio,
-      width,
-      openDirection,
+      positionRatio: result.positionRatio,
+      width: result.width,
+      openDirection: result.openDirection,
+      openDirectionRight: result.openDirectionRight,
+      openSide: result.openSide,
+      leafCount: result.leafCount,
     };
     dispatch({ type: "ADD_DOOR", door });
     setDoorDialog(null);

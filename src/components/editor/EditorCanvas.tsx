@@ -491,29 +491,7 @@ export function EditorCanvas() {
         }
       }
 
-      // If NOT currently drawing, check if clicking on an endpoint of an existing room → resume from it
-      if (drawingPoints.length === 0) {
-        for (const room of state.rooms) {
-          if (room.points.length < 2) continue;
-          const firstPt = room.points[0];
-          const lastPt = room.points[room.points.length - 1];
-          const dFirst = Math.sqrt((snapped.x - firstPt.x) ** 2 + (snapped.y - firstPt.y) ** 2);
-          const dLast = Math.sqrt((snapped.x - lastPt.x) ** 2 + (snapped.y - lastPt.y) ** 2);
 
-          if (dLast < vertexThreshold) {
-            // Resume from end: keep points as-is, remove old room
-            setDrawingPoints([...room.points]);
-            dispatch({ type: "DELETE_ROOM", id: room.id });
-            return;
-          }
-          if (dFirst < vertexThreshold) {
-            // Resume from start: reverse points so we continue from "first" which becomes the end
-            setDrawingPoints([...room.points].reverse());
-            dispatch({ type: "DELETE_ROOM", id: room.id });
-            return;
-          }
-        }
-      }
 
       setDrawingPoints((prev) => [...prev, snapped]);
     }

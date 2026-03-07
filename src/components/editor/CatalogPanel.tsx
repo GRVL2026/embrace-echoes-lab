@@ -4,10 +4,59 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Upload, Package, Play, Trash2, Check, X } from "lucide-react";
+import { Upload, Package, Play, Trash2, Check, X, FileSpreadsheet } from "lucide-react";
 import type { GameEquipment, CatalogJSON } from "@/types/equipment";
 import { DEFAULT_SAFETY_ZONE } from "@/types/equipment";
 import { autoPlaceEquipment } from "@/lib/placement";
+
+/** Parse a CSV string into GameEquipment[] */
+function parseCSV(text: string): GameEquipment[] {
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+  if (lines.length < 2) throw new Error("Le CSV doit contenir au moins un en-tête et une ligne de données");
+
+  // Parse header
+  const headers = lines[0].split(/[;,\t]/).map(h => h.trim().toLowerCase());
+  const nameIdx = headers.findIndex(h => ["name", "nom"].includes(h));
+  const catIdx = headers.findIndex(h => ["category", "catégorie", "categorie", "cat"].includes(h));
+  const wIdx = headers.findIndex(h => ["width", "largeur", "w"].includes(h));
+  const dIdx = headers.findIndex(h => ["depth", "profondeur", "d"].includes(h));
+  const hIdx = headers.findIndex(h => ["height", "hauteur", "h"].includes(h));
+  const szIdx = headers.findIndex(h => ["safetyzone", "safety_zone", "zone_securite", "securite"].includes(h));
+  const colorIdx = headers.findIndex(h => ["color", "couleur"].includes(h));
+  const iconIdx = headers.findIndex(h => ["icon", "icone", "emoji"].includes(h));
+  const pmrIdx = headers.findIndex(h => ["pmraccessible", "pmr", "accessible"].includes(h));
+  const modelIdx = headers.findIndex(h => ["model3d", "model", "modele3d", "modele", "glb"].includes(h));
+
+  if (nameIdx === -1) throw new Error("Colonne 'name' (ou 'nom') requise dans le CSV");
+
+  // Detect separator used in data lines
+  const separator = lines[0].includes('\t') ? '\t' : lines[0].includes(';') ? ';' : ',';
+
+  const items: GameEquipment[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(separator).map(c => c.trim());
+    const name = cols[nameIdx] || `Jeu ${i}`;
+    if (!name) continue;
+
+    const pmrRaw = pmrIdx >= 0 ? cols[pmrIdx]?.toLowerCase() : "";
+    items.push({
+      id: crypto.randomUUID(),
+      name,
+      category: catIdx >= 0 ? (cols[catIdx] || "autre") : "autre",
+      width: wIdx >= 0 ? (Number(cols[wIdx]) || 100) : 100,
+      depth: dIdx >= 0 ? (Number(cols[dIdx]) || 100) : 100,
+      height: hIdx >= 0 ? (Number(cols[hIdx]) || 200) : 200,
+      safetyZone: szIdx >= 0 ? (Number(cols[szIdx]) || DEFAULT_SAFETY_ZONE) : DEFAULT_SAFETY_ZONE,
+      color: colorIdx >= 0 ? cols[colorIdx] || undefined : undefined,
+      icon: iconIdx >= 0 ? cols[iconIdx] || undefined : undefined,
+      pmrAccessible: ["true", "oui", "1", "yes"].includes(pmrRaw),
+      model3d: modelIdx >= 0 ? cols[modelIdx] || undefined : undefined,
+    });
+  }
+
+  if (items.length === 0) throw new Error("Aucun jeu trouvé dans le CSV");
+  return items;
+}
 
 // Color palette for equipment categories
 const CATEGORY_COLORS: Record<string, string> = {

@@ -1337,13 +1337,16 @@ function drawPillars(
     const cx = pillar.position.x * CM_TO_PX;
     const cy = pillar.position.y * CM_TO_PX;
     const isHovered = pillar.id === hoveredPillarId;
+    const rad = (pillar.rotation || 0) * Math.PI / 180;
 
     ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rad);
 
     if (pillar.shape === "round") {
       const r = (pillar.width / 2) * CM_TO_PX;
       ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
       ctx.fillStyle = isHovered ? "hsla(30, 80%, 50%, 0.3)" : "hsla(30, 60%, 40%, 0.2)";
       ctx.fill();
       ctx.strokeStyle = isHovered ? "hsl(0, 85%, 60%)" : "hsl(30, 80%, 50%)";
@@ -1352,10 +1355,10 @@ function drawPillars(
 
       // Cross pattern
       ctx.beginPath();
-      ctx.moveTo(cx - r * 0.6, cy - r * 0.6);
-      ctx.lineTo(cx + r * 0.6, cy + r * 0.6);
-      ctx.moveTo(cx + r * 0.6, cy - r * 0.6);
-      ctx.lineTo(cx - r * 0.6, cy + r * 0.6);
+      ctx.moveTo(-r * 0.6, -r * 0.6);
+      ctx.lineTo(r * 0.6, r * 0.6);
+      ctx.moveTo(r * 0.6, -r * 0.6);
+      ctx.lineTo(-r * 0.6, r * 0.6);
       ctx.strokeStyle = isHovered ? "hsla(0, 85%, 60%, 0.5)" : "hsla(30, 80%, 50%, 0.4)";
       ctx.lineWidth = 1 / zoom;
       ctx.stroke();
@@ -1363,23 +1366,23 @@ function drawPillars(
       const hw = (pillar.width / 2) * CM_TO_PX;
       const hd = (pillar.depth / 2) * CM_TO_PX;
       ctx.fillStyle = isHovered ? "hsla(30, 80%, 50%, 0.3)" : "hsla(30, 60%, 40%, 0.2)";
-      ctx.fillRect(cx - hw, cy - hd, hw * 2, hd * 2);
+      ctx.fillRect(-hw, -hd, hw * 2, hd * 2);
       ctx.strokeStyle = isHovered ? "hsl(0, 85%, 60%)" : "hsl(30, 80%, 50%)";
       ctx.lineWidth = 2 / zoom;
-      ctx.strokeRect(cx - hw, cy - hd, hw * 2, hd * 2);
+      ctx.strokeRect(-hw, -hd, hw * 2, hd * 2);
 
       // Cross pattern
       ctx.beginPath();
-      ctx.moveTo(cx - hw, cy - hd);
-      ctx.lineTo(cx + hw, cy + hd);
-      ctx.moveTo(cx + hw, cy - hd);
-      ctx.lineTo(cx - hw, cy + hd);
+      ctx.moveTo(-hw, -hd);
+      ctx.lineTo(hw, hd);
+      ctx.moveTo(hw, -hd);
+      ctx.lineTo(-hw, hd);
       ctx.strokeStyle = isHovered ? "hsla(0, 85%, 60%, 0.5)" : "hsla(30, 80%, 50%, 0.4)";
       ctx.lineWidth = 1 / zoom;
       ctx.stroke();
     }
 
-    // Dimension label
+    // Dimension label (below pillar)
     if (state.showDimensions) {
       const label = pillar.shape === "round"
         ? `Ø${pillar.width}cm`
@@ -1391,7 +1394,62 @@ function drawPillars(
       const yOffset = pillar.shape === "round"
         ? (pillar.width / 2) * CM_TO_PX + 6 / zoom
         : (pillar.depth / 2) * CM_TO_PX + 6 / zoom;
-      ctx.fillText(label, cx, cy + yOffset);
+      ctx.fillText(label, 0, yOffset);
+    }
+
+    // Rotation handle (above pillar, connected by a line)
+    if (isHovered) {
+      const handleDist = pillar.shape === "round"
+        ? (pillar.width / 2) * CM_TO_PX + 20 / zoom
+        : (Math.max(pillar.width, pillar.depth) / 2) * CM_TO_PX + 20 / zoom;
+      
+      // Line from top of pillar to handle
+      ctx.beginPath();
+      ctx.moveTo(0, -(pillar.shape === "round" ? (pillar.width / 2) * CM_TO_PX : (pillar.depth / 2) * CM_TO_PX));
+      ctx.lineTo(0, -handleDist);
+      ctx.strokeStyle = "hsla(263, 85%, 68%, 0.6)";
+      ctx.lineWidth = 1.5 / zoom;
+      ctx.stroke();
+
+      // Handle circle
+      ctx.beginPath();
+      ctx.arc(0, -handleDist, 6 / zoom, 0, Math.PI * 2);
+      ctx.fillStyle = "hsl(263, 85%, 68%)";
+      ctx.fill();
+      ctx.strokeStyle = "hsl(263, 85%, 90%)";
+      ctx.lineWidth = 1.5 / zoom;
+      ctx.stroke();
+
+      // Rotation arrow icon inside handle
+      ctx.beginPath();
+      const r = 3.5 / zoom;
+      ctx.arc(0, -handleDist, r, -Math.PI * 0.7, Math.PI * 0.5);
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = 1.2 / zoom;
+      ctx.stroke();
+      // Arrow tip
+      const tipAngle = Math.PI * 0.5;
+      const tipX = Math.cos(tipAngle) * r;
+      const tipY = -handleDist + Math.sin(tipAngle) * r;
+      ctx.beginPath();
+      ctx.moveTo(tipX - 2 / zoom, tipY - 1.5 / zoom);
+      ctx.lineTo(tipX, tipY);
+      ctx.lineTo(tipX + 1.5 / zoom, tipY - 2 / zoom);
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = 1.2 / zoom;
+      ctx.stroke();
+    }
+
+    // Rotation angle label
+    if (isHovered && pillar.rotation && Math.abs(pillar.rotation) > 0.5) {
+      ctx.font = `bold ${9 / zoom}px Inter`;
+      ctx.fillStyle = "hsl(263, 85%, 68%)";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      const labelY = pillar.shape === "round"
+        ? -(pillar.width / 2) * CM_TO_PX - 28 / zoom
+        : -(Math.max(pillar.width, pillar.depth) / 2) * CM_TO_PX - 28 / zoom;
+      ctx.fillText(`${Math.round(pillar.rotation)}°`, 0, labelY);
     }
 
     ctx.restore();

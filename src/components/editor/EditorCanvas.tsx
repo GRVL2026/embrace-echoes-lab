@@ -903,8 +903,12 @@ export function EditorCanvas() {
           Cliquez sur un mur pour ajouter une porte.
         </div>
       )}
+      {state.tool === "pillar" && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 rounded-md border border-border bg-card/80 backdrop-blur-sm px-4 py-2 text-sm text-muted-foreground neon-border">
+          Cliquez pour placer un poteau. Glissez un poteau existant pour le déplacer.
+        </div>
+      )}
 
-      {/* Dimension inline edit */}
       {editingDimension && (
         <div
           className="absolute z-50"

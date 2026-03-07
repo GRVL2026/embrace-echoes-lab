@@ -335,6 +335,29 @@ export function EditorCanvas() {
     const world = screenToWorld(e.clientX, e.clientY);
     setMousePos(world);
 
+    // Handle door dragging
+    if (draggingDoor) {
+      const door = state.doors.find((d) => d.id === draggingDoor);
+      if (door) {
+        const room = state.rooms.find((r) => r.id === door.roomId);
+        if (room && door.edgeIndex < room.points.length) {
+          const a = room.points[door.edgeIndex];
+          const b = room.points[(door.edgeIndex + 1) % room.points.length];
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const wallLen = Math.sqrt(dx * dx + dy * dy);
+          if (wallLen > 0) {
+            const ux = dx / wallLen, uy = dy / wallLen;
+            const proj = (world.x - a.x) * ux + (world.y - a.y) * uy;
+            const halfW = door.width / 2;
+            const clampedRatio = Math.max(halfW / wallLen, Math.min(1 - halfW / wallLen, proj / wallLen));
+            dispatch({ type: "UPDATE_DOOR", id: draggingDoor, door: { positionRatio: clampedRatio } });
+          }
+        }
+      }
+      return;
+    }
+
+
     // Hover detection for eraser and door tools
     if (state.tool === "eraser" || state.tool === "door") {
       const threshold = 15 / state.zoom;

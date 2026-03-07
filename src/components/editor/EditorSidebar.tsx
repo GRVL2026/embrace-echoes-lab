@@ -6,7 +6,9 @@ import { useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { Door } from "@/types/editor";
+import type { GameEquipment } from "@/types/equipment";
 import { CatalogPanel } from "./CatalogPanel";
+import { ProjectMenu } from "./ProjectMenu";
 
 type AIPlanDoor = {
   edgeIndex: number;

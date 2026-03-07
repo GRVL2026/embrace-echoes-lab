@@ -39,6 +39,12 @@ export function EditorCanvas() {
     editingDoorId?: string;
   } | null>(null);
 
+  // Pillar dialog state
+  const [pillarDialog, setPillarDialog] = useState<{
+    open: boolean;
+    pillarId: string;
+  } | null>(null);
+
   // Find door under a world point
   const findDoorAtPoint = useCallback((world: Point): Door | null => {
     for (const door of state.doors) {

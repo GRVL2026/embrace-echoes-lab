@@ -296,10 +296,11 @@ export function EditorCanvas() {
   });
 
   // Find nearest edge index of a polygon (returns -1 if none within threshold)
-  const findNearestEdge = useCallback((point: Point, polygon: Point[], threshold: number): number => {
+  const findNearestEdge = useCallback((point: Point, polygon: Point[], threshold: number, isClosed = true): number => {
     let bestDist = Infinity;
     let bestIdx = -1;
-    for (let i = 0; i < polygon.length; i++) {
+    const edgeCount = isClosed ? polygon.length : polygon.length - 1;
+    for (let i = 0; i < edgeCount; i++) {
       const a = polygon[i];
       const b = polygon[(i + 1) % polygon.length];
       const dx = b.x - a.x, dy = b.y - a.y;

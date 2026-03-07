@@ -1475,3 +1475,94 @@ function drawPillars(
     ctx.restore();
   });
 }
+
+// Draw distances from each pillar to nearest walls
+function drawPillarDistances(
+  ctx: CanvasRenderingContext2D,
+  state: { pillars: Pillar[]; rooms: { id: string; points: Point[]; isClosed: boolean }[]; zoom: number }
+) {
+  const { pillars, rooms, zoom } = state;
+
+  // Collect all wall edges
+  const edges: { ax: number; ay: number; bx: number; by: number }[] = [];
+  rooms.forEach((room) => {
+    const count = room.isClosed ? room.points.length : room.points.length - 1;
+    for (let i = 0; i < count; i++) {
+      const a = room.points[i];
+      const b = room.points[(i + 1) % room.points.length];
+      edges.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y });
+    }
+  });
+
+  if (edges.length === 0) return;
+
+  pillars.forEach((pillar) => {
+    const px = pillar.position.x;
+    const py = pillar.position.y;
+
+    // Find closest point on each edge, keep the 4 nearest
+    const distances: { dist: number; projX: number; projY: number }[] = [];
+
+    edges.forEach((e) => {
+      const dx = e.bx - e.ax, dy = e.by - e.ay;
+      const len2 = dx * dx + dy * dy;
+      if (len2 === 0) return;
+      const t = Math.max(0, Math.min(1, ((px - e.ax) * dx + (py - e.ay) * dy) / len2));
+      const projX = e.ax + t * dx;
+      const projY = e.ay + t * dy;
+      const dist = Math.sqrt((px - projX) ** 2 + (py - projY) ** 2);
+      distances.push({ dist, projX, projY });
+    });
+
+    distances.sort((a, b) => a.dist - b.dist);
+
+    // Draw the 4 closest distances (or fewer)
+    const toDraw = distances.slice(0, 4);
+    // Filter out duplicates (same projection point within 1cm)
+    const unique: typeof toDraw = [];
+    toDraw.forEach((d) => {
+      const isDup = unique.some(
+        (u) => Math.abs(u.projX - d.projX) < 1 && Math.abs(u.projY - d.projY) < 1
+      );
+      if (!isDup) unique.push(d);
+    });
+
+    unique.forEach((d) => {
+      const pcx = px * CM_TO_PX;
+      const pcy = py * CM_TO_PX;
+      const wpx = d.projX * CM_TO_PX;
+      const wpy = d.projY * CM_TO_PX;
+
+      // Dashed line from pillar center to wall
+      ctx.beginPath();
+      ctx.moveTo(pcx, pcy);
+      ctx.lineTo(wpx, wpy);
+      ctx.strokeStyle = "hsla(180, 70%, 50%, 0.5)";
+      ctx.lineWidth = 1 / zoom;
+      ctx.setLineDash([4 / zoom, 3 / zoom]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Distance label at midpoint
+      const mx = (pcx + wpx) / 2;
+      const my = (pcy + wpy) / 2;
+      const label = d.dist >= 100
+        ? `${(d.dist / 100).toFixed(2)}m`
+        : `${Math.round(d.dist)}cm`;
+
+      ctx.save();
+      const angle = Math.atan2(wpy - pcy, wpx - pcx);
+      const textAngle = angle > Math.PI / 2 || angle < -Math.PI / 2 ? angle + Math.PI : angle;
+      const offX = Math.sin(angle) * (10 / zoom);
+      const offY = -Math.cos(angle) * (10 / zoom);
+      ctx.translate(mx + offX, my + offY);
+      ctx.rotate(textAngle);
+      ctx.font = `bold ${9 / zoom}px Inter`;
+      ctx.fillStyle = "hsl(180, 70%, 50%)";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(label, 0, -1 / zoom);
+      ctx.restore();
+    });
+  });
+}

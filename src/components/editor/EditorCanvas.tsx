@@ -455,18 +455,35 @@ export function EditorCanvas() {
   // Door dialog handlers
   const handleDoorConfirm = (result: { width: number; positionRatio: number; openDirection: Door["openDirection"]; openDirectionRight?: Door["openDirection"]; openSide: Door["openSide"]; leafCount: Door["leafCount"] }) => {
     if (!doorDialog) return;
-    const door: Door = {
-      id: crypto.randomUUID(),
-      roomId: doorDialog.roomId,
-      edgeIndex: doorDialog.edgeIndex,
-      positionRatio: result.positionRatio,
-      width: result.width,
-      openDirection: result.openDirection,
-      openDirectionRight: result.openDirectionRight,
-      openSide: result.openSide,
-      leafCount: result.leafCount,
-    };
-    dispatch({ type: "ADD_DOOR", door });
+    if (doorDialog.editingDoorId) {
+      // Update existing door
+      dispatch({
+        type: "UPDATE_DOOR",
+        id: doorDialog.editingDoorId,
+        door: {
+          width: result.width,
+          positionRatio: result.positionRatio,
+          openDirection: result.openDirection,
+          openDirectionRight: result.openDirectionRight,
+          openSide: result.openSide,
+          leafCount: result.leafCount,
+        },
+      });
+    } else {
+      // Create new door
+      const door: Door = {
+        id: crypto.randomUUID(),
+        roomId: doorDialog.roomId,
+        edgeIndex: doorDialog.edgeIndex,
+        positionRatio: result.positionRatio,
+        width: result.width,
+        openDirection: result.openDirection,
+        openDirectionRight: result.openDirectionRight,
+        openSide: result.openSide,
+        leafCount: result.leafCount,
+      };
+      dispatch({ type: "ADD_DOOR", door });
+    }
     setDoorDialog(null);
   };
 

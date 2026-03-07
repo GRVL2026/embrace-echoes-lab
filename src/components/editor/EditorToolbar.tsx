@@ -8,7 +8,7 @@ import {
   Ruler,
   ZoomIn,
   ZoomOut,
-  RotateCcw,
+  Undo2,
   Locate,
   Triangle,
 } from "lucide-react";
@@ -28,7 +28,7 @@ const tools: { id: EditorTool; label: string; icon: React.ElementType; shortcut:
 ];
 
 export function EditorToolbar() {
-  const { state, dispatch } = useEditor();
+  const { state, dispatch, canUndo } = useEditor();
 
   return (
     <div className="flex flex-col items-center gap-1 rounded-lg border border-border bg-card/80 backdrop-blur-sm p-2 neon-border">
@@ -214,12 +214,13 @@ export function EditorToolbar() {
             variant="ghost"
             size="icon"
             className="h-10 w-10 text-destructive"
-            onClick={() => dispatch({ type: "RESET" })}
+            disabled={!canUndo}
+            onClick={() => dispatch({ type: "UNDO" })}
           >
-            <RotateCcw className="h-5 w-5" />
+            <Undo2 className="h-5 w-5" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="right">Réinitialiser</TooltipContent>
+        <TooltipContent side="right">Annuler (Ctrl+Z)</TooltipContent>
       </Tooltip>
     </div>
   );

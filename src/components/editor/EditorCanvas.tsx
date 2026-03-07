@@ -10,6 +10,7 @@ export function EditorCanvas() {
   const [lastPanPos, setLastPanPos] = useState<Point>({ x: 0, y: 0 });
   const [drawingPoints, setDrawingPoints] = useState<Point[]>([]);
   const [mousePos, setMousePos] = useState<Point>({ x: 0, y: 0 });
+  const [hoveredWall, setHoveredWall] = useState<{ roomId: string; edgeIndex: number } | null>(null);
 
   // Convert screen coords to world coords (cm)
   const screenToWorld = useCallback(
@@ -77,6 +78,18 @@ export function EditorCanvas() {
         ctx.strokeStyle = "hsl(263, 85%, 68%)";
         ctx.lineWidth = 2 / state.zoom;
         ctx.stroke();
+
+        // Highlight hovered wall for eraser
+        if (hoveredWall && hoveredWall.roomId === room.id) {
+          const a = room.points[hoveredWall.edgeIndex];
+          const b = room.points[(hoveredWall.edgeIndex + 1) % room.points.length];
+          ctx.beginPath();
+          ctx.moveTo(a.x * CM_TO_PX, a.y * CM_TO_PX);
+          ctx.lineTo(b.x * CM_TO_PX, b.y * CM_TO_PX);
+          ctx.strokeStyle = "hsl(0, 85%, 60%)";
+          ctx.lineWidth = 4 / state.zoom;
+          ctx.stroke();
+        }
 
         // Draw wall dimensions
         if (state.showDimensions) {
@@ -205,8 +218,10 @@ export function EditorCanvas() {
     return inside;
   }, []);
 
-  // Check if point is near any edge of a polygon
-  const pointNearEdge = useCallback((point: Point, polygon: Point[], threshold: number): boolean => {
+  // Find nearest edge index of a polygon (returns -1 if none within threshold)
+  const findNearestEdge = useCallback((point: Point, polygon: Point[], threshold: number): number => {
+    let bestDist = Infinity;
+    let bestIdx = -1;
     for (let i = 0; i < polygon.length; i++) {
       const a = polygon[i];
       const b = polygon[(i + 1) % polygon.length];
@@ -216,9 +231,12 @@ export function EditorCanvas() {
       const t = Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / (len * len)));
       const projX = a.x + t * dx, projY = a.y + t * dy;
       const dist = Math.sqrt((point.x - projX) ** 2 + (point.y - projY) ** 2);
-      if (dist < threshold) return true;
+      if (dist < threshold && dist < bestDist) {
+        bestDist = dist;
+        bestIdx = i;
+      }
     }
-    return false;
+    return bestIdx;
   }, []);
 
   // Mouse handlers
@@ -230,13 +248,9 @@ export function EditorCanvas() {
     }
 
     if (state.tool === "eraser" && e.button === 0) {
-      const world = screenToWorld(e.clientX, e.clientY);
-      const threshold = 20 / state.zoom; // tolerance in cm
-      for (const room of state.rooms) {
-        if (pointInPolygon(world, room.points) || pointNearEdge(world, room.points, threshold)) {
-          dispatch({ type: "DELETE_ROOM", id: room.id });
-          return;
-        }
+      if (hoveredWall) {
+        dispatch({ type: "DELETE_WALL", roomId: hoveredWall.roomId, edgeIndex: hoveredWall.edgeIndex });
+        setHoveredWall(null);
       }
       return;
     }
@@ -272,6 +286,22 @@ export function EditorCanvas() {
   const handleMouseMove = (e: React.MouseEvent) => {
     const world = screenToWorld(e.clientX, e.clientY);
     setMousePos(world);
+
+    // Eraser hover detection
+    if (state.tool === "eraser") {
+      const threshold = 15 / state.zoom;
+      let found: { roomId: string; edgeIndex: number } | null = null;
+      for (const room of state.rooms) {
+        const idx = findNearestEdge(world, room.points, threshold);
+        if (idx >= 0) {
+          found = { roomId: room.id, edgeIndex: idx };
+          break;
+        }
+      }
+      setHoveredWall(found);
+    } else if (hoveredWall) {
+      setHoveredWall(null);
+    }
 
     if (isPanning) {
       const dx = e.clientX - lastPanPos.x;

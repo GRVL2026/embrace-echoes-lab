@@ -8,6 +8,7 @@ type EditorAction =
   | { type: "ADD_ROOM"; room: Room }
   | { type: "UPDATE_ROOM"; id: string; room: Partial<Room> }
   | { type: "DELETE_ROOM"; id: string }
+  | { type: "DELETE_WALL"; roomId: string; edgeIndex: number }
   | { type: "ADD_DOOR"; door: Door }
   | { type: "TOGGLE_SNAP" }
   | { type: "TOGGLE_DIMENSIONS" }
@@ -31,6 +32,22 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       };
     case "DELETE_ROOM":
       return { ...state, rooms: state.rooms.filter((r) => r.id !== action.id) };
+    case "DELETE_WALL": {
+      const room = state.rooms.find((r) => r.id === action.roomId);
+      if (!room) return state;
+      // Remove the point at edgeIndex (collapses that edge)
+      const newPoints = room.points.filter((_, i) => i !== action.edgeIndex);
+      // If fewer than 3 points remain, delete the entire room
+      if (newPoints.length < 3) {
+        return { ...state, rooms: state.rooms.filter((r) => r.id !== action.roomId) };
+      }
+      return {
+        ...state,
+        rooms: state.rooms.map((r) =>
+          r.id === action.roomId ? { ...r, points: newPoints } : r
+        ),
+      };
+    }
     case "ADD_DOOR":
       return { ...state, doors: [...state.doors, action.door] };
     case "TOGGLE_SNAP":

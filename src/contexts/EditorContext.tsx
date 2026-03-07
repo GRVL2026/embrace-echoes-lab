@@ -68,6 +68,11 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
     }
     case "ADD_DOOR":
       return { ...state, doors: [...state.doors, action.door] };
+    case "UPDATE_DOOR":
+      return {
+        ...state,
+        doors: state.doors.map((d) => (d.id === action.id ? { ...d, ...action.door } : d)),
+      };
     case "DELETE_DOOR":
       return { ...state, doors: state.doors.filter((d) => d.id !== action.id) };
     case "TOGGLE_SNAP":

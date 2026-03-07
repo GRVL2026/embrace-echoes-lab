@@ -968,6 +968,27 @@ export function EditorCanvas() {
           onCancel={() => setDoorDialog(null)}
         />
       )}
+
+      {/* Pillar dialog */}
+      {pillarDialog && (() => {
+        const p = state.pillars.find((pl) => pl.id === pillarDialog.pillarId);
+        if (!p) return null;
+        return (
+          <PillarDialog
+            open={pillarDialog.open}
+            pillar={p}
+            onConfirm={(updates) => {
+              dispatch({ type: "UPDATE_PILLAR", id: p.id, pillar: updates });
+              setPillarDialog(null);
+            }}
+            onDelete={() => {
+              dispatch({ type: "DELETE_PILLAR", id: p.id });
+              setPillarDialog(null);
+            }}
+            onCancel={() => setPillarDialog(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

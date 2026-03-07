@@ -741,6 +741,7 @@ export function EditorCanvas() {
     setHasDragged(false);
     if (draggingVertex) setDraggingVertex(null);
     if (draggingDoor) setDraggingDoor(null);
+    if (draggingPillar) setDraggingPillar(null);
   };
 
   const handleWheel = (e: React.WheelEvent) => {

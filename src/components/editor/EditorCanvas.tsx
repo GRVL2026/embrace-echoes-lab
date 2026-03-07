@@ -15,6 +15,7 @@ export function EditorCanvas() {
   const [draggingDoor, setDraggingDoor] = useState<string | null>(null);
   const [pendingDoorClick, setPendingDoorClick] = useState<{ doorId: string; startX: number; startY: number } | null>(null);
   const [hasDragged, setHasDragged] = useState(false);
+  const [draggingVertex, setDraggingVertex] = useState<{ roomId: string; pointIndex: number } | null>(null);
 
   // Door dialog state
   const [doorDialog, setDoorDialog] = useState<{
@@ -271,6 +272,22 @@ export function EditorCanvas() {
       return;
     }
 
+    // Check if clicking on a vertex (select tool) — start vertex drag
+    if (e.button === 0 && (state.tool === "select" || state.tool === "wall" || state.tool === "door")) {
+      const world = screenToWorld(e.clientX, e.clientY);
+      const vertexThreshold = 10 / state.zoom; // in cm
+      for (const room of state.rooms) {
+        for (let i = 0; i < room.points.length; i++) {
+          const p = room.points[i];
+          const dist = Math.sqrt((world.x - p.x) ** 2 + (world.y - p.y) ** 2);
+          if (dist < vertexThreshold) {
+            setDraggingVertex({ roomId: room.id, pointIndex: i });
+            return;
+          }
+        }
+      }
+    }
+
     // Check if clicking on an existing door (any tool except eraser) — prepare for click or drag
     if (e.button === 0 && state.tool !== "eraser") {
       const world = screenToWorld(e.clientX, e.clientY);
@@ -338,6 +355,18 @@ export function EditorCanvas() {
   const handleMouseMove = (e: React.MouseEvent) => {
     const world = screenToWorld(e.clientX, e.clientY);
     setMousePos(world);
+
+    // Handle vertex dragging
+    if (draggingVertex) {
+      const snapped = snapPoint(world);
+      const room = state.rooms.find((r) => r.id === draggingVertex.roomId);
+      if (room) {
+        const newPoints = [...room.points];
+        newPoints[draggingVertex.pointIndex] = snapped;
+        dispatch({ type: "UPDATE_ROOM", id: draggingVertex.roomId, room: { points: newPoints } });
+      }
+      return;
+    }
 
     // Handle pending door click → detect drag threshold
     if (pendingDoorClick && !draggingDoor) {
@@ -425,6 +454,7 @@ export function EditorCanvas() {
 
     setPendingDoorClick(null);
     setHasDragged(false);
+    if (draggingVertex) setDraggingVertex(null);
     if (draggingDoor) setDraggingDoor(null);
   };
 
@@ -507,7 +537,7 @@ export function EditorCanvas() {
   const eraserCursor = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23ff4444' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21'/%3E%3Cpath d='M22 21H7'/%3E%3Cpath d='m5 11 9 9'/%3E%3C/svg%3E") 4 20, auto`;
 
   const cursorStyle =
-    draggingDoor
+    draggingVertex || draggingDoor
       ? "cursor-grabbing"
       : state.tool === "pan" || isPanning
       ? "cursor-grab"

@@ -13,7 +13,9 @@ export type Room = {
   name: string;
 };
 
-export type DoorOpenDirection = "left" | "right"; // relative to wall direction
+export type DoorOpenDirection = "left" | "right"; // hinge side relative to wall direction
+export type DoorOpenSide = "interior" | "exterior"; // which side of the wall the door opens toward
+export type DoorLeafCount = "single" | "double";
 
 export type Door = {
   id: string;
@@ -21,7 +23,10 @@ export type Door = {
   edgeIndex: number; // which edge of the room polygon
   positionRatio: number; // 0–1 along the wall
   width: number; // in cm
-  openDirection: DoorOpenDirection;
+  openDirection: DoorOpenDirection; // hinge side (left battant for single, left battant for double)
+  openDirectionRight?: DoorOpenDirection; // right battant direction (double only)
+  openSide: DoorOpenSide;
+  leafCount: DoorLeafCount;
 };
 
 export type EditorTool = "select" | "wall" | "door" | "pan" | "eraser";

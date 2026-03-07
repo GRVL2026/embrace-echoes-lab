@@ -96,6 +96,7 @@ type EditorContextType = {
   dispatch: React.Dispatch<EditorAction>;
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 const EditorContext = createContext<EditorContextType | null>(null);
 
 export function EditorProvider({ children }: { children: ReactNode }) {
@@ -103,6 +104,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
   return <EditorContext.Provider value={{ state, dispatch }}>{children}</EditorContext.Provider>;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useEditor() {
   const ctx = useContext(EditorContext);
   if (!ctx) throw new Error("useEditor must be used within EditorProvider");

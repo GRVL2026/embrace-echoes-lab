@@ -10,6 +10,7 @@ import {
   ZoomOut,
   RotateCcw,
   Locate,
+  Triangle,
 } from "lucide-react";
 import { useEditor } from "@/contexts/EditorContext";
 import { Button } from "@/components/ui/button";

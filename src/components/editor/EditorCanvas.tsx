@@ -4,6 +4,7 @@ import { CM_TO_PX, type Point, type Door, type Pillar, type CirculationSegment }
 import type { PlacedEquipment } from "@/types/equipment";
 import { DoorDialog } from "./DoorDialog";
 import { PillarDialog } from "./PillarDialog";
+import { computeCirculation } from "@/lib/circulation";
 
 export function EditorCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);

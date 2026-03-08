@@ -661,128 +661,210 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
 
       {/* Expanded catalog dialog */}
       <Dialog open={expandedView} onOpenChange={setExpandedView}>
-        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-hidden p-0">
-          <DialogHeader className="p-4 pb-0">
-            <DialogTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5 text-primary" />
-              Catalogue ({catalog.length} jeux)
-            </DialogTitle>
-          </DialogHeader>
-          
-          <div className="p-4 pt-2">
-            {/* Search in expanded view */}
-            <div className="relative mb-4">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Rechercher (nom, type, fournisseur...)"
-                className="pl-10"
-              />
-              {searchQuery && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
-                  onClick={() => setSearchQuery("")}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-            
-            {searchQuery && (
-              <p className="text-sm text-muted-foreground mb-3">
-                {filteredCatalog.length} résultat{filteredCatalog.length > 1 ? "s" : ""} sur {catalog.length}
-              </p>
-            )}
-
-            {/* Selection actions in expanded view */}
-            {selectedIds.size > 0 && (
-              <div className="flex items-center gap-2 p-3 mb-4 bg-primary/10 rounded-lg border border-primary/20">
-                <span className="text-sm text-primary font-medium flex-1">
-                  {selectedIds.size} jeu{selectedIds.size > 1 ? "x" : ""} sélectionné{selectedIds.size > 1 ? "s" : ""}
-                </span>
-                <Button size="sm" className="gap-1.5" onClick={() => { handleAutoPlace(); setExpandedView(false); }}>
-                  <Play className="h-4 w-4" />
-                  Placer sur le plan
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setSelectedIds(new Set())}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-
-            {/* Expanded catalog grid */}
-            <ScrollArea className="h-[60vh]">
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {filteredCatalog.map((eq) => {
-                  const isSelected = selectedIds.has(eq.id);
-                  return (
-                    <div
-                      key={eq.id}
-                      className={`rounded-lg border p-3 cursor-pointer transition-all ${
-                        isSelected
-                          ? "border-primary bg-primary/10"
-                          : "border-border bg-surface hover:border-primary/30"
-                      }`}
-                      onClick={() => handleViewProduct(eq)}
+        <DialogContent className={`max-h-[90vh] overflow-hidden p-0 ${selectedIds.size > 0 ? 'sm:max-w-6xl' : 'sm:max-w-4xl'}`}>
+          <div className="flex h-full">
+            {/* Main catalog area */}
+            <div className={`flex-1 flex flex-col ${selectedIds.size > 0 ? 'border-r border-border' : ''}`}>
+              <DialogHeader className="p-4 pb-0">
+                <DialogTitle className="flex items-center gap-2">
+                  <Package className="h-5 w-5 text-primary" />
+                  Catalogue ({catalog.length} jeux)
+                </DialogTitle>
+              </DialogHeader>
+              
+              <div className="p-4 pt-2 flex-1 flex flex-col min-h-0">
+                {/* Search in expanded view */}
+                <div className="relative mb-4">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Rechercher (nom, type, fournisseur...)"
+                    className="pl-10"
+                  />
+                  {searchQuery && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                      onClick={() => setSearchQuery("")}
                     >
-                      {/* Image */}
-                      {eq.images && eq.images[0] ? (
-                        <div className="aspect-square rounded-md overflow-hidden bg-muted/30 mb-2">
-                          <img 
-                            src={eq.images[0]} 
-                            alt={eq.name}
-                            className="w-full h-full object-contain"
-                          />
-                        </div>
-                      ) : (
-                        <div className="aspect-square rounded-md bg-muted/30 mb-2 flex items-center justify-center">
-                          <Package className="h-8 w-8 text-muted-foreground/30" />
-                        </div>
-                      )}
-                      
-                      {/* Info */}
-                      <h4 className="font-medium text-sm text-foreground truncate">{eq.name}</h4>
-                      {eq.vendor && (
-                        <p className="text-xs text-muted-foreground truncate">{eq.vendor}</p>
-                      )}
-                      <div className="flex items-center justify-between mt-2">
-                        <span className="text-xs text-muted-foreground">
-                          {eq.width}×{eq.depth}cm
-                        </span>
-                        {eq.price && eq.price > 0 && (
-                          <span className="text-xs font-medium text-primary">
-                            {eq.price.toLocaleString("fr-FR")}€
-                          </span>
-                        )}
-                      </div>
-                      
-                      {/* Selection checkbox */}
-                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
-                        <Badge variant="outline" className="text-[10px]">{eq.category}</Badge>
-                        <button
-                          className={`h-6 w-6 rounded border flex items-center justify-center transition-colors ${
-                            isSelected 
-                              ? "bg-primary border-primary text-primary-foreground" 
-                              : "border-muted-foreground/30 hover:border-primary"
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+                
+                {searchQuery && (
+                  <p className="text-sm text-muted-foreground mb-3">
+                    {filteredCatalog.length} résultat{filteredCatalog.length > 1 ? "s" : ""} sur {catalog.length}
+                  </p>
+                )}
+
+                {/* Expanded catalog grid */}
+                <ScrollArea className="flex-1 h-[60vh]">
+                  <div className={`grid gap-3 ${selectedIds.size > 0 ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'}`}>
+                    {filteredCatalog.map((eq) => {
+                      const isSelected = selectedIds.has(eq.id);
+                      return (
+                        <div
+                          key={eq.id}
+                          className={`rounded-lg border p-3 cursor-pointer transition-all ${
+                            isSelected
+                              ? "border-primary bg-primary/10"
+                              : "border-border bg-surface hover:border-primary/30"
                           }`}
-                          onClick={(e) => toggleSelection(eq.id, e)}
+                          onClick={() => handleViewProduct(eq)}
                         >
-                          {isSelected && <Check className="h-4 w-4" />}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
+                          {/* Image */}
+                          {eq.images && eq.images[0] ? (
+                            <div className="aspect-square rounded-md overflow-hidden bg-muted/30 mb-2">
+                              <img 
+                                src={eq.images[0]} 
+                                alt={eq.name}
+                                className="w-full h-full object-contain"
+                              />
+                            </div>
+                          ) : (
+                            <div className="aspect-square rounded-md bg-muted/30 mb-2 flex items-center justify-center">
+                              <Package className="h-8 w-8 text-muted-foreground/30" />
+                            </div>
+                          )}
+                          
+                          {/* Info */}
+                          <h4 className="font-medium text-sm text-foreground truncate">{eq.name}</h4>
+                          {eq.vendor && (
+                            <p className="text-xs text-muted-foreground truncate">{eq.vendor}</p>
+                          )}
+                          <div className="flex items-center justify-between mt-2">
+                            <span className="text-xs text-muted-foreground">
+                              {eq.width}×{eq.depth}cm
+                            </span>
+                            {eq.price && eq.price > 0 && (
+                              <span className="text-xs font-medium text-primary">
+                                {eq.price.toLocaleString("fr-FR")}€
+                              </span>
+                            )}
+                          </div>
+                          
+                          {/* Selection checkbox */}
+                          <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
+                            <Badge variant="outline" className="text-[10px]">{eq.category}</Badge>
+                            <button
+                              className={`h-6 w-6 rounded border flex items-center justify-center transition-colors ${
+                                isSelected 
+                                  ? "bg-primary border-primary text-primary-foreground" 
+                                  : "border-muted-foreground/30 hover:border-primary"
+                              }`}
+                              onClick={(e) => toggleSelection(eq.id, e)}
+                            >
+                              {isSelected && <Check className="h-4 w-4" />}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
               </div>
-            </ScrollArea>
+            </div>
+
+            {/* Selection sidebar */}
+            {selectedIds.size > 0 && (
+              <div className="w-80 flex flex-col bg-muted/30">
+                <div className="p-4 border-b border-border">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-foreground">
+                      Sélection ({selectedIds.size})
+                    </h3>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-muted-foreground"
+                      onClick={() => setSelectedIds(new Set())}
+                    >
+                      Tout effacer
+                    </Button>
+                  </div>
+                </div>
+
+                <ScrollArea className="flex-1">
+                  <div className="p-3 space-y-2">
+                    {catalog.filter(eq => selectedIds.has(eq.id)).map((eq) => (
+                      <div
+                        key={eq.id}
+                        className="rounded-lg border border-border bg-background p-2.5 group"
+                      >
+                        <div className="flex gap-2">
+                          {eq.images && eq.images[0] ? (
+                            <img 
+                              src={eq.images[0]} 
+                              alt={eq.name}
+                              className="w-12 h-12 rounded object-contain bg-muted/50 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded bg-muted/50 flex items-center justify-center shrink-0">
+                              <Package className="h-5 w-5 text-muted-foreground/30" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-medium text-xs text-foreground truncate">{eq.name}</h4>
+                            {eq.vendor && (
+                              <p className="text-[10px] text-muted-foreground truncate">{eq.vendor}</p>
+                            )}
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[10px] text-muted-foreground">
+                                {eq.width}×{eq.depth}×{eq.height}cm
+                              </span>
+                              {eq.price && eq.price > 0 && (
+                                <span className="text-[10px] font-medium text-primary">
+                                  {eq.price.toLocaleString("fr-FR")}€
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 text-destructive/60 hover:text-destructive"
+                            onClick={() => {
+                              setSelectedIds(prev => {
+                                const next = new Set(prev);
+                                next.delete(eq.id);
+                                return next;
+                              });
+                            }}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+
+                {/* Total and action */}
+                <div className="p-4 border-t border-border space-y-3">
+                  {catalog.filter(eq => selectedIds.has(eq.id)).some(eq => eq.price && eq.price > 0) && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Total estimé</span>
+                      <span className="font-semibold text-foreground">
+                        {catalog
+                          .filter(eq => selectedIds.has(eq.id))
+                          .reduce((sum, eq) => sum + (eq.price || 0), 0)
+                          .toLocaleString("fr-FR")} €
+                      </span>
+                    </div>
+                  )}
+                  <Button 
+                    className="w-full gap-2" 
+                    onClick={() => { handleAutoPlace(); setExpandedView(false); }}
+                  >
+                    <Play className="h-4 w-4" />
+                    Placer sur le plan
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

@@ -1386,9 +1386,8 @@ export function EditorCanvas() {
             position: { x: p.position.x + OFFSET, y: p.position.y + OFFSET },
           };
           dispatch({ type: "ADD_PILLAR", pillar: newPillar });
-          // Update clipboard position for subsequent pastes
           clipboardRef.current = { type: "pillar", data: newPillar };
-        } else {
+        } else if (clipboardRef.current.type === "equipment") {
           const eq = clipboardRef.current.data;
           const newEquip: PlacedEquipment = {
             ...eq,
@@ -1397,6 +1396,22 @@ export function EditorCanvas() {
           };
           dispatch({ type: "ADD_PLACED_EQUIPMENT", equipment: newEquip });
           clipboardRef.current = { type: "equipment", data: newEquip };
+        } else if (clipboardRef.current.type === "door") {
+          const door = clipboardRef.current.data;
+          const room = state.rooms.find(r => r.id === door.roomId);
+          if (room) {
+            const a = room.points[door.edgeIndex];
+            const b = room.points[(door.edgeIndex + 1) % room.points.length];
+            const edgeLen = Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2);
+            const shiftRatio = (door.width + 20) / edgeLen;
+            let newRatio = door.positionRatio + shiftRatio;
+            if (newRatio + door.width / 2 / edgeLen > 1) newRatio = door.positionRatio - shiftRatio;
+            const halfRatio = (door.width / 2) / edgeLen;
+            newRatio = Math.max(halfRatio, Math.min(1 - halfRatio, newRatio));
+            const newDoor: Door = { ...door, id: crypto.randomUUID(), positionRatio: newRatio };
+            dispatch({ type: "ADD_DOOR", door: newDoor });
+            clipboardRef.current = { type: "door", data: newDoor };
+          }
         }
         return;
       }

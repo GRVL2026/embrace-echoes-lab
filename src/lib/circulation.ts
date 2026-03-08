@@ -10,6 +10,22 @@ export type CirculationSegment = {
   width: number;
 };
 
+export type RemovalProposal = {
+  id: string;
+  label: string;
+  equipmentIdsToRemove: string[];
+  removedNames: string[];
+  resultingCirculation: CirculationSegment[];
+  remainingEquipments: PlacedEquipment[];
+};
+
+export type CirculationResult = {
+  segments: CirculationSegment[];
+  success: boolean; // true = all equipments reachable
+  unreachableCount: number; // number of equipments not reachable
+  proposals: RemovalProposal[]; // suggestions if !success
+};
+
 /** Build an occupancy grid for pathfinding. true = blocked */
 function buildOccupancyGrid(
   room: Room,
@@ -363,8 +379,9 @@ export function computeCirculation(
   doors: Door[],
   pillars: Pillar[],
   equipments: PlacedEquipment[],
-): CirculationSegment[] {
-  if (rooms.length === 0) return [];
+): CirculationResult {
+  const emptyResult: CirculationResult = { segments: [], success: true, unreachableCount: 0, proposals: [] };
+  if (rooms.length === 0) return emptyResult;
 
   // Find largest closed room
   let bestRoom: Room | null = null;
@@ -380,9 +397,9 @@ export function computeCirculation(
     area = Math.abs(area) / 2;
     if (area > bestArea) { bestArea = area; bestRoom = room; }
   }
-  if (!bestRoom) return [];
+  if (!bestRoom) return emptyResult;
 
-  const resolution = 20; // 20cm grid cells
+  const resolution = 20;
   const gridData = buildOccupancyGrid(bestRoom, equipments, pillars, doors, rooms, resolution);
   const { grid, originX, originY, cols, rows, res } = gridData;
 
@@ -395,7 +412,7 @@ export function computeCirculation(
     y: originY + r * res + res / 2,
   });
 
-  // Find door positions for this room
+  // Door positions
   const roomDoors = doors.filter(d => d.roomId === bestRoom!.id);
   const doorPositions: Point[] = [];
   for (const door of roomDoors) {
@@ -418,8 +435,6 @@ export function computeCirculation(
       }
     }
   }
-
-  // If no doors, use room centroid as start
   if (doorPositions.length === 0) {
     const pts = bestRoom.points;
     const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
@@ -429,43 +444,41 @@ export function computeCirculation(
 
   const allSegments: CirculationSegment[] = [];
   const startPos = doorPositions[0];
+  const unreachableIds: string[] = [];
 
-  // Helper to build path between two world points
-  const buildPath = (from: Point, to: Point): void => {
+  const buildPath = (from: Point, to: Point): boolean => {
     const fromGrid = toGrid(from.x, from.y);
     const toGrid_ = toGrid(to.x, to.y);
     const pathCells = astar(grid, fromGrid.r, fromGrid.c, toGrid_.r, toGrid_.c, rows, cols);
-    if (!pathCells || pathCells.length < 2) return;
+    if (!pathCells || pathCells.length < 2) return false;
     const worldPoints = pathCells.map(cell => toWorld(cell.r, cell.c));
     const simplified = simplifyPath(worldPoints, resolution * 0.8);
     const smoothed = smoothPath(simplified, 3);
     for (let i = 0; i < smoothed.length - 1; i++) {
       allSegments.push({ start: smoothed[i], end: smoothed[i + 1], width: CORRIDOR_WIDTH });
     }
+    return true;
   };
 
   if (equipments.length > 0) {
-    // Path from door to each equipment (greedy nearest neighbor)
     const targets = equipments.map(eq => eq.position);
-    const sortedTargets = [...targets].sort((a, b) => {
-      const da = (a.x - startPos.x) ** 2 + (a.y - startPos.y) ** 2;
-      const db = (b.x - startPos.x) ** 2 + (b.y - startPos.y) ** 2;
+    const sortedEquipments = [...equipments].sort((a, b) => {
+      const da = (a.position.x - startPos.x) ** 2 + (a.position.y - startPos.y) ** 2;
+      const db = (b.position.x - startPos.x) ** 2 + (b.position.y - startPos.y) ** 2;
       return da - db;
     });
 
-    const visited = new Set<number>();
     let currentPos = startPos;
-
-    for (const target of sortedTargets) {
-      const tIdx = targets.indexOf(target);
-      if (visited.has(tIdx)) continue;
-      buildPath(currentPos, target);
-      visited.add(tIdx);
-      currentPos = target;
+    for (const eq of sortedEquipments) {
+      const ok = buildPath(currentPos, eq.position);
+      if (!ok) {
+        unreachableIds.push(eq.id);
+      } else {
+        currentPos = eq.position;
+      }
     }
   } else {
-    // No equipment: create a circulation path through the room
-    // Generate waypoints along the room interior to form a traversal corridor
+    // No equipment — basic room traversal
     const pts = bestRoom.points;
     const minX = Math.min(...pts.map(p => p.x));
     const maxX = Math.max(...pts.map(p => p.x));
@@ -473,16 +486,14 @@ export function computeCirculation(
     const maxY = Math.max(...pts.map(p => p.y));
     const roomW = maxX - minX, roomH = maxY - minY;
 
-    // Find the farthest point from the door inside the room
     const farCorners = [
       { x: minX + HALF_CORRIDOR + 20, y: minY + HALF_CORRIDOR + 20 },
       { x: maxX - HALF_CORRIDOR - 20, y: minY + HALF_CORRIDOR + 20 },
       { x: maxX - HALF_CORRIDOR - 20, y: maxY - HALF_CORRIDOR - 20 },
       { x: minX + HALF_CORRIDOR + 20, y: maxY - HALF_CORRIDOR - 20 },
-      { x: (minX + maxX) / 2, y: (minY + maxY) / 2 }, // center
+      { x: (minX + maxX) / 2, y: (minY + maxY) / 2 },
     ].filter(p => pointInPolygon(p, pts));
 
-    // Sort by distance from door (farthest first), then path to create a nice loop
     farCorners.sort((a, b) => {
       const da = (a.x - startPos.x) ** 2 + (a.y - startPos.y) ** 2;
       const db = (b.x - startPos.x) ** 2 + (b.y - startPos.y) ** 2;
@@ -490,36 +501,23 @@ export function computeCirculation(
     });
 
     if (farCorners.length > 0) {
-      // Path from door to the farthest reachable point
-      const farthest = farCorners[0];
-      buildPath(startPos, farthest);
-
-      // If room is large enough, also add a perpendicular corridor
+      buildPath(startPos, farCorners[0]);
       if (roomW > CORRIDOR_WIDTH * 3 && roomH > CORRIDOR_WIDTH * 3 && farCorners.length > 1) {
-        // Find a point that's far from the main path axis
+        const farthest = farCorners[0];
         const mainDx = farthest.x - startPos.x;
         const mainDy = farthest.y - startPos.y;
         const mainLen = Math.sqrt(mainDx * mainDx + mainDy * mainDy) || 1;
         let bestPerp: Point | null = null;
         let bestPerpDist = 0;
         for (const corner of farCorners.slice(1)) {
-          // Distance from this corner to the main axis line
           const t = ((corner.x - startPos.x) * mainDx + (corner.y - startPos.y) * mainDy) / (mainLen * mainLen);
           const projX = startPos.x + t * mainDx;
           const projY = startPos.y + t * mainDy;
           const perpDist = Math.sqrt((corner.x - projX) ** 2 + (corner.y - projY) ** 2);
-          if (perpDist > bestPerpDist) {
-            bestPerpDist = perpDist;
-            bestPerp = corner;
-          }
+          if (perpDist > bestPerpDist) { bestPerpDist = perpDist; bestPerp = corner; }
         }
         if (bestPerp && bestPerpDist > CORRIDOR_WIDTH) {
-          // Connect from midpoint of main path to perpendicular point
-          const midMain = {
-            x: (startPos.x + farthest.x) / 2,
-            y: (startPos.y + farthest.y) / 2,
-          };
-          buildPath(midMain, bestPerp);
+          buildPath({ x: (startPos.x + farthest.x) / 2, y: (startPos.y + farthest.y) / 2 }, bestPerp);
         }
       }
     }
@@ -530,5 +528,211 @@ export function computeCirculation(
     buildPath(doorPositions[di], startPos);
   }
 
-  return allSegments;
+  const success = unreachableIds.length === 0;
+
+  // Generate removal proposals if circulation failed
+  let proposals: RemovalProposal[] = [];
+  if (!success && equipments.length > 0) {
+    proposals = generateRemovalProposals(rooms, doors, pillars, equipments, unreachableIds);
+  }
+
+  return { segments: allSegments, success, unreachableCount: unreachableIds.length, proposals };
+}
+
+/** Generate up to 3 removal proposals that restore circulation */
+function generateRemovalProposals(
+  rooms: Room[],
+  doors: Door[],
+  pillars: Pillar[],
+  equipments: PlacedEquipment[],
+  unreachableIds: string[],
+): RemovalProposal[] {
+  const proposals: RemovalProposal[] = [];
+
+  // Strategy 1: Remove only the unreachable equipment
+  {
+    const remaining = equipments.filter(e => !unreachableIds.includes(e.id));
+    const removed = equipments.filter(e => unreachableIds.includes(e.id));
+    const testResult = computeCirculationSimple(rooms, doors, pillars, remaining);
+    if (testResult.success) {
+      proposals.push({
+        id: crypto.randomUUID(),
+        label: `Retirer ${removed.length} jeu(x) inaccessible(s)`,
+        equipmentIdsToRemove: unreachableIds,
+        removedNames: removed.map(e => e.name),
+        resultingCirculation: testResult.segments,
+        remainingEquipments: remaining,
+      });
+    }
+  }
+
+  // Strategy 2: Remove equipment one by one (largest first by area) until circulation works
+  {
+    const sorted = [...equipments].sort((a, b) => (b.width * b.depth) - (a.width * a.depth));
+    const toRemove: string[] = [];
+    const removedNames: string[] = [];
+    for (const eq of sorted) {
+      toRemove.push(eq.id);
+      removedNames.push(eq.name);
+      const remaining = equipments.filter(e => !toRemove.includes(e.id));
+      const testResult = computeCirculationSimple(rooms, doors, pillars, remaining);
+      if (testResult.success) {
+        // Don't duplicate strategy 1
+        if (toRemove.length !== unreachableIds.length || !toRemove.every(id => unreachableIds.includes(id))) {
+          proposals.push({
+            id: crypto.randomUUID(),
+            label: `Retirer ${toRemove.length} jeu(x) (les plus encombrants)`,
+            equipmentIdsToRemove: [...toRemove],
+            removedNames: [...removedNames],
+            resultingCirculation: testResult.segments,
+            remainingEquipments: remaining,
+          });
+        }
+        break;
+      }
+      if (toRemove.length >= 5) break; // limit search
+    }
+  }
+
+  // Strategy 3: Remove equipment closest to center (likely blocking passage)
+  {
+    const pts = rooms.find(r => r.isClosed)?.points;
+    if (pts) {
+      const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+      const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+      const sorted = [...equipments].sort((a, b) => {
+        const da = (a.position.x - cx) ** 2 + (a.position.y - cy) ** 2;
+        const db = (b.position.x - cx) ** 2 + (b.position.y - cy) ** 2;
+        return da - db;
+      });
+      const toRemove: string[] = [];
+      const removedNames: string[] = [];
+      for (const eq of sorted) {
+        toRemove.push(eq.id);
+        removedNames.push(eq.name);
+        const remaining = equipments.filter(e => !toRemove.includes(e.id));
+        const testResult = computeCirculationSimple(rooms, doors, pillars, remaining);
+        if (testResult.success) {
+          const isDuplicate = proposals.some(p =>
+            p.equipmentIdsToRemove.length === toRemove.length &&
+            p.equipmentIdsToRemove.every(id => toRemove.includes(id))
+          );
+          if (!isDuplicate) {
+            proposals.push({
+              id: crypto.randomUUID(),
+              label: `Retirer ${toRemove.length} jeu(x) au centre de la salle`,
+              equipmentIdsToRemove: [...toRemove],
+              removedNames: [...removedNames],
+              resultingCirculation: testResult.segments,
+              remainingEquipments: remaining,
+            });
+          }
+          break;
+        }
+        if (toRemove.length >= 5) break;
+      }
+    }
+  }
+
+  return proposals.slice(0, 3);
+}
+
+/** Simplified computeCirculation that just returns segments + success (no proposals to avoid recursion) */
+function computeCirculationSimple(
+  rooms: Room[],
+  doors: Door[],
+  pillars: Pillar[],
+  equipments: PlacedEquipment[],
+): { segments: CirculationSegment[]; success: boolean } {
+  if (rooms.length === 0) return { segments: [], success: true };
+
+  let bestRoom: Room | null = null;
+  let bestArea = 0;
+  for (const room of rooms) {
+    if (!room.isClosed) continue;
+    let area = 0;
+    const pts = room.points;
+    for (let i = 0; i < pts.length; i++) {
+      const j = (i + 1) % pts.length;
+      area += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
+    }
+    area = Math.abs(area) / 2;
+    if (area > bestArea) { bestArea = area; bestRoom = room; }
+  }
+  if (!bestRoom) return { segments: [], success: true };
+
+  const resolution = 20;
+  const gridData = buildOccupancyGrid(bestRoom, equipments, pillars, doors, rooms, resolution);
+  const { grid, originX, originY, cols, rows, res } = gridData;
+
+  const toGrid = (wx: number, wy: number) => ({
+    c: Math.floor((wx - originX) / res),
+    r: Math.floor((wy - originY) / res),
+  });
+  const toWorld = (r: number, c: number): Point => ({
+    x: originX + c * res + res / 2,
+    y: originY + r * res + res / 2,
+  });
+
+  const roomDoors = doors.filter(d => d.roomId === bestRoom!.id);
+  const doorPositions: Point[] = [];
+  for (const door of roomDoors) {
+    const pos = getDoorWorldPosition(door, rooms);
+    if (pos) {
+      const a = bestRoom.points[door.edgeIndex];
+      const b = bestRoom.points[(door.edgeIndex + 1) % bestRoom.points.length];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len > 0) {
+        const nx = -dy / len, ny = dx / len;
+        const testIn = { x: pos.x + nx * 50, y: pos.y + ny * 50 };
+        if (pointInPolygon(testIn, bestRoom.points)) {
+          doorPositions.push({ x: pos.x + nx * HALF_CORRIDOR, y: pos.y + ny * HALF_CORRIDOR });
+        } else {
+          doorPositions.push({ x: pos.x - nx * HALF_CORRIDOR, y: pos.y - ny * HALF_CORRIDOR });
+        }
+      } else { doorPositions.push(pos); }
+    }
+  }
+  if (doorPositions.length === 0) {
+    const pts = bestRoom.points;
+    doorPositions.push({ x: pts.reduce((s, p) => s + p.x, 0) / pts.length, y: pts.reduce((s, p) => s + p.y, 0) / pts.length });
+  }
+
+  const allSegments: CirculationSegment[] = [];
+  const startPos = doorPositions[0];
+  let unreachableCount = 0;
+
+  const buildPath = (from: Point, to: Point): boolean => {
+    const fromGrid = toGrid(from.x, from.y);
+    const toGrid_ = toGrid(to.x, to.y);
+    const pathCells = astar(grid, fromGrid.r, fromGrid.c, toGrid_.r, toGrid_.c, rows, cols);
+    if (!pathCells || pathCells.length < 2) return false;
+    const worldPoints = pathCells.map(cell => toWorld(cell.r, cell.c));
+    const simplified = simplifyPath(worldPoints, resolution * 0.8);
+    const smoothed = smoothPath(simplified, 3);
+    for (let i = 0; i < smoothed.length - 1; i++) {
+      allSegments.push({ start: smoothed[i], end: smoothed[i + 1], width: CORRIDOR_WIDTH });
+    }
+    return true;
+  };
+
+  if (equipments.length > 0) {
+    const sortedEquipments = [...equipments].sort((a, b) => {
+      const da = (a.position.x - startPos.x) ** 2 + (a.position.y - startPos.y) ** 2;
+      const db = (b.position.x - startPos.x) ** 2 + (b.position.y - startPos.y) ** 2;
+      return da - db;
+    });
+    let currentPos = startPos;
+    for (const eq of sortedEquipments) {
+      const ok = buildPath(currentPos, eq.position);
+      if (!ok) { unreachableCount++; } else { currentPos = eq.position; }
+    }
+  }
+
+  for (let di = 1; di < doorPositions.length; di++) {
+    buildPath(doorPositions[di], startPos);
+  }
+
+  return { segments: allSegments, success: unreachableCount === 0 };
 }

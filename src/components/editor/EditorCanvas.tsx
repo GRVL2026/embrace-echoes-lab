@@ -4,7 +4,8 @@ import { CM_TO_PX, type Point, type Door, type Pillar, type CirculationSegment }
 import type { PlacedEquipment } from "@/types/equipment";
 import { DoorDialog } from "./DoorDialog";
 import { PillarDialog } from "./PillarDialog";
-import { computeCirculation } from "@/lib/circulation";
+import { computeCirculation, type CirculationResult, type RemovalProposal } from "@/lib/circulation";
+import { CirculationProposalDialog } from "./CirculationProposalDialog";
 
 export function EditorCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -107,6 +108,9 @@ export function EditorCanvas() {
     open: boolean;
     pillarId: string;
   } | null>(null);
+
+  // Circulation proposal dialog state
+  const [circulationProposals, setCirculationProposals] = useState<RemovalProposal[]>([]);
 
   // Find door under a world point
   const findDoorAtPoint = useCallback((world: Point): Door | null => {
@@ -413,8 +417,11 @@ export function EditorCanvas() {
     if (!hasClosedRoom) return;
     if (circulationTimerRef.current) clearTimeout(circulationTimerRef.current);
     circulationTimerRef.current = setTimeout(() => {
-      const circ = computeCirculation(state.rooms, state.doors, state.pillars, state.placedEquipments);
-      dispatch({ type: "SET_CIRCULATION", circulation: circ });
+      const result = computeCirculation(state.rooms, state.doors, state.pillars, state.placedEquipments);
+      dispatch({ type: "SET_CIRCULATION", circulation: result.segments });
+      if (!result.success && result.proposals.length > 0 && state.placedEquipments.length > 0) {
+        setCirculationProposals(result.proposals);
+      }
     }, 300);
     return () => { if (circulationTimerRef.current) clearTimeout(circulationTimerRef.current); };
   }, [state.rooms, state.doors, state.pillars, state.placedEquipments.length]);
@@ -799,10 +806,7 @@ export function EditorCanvas() {
       if (hoveredEquipment) {
         dispatch({ type: "DELETE_PLACED_EQUIPMENT", id: hoveredEquipment });
         setHoveredEquipment(null);
-        // Recompute circulation after delete
-        const remaining = state.placedEquipments.filter(e => e.id !== hoveredEquipment);
-        const circ = computeCirculation(state.rooms, state.doors, state.pillars, remaining);
-        dispatch({ type: "SET_CIRCULATION", circulation: circ });
+        // Circulation will recompute via useEffect
         return;
       }
       // Check pillar
@@ -1197,15 +1201,11 @@ export function EditorCanvas() {
     if (rotatingPillar) setRotatingPillar(null);
     if (draggingEquipment) {
       setDraggingEquipment(null);
-      // Recompute circulation after equipment move
-      const circ = computeCirculation(state.rooms, state.doors, state.pillars, state.placedEquipments);
-      dispatch({ type: "SET_CIRCULATION", circulation: circ });
+      // Circulation will recompute via useEffect
     }
     if (rotatingEquipment) {
       setRotatingEquipment(null);
-      // Recompute circulation after equipment rotate
-      const circ = computeCirculation(state.rooms, state.doors, state.pillars, state.placedEquipments);
-      dispatch({ type: "SET_CIRCULATION", circulation: circ });
+      // Circulation will recompute via useEffect
     }
   };
 
@@ -1449,6 +1449,26 @@ export function EditorCanvas() {
           />
         );
       })()}
+
+      {/* Circulation proposal dialog */}
+      <CirculationProposalDialog
+        open={circulationProposals.length > 0}
+        proposals={circulationProposals}
+        rooms={state.rooms}
+        doors={state.doors}
+        pillars={state.pillars}
+        allEquipments={state.placedEquipments}
+        onAccept={(proposal) => {
+          // Remove the selected equipment
+          for (const id of proposal.equipmentIdsToRemove) {
+            dispatch({ type: "DELETE_PLACED_EQUIPMENT", id });
+          }
+          // Apply the resulting circulation
+          dispatch({ type: "SET_CIRCULATION", circulation: proposal.resultingCirculation });
+          setCirculationProposals([]);
+        }}
+        onCancel={() => setCirculationProposals([])}
+      />
     </div>
   );
 }

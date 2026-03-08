@@ -1636,8 +1636,8 @@ export function EditorCanvas() {
         );
       })()}
 
-      {/* Circulation proposal dialog */}
-      <CirculationProposalDialog
+      {/* Circulation proposal dialog - disabled to avoid clutter */}
+      {/* <CirculationProposalDialog
         open={circulationProposals.length > 0}
         proposals={circulationProposals}
         rooms={state.rooms}
@@ -1654,7 +1654,7 @@ export function EditorCanvas() {
           setCirculationProposals([]);
         }}
         onCancel={() => setCirculationProposals([])}
-      />
+      /> */}
     </div>
   );
 }

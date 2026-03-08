@@ -529,7 +529,7 @@ export function autoPlaceEquipmentWithReport(
                 };
                 placements.push(placement);
                 result.push(placement);
-                lastPlacement = { x: pos.x, y: pos.y, rotation: finalRot };
+                lastPlacement = { x: pos.x, y: pos.y, rotation: finalRot, w, d };
                 placed = true;
                 break;
               }

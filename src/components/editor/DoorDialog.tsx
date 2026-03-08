@@ -37,6 +37,7 @@ export function DoorDialog({ open, wallLength, initialValues, onConfirm, onCance
   const [directionRight, setDirectionRight] = useState<DoorOpenDirection>("right");
   const [openSide, setOpenSide] = useState<DoorOpenSide>("interior");
   const [leafCount, setLeafCount] = useState<DoorLeafCount>("single");
+  const [isMainDoor, setIsMainDoor] = useState(false);
 
   // Pre-fill values when editing an existing door
   useEffect(() => {

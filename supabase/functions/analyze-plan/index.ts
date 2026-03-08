@@ -18,13 +18,13 @@ serve(async (req) => {
     const { imageBase64, mimeType } = await req.json();
     if (!imageBase64) throw new Error("No image provided");
 
-    const systemPrompt = `You are an expert floor plan analyzer. Given an image of a floor plan, extract all rooms, walls, and doors.
+    const systemPrompt = `You are an expert floor plan analyzer and architect. Given an image of a floor plan, extract ALL rooms, walls, doors, AND any visible furniture or equipment.
 
 Return a JSON object with this EXACT structure:
 {
   "rooms": [
     {
-      "name": "Room name (e.g. Salon, Cuisine, Chambre)",
+      "name": "Room name (e.g. Salon, Cuisine, Chambre, Salle d'arcade)",
       "points": [
         {"x": 0, "y": 0},
         {"x": 500, "y": 0},
@@ -43,20 +43,55 @@ Return a JSON object with this EXACT structure:
         }
       ]
     }
-  ]
+  ],
+  "equipment": [
+    {
+      "name": "Name of the furniture/equipment",
+      "category": "Category (e.g. arcade, billard, mobilier, bar, comptoir)",
+      "position": {"x": 250, "y": 200},
+      "width": 120,
+      "depth": 80,
+      "rotation": 0
+    }
+  ],
+  "scale": {
+    "pixelReference": 100,
+    "cmReference": 200,
+    "confidence": "high"
+  }
 }
 
-CRITICAL RULES:
-- All coordinates are in CENTIMETERS. A typical room is 300-600cm wide.
-- Points define the polygon vertices of each room in order (clockwise or counter-clockwise).
-- Position the rooms relative to each other as they appear on the plan.
+CRITICAL DIMENSION RULES:
+- All coordinates and dimensions are in CENTIMETERS.
+- LOOK CAREFULLY for dimension annotations on the plan (numbers with arrows, lines with measurements).
+- If you see dimensions like "4.50" or "4,50" next to a wall, that means 450cm (4.5 meters).
+- If you see dimensions like "450" next to a wall, that means 450cm.
+- If a legend or scale bar is visible, use it to calibrate ALL measurements.
+- A standard door is 80-90cm wide. Use visible doors as a secondary scale reference.
+- Typical room sizes: bedroom 9-15m², living room 15-35m², kitchen 8-15m², bathroom 4-8m².
+- Cross-check your extracted dimensions against these typical sizes.
+- If no dimensions are visible, estimate from proportions using door widths as reference (standard 83cm).
+
+ROOM EXTRACTION RULES:
+- Points define the polygon vertices of each room in ORDER (clockwise or counter-clockwise).
+- Position rooms relative to each other as they appear on the plan.
 - Use (0,0) as the top-left reference point of the overall plan.
+- Shared walls between adjacent rooms should have EXACTLY matching coordinates.
 - edgeIndex is the wall index (0 = first wall between point[0] and point[1]).
 - positionRatio is 0-1 along the wall where the door center is.
-- Standard door width is 80-90cm.
-- If dimensions are visible on the plan, use them. Otherwise estimate from proportions.
 - Always set isClosed to true for complete rooms.
-- Return ONLY the JSON, no markdown, no explanation.`;
+
+EQUIPMENT EXTRACTION RULES:
+- Identify any furniture, game machines, tables, counters, bars visible on the plan.
+- Position is the CENTER of the equipment in cm, relative to the same (0,0) origin.
+- Estimate width (along X) and depth (along Y) in cm.
+- Rotation in degrees (0 = aligned with axes, 90 = rotated).
+- Common arcade equipment: borne d'arcade (~70x80cm), billard (~130x250cm), baby-foot (~80x150cm), flipper (~70x140cm), air hockey (~120x210cm).
+
+SCALE OBJECT:
+- If you found a scale reference, indicate it. confidence: "high" if explicit dimensions are shown, "medium" if inferred from doors/objects, "low" if purely estimated.
+
+Return ONLY the JSON, no markdown, no explanation.`;
 
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
@@ -75,7 +110,7 @@ CRITICAL RULES:
               content: [
                 {
                   type: "text",
-                  text: "Analyze this floor plan image. Extract all rooms with their dimensions, walls and doors. Return the JSON structure as specified.",
+                  text: "Analyze this floor plan image carefully. Extract ALL rooms with precise dimensions, walls, doors, and any visible furniture or equipment. If dimension annotations are visible, use them. Return the JSON structure as specified.",
                 },
                 {
                   type: "image_url",

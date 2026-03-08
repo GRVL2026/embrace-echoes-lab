@@ -184,8 +184,10 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         })),
         placedEquipments: state.placedEquipments.map((e) => ({
           ...e,
-          x: e.x * cosA - e.y * sinA,
-          y: e.x * sinA + e.y * cosA,
+          position: {
+            x: e.position.x * cosA - e.position.y * sinA,
+            y: e.position.x * sinA + e.position.y * cosA,
+          },
           rotation: (e.rotation || 0) + deg,
         })),
       };

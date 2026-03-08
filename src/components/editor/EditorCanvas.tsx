@@ -2256,6 +2256,25 @@ function drawPlacedEquipments(
   });
 }
 
+// Deduplicate and simplify a polyline (remove near-duplicate points)
+function deduplicateChain(chain: Point[], minDist: number): Point[] {
+  if (chain.length < 2) return chain;
+  const result: Point[] = [chain[0]];
+  for (let i = 1; i < chain.length; i++) {
+    const prev = result[result.length - 1];
+    const dx = chain[i].x - prev.x;
+    const dy = chain[i].y - prev.y;
+    if (dx * dx + dy * dy >= minDist * minDist) {
+      result.push(chain[i]);
+    }
+  }
+  // Always keep last point
+  const last = chain[chain.length - 1];
+  const rLast = result[result.length - 1];
+  if (last.x !== rLast.x || last.y !== rLast.y) result.push(last);
+  return result;
+}
+
 // Draw circulation path (safety corridors)
 function drawCirculationPath(
   ctx: CanvasRenderingContext2D,
@@ -2266,8 +2285,7 @@ function drawCirculationPath(
 
   const hw = (segments[0]?.width || 140) * CM_TO_PX / 2;
 
-  // Build a continuous polyline from segments (each segment is a small piece of the smooth path)
-  // Group segments into continuous chains
+  // Build continuous chains from segments
   const chains: Point[][] = [];
   let currentChain: Point[] = [];
 
@@ -2278,10 +2296,8 @@ function drawCirculationPath(
       const last = currentChain[currentChain.length - 1];
       const dist = Math.sqrt((last.x - seg.start.x) ** 2 + (last.y - seg.start.y) ** 2);
       if (dist < 30) {
-        // Continue the chain
         currentChain.push(seg.end);
       } else {
-        // Start new chain
         chains.push(currentChain);
         currentChain = [seg.start, seg.end];
       }
@@ -2289,8 +2305,10 @@ function drawCirculationPath(
   }
   if (currentChain.length > 0) chains.push(currentChain);
 
-  // Draw each chain as a smooth filled corridor
-  for (const chain of chains) {
+  // Draw each chain
+  for (let ci = 0; ci < chains.length; ci++) {
+    // Deduplicate to remove near-overlapping points from fine grid
+    const chain = deduplicateChain(chains[ci], 5);
     if (chain.length < 2) continue;
 
     // Build left and right offset polylines for corridor edges
@@ -2310,7 +2328,6 @@ function drawCirculationPath(
         const len = Math.sqrt(dx * dx + dy * dy) || 1;
         nx = -dy / len; ny = dx / len;
       } else {
-        // Average normal of adjacent segments
         const dx1 = chain[i].x - chain[i - 1].x;
         const dy1 = chain[i].y - chain[i - 1].y;
         const len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1) || 1;
@@ -2327,23 +2344,19 @@ function drawCirculationPath(
       rightEdge.push({ x: chain[i].x * CM_TO_PX - nx * hw, y: chain[i].y * CM_TO_PX - ny * hw });
     }
 
-    // Draw filled corridor
+    // Filled corridor (subtle)
     ctx.beginPath();
     ctx.moveTo(leftEdge[0].x, leftEdge[0].y);
-    for (let i = 1; i < leftEdge.length; i++) {
-      ctx.lineTo(leftEdge[i].x, leftEdge[i].y);
-    }
-    for (let i = rightEdge.length - 1; i >= 0; i--) {
-      ctx.lineTo(rightEdge[i].x, rightEdge[i].y);
-    }
+    for (let i = 1; i < leftEdge.length; i++) ctx.lineTo(leftEdge[i].x, leftEdge[i].y);
+    for (let i = rightEdge.length - 1; i >= 0; i--) ctx.lineTo(rightEdge[i].x, rightEdge[i].y);
     ctx.closePath();
-    ctx.fillStyle = "hsla(142, 70%, 45%, 0.1)";
+    ctx.fillStyle = "hsla(142, 70%, 45%, 0.07)";
     ctx.fill();
 
-    // Draw corridor edges (dashed)
-    ctx.setLineDash([8 / zoom, 4 / zoom]);
-    ctx.strokeStyle = "hsla(142, 70%, 45%, 0.5)";
-    ctx.lineWidth = 1.5 / zoom;
+    // Corridor edges — solid thin lines
+    ctx.strokeStyle = "hsla(142, 70%, 50%, 0.35)";
+    ctx.lineWidth = 1 / zoom;
+    ctx.setLineDash([]);
 
     ctx.beginPath();
     ctx.moveTo(leftEdge[0].x, leftEdge[0].y);
@@ -2355,10 +2368,10 @@ function drawCirculationPath(
     for (let i = 1; i < rightEdge.length; i++) ctx.lineTo(rightEdge[i].x, rightEdge[i].y);
     ctx.stroke();
 
-    // Draw centerline (dotted)
-    ctx.strokeStyle = "hsla(142, 70%, 50%, 0.35)";
-    ctx.lineWidth = 1 / zoom;
-    ctx.setLineDash([4 / zoom, 6 / zoom]);
+    // Centerline — smooth dashed
+    ctx.strokeStyle = "hsla(142, 70%, 55%, 0.5)";
+    ctx.lineWidth = 1.5 / zoom;
+    ctx.setLineDash([12 / zoom, 8 / zoom]);
     ctx.beginPath();
     ctx.moveTo(chain[0].x * CM_TO_PX, chain[0].y * CM_TO_PX);
     for (let i = 1; i < chain.length; i++) {
@@ -2366,30 +2379,54 @@ function drawCirculationPath(
     }
     ctx.stroke();
     ctx.setLineDash([]);
+
+    // Start/end markers (small circles)
+    for (const pt of [chain[0], chain[chain.length - 1]]) {
+      ctx.beginPath();
+      ctx.arc(pt.x * CM_TO_PX, pt.y * CM_TO_PX, 4 / zoom, 0, Math.PI * 2);
+      ctx.fillStyle = "hsla(142, 70%, 50%, 0.6)";
+      ctx.fill();
+    }
   }
 
-  // Draw "1.40m" label at the midpoint of the first chain
+  // Label at midpoint of first chain
   if (chains.length > 0 && chains[0].length > 1) {
-    const midIdx = Math.floor(chains[0].length / 2);
-    const midPt = chains[0][midIdx];
+    const chain0 = deduplicateChain(chains[0], 5);
+    const midIdx = Math.floor(chain0.length / 2);
+    const midPt = chain0[midIdx];
     const midX = midPt.x * CM_TO_PX;
     const midY = midPt.y * CM_TO_PX;
 
     ctx.save();
-    const text = "Circulation 1.40m";
-    ctx.font = `bold ${11 / zoom}px Inter`;
-    const textMetrics = ctx.measureText(text);
-    const padding = 5 / zoom;
+    const text = "↔ 1.40m";
+    ctx.font = `bold ${10 / zoom}px Inter`;
+    const tw = ctx.measureText(text).width;
+    const pad = 4 / zoom;
 
-    ctx.fillStyle = "hsla(142, 70%, 95%, 0.9)";
-    ctx.fillRect(
-      midX - textMetrics.width / 2 - padding,
-      midY - 7 / zoom - padding,
-      textMetrics.width + padding * 2,
-      14 / zoom + padding * 2
-    );
+    // Background pill
+    const rx = midX - tw / 2 - pad;
+    const ry = midY - 6 / zoom - pad;
+    const rw = tw + pad * 2;
+    const rh = 12 / zoom + pad * 2;
+    const radius = 4 / zoom;
+    ctx.beginPath();
+    ctx.moveTo(rx + radius, ry);
+    ctx.lineTo(rx + rw - radius, ry);
+    ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + radius);
+    ctx.lineTo(rx + rw, ry + rh - radius);
+    ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - radius, ry + rh);
+    ctx.lineTo(rx + radius, ry + rh);
+    ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - radius);
+    ctx.lineTo(rx, ry + radius);
+    ctx.quadraticCurveTo(rx, ry, rx + radius, ry);
+    ctx.closePath();
+    ctx.fillStyle = "hsla(142, 60%, 20%, 0.85)";
+    ctx.fill();
+    ctx.strokeStyle = "hsla(142, 70%, 50%, 0.5)";
+    ctx.lineWidth = 0.8 / zoom;
+    ctx.stroke();
 
-    ctx.fillStyle = "hsla(142, 70%, 30%, 1)";
+    ctx.fillStyle = "hsla(142, 80%, 75%, 1)";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(text, midX, midY);

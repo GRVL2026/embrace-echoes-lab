@@ -456,7 +456,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
       }
     });
 
-    const newPlacements = autoPlaceEquipment(
+    const placementResult = autoPlaceEquipmentWithReport(
       selected,
       state.rooms,
       state.doors,
@@ -464,17 +464,23 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
       state.placedEquipments,
     );
 
-    if (newPlacements.length === 0) {
+    if (placementResult.placed.length === 0) {
       toast.error("Impossible de placer les jeux sélectionnés (espace insuffisant)");
       return;
     }
 
-    dispatch({ type: "ADD_PLACED_EQUIPMENTS", equipments: newPlacements });
+    dispatch({ type: "ADD_PLACED_EQUIPMENTS", equipments: placementResult.placed });
 
-    const placed = newPlacements.length;
-    const failed = totalSelectedCount - placed;
+    const placed = placementResult.placed.length;
+    const failed = placementResult.notPlaced.length;
+    
     if (failed > 0) {
-      toast.warning(`${placed} jeu${placed > 1 ? "x" : ""} placé${placed > 1 ? "s" : ""}, ${failed} impossible${failed > 1 ? "s" : ""} à placer`);
+      const notPlacedNames = placementResult.notPlaced.map(e => e.name).slice(0, 5).join(", ");
+      const moreCount = placementResult.notPlaced.length > 5 ? ` +${placementResult.notPlaced.length - 5} autres` : "";
+      toast.warning(
+        `${placed} jeu${placed > 1 ? "x" : ""} placé${placed > 1 ? "s" : ""}. Non placés (${failed}): ${notPlacedNames}${moreCount}`,
+        { duration: 8000 }
+      );
     } else {
       toast.success(`${placed} jeu${placed > 1 ? "x" : ""} placé${placed > 1 ? "s" : ""} avec succès`);
     }

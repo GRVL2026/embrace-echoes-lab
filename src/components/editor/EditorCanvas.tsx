@@ -87,12 +87,12 @@ export function EditorCanvas() {
   const [collidingEquipIds, setCollidingEquipIds] = useState<Set<string>>(new Set());
 
   // Clipboard for copy/paste
-  const clipboardRef = useRef<{ type: "pillar"; data: Pillar } | { type: "equipment"; data: PlacedEquipment } | null>(null);
+  const clipboardRef = useRef<{ type: "pillar"; data: Pillar } | { type: "equipment"; data: PlacedEquipment } | { type: "door"; data: Door } | null>(null);
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
     x: number; y: number;
-    target: { type: "pillar"; id: string } | { type: "equipment"; id: string };
+    target: { type: "pillar"; id: string } | { type: "equipment"; id: string } | { type: "door"; id: string };
   } | null>(null);
 
   const [editingDimension, setEditingDimension] = useState<{

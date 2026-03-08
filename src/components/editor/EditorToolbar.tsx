@@ -22,6 +22,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { EditorTool } from "@/types/editor";
+import { fitToView } from "@/lib/fitToView";
 
 const tools: { id: EditorTool; label: string; icon: React.ElementType; shortcut: string }[] = [
   { id: "select", label: "Sélectionner", icon: MousePointer2, shortcut: "V" },

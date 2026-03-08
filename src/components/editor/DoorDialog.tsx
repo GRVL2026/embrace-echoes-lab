@@ -57,6 +57,7 @@ export function DoorDialog({ open, wallLength, initialValues, onConfirm, onCance
       setDirectionRight("right");
       setOpenSide("interior");
       setLeafCount("single");
+      setIsMainDoor(false);
     }
   }, [initialValues, wallLength]);
 

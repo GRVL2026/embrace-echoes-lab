@@ -735,7 +735,7 @@ function pointToLineDistance(point: Point, lineStart: Point, lineEnd: Point): nu
   return Math.sqrt((point.x - projX) ** 2 + (point.y - projY) ** 2);
 }
 
-/** Generate positions adjacent to a previous placement */
+/** Generate positions adjacent to a previous placement (side by side along the wall) */
 function generateAdjacentPositions(
   prevX: number, prevY: number, prevRot: number,
   w: number, d: number, sz: number,
@@ -746,31 +746,31 @@ function generateAdjacentPositions(
   // Keep the same rotation for uniformity
   const rotation = prevRot;
   
-  // Calculate offset based on rotation (place side by side)
+  // The equipment faces inward (rotation = wall angle + 90°)
+  // "Along the wall" = perpendicular to facing direction = local X axis
   const rad = prevRot * Math.PI / 180;
   const cos = Math.cos(rad);
   const sin = Math.sin(rad);
   
-  // Spacing between equipment (width + small gap between safety zones)
-  const spacing = w + 10; // 10cm gap
+  // Spacing between equipment along the wall (width + 10cm gap)
+  const spacing = w + 10;
   
-  // Try positions to the left and right along the equipment's orientation
-  // "Left" and "Right" relative to the equipment's facing direction
+  // Generate multiple positions along the wall direction (local X = perpendicular to facing)
+  // Local X direction: (cos(rot+90), sin(rot+90)) = (-sin(rot), cos(rot))
+  const wallDirX = -sin; // perpendicular to facing, along the wall
+  const wallDirY = cos;
+  
   const offsets = [
-    { dx: spacing, dy: 0 },   // Right
-    { dx: -spacing, dy: 0 },  // Left
-    { dx: spacing * 2, dy: 0 },   // Further right
-    { dx: -spacing * 2, dy: 0 },  // Further left
+    1, -1, 2, -2, 3, -3, 4, -4, 5, -5 // try up to 5 spacings in each direction
   ];
   
-  for (const offset of offsets) {
-    // Rotate offset based on equipment rotation
-    const rotatedDx = offset.dx * cos - offset.dy * sin;
-    const rotatedDy = offset.dx * sin + offset.dy * cos;
+  for (const mult of offsets) {
+    const dx = wallDirX * spacing * mult;
+    const dy = wallDirY * spacing * mult;
     
     positions.push({
-      x: prevX + rotatedDx,
-      y: prevY + rotatedDy,
+      x: prevX + dx,
+      y: prevY + dy,
       rotation,
     });
   }

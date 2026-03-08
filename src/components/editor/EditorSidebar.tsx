@@ -161,7 +161,7 @@ export function EditorSidebar() {
             safetyZone: 10,
             color: getCategoryColor(eq.category),
           };
-          dispatch({ type: "PLACE_EQUIPMENT", equipment: placed });
+          dispatch({ type: "ADD_PLACED_EQUIPMENT", equipment: placed });
           equipCount++;
         });
       }

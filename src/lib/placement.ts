@@ -149,10 +149,8 @@ function isPlacementValid(
     }
   }
   // Must not overlap other equipment (with gap)
-  // Each rect is inflated by gap/2 on each side, so total buffer = gap between edges
-  const halfGap = gap / 2;
   for (const pe of existingPlacements) {
-    if (rectsOverlap(cx, cy, w + halfGap * 2, d + halfGap * 2, rot, pe.position.x, pe.position.y, pe.width + halfGap * 2, pe.depth + halfGap * 2, pe.rotation)) {
+    if (rectsOverlap(cx, cy, w + gap, d + gap, rot, pe.position.x, pe.position.y, pe.width + gap, pe.depth + gap, pe.rotation)) {
       if (debug) console.log(`[placement] EQUIP overlap with ${pe.name} at (${cx.toFixed(0)},${cy.toFixed(0)})`);
       return false;
     }

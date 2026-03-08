@@ -340,7 +340,7 @@ export function autoPlaceEquipmentWithReport(
   existingPlacements: PlacedEquipment[],
 ): PlacementResult {
   if (rooms.length === 0 || selectedEquipments.length === 0) {
-    return { placed: [], notPlaced: selectedEquipments };
+    return { placed: [], notPlaced: selectedEquipments, circulation: [] };
   }
 
   // Find the largest closed room

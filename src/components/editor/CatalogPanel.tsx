@@ -447,6 +447,17 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
           >
             <Upload className="h-3.5 w-3.5" />
           </Button>
+          {catalog.length > 0 && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => setExpandedView(true)}
+              title="Agrandir le catalogue"
+            >
+              <Maximize2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
       </div>
 

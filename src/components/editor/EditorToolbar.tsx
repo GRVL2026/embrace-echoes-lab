@@ -22,6 +22,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { EditorTool } from "@/types/editor";
+import { fitToView } from "@/lib/fitToView";
 
 const tools: { id: EditorTool; label: string; icon: React.ElementType; shortcut: string }[] = [
   { id: "select", label: "Sélectionner", icon: MousePointer2, shortcut: "V" },
@@ -196,46 +197,10 @@ export function EditorToolbar() {
              size="icon"
              className="h-10 w-10"
               onClick={() => {
-                // Gather ALL points: rooms, pillars, placed equipment
-                const allPts: { x: number; y: number }[] = [];
-                state.rooms.forEach((r) => r.points.forEach((p) => allPts.push(p)));
-                state.pillars.forEach((p) => {
-                  const half = Math.max(p.width, p.depth) / 2;
-                  allPts.push({ x: p.position.x - half, y: p.position.y - half });
-                  allPts.push({ x: p.position.x + half, y: p.position.y + half });
-                });
-                state.placedEquipments.forEach((e) => {
-                  const half = Math.max(e.width, e.depth) / 2 + e.safetyZone;
-                  allPts.push({ x: e.position.x - half, y: e.position.y - half });
-                  allPts.push({ x: e.position.x + half, y: e.position.y + half });
-                });
-
-                if (allPts.length > 0) {
-                  const minX = Math.min(...allPts.map((p) => p.x));
-                  const maxX = Math.max(...allPts.map((p) => p.x));
-                  const minY = Math.min(...allPts.map((p) => p.y));
-                  const maxY = Math.max(...allPts.map((p) => p.y));
-
-                  const planWidth = maxX - minX;
-                  const planHeight = maxY - minY;
-                  const paddingCm = 100; // 1m padding
-
-                  // Available viewport (subtract left toolbar ~60px + right sidebar ~288px, header ~56px)
-                  const vw = window.innerWidth - 60 - 288;
-                  const vh = window.innerHeight - 56;
-
-                  const scale = 0.5; // CM_TO_PX
-                  const zoomX = vw / ((planWidth + paddingCm * 2) * scale);
-                  const zoomY = vh / ((planHeight + paddingCm * 2) * scale);
-                  const newZoom = Math.min(zoomX, zoomY, 5);
-
-                  const cx = ((minX + maxX) / 2) * scale;
-                  const cy = ((minY + maxY) / 2) * scale;
-                  const px = vw / 2 - cx * newZoom + 60;
-                  const py = vh / 2 - cy * newZoom + 56;
-
-                  dispatch({ type: "SET_ZOOM", zoom: newZoom });
-                  dispatch({ type: "SET_PAN", offset: { x: px, y: py } });
+                const result = fitToView(state);
+                if (result) {
+                  dispatch({ type: "SET_ZOOM", zoom: result.zoom });
+                  dispatch({ type: "SET_PAN", offset: result.pan });
                 } else {
                   dispatch({ type: "SET_ZOOM", zoom: 1 });
                   dispatch({ type: "SET_PAN", offset: { x: window.innerWidth / 3, y: window.innerHeight / 3 } });

@@ -1,9 +1,9 @@
 import { useEditor } from "@/contexts/EditorContext";
-import { Trash2, Upload, Loader2, FileImage, FileText } from "lucide-react";
+import { Trash2, Upload, Loader2, FileImage, FileText, FileUp, Home, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useMemo } from "react";
 import { useAutoSave, loadSession } from "@/hooks/useAutoSave";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -11,6 +11,7 @@ import type { Door } from "@/types/editor";
 import type { GameEquipment, PlacedEquipment } from "@/types/equipment";
 import { CatalogPanel } from "./CatalogPanel";
 import { ProjectMenu } from "./ProjectMenu";
+import { SidebarSection } from "./SidebarSection";
 import { pdfToImage } from "@/lib/pdfUtils";
 
 type AIPlanDoor = {

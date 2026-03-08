@@ -49,6 +49,7 @@ export function DoorDialog({ open, wallLength, initialValues, onConfirm, onCance
       setDirectionRight(initialValues.openDirectionRight || "right");
       setOpenSide(initialValues.openSide);
       setLeafCount(initialValues.leafCount);
+      setIsMainDoor(initialValues.isMainDoor || false);
     } else {
       setWidth(80);
       setPosition(Math.round(wallLength / 2));

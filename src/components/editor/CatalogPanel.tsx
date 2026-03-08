@@ -404,8 +404,8 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
     toast.info("Tous les équipements retirés du plan");
   };
 
-  // Group by category
-  const categories = catalog.reduce<Record<string, GameEquipment[]>>((acc, eq) => {
+  // Group filtered catalog by category
+  const categories = filteredCatalog.reduce<Record<string, GameEquipment[]>>((acc, eq) => {
     const cat = eq.category || "autre";
     if (!acc[cat]) acc[cat] = [];
     acc[cat].push(eq);

@@ -76,6 +76,12 @@ export function EditorCanvas() {
   const [hasPillarDragged, setHasPillarDragged] = useState(false);
   const [hoveredPillar, setHoveredPillar] = useState<string | null>(null);
   const [hasVertexDragged, setHasVertexDragged] = useState(false);
+  // Equipment drag & rotate state
+  const [draggingEquipment, setDraggingEquipment] = useState<string | null>(null);
+  const [rotatingEquipment, setRotatingEquipment] = useState<string | null>(null);
+  const [pendingEquipClick, setPendingEquipClick] = useState<{ equipId: string; startX: number; startY: number } | null>(null);
+  const [hasEquipDragged, setHasEquipDragged] = useState(false);
+  const [hoveredEquipment, setHoveredEquipment] = useState<string | null>(null);
   const [editingDimension, setEditingDimension] = useState<{
     roomId: string;
     edgeIndex: number;
@@ -175,6 +181,45 @@ export function EditorCanvas() {
     const dx = world.x - hx;
     const dy = world.y - hy;
     return dx * dx + dy * dy < (12 / zoom) * (12 / zoom);
+  }, []);
+
+  // Find placed equipment under a world point
+  const findEquipmentAtPoint = useCallback((world: Point, includeHandle = false): PlacedEquipment | null => {
+    for (const eq of state.placedEquipments) {
+      const dx = world.x - eq.position.x;
+      const dy = world.y - eq.position.y;
+      const rad = -(eq.rotation || 0) * Math.PI / 180;
+      const cosR = Math.cos(rad), sinR = Math.sin(rad);
+      const lx = dx * cosR - dy * sinR;
+      const ly = dx * sinR + dy * cosR;
+      const hw = eq.width / 2 + 5;
+      const hd = eq.depth / 2 + 5;
+      if (Math.abs(lx) <= hw && Math.abs(ly) <= hd) return eq;
+
+      // Check rotation handle zone
+      if (includeHandle) {
+        const handleDistCm = Math.max(eq.width, eq.depth) / 2 + 25 / state.zoom;
+        const hdx = lx;
+        const hdy = ly + handleDistCm;
+        if (hdx * hdx + hdy * hdy < (14 / state.zoom) * (14 / state.zoom)) return eq;
+        if (Math.abs(lx) < 5 / state.zoom && ly < 0 && ly > -handleDistCm) return eq;
+      }
+    }
+    return null;
+  }, [state.placedEquipments, state.zoom]);
+
+  // Check if world point is on an equipment's rotation handle
+  const isOnEquipmentRotationHandle = useCallback((world: Point, eq: PlacedEquipment, zoom: number): boolean => {
+    const handleDistCm = Math.max(eq.width, eq.depth) / 2 + 25 / zoom;
+    const rad = (eq.rotation || 0) * Math.PI / 180;
+    const cosR = Math.cos(rad), sinR = Math.sin(rad);
+    const rotX = handleDistCm * sinR;
+    const rotY = -handleDistCm * cosR;
+    const hx = eq.position.x + rotX;
+    const hy = eq.position.y + rotY;
+    const ddx = world.x - hx;
+    const ddy = world.y - hy;
+    return ddx * ddx + ddy * ddy < (12 / zoom) * (12 / zoom);
   }, []);
 
   // Convert screen coords to world coords (cm)
@@ -354,7 +399,7 @@ export function EditorCanvas() {
 
       // Draw placed equipments
       if (state.placedEquipments.length > 0) {
-        drawPlacedEquipments(ctx, state.placedEquipments, state.zoom);
+        drawPlacedEquipments(ctx, state.placedEquipments, state.zoom, hoveredEquipment);
       }
 
       // Draw current drawing
@@ -533,6 +578,18 @@ export function EditorCanvas() {
         setHasPillarDragged(false);
         return;
       }
+
+      // Check if clicking on placed equipment
+      const clickedEquip = findEquipmentAtPoint(world, true);
+      if (clickedEquip) {
+        if (isOnEquipmentRotationHandle(world, clickedEquip, state.zoom)) {
+          setRotatingEquipment(clickedEquip.id);
+          return;
+        }
+        setPendingEquipClick({ equipId: clickedEquip.id, startX: e.clientX, startY: e.clientY });
+        setHasEquipDragged(false);
+        return;
+      }
     }
 
     // Check if clicking on a vertex — select/door: immediate drag; wall tool: pending (click=resume, hold+move=drag)
@@ -569,7 +626,13 @@ export function EditorCanvas() {
     }
 
     if (state.tool === "eraser" && e.button === 0) {
-      // Check pillar first
+      // Check equipment first
+      if (hoveredEquipment) {
+        dispatch({ type: "DELETE_PLACED_EQUIPMENT", id: hoveredEquipment });
+        setHoveredEquipment(null);
+        return;
+      }
+      // Check pillar
       if (hoveredPillar) {
         dispatch({ type: "DELETE_PILLAR", id: hoveredPillar });
         setHoveredPillar(null);
@@ -754,6 +817,16 @@ export function EditorCanvas() {
       }
     }
 
+    // Handle pending equipment click → detect drag threshold
+    if (pendingEquipClick && !draggingEquipment) {
+      const dx = e.clientX - pendingEquipClick.startX;
+      const dy = e.clientY - pendingEquipClick.startY;
+      if (Math.sqrt(dx * dx + dy * dy) > 5) {
+        setDraggingEquipment(pendingEquipClick.equipId);
+        setHasEquipDragged(true);
+      }
+    }
+
     // Handle door dragging
     if (draggingDoor) {
       const door = state.doors.find((d) => d.id === draggingDoor);
@@ -780,6 +853,27 @@ export function EditorCanvas() {
     if (draggingPillar) {
       const snapped = snapPoint(world);
       dispatch({ type: "UPDATE_PILLAR", id: draggingPillar, pillar: { position: snapped } });
+      return;
+    }
+
+    // Handle equipment dragging
+    if (draggingEquipment) {
+      const snapped = snapPoint(world);
+      dispatch({ type: "UPDATE_PLACED_EQUIPMENT", id: draggingEquipment, equipment: { position: snapped } });
+      return;
+    }
+
+    // Handle equipment rotation
+    if (rotatingEquipment) {
+      const eq = state.placedEquipments.find((e) => e.id === rotatingEquipment);
+      if (eq) {
+        const angle = Math.atan2(world.x - eq.position.x, -(world.y - eq.position.y));
+        let degrees = angle * 180 / Math.PI;
+        if (state.snapToGrid) {
+          degrees = Math.round(degrees / 15) * 15;
+        }
+        dispatch({ type: "UPDATE_PLACED_EQUIPMENT", id: rotatingEquipment, equipment: { rotation: degrees } });
+      }
       return;
     }
 
@@ -820,6 +914,14 @@ export function EditorCanvas() {
       setHoveredPillar(p ? p.id : null);
     } else if (hoveredPillar) {
       setHoveredPillar(null);
+    }
+
+    // Hover detection for placed equipment (select tool)
+    if (state.tool === "select" || state.tool === "eraser") {
+      const eq = findEquipmentAtPoint(world, true);
+      setHoveredEquipment(eq ? eq.id : null);
+    } else if (hoveredEquipment) {
+      setHoveredEquipment(null);
     }
 
     if (isPanning) {
@@ -900,6 +1002,13 @@ export function EditorCanvas() {
     if (pendingPillarClick && !hasPillarDragged) {
       setPillarDialog({ open: true, pillarId: pendingPillarClick.pillarId });
     }
+    // If we had a pending equipment click and didn't drag → delete with eraser, or just deselect
+    if (pendingEquipClick && !hasEquipDragged) {
+      if (state.tool === "eraser") {
+        dispatch({ type: "DELETE_PLACED_EQUIPMENT", id: pendingEquipClick.equipId });
+      }
+      // For select tool, clicking without drag does nothing special (could open dialog later)
+    }
 
     setPendingVertexClick(null);
     setHasVertexDragged(false);
@@ -907,10 +1016,14 @@ export function EditorCanvas() {
     setHasDragged(false);
     setPendingPillarClick(null);
     setHasPillarDragged(false);
+    setPendingEquipClick(null);
+    setHasEquipDragged(false);
     if (draggingVertex) setDraggingVertex(null);
     if (draggingDoor) setDraggingDoor(null);
     if (draggingPillar) setDraggingPillar(null);
     if (rotatingPillar) setRotatingPillar(null);
+    if (draggingEquipment) setDraggingEquipment(null);
+    if (rotatingEquipment) setRotatingEquipment(null);
   };
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -1021,9 +1134,9 @@ export function EditorCanvas() {
   const eraserCursor = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23ff4444' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21'/%3E%3Cpath d='M22 21H7'/%3E%3Cpath d='m5 11 9 9'/%3E%3C/svg%3E") 4 20, auto`;
 
   const cursorStyle =
-    rotatingPillar
+    rotatingPillar || rotatingEquipment
       ? "cursor-alias"
-      : draggingVertex || draggingDoor || draggingPillar
+      : draggingVertex || draggingDoor || draggingPillar || draggingEquipment
       ? "cursor-grabbing"
       : state.tool === "pan" || isPanning
       ? "cursor-grab"
@@ -1035,6 +1148,8 @@ export function EditorCanvas() {
       ? "cursor-pointer"
       : state.tool === "pillar"
       ? "cursor-crosshair"
+      : (hoveredEquipment || hoveredPillar)
+      ? "cursor-grab"
       : "cursor-default";
 
   const inlineCursor = state.tool === "eraser" && !isPanning ? { cursor: eraserCursor } : undefined;
@@ -1670,6 +1785,7 @@ function drawPlacedEquipments(
   ctx: CanvasRenderingContext2D,
   equipments: PlacedEquipment[],
   zoom: number,
+  hoveredEquipId?: string | null,
 ) {
   equipments.forEach((eq) => {
     const cx = eq.position.x * CM_TO_PX;
@@ -1677,6 +1793,7 @@ function drawPlacedEquipments(
     const w = eq.width * CM_TO_PX;
     const d = eq.depth * CM_TO_PX;
     const rot = (eq.rotation || 0) * Math.PI / 180;
+    const isHovered = eq.id === hoveredEquipId;
 
     ctx.save();
     ctx.translate(cx, cy);
@@ -1694,8 +1811,8 @@ function drawPlacedEquipments(
     // Equipment body
     ctx.fillStyle = eq.color.replace(")", ", 0.3)").replace("hsl(", "hsla(");
     ctx.fillRect(-w / 2, -d / 2, w, d);
-    ctx.strokeStyle = eq.color;
-    ctx.lineWidth = 2 / zoom;
+    ctx.strokeStyle = isHovered ? "hsl(48, 100%, 70%)" : eq.color;
+    ctx.lineWidth = isHovered ? 3 / zoom : 2 / zoom;
     ctx.strokeRect(-w / 2, -d / 2, w, d);
 
     // Label
@@ -1703,7 +1820,6 @@ function drawPlacedEquipments(
     ctx.font = `bold ${Math.max(10, 11 / zoom)}px Inter`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    // Truncate name if too long
     const maxChars = Math.floor(w / (7 / zoom * CM_TO_PX) * 2);
     const label = eq.name.length > maxChars ? eq.name.slice(0, maxChars - 1) + "…" : eq.name;
     ctx.fillText(label, 0, 0);
@@ -1712,6 +1828,36 @@ function drawPlacedEquipments(
     ctx.font = `${9 / zoom}px Inter`;
     ctx.fillStyle = "hsla(48, 100%, 50%, 0.7)";
     ctx.fillText(`${eq.width}×${eq.depth}cm`, 0, d / 2 + 12 / zoom);
+
+    // Rotation handle (when hovered)
+    if (isHovered) {
+      const handleDistPx = Math.max(eq.width, eq.depth) / 2 * CM_TO_PX + 25 / zoom;
+      // Stem line
+      ctx.beginPath();
+      ctx.moveTo(0, -d / 2);
+      ctx.lineTo(0, -handleDistPx);
+      ctx.strokeStyle = "hsla(48, 100%, 60%, 0.6)";
+      ctx.lineWidth = 1.5 / zoom;
+      ctx.setLineDash([3 / zoom, 3 / zoom]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Handle circle
+      ctx.beginPath();
+      ctx.arc(0, -handleDistPx, 6 / zoom, 0, Math.PI * 2);
+      ctx.fillStyle = "hsl(48, 100%, 60%)";
+      ctx.fill();
+      ctx.strokeStyle = "hsl(240, 60%, 4.7%)";
+      ctx.lineWidth = 1.5 / zoom;
+      ctx.stroke();
+
+      // Rotation icon
+      ctx.beginPath();
+      ctx.arc(0, -handleDistPx, 3.5 / zoom, -Math.PI * 0.7, Math.PI * 0.7);
+      ctx.strokeStyle = "hsl(240, 60%, 4.7%)";
+      ctx.lineWidth = 1 / zoom;
+      ctx.stroke();
+    }
 
     ctx.restore();
   });

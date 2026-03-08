@@ -228,7 +228,7 @@ export function EditorCanvas() {
 
   // Check if world point is on an equipment's rotation handle
   const isOnEquipmentRotationHandle = useCallback((world: Point, eq: PlacedEquipment, zoom: number): boolean => {
-    const handleDistCm = Math.max(eq.width, eq.depth) / 2 + 25 / zoom;
+    const handleDistCm = Math.max(eq.width, eq.depth) / 2 + 35;
     const rad = (eq.rotation || 0) * Math.PI / 180;
     const cosR = Math.cos(rad), sinR = Math.sin(rad);
     const rotX = handleDistCm * sinR;
@@ -237,7 +237,8 @@ export function EditorCanvas() {
     const hy = eq.position.y + rotY;
     const ddx = world.x - hx;
     const ddy = world.y - hy;
-    return ddx * ddx + ddy * ddy < (12 / zoom) * (12 / zoom);
+    const hitR = Math.max(15, 18 / zoom);
+    return ddx * ddx + ddy * ddy < hitR * hitR;
   }, []);
 
   // Check if a placed equipment collides with walls, pillars, doors, or other equipment

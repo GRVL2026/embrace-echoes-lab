@@ -694,7 +694,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                       return (
                         <div
                           key={eq.id}
-                          className={`w-full rounded-md border p-2 text-left transition-all text-xs cursor-pointer ${
+                          className={`w-full rounded-md border p-2 text-left transition-all text-xs cursor-pointer overflow-hidden ${
                             isNotPlaced
                               ? "border-destructive bg-destructive/10"
                               : isSelected
@@ -703,42 +703,31 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                           }`}
                           onClick={() => handleViewProduct(eq)}
                         >
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
                             {eq.images && eq.images[0] ? (
                               <img 
                                 src={eq.images[0]} 
                                 alt={eq.name}
-                                className="w-8 h-8 rounded object-contain bg-muted/30"
+                                className="w-7 h-7 rounded object-contain bg-muted/30 shrink-0"
                               />
                             ) : eq.icon ? (
-                              <span className="text-base">{eq.icon}</span>
+                              <span className="text-sm shrink-0">{eq.icon}</span>
                             ) : null}
-                            <span className="font-medium text-foreground flex-1 truncate">
+                            <span className="font-medium text-foreground truncate min-w-0 flex-1 text-[11px]">
                               {eq.name}
                             </span>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 shrink-0"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleViewProduct(eq);
-                              }}
-                            >
-                              <Info className="h-3.5 w-3.5 text-muted-foreground" />
-                            </Button>
                             {/* Quantity controls */}
-                            <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center gap-0.5 shrink-0 ml-auto" onClick={(e) => e.stopPropagation()}>
                               {isSelected && (
                                 <button
                                   className="h-5 w-5 rounded border border-muted-foreground/30 flex items-center justify-center hover:border-primary hover:bg-primary/10 transition-colors"
                                   onClick={(e) => decrementQuantity(eq.id, e)}
                                 >
-                                  <Minus className="h-3 w-3" />
+                                  <Minus className="h-2.5 w-2.5" />
                                 </button>
                               )}
                               {isSelected && (
-                                <span className="w-5 text-center font-medium text-primary text-xs">
+                                <span className="w-4 text-center font-medium text-primary text-[10px]">
                                   {quantity}
                                 </span>
                               )}
@@ -750,11 +739,11 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                                 }`}
                                 onClick={(e) => incrementQuantity(eq.id, e)}
                               >
-                                <Plus className="h-3 w-3" />
+                                <Plus className="h-2.5 w-2.5" />
                               </button>
                             </div>
                           </div>
-                          <div className="flex gap-2 mt-1 text-muted-foreground">
+                          <div className="flex flex-wrap gap-x-1.5 gap-y-0 mt-1 text-[10px] text-muted-foreground">
                             <span>{eq.width}×{eq.depth}cm</span>
                             <span>·</span>
                             <span>h{eq.height}cm</span>
@@ -765,7 +754,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                               </>
                             )}
                             {eq.pmrAccessible && (
-                              <Badge variant="outline" className="text-[9px] h-4 px-1">PMR</Badge>
+                              <Badge variant="outline" className="text-[8px] h-3.5 px-1">PMR</Badge>
                             )}
                           </div>
                         </div>

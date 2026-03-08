@@ -130,6 +130,18 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
     toast.info("Nouveau projet créé");
   };
 
+  const handleLoadHyperNova = () => {
+    const { rooms, doors, pillars, equipments } = createHyperNovaProject();
+    dispatch({ type: "RESET" });
+    rooms.forEach((room) => dispatch({ type: "ADD_ROOM", room }));
+    doors.forEach((door) => dispatch({ type: "ADD_DOOR", door }));
+    pillars.forEach((pillar) => dispatch({ type: "ADD_PILLAR", pillar }));
+    dispatch({ type: "ADD_PLACED_EQUIPMENTS", equipments });
+    setCurrentProjectId(null);
+    setCurrentProjectName("HYPER NOVA - Cergy");
+    toast.success("Projet HYPER NOVA chargé (3 salles, 2 poteaux, 30+ équipements)");
+  };
+
   return (
     <>
       <DropdownMenu>

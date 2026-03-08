@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useEditor } from "@/contexts/EditorContext";
 import { createHyperNovaProject } from "@/lib/hypernovaProject";
+import { clearSession } from "@/hooks/useAutoSave";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";

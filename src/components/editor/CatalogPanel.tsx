@@ -1086,6 +1086,8 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
           </div>
         </DialogContent>
       </Dialog>
+      </>
+      )}
     </div>
   );
 }

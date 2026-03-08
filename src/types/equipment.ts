@@ -11,6 +11,22 @@ export type GameEquipment = {
   icon?: string;   // optional emoji or icon name
   pmrAccessible?: boolean; // requires extra clearance for PMR
   model3d?: string; // URL to a .glb/.gltf 3D model file
+  
+  // Shopify extended fields
+  description?: string; // HTML description
+  vendor?: string; // Brand/manufacturer
+  price?: number; // Price in cents or euros
+  images?: string[]; // Array of image URLs
+  videoUrl?: string; // YouTube embed URL
+  tags?: string[]; // Product tags
+  warranty?: string; // Warranty info
+  stock?: string; // Stock status
+  specs?: {
+    power?: string; // e.g. "500 W"
+    screen?: string; // e.g. "65\" HD"
+    capacity?: string; // e.g. "2 joueurs"
+    tickets?: boolean; // Has ticket distribution
+  };
 };
 
 /** An equipment placed on the plan */

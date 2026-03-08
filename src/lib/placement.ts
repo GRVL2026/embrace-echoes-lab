@@ -224,10 +224,69 @@ function generateWallPositions(
 }
 
 /**
- * Generate center island positions (back-to-back rows in room center).
- * Equipment is oriented so the front (dimension side) faces outward, 
- * ensuring the corridor can pass at CORRIDOR_FRONT_GAP from the front.
+ * Generate positions with equipment back against a pillar face.
+ * Each pillar has 4 faces (top, bottom, left, right); equipment is placed
+ * with its back touching the pillar face, facing outward.
  */
+function generatePillarBackedPositions(
+  pillars: Pillar[],
+  equipWidth: number,
+  equipDepth: number,
+  step: number = 20,
+): { x: number; y: number; rotation: number; score: number }[] {
+  const positions: { x: number; y: number; rotation: number; score: number }[] = [];
+
+  for (const pillar of pillars) {
+    const px = pillar.position.x;
+    const py = pillar.position.y;
+    const pw = pillar.width;
+    const pd = pillar.depth;
+    const pRot = (pillar.rotation || 0) * Math.PI / 180;
+    const cos = Math.cos(pRot);
+    const sin = Math.sin(pRot);
+
+    // 4 faces of the pillar: each defined by direction from center and equipment rotation
+    const faces = [
+      { nx: 0, ny: -1, faceLen: pw, rot: 0 },    // top face → equipment faces down (rot 0)
+      { nx: 0, ny: 1, faceLen: pw, rot: 180 },    // bottom face → equipment faces up (rot 180)
+      { nx: -1, ny: 0, faceLen: pd, rot: 90 },    // left face → equipment faces right (rot 90)
+      { nx: 1, ny: 0, faceLen: pd, rot: 270 },    // right face → equipment faces left (rot 270)
+    ];
+
+    for (const face of faces) {
+      // Only place if the pillar face is wide enough for the equipment
+      if (face.faceLen < equipWidth * 0.5) continue;
+
+      // Distance from pillar center to the face surface + equipment half-depth + margin
+      const distToFace = (face.nx !== 0 ? pw / 2 : pd / 2) + equipDepth / 2 + WALL_MARGIN;
+
+      // World-space direction (accounting for pillar rotation)
+      const dirX = face.nx * cos - face.ny * sin;
+      const dirY = face.nx * sin + face.ny * cos;
+
+      const cx = px + dirX * distToFace;
+      const cy = py + dirY * distToFace;
+      const equipRot = (face.rot + (pillar.rotation || 0) + 360) % 360;
+
+      positions.push({ x: cx, y: cy, rotation: equipRot, score: 200 }); // higher score = less preferred than walls
+
+      // If the face is wider than the equipment, add offset positions along the face
+      if (face.faceLen > equipWidth + step) {
+        const along = { x: -face.ny * cos - (-face.nx) * sin, y: -face.ny * sin + (-face.nx) * cos };
+        const maxOffset = (face.faceLen - equipWidth) / 2;
+        for (let t = step; t <= maxOffset; t += step) {
+          positions.push({ x: cx + along.x * t, y: cy + along.y * t, rotation: equipRot, score: 200 });
+          positions.push({ x: cx - along.x * t, y: cy - along.y * t, rotation: equipRot, score: 200 });
+        }
+      }
+    }
+  }
+
+  return positions;
+}
+
+
+/** Generate center island positions (kept for reference) */
 function generateIslandPositions(
   room: Room,
   equipWidth: number,
@@ -473,7 +532,27 @@ export function autoPlaceEquipmentWithReport(
           }
         }
 
-        // No island placement: equipment back MUST be against a wall
+        // ── RULE 2b: Fallback — try placing back against a pillar ──
+        if (!placed) {
+          for (const orientRot of [0, 90]) {
+            if (placed) break;
+            const w = orientRot === 0 ? equip.width : equip.depth;
+            const d = orientRot === 0 ? equip.depth : equip.width;
+            const pillarPositions = generatePillarBackedPositions(pillars, w, d, step);
+            const gap2 = isSameRef ? SAME_REF_GAP : DIFFERENT_GAP;
+
+            for (const pos of pillarPositions) {
+              if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, gap2, bestRoom!, doorZones, pillarZones, placements)) {
+                const p = makePlacement(equip, pos.x, pos.y, pos.rotation, w, d);
+                placements.push(p);
+                result.push(p);
+                lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w, d };
+                placed = true;
+                break;
+              }
+            }
+          }
+        }
 
         if (!placed) {
           console.warn(`Could not place: ${equip.name} (instance ${i + 1}/${count})`);

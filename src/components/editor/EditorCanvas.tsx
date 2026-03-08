@@ -578,6 +578,18 @@ export function EditorCanvas() {
         setHasPillarDragged(false);
         return;
       }
+
+      // Check if clicking on placed equipment
+      const clickedEquip = findEquipmentAtPoint(world, true);
+      if (clickedEquip) {
+        if (isOnEquipmentRotationHandle(world, clickedEquip, state.zoom)) {
+          setRotatingEquipment(clickedEquip.id);
+          return;
+        }
+        setPendingEquipClick({ equipId: clickedEquip.id, startX: e.clientX, startY: e.clientY });
+        setHasEquipDragged(false);
+        return;
+      }
     }
 
     // Check if clicking on a vertex — select/door: immediate drag; wall tool: pending (click=resume, hold+move=drag)

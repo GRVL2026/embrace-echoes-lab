@@ -127,7 +127,9 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
     case "DELETE_PLACED_EQUIPMENT":
       return { ...state, placedEquipments: state.placedEquipments.filter((e) => e.id !== action.id) };
     case "CLEAR_PLACED_EQUIPMENTS":
-      return { ...state, placedEquipments: [] };
+      return { ...state, placedEquipments: [], circulationPath: [] };
+    case "SET_CIRCULATION":
+      return { ...state, circulationPath: action.circulation };
     case "TOGGLE_SNAP":
       return { ...state, snapToGrid: !state.snapToGrid };
     case "TOGGLE_DIMENSIONS":

@@ -18,18 +18,68 @@ serve(async (req) => {
     const { imageBase64, mimeType } = await req.json();
     if (!imageBase64) throw new Error("No image provided");
 
-    const systemPrompt = `You are an expert floor plan analyzer and architect. Given an image of a floor plan, extract ALL rooms, walls, doors, AND any visible furniture or equipment.
+    const systemPrompt = `You are a senior architect and floor plan analyst specializing in French commercial architecture plans (plans de principe, plans d'implantation, plans TCE). You have deep expertise in reading plans produced by firms like C2A, AREP, and similar French engineering offices.
+
+## YOUR TASK
+Analyze the floor plan image and extract ALL spatial data into a precise JSON structure that can be used to recreate the space in a 2D editor.
+
+## READING TECHNICAL PLANS - KEY SKILLS
+
+### Scale & Dimensions
+- FIRST, identify the scale annotation (e.g. "Échelle : 1/50°", "1/100°", "1 : 200")
+- Look for dimension lines with arrows/ticks and numbers. In French plans:
+  - "4,50" or "4.50" next to a wall = 450cm (4.5 meters)
+  - "450" = could be 450cm or a height annotation (check context: NGF = altitude)
+  - Numbers like "17,66" near a facade = 1766cm width
+- Use DOOR widths as calibration: standard French door = 83cm, double door = 140-180cm
+- Cross-reference with surface annotations: "123,3 m²" should match computed polygon area
+
+### French Plan Conventions
+- "HS" = Hauteur Sous (height under beam/ceiling): HSPoutre, HSPlaf, HSD
+- "NGF" = Nivellement Général de la France (altitude reference) - IGNORE for 2D
+- "CF" = Coupe-Feu (fire rating): CF1h, CF 1/2h
+- "LT" = Local Technique
+- "UP" = Unité de Passage (emergency exit width unit = 60cm)
+- "1 UP" = 90cm door, "2 UP" = 140cm door, "4 UP" = 280cm opening
+- Red outlines often indicate the tenant/commercial boundary (limite locataire)
+- Dashed lines = overhead elements, structure above, or projected elements
+- Green arrows = emergency exits (issues de secours)
+
+### Structural Elements
+- "Poteau béton existant" = existing concrete pillar - extract position and dimensions
+- Pillars are usually shown as filled rectangles or circles with cross-hatching
+- Gaines (service shafts) appear as hatched rectangles - note but don't include as rooms
+
+### Doors Recognition
+- Arcs on plan = door swing direction and side
+- "PA" or "Portes Automatiques" = sliding automatic doors (main entrance)
+- "Issue de secours" / "Sortie secours" = emergency exits
+- "Rideau métallique" = metal roller shutter (security, not a swinging door)
+- "Porte vitrée battante" = glass swinging door
+
+### Equipment & Furniture
+- Look for labeled rectangles with dimensions like "L104xP189xH255" (Length x Depth x Height in cm)
+- Game machines, tables, counters, display furniture
+- "Caisse" = cash register/checkout counter
+- "Podium" = display platform
+- "Écran" = screen/monitor
+- "Borne" = kiosk/terminal
+
+## OUTPUT FORMAT
 
 Return a JSON object with this EXACT structure:
 {
+  "projectName": "Name of the project if visible",
+  "scale": "1/50" or "1/100" etc.,
   "rooms": [
     {
-      "name": "Room name (e.g. Salon, Cuisine, Chambre, Salle d'arcade)",
+      "name": "Room name (exactly as labeled on plan)",
+      "surface": 123.3,
       "points": [
         {"x": 0, "y": 0},
-        {"x": 500, "y": 0},
-        {"x": 500, "y": 400},
-        {"x": 0, "y": 400}
+        {"x": 990, "y": 0},
+        {"x": 990, "y": 782},
+        {"x": 0, "y": 782}
       ],
       "isClosed": true,
       "doors": [
@@ -39,59 +89,51 @@ Return a JSON object with this EXACT structure:
           "width": 90,
           "openDirection": "left",
           "openSide": "interior",
-          "leafCount": "single"
+          "leafCount": "single",
+          "type": "standard",
+          "isMainDoor": false,
+          "isEmergencyExit": false
         }
       ]
     }
   ],
+  "pillars": [
+    {
+      "position": {"x": 500, "y": 300},
+      "shape": "square",
+      "width": 40,
+      "depth": 40
+    }
+  ],
   "equipment": [
     {
-      "name": "Name of the furniture/equipment",
-      "category": "Category (e.g. arcade, billard, mobilier, bar, comptoir)",
+      "name": "Equipment name",
+      "category": "arcade|sport|racing|table|mobilier|écran",
       "position": {"x": 250, "y": 200},
-      "width": 120,
-      "depth": 80,
+      "width": 104,
+      "depth": 189,
       "rotation": 0
     }
   ],
-  "scale": {
-    "pixelReference": 100,
-    "cmReference": 200,
-    "confidence": "high"
+  "confidence": {
+    "dimensions": "high|medium|low",
+    "layout": "high|medium|low",
+    "equipment": "high|medium|low",
+    "notes": "Any observations about the plan quality or ambiguities"
   }
 }
 
-CRITICAL DIMENSION RULES:
-- All coordinates and dimensions are in CENTIMETERS.
-- LOOK CAREFULLY for dimension annotations on the plan (numbers with arrows, lines with measurements).
-- If you see dimensions like "4.50" or "4,50" next to a wall, that means 450cm (4.5 meters).
-- If you see dimensions like "450" next to a wall, that means 450cm.
-- If a legend or scale bar is visible, use it to calibrate ALL measurements.
-- A standard door is 80-90cm wide. Use visible doors as a secondary scale reference.
-- Typical room sizes: bedroom 9-15m², living room 15-35m², kitchen 8-15m², bathroom 4-8m².
-- Cross-check your extracted dimensions against these typical sizes.
-- If no dimensions are visible, estimate from proportions using door widths as reference (standard 83cm).
-
-ROOM EXTRACTION RULES:
-- Points define the polygon vertices of each room in ORDER (clockwise or counter-clockwise).
-- Position rooms relative to each other as they appear on the plan.
-- Use (0,0) as the top-left reference point of the overall plan.
-- Shared walls between adjacent rooms should have EXACTLY matching coordinates.
-- edgeIndex is the wall index (0 = first wall between point[0] and point[1]).
-- positionRatio is 0-1 along the wall where the door center is.
-- Always set isClosed to true for complete rooms.
-
-EQUIPMENT EXTRACTION RULES:
-- Identify any furniture, game machines, tables, counters, bars visible on the plan.
-- Position is the CENTER of the equipment in cm, relative to the same (0,0) origin.
-- Estimate width (along X) and depth (along Y) in cm.
-- Rotation in degrees (0 = aligned with axes, 90 = rotated).
-- Common arcade equipment: borne d'arcade (~70x80cm), billard (~130x250cm), baby-foot (~80x150cm), flipper (~70x140cm), air hockey (~120x210cm).
-
-SCALE OBJECT:
-- If you found a scale reference, indicate it. confidence: "high" if explicit dimensions are shown, "medium" if inferred from doors/objects, "low" if purely estimated.
-
-Return ONLY the JSON, no markdown, no explanation.`;
+## CRITICAL RULES
+1. ALL coordinates in CENTIMETERS. Origin (0,0) = top-left of the main space.
+2. Points define polygon vertices in ORDER (clockwise).
+3. Adjacent rooms sharing walls MUST have matching coordinates at shared edges.
+4. Door edgeIndex = wall segment index (0 = edge from point[0] to point[1]).
+5. positionRatio = 0-1 position along the wall where door CENTER is.
+6. For equipment dimensions in format "LxxxPxxxHxxx": L=width, P=depth, H=height.
+7. Equipment position = CENTER of the equipment footprint.
+8. If a dimension is illegible, estimate from adjacent known dimensions.
+9. Mark confidence levels honestly.
+10. Return ONLY valid JSON, no markdown fences, no explanation.`;
 
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
@@ -110,7 +152,7 @@ Return ONLY the JSON, no markdown, no explanation.`;
               content: [
                 {
                   type: "text",
-                  text: "Analyze this floor plan image carefully. Extract ALL rooms with precise dimensions, walls, doors, and any visible furniture or equipment. If dimension annotations are visible, use them. Return the JSON structure as specified.",
+                  text: "Analyze this architectural floor plan. Extract ALL rooms with precise dimensions, structural elements (pillars/columns), doors (type, position, swing direction), and any furniture or equipment. Use dimension annotations visible on the plan. Return the structured JSON.",
                 },
                 {
                   type: "image_url",

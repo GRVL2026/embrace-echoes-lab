@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useEditor } from "@/contexts/EditorContext";
+import { createHyperNovaProject } from "@/lib/hypernovaProject";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,7 +20,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Save, FolderOpen, FilePlus, Trash2, Menu } from "lucide-react";
+import { Save, FolderOpen, FilePlus, Trash2, Menu, Gamepad2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   listProjects,
@@ -129,6 +130,18 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
     toast.info("Nouveau projet créé");
   };
 
+  const handleLoadHyperNova = () => {
+    const { rooms, doors, pillars, equipments } = createHyperNovaProject();
+    dispatch({ type: "RESET" });
+    rooms.forEach((room) => dispatch({ type: "ADD_ROOM", room }));
+    doors.forEach((door) => dispatch({ type: "ADD_DOOR", door }));
+    pillars.forEach((pillar) => dispatch({ type: "ADD_PILLAR", pillar }));
+    dispatch({ type: "ADD_PLACED_EQUIPMENTS", equipments });
+    setCurrentProjectId(null);
+    setCurrentProjectName("HYPER NOVA - Cergy");
+    toast.success("Projet HYPER NOVA chargé (3 salles, 2 poteaux, 30+ équipements)");
+  };
+
   return (
     <>
       <DropdownMenu>
@@ -142,6 +155,10 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
           <DropdownMenuItem onClick={handleNewProject} className="gap-2">
             <FilePlus className="h-4 w-4" />
             Nouveau projet
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleLoadHyperNova} className="gap-2">
+            <Gamepad2 className="h-4 w-4" />
+            Démo HYPER NOVA
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleOpenSave} className="gap-2">

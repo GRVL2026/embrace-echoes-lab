@@ -107,7 +107,13 @@ export function EditorSidebar() {
 
       setAnalysisStep("importing");
 
-      const planData = data as { rooms: AIPlanRoom[]; equipment?: AIEquipment[]; scale?: { confidence: string } };
+      const planData = data as {
+        rooms: AIPlanRoom[];
+        equipment?: AIEquipment[];
+        pillars?: { position: { x: number; y: number }; shape?: string; width: number; depth?: number }[];
+        confidence?: { dimensions?: string; notes?: string };
+        scale?: { confidence?: string };
+      };
 
       if (!planData.rooms || planData.rooms.length === 0) {
         toast.error("Aucune pièce détectée dans le plan");
@@ -146,6 +152,26 @@ export function EditorSidebar() {
         }
       });
 
+      // Inject detected pillars
+      let pillarCount = 0;
+      if (planData.pillars && planData.pillars.length > 0) {
+        planData.pillars.forEach((p) => {
+          dispatch({
+            type: "ADD_PILLAR",
+            pillar: {
+              id: crypto.randomUUID(),
+              position: p.position,
+              shape: (p.shape === "round" ? "round" : "square") as "square" | "round",
+              width: p.width || 30,
+              depth: p.depth || p.width || 30,
+              height: 300,
+              rotation: 0,
+            },
+          });
+          pillarCount++;
+        });
+      }
+
       // Inject detected equipment
       let equipCount = 0;
       if (planData.equipment && planData.equipment.length > 0) {
@@ -168,13 +194,17 @@ export function EditorSidebar() {
 
       setAnalysisStep("done");
 
-      const scaleInfo = planData.scale?.confidence
-        ? ` (précision: ${planData.scale.confidence})`
+      const confidenceInfo = planData.confidence?.dimensions
+        ? ` (précision: ${planData.confidence.dimensions})`
         : "";
 
-      toast.success(
-        `Plan importé : ${planData.rooms.length} pièce${planData.rooms.length > 1 ? "s" : ""}${equipCount > 0 ? `, ${equipCount} équipement${equipCount > 1 ? "s" : ""}` : ""}${scaleInfo}`
-      );
+      const parts = [
+        `${planData.rooms.length} pièce${planData.rooms.length > 1 ? "s" : ""}`,
+        pillarCount > 0 ? `${pillarCount} poteau${pillarCount > 1 ? "x" : ""}` : null,
+        equipCount > 0 ? `${equipCount} équipement${equipCount > 1 ? "s" : ""}` : null,
+      ].filter(Boolean).join(", ");
+
+      toast.success(`Plan importé : ${parts}${confidenceInfo}`);
     } catch (err) {
       console.error("Import error:", err);
       toast.error(err instanceof Error ? err.message : "Erreur lors de l'import du plan");

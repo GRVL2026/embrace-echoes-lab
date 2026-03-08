@@ -1,7 +1,9 @@
 import type { Point, Room, Door, Pillar } from "@/types/editor";
 import type { GameEquipment, PlacedEquipment } from "@/types/equipment";
 import { DOOR_EXCLUSION_DEPTH, PMR_CLEARANCE } from "@/types/equipment";
-import { CM_TO_PX } from "@/types/editor";
+
+// Corridor width for accessibility
+const CORRIDOR_WIDTH = 140; // 1.4m
 
 /** Check if a point is inside a polygon (ray-casting) */
 function pointInPolygon(p: Point, polygon: Point[]): boolean {
@@ -87,15 +89,11 @@ function getDoorExclusionZones(rooms: Room[], doors: Door[]): { cx: number; cy: 
     const wallLen = Math.sqrt(dx * dx + dy * dy);
     if (wallLen === 0) continue;
     const ux = dx / wallLen, uy = dy / wallLen;
-    const nx = -uy, ny = ux; // interior normal
+    const nx = -uy, ny = ux;
 
     const centerDist = door.positionRatio * wallLen;
     const doorCx = a.x + ux * centerDist;
     const doorCy = a.y + uy * centerDist;
-
-    // Exclusion zone: rectangle centered on door, extending DOOR_EXCLUSION_DEPTH on both sides
-    const zoneCx = doorCx + nx * (DOOR_EXCLUSION_DEPTH / 2 - DOOR_EXCLUSION_DEPTH / 2); // centered on wall
-    const zoneCy = doorCy + ny * (DOOR_EXCLUSION_DEPTH / 2 - DOOR_EXCLUSION_DEPTH / 2);
     const rot = Math.atan2(dy, dx) * 180 / Math.PI;
 
     // Two zones: interior and exterior
@@ -110,7 +108,7 @@ function getDoorExclusionZones(rooms: Room[], doors: Door[]): { cx: number; cy: 
   return zones;
 }
 
-/** Get pillar exclusion zones (pillar bounding box + small margin) */
+/** Get pillar exclusion zones */
 function getPillarExclusionZones(pillars: Pillar[]): { cx: number; cy: number; r: number; w: number; d: number; rot: number; shape: string }[] {
   return pillars.map(p => ({
     cx: p.position.x,
@@ -148,8 +146,6 @@ function isPlacementValid(
 
   // 4. Must not overlap other placed equipment (including their safety zones)
   for (const pe of existingPlacements) {
-    const overlapW = w / 2 + pe.width / 2 + Math.max(safetyZone, pe.safetyZone);
-    const overlapD = d / 2 + pe.depth / 2 + Math.max(safetyZone, pe.safetyZone);
     if (rectsOverlap(cx, cy, w + safetyZone, d + safetyZone, rot, pe.position.x, pe.position.y, pe.width + pe.safetyZone, pe.depth + pe.safetyZone, pe.rotation)) {
       return false;
     }
@@ -158,7 +154,164 @@ function isPlacementValid(
   return true;
 }
 
-/** Auto-place selected equipment in a room */
+/** Get all wall segments of a room with their properties */
+type WallSegment = {
+  start: Point;
+  end: Point;
+  length: number;
+  angle: number; // degrees
+  normalX: number; // interior normal
+  normalY: number;
+  edgeIndex: number;
+  hasDoor: boolean;
+};
+
+function getRoomWalls(room: Room, doors: Door[]): WallSegment[] {
+  const walls: WallSegment[] = [];
+  const pts = room.points;
+  
+  for (let i = 0; i < pts.length; i++) {
+    const j = (i + 1) % pts.length;
+    const dx = pts[j].x - pts[i].x;
+    const dy = pts[j].y - pts[i].y;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    if (length === 0) continue;
+    
+    const ux = dx / length;
+    const uy = dy / length;
+    // Interior normal (perpendicular, pointing inward for clockwise polygon)
+    const nx = -uy;
+    const ny = ux;
+    
+    const hasDoor = doors.some(d => d.roomId === room.id && d.edgeIndex === i);
+    
+    walls.push({
+      start: pts[i],
+      end: pts[j],
+      length,
+      angle: Math.atan2(dy, dx) * 180 / Math.PI,
+      normalX: nx,
+      normalY: ny,
+      edgeIndex: i,
+      hasDoor,
+    });
+  }
+  
+  return walls;
+}
+
+/** Generate wall positions along a wall segment */
+function generateWallPositions(
+  wall: WallSegment,
+  equipWidth: number,
+  equipDepth: number,
+  safetyZone: number,
+  step: number = 20,
+): { x: number; y: number; rotation: number; score: number }[] {
+  const positions: { x: number; y: number; rotation: number; score: number }[] = [];
+  
+  // Equipment should be placed parallel to the wall, back against the wall
+  // Rotation = wall angle + 90° to face inward
+  const rotation = (wall.angle + 90 + 360) % 360;
+  
+  // Distance from wall center to equipment center
+  const distFromWall = equipDepth / 2 + 5; // 5cm margin from wall
+  
+  // Offset along the wall
+  const margin = equipWidth / 2 + safetyZone;
+  const usableLength = wall.length - margin * 2;
+  
+  if (usableLength < 0) return positions;
+  
+  for (let t = margin; t <= wall.length - margin; t += step) {
+    // Position along the wall
+    const wx = wall.start.x + (wall.end.x - wall.start.x) * (t / wall.length);
+    const wy = wall.start.y + (wall.end.y - wall.start.y) * (t / wall.length);
+    
+    // Move into the room by the equipment depth/2
+    const x = wx + wall.normalX * distFromWall;
+    const y = wy + wall.normalY * distFromWall;
+    
+    // Score: prefer walls without doors, and positions away from corners
+    const distFromEdges = Math.min(t, wall.length - t);
+    const cornerPenalty = distFromEdges < 100 ? 10 : 0;
+    const doorPenalty = wall.hasDoor ? 50 : 0;
+    const score = cornerPenalty + doorPenalty;
+    
+    positions.push({ x, y, rotation, score });
+  }
+  
+  return positions;
+}
+
+/** Generate center island positions (back-to-back rows) */
+function generateIslandPositions(
+  room: Room,
+  equipWidth: number,
+  equipDepth: number,
+  safetyZone: number,
+  existingPlacements: PlacedEquipment[],
+  step: number = 20,
+): { x: number; y: number; rotation: number; score: number }[] {
+  const positions: { x: number; y: number; rotation: number; score: number }[] = [];
+  
+  const pts = room.points;
+  const minX = Math.min(...pts.map(p => p.x));
+  const maxX = Math.max(...pts.map(p => p.x));
+  const minY = Math.min(...pts.map(p => p.y));
+  const maxY = Math.max(...pts.map(p => p.y));
+  
+  const roomWidth = maxX - minX;
+  const roomHeight = maxY - minY;
+  
+  // Determine primary axis (longer dimension)
+  const isWide = roomWidth >= roomHeight;
+  
+  // Calculate corridor positions
+  const wallMargin = Math.max(equipDepth, equipWidth) + safetyZone + CORRIDOR_WIDTH;
+  
+  // Create back-to-back islands in the center
+  // Two rows facing opposite directions with minimal gap between backs
+  const backToBackGap = 20; // 20cm between backs
+  
+  if (isWide) {
+    // Horizontal room: create vertical aisles with horizontal rows
+    const centerY = (minY + maxY) / 2;
+    
+    // Row 1: facing up (rotation 180)
+    const row1Y = centerY - backToBackGap / 2 - equipDepth / 2;
+    // Row 2: facing down (rotation 0)
+    const row2Y = centerY + backToBackGap / 2 + equipDepth / 2;
+    
+    for (let x = minX + wallMargin; x <= maxX - wallMargin; x += step) {
+      positions.push({ x, y: row1Y, rotation: 180, score: 100 }); // Higher score = lower priority
+      positions.push({ x, y: row2Y, rotation: 0, score: 100 });
+    }
+  } else {
+    // Vertical room: create horizontal aisles with vertical rows
+    const centerX = (minX + maxX) / 2;
+    
+    // Row 1: facing left (rotation 270)
+    const row1X = centerX - backToBackGap / 2 - equipDepth / 2;
+    // Row 2: facing right (rotation 90)
+    const row2X = centerX + backToBackGap / 2 + equipDepth / 2;
+    
+    for (let y = minY + wallMargin; y <= maxY - wallMargin; y += step) {
+      positions.push({ x: row1X, y, rotation: 270, score: 100 });
+      positions.push({ x: row2X, y, rotation: 90, score: 100 });
+    }
+  }
+  
+  return positions;
+}
+
+/** Result of auto-placement */
+export type PlacementResult = {
+  placed: PlacedEquipment[];
+  notPlaced: GameEquipment[];
+};
+
+/** Auto-place selected equipment in a room with business rules */
 export function autoPlaceEquipment(
   selectedEquipments: GameEquipment[],
   rooms: Room[],
@@ -166,7 +319,21 @@ export function autoPlaceEquipment(
   pillars: Pillar[],
   existingPlacements: PlacedEquipment[],
 ): PlacedEquipment[] {
-  if (rooms.length === 0 || selectedEquipments.length === 0) return [];
+  const result = autoPlaceEquipmentWithReport(selectedEquipments, rooms, doors, pillars, existingPlacements);
+  return result.placed;
+}
+
+/** Auto-place with full report (placed + not placed) */
+export function autoPlaceEquipmentWithReport(
+  selectedEquipments: GameEquipment[],
+  rooms: Room[],
+  doors: Door[],
+  pillars: Pillar[],
+  existingPlacements: PlacedEquipment[],
+): PlacementResult {
+  if (rooms.length === 0 || selectedEquipments.length === 0) {
+    return { placed: [], notPlaced: selectedEquipments };
+  }
 
   // Find the largest closed room
   let bestRoom: Room | null = null;
@@ -186,46 +353,80 @@ export function autoPlaceEquipment(
     }
   }
 
-  if (!bestRoom) return [];
+  if (!bestRoom) {
+    return { placed: [], notPlaced: selectedEquipments };
+  }
 
   const doorZones = getDoorExclusionZones(rooms, doors);
   const pillarZones = getPillarExclusionZones(pillars);
-
-  // Compute bounding box of the room
-  const pts = bestRoom.points;
-  const minX = Math.min(...pts.map(p => p.x));
-  const maxX = Math.max(...pts.map(p => p.x));
-  const minY = Math.min(...pts.map(p => p.y));
-  const maxY = Math.max(...pts.map(p => p.y));
+  const walls = getRoomWalls(bestRoom, doors);
 
   const placements: PlacedEquipment[] = [...existingPlacements];
   const result: PlacedEquipment[] = [];
+  const notPlaced: GameEquipment[] = [];
 
-  // Sort equipment by area (largest first for better packing)
-  const sorted = [...selectedEquipments].sort((a, b) => (b.width * b.depth) - (a.width * a.depth));
+  // Group equipment by category for clustering
+  const byCategory = new Map<string, GameEquipment[]>();
+  for (const equip of selectedEquipments) {
+    const cat = equip.category || "autre";
+    if (!byCategory.has(cat)) byCategory.set(cat, []);
+    byCategory.get(cat)!.push(equip);
+  }
 
-  const step = 20; // 20cm grid step for placement search
+  // Sort categories by total area (largest first)
+  const sortedCategories = Array.from(byCategory.entries())
+    .sort((a, b) => {
+      const areaA = a[1].reduce((sum, e) => sum + e.width * e.depth, 0);
+      const areaB = b[1].reduce((sum, e) => sum + e.width * e.depth, 0);
+      return areaB - areaA;
+    });
 
-  for (const equip of sorted) {
-    let placed = false;
+  // Track which wall segments are "full"
+  const wallOccupancy = new Map<number, number>(); // edgeIndex -> occupied length
+  walls.forEach(w => wallOccupancy.set(w.edgeIndex, 0));
 
-    // Try both orientations (0° and 90°)
-    for (const rot of [0, 90]) {
-      if (placed) break;
-      const w = rot === 0 ? equip.width : equip.depth;
-      const d = rot === 0 ? equip.depth : equip.width;
+  const step = 25; // 25cm grid step
+
+  for (const [category, equipments] of sortedCategories) {
+    // Sort equipment in this category by area (largest first)
+    const sorted = [...equipments].sort((a, b) => (b.width * b.depth) - (a.width * a.depth));
+
+    for (const equip of sorted) {
+      let placed = false;
       const sz = equip.safetyZone;
 
-      // Scan from top-left corner with safety margin
-      for (let y = minY + sz + d / 2; y <= maxY - sz - d / 2; y += step) {
+      // Try each orientation
+      for (const orientationRot of [0, 90]) {
         if (placed) break;
-        for (let x = minX + sz + w / 2; x <= maxX - sz - w / 2; x += step) {
-          if (isPlacementValid(x, y, w, d, rot, sz, bestRoom, doorZones, pillarZones, placements)) {
+        
+        const w = orientationRot === 0 ? equip.width : equip.depth;
+        const d = orientationRot === 0 ? equip.depth : equip.width;
+
+        // PHASE 1: Try wall positions first
+        const allWallPositions: { x: number; y: number; rotation: number; score: number; wall: WallSegment }[] = [];
+        
+        for (const wall of walls) {
+          // Skip walls with doors for larger equipment
+          if (wall.hasDoor && w > 100) continue;
+          
+          const positions = generateWallPositions(wall, w, d, sz, step);
+          for (const pos of positions) {
+            // Adjust rotation based on equipment orientation
+            const finalRot = (pos.rotation + orientationRot) % 360;
+            allWallPositions.push({ ...pos, rotation: finalRot, wall });
+          }
+        }
+
+        // Sort by score (lower is better)
+        allWallPositions.sort((a, b) => a.score - b.score);
+
+        for (const pos of allWallPositions) {
+          if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, sz, bestRoom, doorZones, pillarZones, placements)) {
             const placement: PlacedEquipment = {
               id: crypto.randomUUID(),
               equipmentId: equip.id,
-              position: { x, y },
-              rotation: rot,
+              position: { x: pos.x, y: pos.y },
+              rotation: pos.rotation,
               name: equip.name,
               width: w,
               depth: d,
@@ -235,16 +436,47 @@ export function autoPlaceEquipment(
             placements.push(placement);
             result.push(placement);
             placed = true;
+            
+            // Update wall occupancy
+            const occ = wallOccupancy.get(pos.wall.edgeIndex) || 0;
+            wallOccupancy.set(pos.wall.edgeIndex, occ + w + sz);
             break;
           }
         }
-      }
-    }
 
-    if (!placed) {
-      console.warn(`Could not place: ${equip.name}`);
+        // PHASE 2: If wall placement failed, try center island (back-to-back)
+        if (!placed) {
+          const islandPositions = generateIslandPositions(bestRoom, w, d, sz, placements, step);
+          
+          for (const pos of islandPositions) {
+            const finalRot = (pos.rotation + orientationRot) % 360;
+            if (isPlacementValid(pos.x, pos.y, w, d, finalRot, sz, bestRoom, doorZones, pillarZones, placements)) {
+              const placement: PlacedEquipment = {
+                id: crypto.randomUUID(),
+                equipmentId: equip.id,
+                position: { x: pos.x, y: pos.y },
+                rotation: finalRot,
+                name: equip.name,
+                width: w,
+                depth: d,
+                safetyZone: sz,
+                color: equip.color || "hsl(263, 85%, 68%)",
+              };
+              placements.push(placement);
+              result.push(placement);
+              placed = true;
+              break;
+            }
+          }
+        }
+      }
+
+      if (!placed) {
+        console.warn(`Could not place: ${equip.name}`);
+        notPlaced.push(equip);
+      }
     }
   }
 
-  return result;
+  return { placed: result, notPlaced };
 }

@@ -183,6 +183,45 @@ export function EditorCanvas() {
     return dx * dx + dy * dy < (12 / zoom) * (12 / zoom);
   }, []);
 
+  // Find placed equipment under a world point
+  const findEquipmentAtPoint = useCallback((world: Point, includeHandle = false): PlacedEquipment | null => {
+    for (const eq of state.placedEquipments) {
+      const dx = world.x - eq.position.x;
+      const dy = world.y - eq.position.y;
+      const rad = -(eq.rotation || 0) * Math.PI / 180;
+      const cosR = Math.cos(rad), sinR = Math.sin(rad);
+      const lx = dx * cosR - dy * sinR;
+      const ly = dx * sinR + dy * cosR;
+      const hw = eq.width / 2 + 5;
+      const hd = eq.depth / 2 + 5;
+      if (Math.abs(lx) <= hw && Math.abs(ly) <= hd) return eq;
+
+      // Check rotation handle zone
+      if (includeHandle) {
+        const handleDistCm = Math.max(eq.width, eq.depth) / 2 + 25 / state.zoom;
+        const hdx = lx;
+        const hdy = ly + handleDistCm;
+        if (hdx * hdx + hdy * hdy < (14 / state.zoom) * (14 / state.zoom)) return eq;
+        if (Math.abs(lx) < 5 / state.zoom && ly < 0 && ly > -handleDistCm) return eq;
+      }
+    }
+    return null;
+  }, [state.placedEquipments, state.zoom]);
+
+  // Check if world point is on an equipment's rotation handle
+  const isOnEquipmentRotationHandle = useCallback((world: Point, eq: PlacedEquipment, zoom: number): boolean => {
+    const handleDistCm = Math.max(eq.width, eq.depth) / 2 + 25 / zoom;
+    const rad = (eq.rotation || 0) * Math.PI / 180;
+    const cosR = Math.cos(rad), sinR = Math.sin(rad);
+    const rotX = handleDistCm * sinR;
+    const rotY = -handleDistCm * cosR;
+    const hx = eq.position.x + rotX;
+    const hy = eq.position.y + rotY;
+    const ddx = world.x - hx;
+    const ddy = world.y - hy;
+    return ddx * ddx + ddy * ddy < (12 / zoom) * (12 / zoom);
+  }, []);
+
   // Convert screen coords to world coords (cm)
   const screenToWorld = useCallback(
     (sx: number, sy: number): Point => {

@@ -19,6 +19,7 @@ interface DoorDialogResult {
   openDirectionRight?: DoorOpenDirection;
   openSide: DoorOpenSide;
   leafCount: DoorLeafCount;
+  isMainDoor: boolean;
 }
 
 interface DoorDialogProps {

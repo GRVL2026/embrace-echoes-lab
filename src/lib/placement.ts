@@ -172,10 +172,9 @@ function polygonSignedArea(pts: Point[]): number {
 function getRoomWalls(room: Room, doors: Door[]): WallSegment[] {
   const walls: WallSegment[] = [];
   const pts = room.points;
-  // For CCW math (signedArea > 0), interior is LEFT → base normal (-uy, ux) is already inward
-  // For CW math (signedArea < 0), interior is RIGHT → must flip normals
+  // Determine winding: if signed area > 0, polygon is CCW → flip normals
   const signedArea = polygonSignedArea(pts);
-  const normalSign = signedArea > 0 ? 1 : -1;
+  const normalSign = signedArea > 0 ? -1 : 1; // flip for CCW so normals point inward
 
   for (let i = 0; i < pts.length; i++) {
     const j = (i + 1) % pts.length;

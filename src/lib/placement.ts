@@ -499,7 +499,7 @@ export function autoPlaceEquipmentWithReport(
               };
               placements.push(placement);
               result.push(placement);
-              lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, wall: pos.wall };
+              lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w, d, wall: pos.wall };
               placed = true;
               
               // Update wall occupancy

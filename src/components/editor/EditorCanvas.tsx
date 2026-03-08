@@ -87,12 +87,12 @@ export function EditorCanvas() {
   const [collidingEquipIds, setCollidingEquipIds] = useState<Set<string>>(new Set());
 
   // Clipboard for copy/paste
-  const clipboardRef = useRef<{ type: "pillar"; data: Pillar } | { type: "equipment"; data: PlacedEquipment } | null>(null);
+  const clipboardRef = useRef<{ type: "pillar"; data: Pillar } | { type: "equipment"; data: PlacedEquipment } | { type: "door"; data: Door } | null>(null);
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
     x: number; y: number;
-    target: { type: "pillar"; id: string } | { type: "equipment"; id: string };
+    target: { type: "pillar"; id: string } | { type: "equipment"; id: string } | { type: "door"; id: string };
   } | null>(null);
 
   const [editingDimension, setEditingDimension] = useState<{
@@ -1304,7 +1304,7 @@ export function EditorCanvas() {
   };
 
   // Duplicate helper
-  const duplicateItem = useCallback((item: { type: "pillar"; id: string } | { type: "equipment"; id: string }) => {
+  const duplicateItem = useCallback((item: { type: "pillar"; id: string } | { type: "equipment"; id: string } | { type: "door"; id: string }) => {
     const OFFSET = 50; // 50cm offset
     if (item.type === "pillar") {
       const p = state.pillars.find(pl => pl.id === item.id);
@@ -1315,7 +1315,7 @@ export function EditorCanvas() {
         position: { x: p.position.x + OFFSET, y: p.position.y + OFFSET },
       };
       dispatch({ type: "ADD_PILLAR", pillar: newPillar });
-    } else {
+    } else if (item.type === "equipment") {
       const eq = state.placedEquipments.find(e => e.id === item.id);
       if (!eq) return;
       const newEquip: PlacedEquipment = {
@@ -1324,8 +1324,35 @@ export function EditorCanvas() {
         position: { x: eq.position.x + OFFSET, y: eq.position.y + OFFSET },
       };
       dispatch({ type: "ADD_PLACED_EQUIPMENT", equipment: newEquip });
+    } else if (item.type === "door") {
+      const door = state.doors.find(d => d.id === item.id);
+      if (!door) return;
+      const room = state.rooms.find(r => r.id === door.roomId);
+      if (!room) return;
+      const edgeLen = (() => {
+        const a = room.points[door.edgeIndex];
+        const b = room.points[(door.edgeIndex + 1) % room.points.length];
+        return Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2);
+      })();
+      // Offset along the wall by door width + 20cm gap
+      const shiftCm = door.width + 20;
+      const shiftRatio = shiftCm / edgeLen;
+      let newRatio = door.positionRatio + shiftRatio;
+      // If it doesn't fit to the right, try left
+      if (newRatio + door.width / 2 / edgeLen > 1) {
+        newRatio = door.positionRatio - shiftRatio;
+      }
+      // Clamp
+      const halfRatio = (door.width / 2) / edgeLen;
+      newRatio = Math.max(halfRatio, Math.min(1 - halfRatio, newRatio));
+      const newDoor: Door = {
+        ...door,
+        id: crypto.randomUUID(),
+        positionRatio: newRatio,
+      };
+      dispatch({ type: "ADD_DOOR", door: newDoor });
     }
-  }, [state.pillars, state.placedEquipments, dispatch]);
+  }, [state.pillars, state.placedEquipments, state.doors, state.rooms, dispatch]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -1336,14 +1363,18 @@ export function EditorCanvas() {
         dispatch({ type: "UNDO" });
         return;
       }
-      // Copy: Ctrl+C — copy hovered pillar or equipment
+      // Copy: Ctrl+C — copy hovered pillar, equipment, or door under cursor
       if ((e.ctrlKey || e.metaKey) && e.key === "c") {
         if (hoveredPillar) {
           const p = state.pillars.find(pl => pl.id === hoveredPillar);
           if (p) { clipboardRef.current = { type: "pillar", data: { ...p } }; }
         } else if (hoveredEquipment) {
-          const eq = state.placedEquipments.find(e => e.id === hoveredEquipment);
+          const eq = state.placedEquipments.find(el => el.id === hoveredEquipment);
           if (eq) { clipboardRef.current = { type: "equipment", data: { ...eq } }; }
+        } else {
+          // Check if cursor is over a door
+          const doorUnder = findDoorAtPoint(mousePos);
+          if (doorUnder) { clipboardRef.current = { type: "door", data: { ...doorUnder } }; }
         }
         return;
       }
@@ -1359,9 +1390,8 @@ export function EditorCanvas() {
             position: { x: p.position.x + OFFSET, y: p.position.y + OFFSET },
           };
           dispatch({ type: "ADD_PILLAR", pillar: newPillar });
-          // Update clipboard position for subsequent pastes
           clipboardRef.current = { type: "pillar", data: newPillar };
-        } else {
+        } else if (clipboardRef.current.type === "equipment") {
           const eq = clipboardRef.current.data;
           const newEquip: PlacedEquipment = {
             ...eq,
@@ -1370,6 +1400,22 @@ export function EditorCanvas() {
           };
           dispatch({ type: "ADD_PLACED_EQUIPMENT", equipment: newEquip });
           clipboardRef.current = { type: "equipment", data: newEquip };
+        } else if (clipboardRef.current.type === "door") {
+          const door = clipboardRef.current.data;
+          const room = state.rooms.find(r => r.id === door.roomId);
+          if (room) {
+            const a = room.points[door.edgeIndex];
+            const b = room.points[(door.edgeIndex + 1) % room.points.length];
+            const edgeLen = Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2);
+            const shiftRatio = (door.width + 20) / edgeLen;
+            let newRatio = door.positionRatio + shiftRatio;
+            if (newRatio + door.width / 2 / edgeLen > 1) newRatio = door.positionRatio - shiftRatio;
+            const halfRatio = (door.width / 2) / edgeLen;
+            newRatio = Math.max(halfRatio, Math.min(1 - halfRatio, newRatio));
+            const newDoor: Door = { ...door, id: crypto.randomUUID(), positionRatio: newRatio };
+            dispatch({ type: "ADD_DOOR", door: newDoor });
+            clipboardRef.current = { type: "door", data: newDoor };
+          }
         }
         return;
       }
@@ -1385,7 +1431,7 @@ export function EditorCanvas() {
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [dispatch, hoveredPillar, hoveredEquipment, state.pillars, state.placedEquipments]);
+  }, [dispatch, hoveredPillar, hoveredEquipment, state.pillars, state.placedEquipments, state.doors, state.rooms, findDoorAtPoint, mousePos]);
 
   const eraserCursor = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23ff4444' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21'/%3E%3Cpath d='M22 21H7'/%3E%3Cpath d='m5 11 9 9'/%3E%3C/svg%3E") 4 20, auto`;
 
@@ -1422,18 +1468,14 @@ export function EditorCanvas() {
         onContextMenu={(e) => {
           e.preventDefault();
           const world = screenToWorld(e.clientX, e.clientY);
+          const rect = containerRef.current?.getBoundingClientRect();
+          const menuPos = { x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0) };
           const pillar = findPillarAtPoint(world);
-          if (pillar) {
-            const rect = containerRef.current?.getBoundingClientRect();
-            setContextMenu({ x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0), target: { type: "pillar", id: pillar.id } });
-            return;
-          }
+          if (pillar) { setContextMenu({ ...menuPos, target: { type: "pillar", id: pillar.id } }); return; }
           const equip = findEquipmentAtPoint(world);
-          if (equip) {
-            const rect = containerRef.current?.getBoundingClientRect();
-            setContextMenu({ x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0), target: { type: "equipment", id: equip.id } });
-            return;
-          }
+          if (equip) { setContextMenu({ ...menuPos, target: { type: "equipment", id: equip.id } }); return; }
+          const door = findDoorAtPoint(world);
+          if (door) { setContextMenu({ ...menuPos, target: { type: "door", id: door.id } }); return; }
           setContextMenu(null);
         }}
         className="absolute inset-0"
@@ -1447,13 +1489,15 @@ export function EditorCanvas() {
           <button
             className="w-full px-3 py-1.5 text-left text-sm hover:bg-accent/20 flex items-center gap-2"
             onClick={() => {
-              // Copy to clipboard
               if (contextMenu.target.type === "pillar") {
                 const p = state.pillars.find(pl => pl.id === contextMenu.target.id);
                 if (p) clipboardRef.current = { type: "pillar", data: { ...p } };
-              } else {
+              } else if (contextMenu.target.type === "equipment") {
                 const eq = state.placedEquipments.find(e => e.id === contextMenu.target.id);
                 if (eq) clipboardRef.current = { type: "equipment", data: { ...eq } };
+              } else {
+                const d = state.doors.find(d => d.id === contextMenu.target.id);
+                if (d) clipboardRef.current = { type: "door", data: { ...d } };
               }
               setContextMenu(null);
             }}
@@ -1475,8 +1519,10 @@ export function EditorCanvas() {
             onClick={() => {
               if (contextMenu.target.type === "pillar") {
                 dispatch({ type: "DELETE_PILLAR", id: contextMenu.target.id });
-              } else {
+              } else if (contextMenu.target.type === "equipment") {
                 dispatch({ type: "DELETE_PLACED_EQUIPMENT", id: contextMenu.target.id });
+              } else {
+                dispatch({ type: "DELETE_DOOR", id: contextMenu.target.id });
               }
               setContextMenu(null);
             }}

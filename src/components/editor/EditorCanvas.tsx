@@ -1007,6 +1007,14 @@ export function EditorCanvas() {
     if (draggingEquipment) {
       const snapped = snapPoint(world);
       dispatch({ type: "UPDATE_PLACED_EQUIPMENT", id: draggingEquipment, equipment: { position: snapped } });
+      // Check collision after position update (will be reflected next render via state)
+      setTimeout(() => {
+        setCollidingEquipIds(prev => {
+          const next = new Set(prev);
+          // We'll recheck in the draw effect; for now mark based on current
+          return next;
+        });
+      }, 0);
       return;
     }
 

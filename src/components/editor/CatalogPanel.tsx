@@ -701,7 +701,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                 )}
 
                 {/* Expanded catalog grid */}
-                <div className="flex-1 overflow-y-auto overscroll-contain">
+                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-2">
                   <div className={`grid gap-3 pb-4 ${selectedIds.size > 0 ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'}`}>
                     {filteredCatalog.map((eq) => {
                       const isSelected = selectedIds.has(eq.id);

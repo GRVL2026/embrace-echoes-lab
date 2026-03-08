@@ -626,7 +626,13 @@ export function EditorCanvas() {
     }
 
     if (state.tool === "eraser" && e.button === 0) {
-      // Check pillar first
+      // Check equipment first
+      if (hoveredEquipment) {
+        dispatch({ type: "DELETE_PLACED_EQUIPMENT", id: hoveredEquipment });
+        setHoveredEquipment(null);
+        return;
+      }
+      // Check pillar
       if (hoveredPillar) {
         dispatch({ type: "DELETE_PILLAR", id: hoveredPillar });
         setHoveredPillar(null);

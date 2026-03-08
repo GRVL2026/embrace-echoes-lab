@@ -57,30 +57,52 @@ function parseShopifyDimensions(dimStr: string): { width: number; depth: number;
 
 /** Parse Shopify CSV export into GameEquipment[] */
 function parseShopifyCSV(text: string): GameEquipment[] {
-  const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-  if (lines.length < 2) throw new Error("Le CSV doit contenir au moins un en-tête et une ligne de données");
-
-  // Parse header - handle quoted fields
-  const parseCSVLine = (line: string): string[] => {
-    const result: string[] = [];
+  // Proper CSV parsing that handles multi-line quoted fields
+  const parseCSVFull = (csv: string): string[][] => {
+    const rows: string[][] = [];
     let current = "";
     let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i];
+    let row: string[] = [];
+    
+    for (let i = 0; i < csv.length; i++) {
+      const char = csv[i];
+      
       if (char === '"') {
-        inQuotes = !inQuotes;
+        if (inQuotes && i + 1 < csv.length && csv[i + 1] === '"') {
+          current += '"';
+          i++; // skip escaped quote
+        } else {
+          inQuotes = !inQuotes;
+        }
       } else if (char === ',' && !inQuotes) {
-        result.push(current.trim());
+        row.push(current.trim());
+        current = "";
+      } else if ((char === '\n' || char === '\r') && !inQuotes) {
+        if (char === '\r' && i + 1 < csv.length && csv[i + 1] === '\n') {
+          i++; // skip \r\n
+        }
+        row.push(current.trim());
+        if (row.some(cell => cell.length > 0)) {
+          rows.push(row);
+        }
+        row = [];
         current = "";
       } else {
         current += char;
       }
     }
-    result.push(current.trim());
-    return result;
+    // Last row
+    row.push(current.trim());
+    if (row.some(cell => cell.length > 0)) {
+      rows.push(row);
+    }
+    return rows;
   };
 
-  const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase());
+  const allRows = parseCSVFull(text);
+  if (allRows.length < 2) throw new Error("Le CSV doit contenir au moins un en-tête et une ligne de données");
+
+  const headers = allRows[0].map(h => h.toLowerCase());
   
   // Find column indices
   const findCol = (...names: string[]) => headers.findIndex(h => names.some(n => h.includes(n)));

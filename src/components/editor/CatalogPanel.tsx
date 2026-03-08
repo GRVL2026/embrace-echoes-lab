@@ -458,27 +458,46 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
       }
     });
 
+    // Convert existing placements back to GameEquipment entries so everything
+    // can be re-placed together, keeping categories grouped optimally.
+    const existingAsEquip: GameEquipment[] = state.placedEquipments.map(pe => {
+      // Try to find original catalog entry for full metadata
+      const catalogEntry = catalog.find(c => c.id === pe.equipmentId);
+      return catalogEntry || {
+        id: pe.equipmentId,
+        name: pe.name,
+        category: "autre",
+        width: pe.width,
+        depth: pe.depth,
+        height: 0,
+        safetyZone: pe.safetyZone,
+        color: pe.color,
+      };
+    });
+
+    // Re-place ALL equipment (existing + new) from scratch for optimal grouping
+    const allEquipToPlace = [...existingAsEquip, ...selected];
     const placementResult = autoPlaceEquipmentWithReport(
-      selected,
+      allEquipToPlace,
       state.rooms,
       state.doors,
       state.pillars,
-      state.placedEquipments,
+      [], // no existing placements — we're re-placing everything
     );
 
     if (placementResult.placed.length === 0) {
-      // Even if nothing placed, mark all as not placed
       const failedIds = new Set(placementResult.notPlaced.map(e => e.id));
       setNotPlacedIds(failedIds);
       toast.error("Impossible de placer les jeux sélectionnés (espace insuffisant)");
       return;
     }
 
+    // Replace all placed equipment with the new optimized layout
+    dispatch({ type: "CLEAR_PLACED_EQUIPMENTS" });
     dispatch({ type: "ADD_PLACED_EQUIPMENTS", equipments: placementResult.placed });
     
-    // Compute dynamic circulation using pathfinding
-    const allEquipments = [...state.placedEquipments, ...placementResult.placed];
-    const circResult = computeCirculation(state.rooms, state.doors, state.pillars, allEquipments);
+    // Compute dynamic circulation
+    const circResult = computeCirculation(state.rooms, state.doors, state.pillars, placementResult.placed);
     dispatch({ type: "SET_CIRCULATION", circulation: circResult.segments });
 
     const placed = placementResult.placed.length;

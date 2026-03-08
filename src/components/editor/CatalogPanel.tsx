@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Upload, Package, Play, Trash2, Check, X, Info, Search, Maximize2, Minus, Plus, ChevronDown, ChevronRight } from "lucide-react";
+import { Upload, Package, Play, Trash2, Check, X, Info, Search, Maximize2, Minus, Plus, ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
 import type { GameEquipment, CatalogJSON } from "@/types/equipment";
 import { DEFAULT_SAFETY_ZONE } from "@/types/equipment";
 import { autoPlaceEquipmentWithReport } from "@/lib/placement";

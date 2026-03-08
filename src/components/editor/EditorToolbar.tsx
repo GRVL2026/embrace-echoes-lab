@@ -12,6 +12,7 @@ import {
   Locate,
   Triangle,
   Columns,
+  Route,
 } from "lucide-react";
 import { useEditor } from "@/contexts/EditorContext";
 import { Button } from "@/components/ui/button";

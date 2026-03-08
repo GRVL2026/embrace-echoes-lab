@@ -288,8 +288,8 @@ function astar(
   return null; // No path found
 }
 
-/** Smooth a path using Chaikin's corner-cutting algorithm */
-function smoothPath(points: Point[], iterations: number = 3): Point[] {
+/** Smooth a path using Chaikin's corner-cutting algorithm, constrained to free cells */
+function smoothPath(points: Point[], iterations: number = 3, isBlocked?: (p: Point) => boolean): Point[] {
   if (points.length < 3) return points;
 
   let current = points;
@@ -297,14 +297,17 @@ function smoothPath(points: Point[], iterations: number = 3): Point[] {
     const next: Point[] = [current[0]]; // Keep start
     for (let i = 0; i < current.length - 1; i++) {
       const p0 = current[i], p1 = current[i + 1];
-      next.push({
+      const q: Point = {
         x: p0.x * 0.75 + p1.x * 0.25,
         y: p0.y * 0.75 + p1.y * 0.25,
-      });
-      next.push({
+      };
+      const r: Point = {
         x: p0.x * 0.25 + p1.x * 0.75,
         y: p0.y * 0.25 + p1.y * 0.75,
-      });
+      };
+      // Only add smoothed point if it doesn't enter a blocked area
+      next.push(isBlocked && isBlocked(q) ? p0 : q);
+      next.push(isBlocked && isBlocked(r) ? p1 : r);
     }
     next.push(current[current.length - 1]); // Keep end
     current = next;
@@ -447,6 +450,14 @@ export function computeCirculation(
   const endPos = doorPositions.length > 1 ? doorPositions[doorPositions.length - 1] : null;
   const unreachableIds: string[] = [];
 
+  // Check if a world point falls in a blocked grid cell
+  const isBlockedWorld = (p: Point): boolean => {
+    const gc = Math.floor((p.x - originX) / res);
+    const gr = Math.floor((p.y - originY) / res);
+    if (gr < 0 || gr >= rows || gc < 0 || gc >= cols) return true;
+    return grid[gr][gc];
+  };
+
   const buildPath = (from: Point, to: Point): boolean => {
     const fromGrid = toGrid(from.x, from.y);
     const toGrid_ = toGrid(to.x, to.y);
@@ -454,7 +465,7 @@ export function computeCirculation(
     if (!pathCells || pathCells.length < 2) return false;
     const worldPoints = pathCells.map(cell => toWorld(cell.r, cell.c));
     const simplified = simplifyPath(worldPoints, resolution * 0.8);
-    const smoothed = smoothPath(simplified, 3);
+    const smoothed = smoothPath(simplified, 3, isBlockedWorld);
     for (let i = 0; i < smoothed.length - 1; i++) {
       allSegments.push({ start: smoothed[i], end: smoothed[i + 1], width: CORRIDOR_WIDTH });
     }

@@ -4,20 +4,192 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Upload, Package, Play, Trash2, Check, X, FileSpreadsheet } from "lucide-react";
+import { Upload, Package, Play, Trash2, Check, X, Info } from "lucide-react";
 import type { GameEquipment, CatalogJSON } from "@/types/equipment";
 import { DEFAULT_SAFETY_ZONE } from "@/types/equipment";
 import { autoPlaceEquipment } from "@/lib/placement";
+import { ProductDialog } from "./ProductDialog";
 
-/** Parse a CSV string into GameEquipment[] */
-function parseCSV(text: string): GameEquipment[] {
+/** Parse Shopify CSV dimensions like "L 1030 x P 2500 x H 2640 mm" */
+function parseShopifyDimensions(dimStr: string): { width: number; depth: number; height: number } | null {
+  if (!dimStr) return null;
+  // Match patterns like "L 1030 x P 2500 x H 2640 mm" or "L1030xP2500xH2640"
+  const match = dimStr.match(/L\s*(\d+)\s*x?\s*P\s*(\d+)\s*x?\s*H\s*(\d+)/i);
+  if (match) {
+    return {
+      width: parseInt(match[1], 10) / 10, // mm to cm
+      depth: parseInt(match[2], 10) / 10,
+      height: parseInt(match[3], 10) / 10,
+    };
+  }
+  return null;
+}
+
+/** Parse Shopify CSV export into GameEquipment[] */
+function parseShopifyCSV(text: string): GameEquipment[] {
   const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
   if (lines.length < 2) throw new Error("Le CSV doit contenir au moins un en-tête et une ligne de données");
 
-  // Parse header
+  // Parse header - handle quoted fields
+  const parseCSVLine = (line: string): string[] => {
+    const result: string[] = [];
+    let current = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
+
+  const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase());
+  
+  // Find column indices
+  const findCol = (...names: string[]) => headers.findIndex(h => names.some(n => h.includes(n)));
+  
+  const handleIdx = findCol("handle");
+  const titleIdx = findCol("title");
+  const bodyIdx = findCol("body");
+  const vendorIdx = findCol("vendor");
+  const typeIdx = findCol("type");
+  const tagsIdx = findCol("tags");
+  const priceIdx = findCol("variant price");
+  const imageIdx = findCol("image src");
+  const dimIdx = findCol("specs dimensions");
+  const powerIdx = findCol("specs power");
+  const screenIdx = findCol("specs screen");
+  const capacityIdx = findCol("specs capacity");
+  const ticketsIdx = findCol("specs tickets");
+  const weightIdx = findCol("specs weight");
+  const videoIdx = findCol("video url");
+  const warrantyIdx = findCol("warranty");
+  const stockIdx = findCol("stock");
+
+  // Group rows by handle (products can span multiple rows for variants/images)
+  const productMap = new Map<string, {
+    handle: string;
+    title: string;
+    body: string;
+    vendor: string;
+    type: string;
+    tags: string;
+    price: string;
+    images: string[];
+    dimensions: string;
+    power: string;
+    screen: string;
+    capacity: string;
+    tickets: string;
+    weight: string;
+    videoUrl: string;
+    warranty: string;
+    stock: string;
+  }>();
+
+  for (let i = 1; i < lines.length; i++) {
+    const cols = parseCSVLine(lines[i]);
+    const handle = handleIdx >= 0 ? cols[handleIdx] : "";
+    if (!handle) continue;
+
+    const imageSrc = imageIdx >= 0 ? cols[imageIdx] : "";
+
+    if (productMap.has(handle)) {
+      // Add additional image
+      const existing = productMap.get(handle)!;
+      if (imageSrc && !existing.images.includes(imageSrc)) {
+        existing.images.push(imageSrc);
+      }
+    } else {
+      // New product
+      productMap.set(handle, {
+        handle,
+        title: titleIdx >= 0 ? cols[titleIdx] : "",
+        body: bodyIdx >= 0 ? cols[bodyIdx] : "",
+        vendor: vendorIdx >= 0 ? cols[vendorIdx] : "",
+        type: typeIdx >= 0 ? cols[typeIdx] : "",
+        tags: tagsIdx >= 0 ? cols[tagsIdx] : "",
+        price: priceIdx >= 0 ? cols[priceIdx] : "",
+        images: imageSrc ? [imageSrc] : [],
+        dimensions: dimIdx >= 0 ? cols[dimIdx] : "",
+        power: powerIdx >= 0 ? cols[powerIdx] : "",
+        screen: screenIdx >= 0 ? cols[screenIdx] : "",
+        capacity: capacityIdx >= 0 ? cols[capacityIdx] : "",
+        tickets: ticketsIdx >= 0 ? cols[ticketsIdx] : "",
+        weight: weightIdx >= 0 ? cols[weightIdx] : "",
+        videoUrl: videoIdx >= 0 ? cols[videoIdx] : "",
+        warranty: warrantyIdx >= 0 ? cols[warrantyIdx] : "",
+        stock: stockIdx >= 0 ? cols[stockIdx] : "",
+      });
+    }
+  }
+
+  // Convert to GameEquipment
+  const items: GameEquipment[] = [];
+  
+  for (const [, product] of productMap) {
+    if (!product.title) continue;
+
+    // Parse dimensions
+    const dims = parseShopifyDimensions(product.dimensions);
+    const width = dims?.width || 100;
+    const depth = dims?.depth || 100;
+    const height = dims?.height || 200;
+
+    // Parse tags
+    const tags = product.tags
+      ? product.tags.split(",").map(t => t.trim()).filter(Boolean)
+      : [];
+
+    // Parse price
+    const price = product.price ? parseFloat(product.price.replace(",", ".")) : undefined;
+
+    items.push({
+      id: crypto.randomUUID(),
+      name: product.title,
+      category: product.type || "autre",
+      width,
+      depth,
+      height,
+      safetyZone: DEFAULT_SAFETY_ZONE,
+      color: getCategoryColor(product.type || "default"),
+      description: product.body || undefined,
+      vendor: product.vendor || undefined,
+      price: price && price > 0 ? price : undefined,
+      images: product.images.length > 0 ? product.images : undefined,
+      videoUrl: product.videoUrl || undefined,
+      tags: tags.length > 0 ? tags : undefined,
+      warranty: product.warranty || undefined,
+      stock: product.stock || undefined,
+      specs: {
+        power: product.power || undefined,
+        screen: product.screen || undefined,
+        capacity: product.capacity || undefined,
+        tickets: product.tickets?.toLowerCase() === "oui" ? true : 
+                 product.tickets?.toLowerCase() === "non" ? false : undefined,
+      },
+    });
+  }
+
+  if (items.length === 0) throw new Error("Aucun produit trouvé dans le CSV");
+  return items;
+}
+
+/** Parse a simple CSV string into GameEquipment[] (original format) */
+function parseSimpleCSV(text: string): GameEquipment[] {
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+  if (lines.length < 2) throw new Error("Le CSV doit contenir au moins un en-tête et une ligne de données");
+
   const headers = lines[0].split(/[;,\t]/).map(h => h.trim().toLowerCase());
-  const nameIdx = headers.findIndex(h => ["name", "nom"].includes(h));
-  const catIdx = headers.findIndex(h => ["category", "catégorie", "categorie", "cat"].includes(h));
+  const nameIdx = headers.findIndex(h => ["name", "nom", "title"].includes(h));
+  const catIdx = headers.findIndex(h => ["category", "catégorie", "categorie", "cat", "type"].includes(h));
   const wIdx = headers.findIndex(h => ["width", "largeur", "w"].includes(h));
   const dIdx = headers.findIndex(h => ["depth", "profondeur", "d"].includes(h));
   const hIdx = headers.findIndex(h => ["height", "hauteur", "h"].includes(h));
@@ -27,9 +199,8 @@ function parseCSV(text: string): GameEquipment[] {
   const pmrIdx = headers.findIndex(h => ["pmraccessible", "pmr", "accessible"].includes(h));
   const modelIdx = headers.findIndex(h => ["model3d", "model", "modele3d", "modele", "glb"].includes(h));
 
-  if (nameIdx === -1) throw new Error("Colonne 'name' (ou 'nom') requise dans le CSV");
+  if (nameIdx === -1) return []; // Not a simple format
 
-  // Detect separator used in data lines
   const separator = lines[0].includes('\t') ? '\t' : lines[0].includes(';') ? ';' : ',';
 
   const items: GameEquipment[] = [];
@@ -54,23 +225,50 @@ function parseCSV(text: string): GameEquipment[] {
     });
   }
 
-  if (items.length === 0) throw new Error("Aucun jeu trouvé dans le CSV");
   return items;
+}
+
+/** Detect CSV format and parse accordingly */
+function parseCSV(text: string): GameEquipment[] {
+  const firstLine = text.split(/\r?\n/)[0]?.toLowerCase() || "";
+  
+  // Detect Shopify format by checking for specific columns
+  if (firstLine.includes("handle") && firstLine.includes("title") && firstLine.includes("vendor")) {
+    return parseShopifyCSV(text);
+  }
+  
+  // Try simple format
+  const simpleResult = parseSimpleCSV(text);
+  if (simpleResult.length > 0) {
+    return simpleResult;
+  }
+  
+  // Fallback to Shopify parser
+  return parseShopifyCSV(text);
 }
 
 // Color palette for equipment categories
 const CATEGORY_COLORS: Record<string, string> = {
   "arcade": "hsl(263, 85%, 68%)",
   "flipper": "hsl(75, 100%, 45%)",
+  "flippers": "hsl(75, 100%, 45%)",
   "billard": "hsl(200, 80%, 50%)",
   "babyfoot": "hsl(30, 90%, 55%)",
   "flechettes": "hsl(0, 70%, 55%)",
   "simulateur": "hsl(180, 70%, 50%)",
+  "sport": "hsl(142, 76%, 45%)",
+  "tir": "hsl(0, 85%, 55%)",
+  "jeux famille": "hsl(280, 70%, 60%)",
+  "grues & distributeurs": "hsl(45, 90%, 50%)",
+  "réalité virtuelle": "hsl(200, 90%, 55%)",
+  "adresse": "hsl(330, 70%, 55%)",
+  "jeux de conduite": "hsl(15, 85%, 55%)",
   "default": "hsl(48, 100%, 50%)",
 };
 
 function getCategoryColor(category: string): string {
-  return CATEGORY_COLORS[category.toLowerCase()] || CATEGORY_COLORS.default;
+  const key = category.toLowerCase();
+  return CATEGORY_COLORS[key] || CATEGORY_COLORS.default;
 }
 
 type CatalogPanelProps = {
@@ -81,6 +279,7 @@ type CatalogPanelProps = {
 export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   const { state, dispatch } = useEditor();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [viewingProduct, setViewingProduct] = useState<GameEquipment | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImportFile = (file: File) => {
@@ -108,6 +307,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
 
         // Validate and normalize
         const validated = items.map((item, i) => ({
+          ...item,
           id: item.id || crypto.randomUUID(),
           name: item.name || `Jeu ${i + 1}`,
           category: item.category || "autre",
@@ -116,9 +316,6 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
           height: Number(item.height) || 200,
           safetyZone: Number(item.safetyZone) || DEFAULT_SAFETY_ZONE,
           color: item.color || getCategoryColor(item.category || "default"),
-          icon: item.icon,
-          pmrAccessible: item.pmrAccessible ?? false,
-          model3d: item.model3d,
         }));
 
         setCatalog(prev => [...prev, ...validated]);
@@ -131,13 +328,18 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
     reader.readAsText(file);
   };
 
-  const toggleSelection = (id: string) => {
+  const toggleSelection = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
+  };
+
+  const handleViewProduct = (eq: GameEquipment) => {
+    setViewingProduct(eq);
   };
 
   const handleAutoPlace = () => {
@@ -232,7 +434,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
           <div className="rounded-lg border border-dashed border-border p-4 text-center">
             <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
             <p className="text-xs text-muted-foreground">
-              Importez un fichier JSON pour charger le catalogue de jeux
+              Importez un fichier CSV ou JSON pour charger le catalogue
             </p>
             <Button
               variant="outline"
@@ -241,7 +443,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
               onClick={() => fileInputRef.current?.click()}
             >
               <Upload className="h-3 w-3" />
-              Importer JSON
+              Importer
             </Button>
           </div>
         </div>
@@ -280,33 +482,65 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                     {items.map((eq) => {
                       const isSelected = selectedIds.has(eq.id);
                       return (
-                        <button
+                        <div
                           key={eq.id}
-                          className={`w-full rounded-md border p-2 text-left transition-all text-xs ${
+                          className={`w-full rounded-md border p-2 text-left transition-all text-xs cursor-pointer ${
                             isSelected
                               ? "border-primary bg-primary/10"
                               : "border-border bg-surface hover:border-primary/30"
                           }`}
-                          onClick={() => toggleSelection(eq.id)}
+                          onClick={() => handleViewProduct(eq)}
                         >
                           <div className="flex items-center gap-2">
-                            {eq.icon && <span className="text-base">{eq.icon}</span>}
+                            {eq.images && eq.images[0] ? (
+                              <img 
+                                src={eq.images[0]} 
+                                alt={eq.name}
+                                className="w-8 h-8 rounded object-contain bg-muted/30"
+                              />
+                            ) : eq.icon ? (
+                              <span className="text-base">{eq.icon}</span>
+                            ) : null}
                             <span className="font-medium text-foreground flex-1 truncate">
                               {eq.name}
                             </span>
-                            {isSelected && (
-                              <Check className="h-3.5 w-3.5 text-primary shrink-0" />
-                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 shrink-0"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleViewProduct(eq);
+                              }}
+                            >
+                              <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                            </Button>
+                            <button
+                              className={`h-5 w-5 rounded border flex items-center justify-center shrink-0 transition-colors ${
+                                isSelected 
+                                  ? "bg-primary border-primary text-primary-foreground" 
+                                  : "border-muted-foreground/30 hover:border-primary"
+                              }`}
+                              onClick={(e) => toggleSelection(eq.id, e)}
+                            >
+                              {isSelected && <Check className="h-3 w-3" />}
+                            </button>
                           </div>
                           <div className="flex gap-2 mt-1 text-muted-foreground">
                             <span>{eq.width}×{eq.depth}cm</span>
                             <span>·</span>
                             <span>h{eq.height}cm</span>
+                            {eq.price && eq.price > 0 && (
+                              <>
+                                <span>·</span>
+                                <span className="text-primary font-medium">{eq.price.toLocaleString("fr-FR")}€</span>
+                              </>
+                            )}
                             {eq.pmrAccessible && (
                               <Badge variant="outline" className="text-[9px] h-4 px-1">PMR</Badge>
                             )}
                           </div>
-                        </button>
+                        </div>
                       );
                     })}
                   </div>
@@ -355,6 +589,13 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
           </ScrollArea>
         </div>
       )}
+
+      {/* Product detail dialog */}
+      <ProductDialog 
+        equipment={viewingProduct} 
+        open={!!viewingProduct} 
+        onOpenChange={(open) => !open && setViewingProduct(null)} 
+      />
     </div>
   );
 }

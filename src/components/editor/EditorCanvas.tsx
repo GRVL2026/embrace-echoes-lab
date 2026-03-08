@@ -215,11 +215,12 @@ export function EditorCanvas() {
 
       // Check rotation handle zone
       if (includeHandle) {
-        const handleDistCm = Math.max(eq.width, eq.depth) / 2 + 25 / state.zoom;
+        const handleDistCm = Math.max(eq.width, eq.depth) / 2 + 35;
         const hdx = lx;
         const hdy = ly + handleDistCm;
-        if (hdx * hdx + hdy * hdy < (14 / state.zoom) * (14 / state.zoom)) return eq;
-        if (Math.abs(lx) < 5 / state.zoom && ly < 0 && ly > -handleDistCm) return eq;
+        const hitR = Math.max(15, 18 / state.zoom);
+        if (hdx * hdx + hdy * hdy < hitR * hitR) return eq;
+        if (Math.abs(lx) < hitR && ly < 0 && ly > -handleDistCm) return eq;
       }
     }
     return null;

@@ -413,6 +413,16 @@ export function autoPlaceEquipmentWithReport(
   const doorZones = getDoorExclusionZones(rooms, doors);
   const pillarZones = getPillarExclusionZones(pillars);
   const walls = getRoomWalls(bestRoom, doors);
+  
+  // DEBUG: log room info
+  const pts = bestRoom.points;
+  const rMinX = Math.min(...pts.map(p => p.x)), rMaxX = Math.max(...pts.map(p => p.x));
+  const rMinY = Math.min(...pts.map(p => p.y)), rMaxY = Math.max(...pts.map(p => p.y));
+  console.log(`[placement] Room bounds: x[${rMinX},${rMaxX}] y[${rMinY},${rMaxY}], ${walls.length} walls, signedArea=${polygonSignedArea(pts).toFixed(0)}`);
+  if (walls.length > 0) {
+    const w0 = walls[0];
+    console.log(`[placement] Wall0: start(${w0.start.x.toFixed(0)},${w0.start.y.toFixed(0)}) normal(${w0.normalX.toFixed(2)},${w0.normalY.toFixed(2)})`);
+  }
 
   const placements: PlacedEquipment[] = [...existingPlacements];
   const result: PlacedEquipment[] = [];

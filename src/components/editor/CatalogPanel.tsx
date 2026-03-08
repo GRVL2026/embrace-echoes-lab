@@ -15,6 +15,7 @@ import { Upload, Package, Play, Trash2, Check, X, Info, Search, Maximize2, Minus
 import type { GameEquipment, CatalogJSON } from "@/types/equipment";
 import { DEFAULT_SAFETY_ZONE } from "@/types/equipment";
 import { autoPlaceEquipmentWithReport } from "@/lib/placement";
+import { computeCirculation } from "@/lib/circulation";
 import { ProductDialog } from "./ProductDialog";
 
 /** Parse Shopify CSV dimensions like "L 1030 x P 2500 x H 2640 mm" or "35X22X12" */

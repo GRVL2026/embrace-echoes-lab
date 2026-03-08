@@ -444,6 +444,7 @@ export function computeCirculation(
 
   const allSegments: CirculationSegment[] = [];
   const startPos = doorPositions[0];
+  const endPos = doorPositions.length > 1 ? doorPositions[doorPositions.length - 1] : null;
   const unreachableIds: string[] = [];
 
   const buildPath = (from: Point, to: Point): boolean => {
@@ -461,12 +462,33 @@ export function computeCirculation(
   };
 
   if (equipments.length > 0) {
-    const targets = equipments.map(eq => eq.position);
-    const sortedEquipments = [...equipments].sort((a, b) => {
-      const da = (a.position.x - startPos.x) ** 2 + (a.position.y - startPos.y) ** 2;
-      const db = (b.position.x - startPos.x) ** 2 + (b.position.y - startPos.y) ** 2;
-      return da - db;
-    });
+    // If we have 2+ doors, sort equipments along the axis between first and last door
+    // so the path naturally flows door1 → equipments → door2
+    let sortedEquipments: PlacedEquipment[];
+    if (endPos) {
+      const axisX = endPos.x - startPos.x;
+      const axisY = endPos.y - startPos.y;
+      const axisLen2 = axisX * axisX + axisY * axisY;
+      if (axisLen2 > 0) {
+        sortedEquipments = [...equipments].sort((a, b) => {
+          const ta = ((a.position.x - startPos.x) * axisX + (a.position.y - startPos.y) * axisY) / axisLen2;
+          const tb = ((b.position.x - startPos.x) * axisX + (b.position.y - startPos.y) * axisY) / axisLen2;
+          return ta - tb;
+        });
+      } else {
+        sortedEquipments = [...equipments].sort((a, b) => {
+          const da = (a.position.x - startPos.x) ** 2 + (a.position.y - startPos.y) ** 2;
+          const db = (b.position.x - startPos.x) ** 2 + (b.position.y - startPos.y) ** 2;
+          return da - db;
+        });
+      }
+    } else {
+      sortedEquipments = [...equipments].sort((a, b) => {
+        const da = (a.position.x - startPos.x) ** 2 + (a.position.y - startPos.y) ** 2;
+        const db = (b.position.x - startPos.x) ** 2 + (b.position.y - startPos.y) ** 2;
+        return da - db;
+      });
+    }
 
     let currentPos = startPos;
     for (const eq of sortedEquipments) {
@@ -477,55 +499,71 @@ export function computeCirculation(
         currentPos = eq.position;
       }
     }
+
+    // After visiting all equipments, connect to the last door (and any intermediate doors)
+    if (endPos) {
+      buildPath(currentPos, endPos);
+    }
+    // Connect any intermediate doors (index 1 to length-2) to the main path
+    for (let di = 1; di < doorPositions.length - 1; di++) {
+      // Find the nearest point on the main chain to branch from
+      buildPath(doorPositions[di], startPos);
+    }
   } else {
-    // No equipment — basic room traversal
-    const pts = bestRoom.points;
-    const minX = Math.min(...pts.map(p => p.x));
-    const maxX = Math.max(...pts.map(p => p.x));
-    const minY = Math.min(...pts.map(p => p.y));
-    const maxY = Math.max(...pts.map(p => p.y));
-    const roomW = maxX - minX, roomH = maxY - minY;
+    // No equipment — connect doors directly if multiple
+    if (endPos) {
+      buildPath(startPos, endPos);
+    }
+    // Connect intermediate doors
+    for (let di = 1; di < doorPositions.length - 1; di++) {
+      buildPath(doorPositions[di], startPos);
+    }
 
-    const farCorners = [
-      { x: minX + HALF_CORRIDOR + 20, y: minY + HALF_CORRIDOR + 20 },
-      { x: maxX - HALF_CORRIDOR - 20, y: minY + HALF_CORRIDOR + 20 },
-      { x: maxX - HALF_CORRIDOR - 20, y: maxY - HALF_CORRIDOR - 20 },
-      { x: minX + HALF_CORRIDOR + 20, y: maxY - HALF_CORRIDOR - 20 },
-      { x: (minX + maxX) / 2, y: (minY + maxY) / 2 },
-    ].filter(p => pointInPolygon(p, pts));
+    // If only one door (or after door connections), basic room traversal
+    if (doorPositions.length <= 1) {
+      const pts = bestRoom.points;
+      const minX = Math.min(...pts.map(p => p.x));
+      const maxX = Math.max(...pts.map(p => p.x));
+      const minY = Math.min(...pts.map(p => p.y));
+      const maxY = Math.max(...pts.map(p => p.y));
+      const roomW = maxX - minX, roomH = maxY - minY;
 
-    farCorners.sort((a, b) => {
-      const da = (a.x - startPos.x) ** 2 + (a.y - startPos.y) ** 2;
-      const db = (b.x - startPos.x) ** 2 + (b.y - startPos.y) ** 2;
-      return db - da;
-    });
+      const farCorners = [
+        { x: minX + HALF_CORRIDOR + 20, y: minY + HALF_CORRIDOR + 20 },
+        { x: maxX - HALF_CORRIDOR - 20, y: minY + HALF_CORRIDOR + 20 },
+        { x: maxX - HALF_CORRIDOR - 20, y: maxY - HALF_CORRIDOR - 20 },
+        { x: minX + HALF_CORRIDOR + 20, y: maxY - HALF_CORRIDOR - 20 },
+        { x: (minX + maxX) / 2, y: (minY + maxY) / 2 },
+      ].filter(p => pointInPolygon(p, pts));
 
-    if (farCorners.length > 0) {
-      buildPath(startPos, farCorners[0]);
-      if (roomW > CORRIDOR_WIDTH * 3 && roomH > CORRIDOR_WIDTH * 3 && farCorners.length > 1) {
-        const farthest = farCorners[0];
-        const mainDx = farthest.x - startPos.x;
-        const mainDy = farthest.y - startPos.y;
-        const mainLen = Math.sqrt(mainDx * mainDx + mainDy * mainDy) || 1;
-        let bestPerp: Point | null = null;
-        let bestPerpDist = 0;
-        for (const corner of farCorners.slice(1)) {
-          const t = ((corner.x - startPos.x) * mainDx + (corner.y - startPos.y) * mainDy) / (mainLen * mainLen);
-          const projX = startPos.x + t * mainDx;
-          const projY = startPos.y + t * mainDy;
-          const perpDist = Math.sqrt((corner.x - projX) ** 2 + (corner.y - projY) ** 2);
-          if (perpDist > bestPerpDist) { bestPerpDist = perpDist; bestPerp = corner; }
-        }
-        if (bestPerp && bestPerpDist > CORRIDOR_WIDTH) {
-          buildPath({ x: (startPos.x + farthest.x) / 2, y: (startPos.y + farthest.y) / 2 }, bestPerp);
+      farCorners.sort((a, b) => {
+        const da = (a.x - startPos.x) ** 2 + (a.y - startPos.y) ** 2;
+        const db = (b.x - startPos.x) ** 2 + (b.y - startPos.y) ** 2;
+        return db - da;
+      });
+
+      if (farCorners.length > 0) {
+        buildPath(startPos, farCorners[0]);
+        if (roomW > CORRIDOR_WIDTH * 3 && roomH > CORRIDOR_WIDTH * 3 && farCorners.length > 1) {
+          const farthest = farCorners[0];
+          const mainDx = farthest.x - startPos.x;
+          const mainDy = farthest.y - startPos.y;
+          const mainLen = Math.sqrt(mainDx * mainDx + mainDy * mainDy) || 1;
+          let bestPerp: Point | null = null;
+          let bestPerpDist = 0;
+          for (const corner of farCorners.slice(1)) {
+            const t = ((corner.x - startPos.x) * mainDx + (corner.y - startPos.y) * mainDy) / (mainLen * mainLen);
+            const projX = startPos.x + t * mainDx;
+            const projY = startPos.y + t * mainDy;
+            const perpDist = Math.sqrt((corner.x - projX) ** 2 + (corner.y - projY) ** 2);
+            if (perpDist > bestPerpDist) { bestPerpDist = perpDist; bestPerp = corner; }
+          }
+          if (bestPerp && bestPerpDist > CORRIDOR_WIDTH) {
+            buildPath({ x: (startPos.x + farthest.x) / 2, y: (startPos.y + farthest.y) / 2 }, bestPerp);
+          }
         }
       }
     }
-  }
-
-  // Connect additional doors
-  for (let di = 1; di < doorPositions.length; di++) {
-    buildPath(doorPositions[di], startPos);
   }
 
   const success = unreachableIds.length === 0;

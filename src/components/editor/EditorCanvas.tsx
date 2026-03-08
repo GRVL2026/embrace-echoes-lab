@@ -347,6 +347,11 @@ export function EditorCanvas() {
         drawPillarDistances(ctx, state);
       }
 
+      // Draw circulation path (before equipment so it's behind)
+      if (state.circulationPath && state.circulationPath.length > 0) {
+        drawCirculationPath(ctx, state.circulationPath, state.zoom);
+      }
+
       // Draw placed equipments
       if (state.placedEquipments.length > 0) {
         drawPlacedEquipments(ctx, state.placedEquipments, state.zoom);

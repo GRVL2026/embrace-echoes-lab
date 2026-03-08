@@ -2224,7 +2224,7 @@ function drawPlacedEquipments(
 
     // Rotation handle (when hovered)
     if (isHovered) {
-      const handleDistPx = Math.max(eq.width, eq.depth) / 2 * CM_TO_PX + 25 / zoom;
+      const handleDistPx = (Math.max(eq.width, eq.depth) / 2 + 35) * CM_TO_PX;
       // Stem line
       ctx.beginPath();
       ctx.moveTo(0, -d / 2);

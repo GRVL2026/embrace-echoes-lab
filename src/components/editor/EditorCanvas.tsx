@@ -1417,6 +1417,23 @@ export function EditorCanvas() {
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
         onWheel={handleWheel}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          const world = screenToWorld(e.clientX, e.clientY);
+          const pillar = findPillarAtPoint(world);
+          if (pillar) {
+            const rect = containerRef.current?.getBoundingClientRect();
+            setContextMenu({ x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0), target: { type: "pillar", id: pillar.id } });
+            return;
+          }
+          const equip = findEquipmentAtPoint(world);
+          if (equip) {
+            const rect = containerRef.current?.getBoundingClientRect();
+            setContextMenu({ x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0), target: { type: "equipment", id: equip.id } });
+            return;
+          }
+          setContextMenu(null);
+        }}
         className="absolute inset-0"
       />
       {/* Zoom indicator */}

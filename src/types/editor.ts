@@ -65,6 +65,7 @@ export type EditorState = {
   showAngles: boolean;
   showPillarDistances: boolean;
   showCirculation: boolean; // toggle circulation path visibility
+  planRotation: number; // 0, 90, 180, 270
   placedEquipments: import("@/types/equipment").PlacedEquipment[];
   circulationPath: CirculationSegment[]; // safety circulation display
 };

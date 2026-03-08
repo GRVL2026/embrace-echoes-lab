@@ -651,8 +651,9 @@ function generateAdjacentPositions(
   // This is perpendicular to the facing direction and runs along the wall surface
   const wallDirX = Math.cos(rad);
   const wallDirY = Math.sin(rad);
-  // Spacing accounts for half of previous + half of current + gap
-  const baseSpacing = prevW / 2 + curW / 2 + gap;
+  // Spacing: half of previous + half of current + desired gap + small epsilon
+  // The epsilon (1cm) prevents exact-touching collision detection from rejecting valid placements
+  const baseSpacing = prevW / 2 + curW / 2 + gap + 1;
 
   for (const mult of [1, -1, 2, -2, 3, -3, 4, -4, 5, -5]) {
     const sign = mult > 0 ? 1 : -1;

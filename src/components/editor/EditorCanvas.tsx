@@ -1179,8 +1179,18 @@ export function EditorCanvas() {
     if (draggingDoor) setDraggingDoor(null);
     if (draggingPillar) setDraggingPillar(null);
     if (rotatingPillar) setRotatingPillar(null);
-    if (draggingEquipment) setDraggingEquipment(null);
-    if (rotatingEquipment) setRotatingEquipment(null);
+    if (draggingEquipment) {
+      setDraggingEquipment(null);
+      // Recompute circulation after equipment move
+      const circ = computeCirculation(state.rooms, state.doors, state.pillars, state.placedEquipments);
+      dispatch({ type: "SET_CIRCULATION", circulation: circ });
+    }
+    if (rotatingEquipment) {
+      setRotatingEquipment(null);
+      // Recompute circulation after equipment rotate
+      const circ = computeCirculation(state.rooms, state.doors, state.pillars, state.placedEquipments);
+      dispatch({ type: "SET_CIRCULATION", circulation: circ });
+    }
   };
 
   const handleWheel = (e: React.WheelEvent) => {

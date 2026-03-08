@@ -348,7 +348,7 @@ export function EditorCanvas() {
       }
 
       // Draw circulation path (before equipment so it's behind)
-      if (state.circulationPath && state.circulationPath.length > 0) {
+      if (state.showCirculation && state.circulationPath && state.circulationPath.length > 0) {
         drawCirculationPath(ctx, state.circulationPath, state.zoom);
       }
 

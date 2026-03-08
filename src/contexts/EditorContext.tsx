@@ -26,6 +26,7 @@ type EditorAction =
   | { type: "TOGGLE_PILLAR_DISTANCES" }
   | { type: "TOGGLE_DIMENSIONS" }
   | { type: "TOGGLE_ANGLES" }
+  | { type: "TOGGLE_CIRCULATION" }
   | { type: "SET_GRID_SIZE"; size: number }
   | { type: "UNDO" }
   | { type: "RESET" }
@@ -138,6 +139,8 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       return { ...state, showAngles: !state.showAngles };
     case "TOGGLE_PILLAR_DISTANCES":
       return { ...state, showPillarDistances: !state.showPillarDistances };
+    case "TOGGLE_CIRCULATION":
+      return { ...state, showCirculation: !state.showCirculation };
     case "SET_GRID_SIZE":
       return { ...state, gridSize: action.size };
     case "RESET":

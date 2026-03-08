@@ -1779,6 +1779,7 @@ function drawPlacedEquipments(
   ctx: CanvasRenderingContext2D,
   equipments: PlacedEquipment[],
   zoom: number,
+  hoveredEquipId?: string | null,
 ) {
   equipments.forEach((eq) => {
     const cx = eq.position.x * CM_TO_PX;
@@ -1786,6 +1787,7 @@ function drawPlacedEquipments(
     const w = eq.width * CM_TO_PX;
     const d = eq.depth * CM_TO_PX;
     const rot = (eq.rotation || 0) * Math.PI / 180;
+    const isHovered = eq.id === hoveredEquipId;
 
     ctx.save();
     ctx.translate(cx, cy);
@@ -1803,8 +1805,8 @@ function drawPlacedEquipments(
     // Equipment body
     ctx.fillStyle = eq.color.replace(")", ", 0.3)").replace("hsl(", "hsla(");
     ctx.fillRect(-w / 2, -d / 2, w, d);
-    ctx.strokeStyle = eq.color;
-    ctx.lineWidth = 2 / zoom;
+    ctx.strokeStyle = isHovered ? "hsl(48, 100%, 70%)" : eq.color;
+    ctx.lineWidth = isHovered ? 3 / zoom : 2 / zoom;
     ctx.strokeRect(-w / 2, -d / 2, w, d);
 
     // Label
@@ -1812,7 +1814,6 @@ function drawPlacedEquipments(
     ctx.font = `bold ${Math.max(10, 11 / zoom)}px Inter`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    // Truncate name if too long
     const maxChars = Math.floor(w / (7 / zoom * CM_TO_PX) * 2);
     const label = eq.name.length > maxChars ? eq.name.slice(0, maxChars - 1) + "…" : eq.name;
     ctx.fillText(label, 0, 0);
@@ -1821,6 +1822,36 @@ function drawPlacedEquipments(
     ctx.font = `${9 / zoom}px Inter`;
     ctx.fillStyle = "hsla(48, 100%, 50%, 0.7)";
     ctx.fillText(`${eq.width}×${eq.depth}cm`, 0, d / 2 + 12 / zoom);
+
+    // Rotation handle (when hovered)
+    if (isHovered) {
+      const handleDistPx = Math.max(eq.width, eq.depth) / 2 * CM_TO_PX + 25 / zoom;
+      // Stem line
+      ctx.beginPath();
+      ctx.moveTo(0, -d / 2);
+      ctx.lineTo(0, -handleDistPx);
+      ctx.strokeStyle = "hsla(48, 100%, 60%, 0.6)";
+      ctx.lineWidth = 1.5 / zoom;
+      ctx.setLineDash([3 / zoom, 3 / zoom]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Handle circle
+      ctx.beginPath();
+      ctx.arc(0, -handleDistPx, 6 / zoom, 0, Math.PI * 2);
+      ctx.fillStyle = "hsl(48, 100%, 60%)";
+      ctx.fill();
+      ctx.strokeStyle = "hsl(240, 60%, 4.7%)";
+      ctx.lineWidth = 1.5 / zoom;
+      ctx.stroke();
+
+      // Rotation icon
+      ctx.beginPath();
+      ctx.arc(0, -handleDistPx, 3.5 / zoom, -Math.PI * 0.7, Math.PI * 0.7);
+      ctx.strokeStyle = "hsl(240, 60%, 4.7%)";
+      ctx.lineWidth = 1 / zoom;
+      ctx.stroke();
+    }
 
     ctx.restore();
   });

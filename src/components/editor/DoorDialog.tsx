@@ -126,9 +126,18 @@ export function DoorDialog({ open, wallLength, initialValues, onConfirm, onCance
               />
             </div>
           </div>
+          <div className="flex items-center gap-2 py-1">
+            <Checkbox
+              id="main-door"
+              checked={isMainDoor}
+              onCheckedChange={(checked) => setIsMainDoor(checked === true)}
+            />
+            <Label htmlFor="main-door" className="text-sm font-medium cursor-pointer">
+              ⭐ Porte principale (circulation)
+            </Label>
+          </div>
 
-          <div className="space-y-2">
-            <Label>Type de porte</Label>
+
             <div className="flex gap-2">
               <Button
                 type="button"

@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { DoorOpenDirection, DoorOpenSide, DoorLeafCount, Door } from "@/types/editor";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +20,7 @@ interface DoorDialogResult {
   openDirectionRight?: DoorOpenDirection;
   openSide: DoorOpenSide;
   leafCount: DoorLeafCount;
+  isMainDoor: boolean;
 }
 
 interface DoorDialogProps {
@@ -36,6 +38,7 @@ export function DoorDialog({ open, wallLength, initialValues, onConfirm, onCance
   const [directionRight, setDirectionRight] = useState<DoorOpenDirection>("right");
   const [openSide, setOpenSide] = useState<DoorOpenSide>("interior");
   const [leafCount, setLeafCount] = useState<DoorLeafCount>("single");
+  const [isMainDoor, setIsMainDoor] = useState(false);
 
   // Pre-fill values when editing an existing door
   useEffect(() => {
@@ -47,6 +50,7 @@ export function DoorDialog({ open, wallLength, initialValues, onConfirm, onCance
       setDirectionRight(initialValues.openDirectionRight || "right");
       setOpenSide(initialValues.openSide);
       setLeafCount(initialValues.leafCount);
+      setIsMainDoor(initialValues.isMainDoor || false);
     } else {
       setWidth(80);
       setPosition(Math.round(wallLength / 2));
@@ -54,6 +58,7 @@ export function DoorDialog({ open, wallLength, initialValues, onConfirm, onCance
       setDirectionRight("right");
       setOpenSide("interior");
       setLeafCount("single");
+      setIsMainDoor(false);
     }
   }, [initialValues, wallLength]);
 
@@ -69,6 +74,7 @@ export function DoorDialog({ open, wallLength, initialValues, onConfirm, onCance
       openDirectionRight: leafCount === "double" ? directionRight : undefined,
       openSide,
       leafCount,
+      isMainDoor,
     });
   };
 
@@ -119,6 +125,16 @@ export function DoorDialog({ open, wallLength, initialValues, onConfirm, onCance
                 }}
               />
             </div>
+          </div>
+          <div className="flex items-center gap-2 py-1">
+            <Checkbox
+              id="main-door"
+              checked={isMainDoor}
+              onCheckedChange={(checked) => setIsMainDoor(checked === true)}
+            />
+            <Label htmlFor="main-door" className="text-sm font-medium cursor-pointer">
+              ⭐ Porte principale (circulation)
+            </Label>
           </div>
 
           <div className="space-y-2">

@@ -96,13 +96,24 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         doors: updatedDoors,
       };
     }
-    case "ADD_DOOR":
-      return { ...state, doors: [...state.doors, action.door] };
-    case "UPDATE_DOOR":
+    case "ADD_DOOR": {
+      const newDoors = action.door.isMainDoor
+        ? state.doors.map(d => ({ ...d, isMainDoor: false }))
+        : [...state.doors];
+      return { ...state, doors: [...newDoors, action.door] };
+    }
+    case "UPDATE_DOOR": {
+      const updatedDoor = action.door;
       return {
         ...state,
-        doors: state.doors.map((d) => (d.id === action.id ? { ...d, ...action.door } : d)),
+        doors: state.doors.map((d) => {
+          if (d.id === action.id) return { ...d, ...updatedDoor };
+          // If marking another door as main, unmark this one
+          if (updatedDoor.isMainDoor) return { ...d, isMainDoor: false };
+          return d;
+        }),
       };
+    }
     case "DELETE_DOOR":
       return { ...state, doors: state.doors.filter((d) => d.id !== action.id) };
     case "ADD_PILLAR":

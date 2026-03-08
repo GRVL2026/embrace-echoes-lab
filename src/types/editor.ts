@@ -28,6 +28,7 @@ export type Door = {
   openDirectionRight?: DoorOpenDirection; // right battant direction (double only)
   openSide: DoorOpenSide;
   leafCount: DoorLeafCount;
+  isMainDoor?: boolean; // porte principale for circulation
 };
 
 export type PillarShape = "square" | "round";

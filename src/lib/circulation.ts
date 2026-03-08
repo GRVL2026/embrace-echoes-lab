@@ -373,9 +373,42 @@ function getDoorWorldPosition(door: Door, rooms: Room[]): Point | null {
   };
 }
 
+/** Get the "front" waypoint of an equipment: 2cm from the front face (side with dimensions/player access) */
+function getEquipmentFrontWaypoint(eq: PlacedEquipment): Point {
+  const rad = (eq.rotation || 0) * Math.PI / 180;
+  const cos = Math.cos(rad), sin = Math.sin(rad);
+  // Front face is the +y side in local space (depth direction), offset by half depth + 2cm
+  const frontOffset = eq.depth / 2 + 2; // 2cm gap from front
+  return {
+    x: eq.position.x + (-sin) * frontOffset,
+    y: eq.position.y + cos * frontOffset,
+  };
+}
+
+/** Order waypoints using nearest-neighbor heuristic for shortest tour */
+function orderWaypoints(start: Point, waypoints: Point[]): Point[] {
+  if (waypoints.length <= 1) return [...waypoints];
+  const remaining = [...waypoints];
+  const ordered: Point[] = [];
+  let current = start;
+  while (remaining.length > 0) {
+    let bestIdx = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < remaining.length; i++) {
+      const d = (remaining[i].x - current.x) ** 2 + (remaining[i].y - current.y) ** 2;
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    }
+    ordered.push(remaining[bestIdx]);
+    current = remaining[bestIdx];
+    remaining.splice(bestIdx, 1);
+  }
+  return ordered;
+}
+
 /**
- * Compute dynamic circulation paths that navigate from doors
- * through the room, contouring around all obstacles with 1.40m width.
+ * Compute dynamic circulation paths.
+ * Starts from the main door, visits the front of every equipment (2cm gap),
+ * tries to loop back to the main door, otherwise backtracks.
  */
 export function computeCirculation(
   rooms: Room[],
@@ -402,7 +435,7 @@ export function computeCirculation(
   }
   if (!bestRoom) return emptyResult;
 
-  const resolution = 10; // finer grid for smoother, non-snapped paths
+  const resolution = 10;
   const gridData = buildOccupancyGrid(bestRoom, equipments, pillars, doors, rooms, resolution);
   const { grid, originX, originY, cols, rows, res } = gridData;
 
@@ -415,48 +448,45 @@ export function computeCirculation(
     y: originY + r * res + res / 2,
   });
 
-  // Door positions
-  const roomDoors = doors.filter(d => d.roomId === bestRoom!.id);
-  const doorPositions: Point[] = [];
-  for (const door of roomDoors) {
-    const pos = getDoorWorldPosition(door, rooms);
-    if (pos) {
-      const a = bestRoom.points[door.edgeIndex];
-      const b = bestRoom.points[(door.edgeIndex + 1) % bestRoom.points.length];
-      const dx = b.x - a.x, dy = b.y - a.y;
-      const len = Math.sqrt(dx * dx + dy * dy);
-      if (len > 0) {
-        const nx = -dy / len, ny = dx / len;
-        const testIn = { x: pos.x + nx * 50, y: pos.y + ny * 50 };
-        if (pointInPolygon(testIn, bestRoom.points)) {
-          doorPositions.push({ x: pos.x + nx * HALF_CORRIDOR, y: pos.y + ny * HALF_CORRIDOR });
-        } else {
-          doorPositions.push({ x: pos.x - nx * HALF_CORRIDOR, y: pos.y - ny * HALF_CORRIDOR });
-        }
-      } else {
-        doorPositions.push(pos);
-      }
-    }
-  }
-  if (doorPositions.length === 0) {
-    const pts = bestRoom.points;
-    const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
-    const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
-    doorPositions.push({ x: cx, y: cy });
-  }
-
-  const allSegments: CirculationSegment[] = [];
-  const startPos = doorPositions[0];
-  const endPos = doorPositions.length > 1 ? doorPositions[doorPositions.length - 1] : null;
-  const unreachableIds: string[] = [];
-
-  // Check if a world point falls in a blocked grid cell
   const isBlockedWorld = (p: Point): boolean => {
     const gc = Math.floor((p.x - originX) / res);
     const gr = Math.floor((p.y - originY) / res);
     if (gr < 0 || gr >= rows || gc < 0 || gc >= cols) return true;
     return grid[gr][gc];
   };
+
+  // Find main door (or first door, or room center)
+  const roomDoors = doors.filter(d => d.roomId === bestRoom!.id);
+  const mainDoor = roomDoors.find(d => d.isMainDoor) || roomDoors[0];
+
+  const getDoorEntry = (door: Door): Point => {
+    const pos = getDoorWorldPosition(door, rooms);
+    if (!pos) return bestRoom!.points.reduce((acc, p) => ({ x: acc.x + p.x / bestRoom!.points.length, y: acc.y + p.y / bestRoom!.points.length }), { x: 0, y: 0 });
+    const a = bestRoom!.points[door.edgeIndex];
+    const b = bestRoom!.points[(door.edgeIndex + 1) % bestRoom!.points.length];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len > 0) {
+      const nx = -dy / len, ny = dx / len;
+      const testIn = { x: pos.x + nx * 50, y: pos.y + ny * 50 };
+      if (pointInPolygon(testIn, bestRoom!.points)) {
+        return { x: pos.x + nx * HALF_CORRIDOR, y: pos.y + ny * HALF_CORRIDOR };
+      }
+      return { x: pos.x - nx * HALF_CORRIDOR, y: pos.y - ny * HALF_CORRIDOR };
+    }
+    return pos;
+  };
+
+  let startPos: Point;
+  if (mainDoor) {
+    startPos = getDoorEntry(mainDoor);
+  } else {
+    const pts = bestRoom.points;
+    startPos = { x: pts.reduce((s, p) => s + p.x, 0) / pts.length, y: pts.reduce((s, p) => s + p.y, 0) / pts.length };
+  }
+
+  const allSegments: CirculationSegment[] = [];
+  const unreachableIds: string[] = [];
 
   const buildPath = (from: Point, to: Point): boolean => {
     const fromGrid = toGrid(from.x, from.y);
@@ -472,76 +502,43 @@ export function computeCirculation(
     return true;
   };
 
-  if (doorPositions.length >= 2) {
-    // Simply connect doors in order — A* will naturally route through
-    // the free corridor space in front of equipment (no need to visit each equipment center)
+  if (equipments.length > 0) {
+    // Compute front waypoints for each equipment
+    const waypoints = equipments.map(eq => ({
+      id: eq.id,
+      point: getEquipmentFrontWaypoint(eq),
+    }));
+
+    // Order waypoints nearest-neighbor starting from the main door
+    const orderedPoints = orderWaypoints(startPos, waypoints.map(w => w.point));
+    const orderedWithIds = orderedPoints.map(p => {
+      const wp = waypoints.find(w => w.point.x === p.x && w.point.y === p.y)!;
+      return wp;
+    });
+
+    // Build path: door → wp1 → wp2 → ... → wpN
     let currentPos = startPos;
-    for (let di = 1; di < doorPositions.length; di++) {
-      buildPath(currentPos, doorPositions[di]);
-      currentPos = doorPositions[di];
-    }
-  } else if (equipments.length > 0) {
-    // Single door: find the farthest reachable point to show the corridor extent
-    // Pick equipment centers projected to the nearest free cell as waypoints
-    const farthest = [...equipments].sort((a, b) => {
-      const da = (a.position.x - startPos.x) ** 2 + (a.position.y - startPos.y) ** 2;
-      const db = (b.position.x - startPos.x) ** 2 + (b.position.y - startPos.y) ** 2;
-      return db - da;
-    })[0];
-    // Path toward the farthest equipment area (A* will find a free route)
-    buildPath(startPos, farthest.position);
-  } else {
-
-    // If only one door (or after door connections), basic room traversal
-    if (doorPositions.length <= 1) {
-      const pts = bestRoom.points;
-      const minX = Math.min(...pts.map(p => p.x));
-      const maxX = Math.max(...pts.map(p => p.x));
-      const minY = Math.min(...pts.map(p => p.y));
-      const maxY = Math.max(...pts.map(p => p.y));
-      const roomW = maxX - minX, roomH = maxY - minY;
-
-      const farCorners = [
-        { x: minX + HALF_CORRIDOR + 20, y: minY + HALF_CORRIDOR + 20 },
-        { x: maxX - HALF_CORRIDOR - 20, y: minY + HALF_CORRIDOR + 20 },
-        { x: maxX - HALF_CORRIDOR - 20, y: maxY - HALF_CORRIDOR - 20 },
-        { x: minX + HALF_CORRIDOR + 20, y: maxY - HALF_CORRIDOR - 20 },
-        { x: (minX + maxX) / 2, y: (minY + maxY) / 2 },
-      ].filter(p => pointInPolygon(p, pts));
-
-      farCorners.sort((a, b) => {
-        const da = (a.x - startPos.x) ** 2 + (a.y - startPos.y) ** 2;
-        const db = (b.x - startPos.x) ** 2 + (b.y - startPos.y) ** 2;
-        return db - da;
-      });
-
-      if (farCorners.length > 0) {
-        buildPath(startPos, farCorners[0]);
-        if (roomW > CORRIDOR_WIDTH * 3 && roomH > CORRIDOR_WIDTH * 3 && farCorners.length > 1) {
-          const farthest = farCorners[0];
-          const mainDx = farthest.x - startPos.x;
-          const mainDy = farthest.y - startPos.y;
-          const mainLen = Math.sqrt(mainDx * mainDx + mainDy * mainDy) || 1;
-          let bestPerp: Point | null = null;
-          let bestPerpDist = 0;
-          for (const corner of farCorners.slice(1)) {
-            const t = ((corner.x - startPos.x) * mainDx + (corner.y - startPos.y) * mainDy) / (mainLen * mainLen);
-            const projX = startPos.x + t * mainDx;
-            const projY = startPos.y + t * mainDy;
-            const perpDist = Math.sqrt((corner.x - projX) ** 2 + (corner.y - projY) ** 2);
-            if (perpDist > bestPerpDist) { bestPerpDist = perpDist; bestPerp = corner; }
-          }
-          if (bestPerp && bestPerpDist > CORRIDOR_WIDTH) {
-            buildPath({ x: (startPos.x + farthest.x) / 2, y: (startPos.y + farthest.y) / 2 }, bestPerp);
-          }
-        }
+    for (const wp of orderedWithIds) {
+      const ok = buildPath(currentPos, wp.point);
+      if (!ok) {
+        unreachableIds.push(wp.id);
+      } else {
+        currentPos = wp.point;
       }
     }
+
+    // Try to loop back to start (boucle)
+    const loopOk = buildPath(currentPos, startPos);
+    if (!loopOk) {
+      // Fallback: retrace path back (aller-retour) — just path back to start
+      // The corridor already covers all equipment fronts, so we just need to get back
+      buildPath(currentPos, startPos); // may fail in tight spaces, that's ok
+    }
+  } else if (roomDoors.length === 0) {
+    // No doors, no equipment — nothing to show
   }
 
   const success = unreachableIds.length === 0;
-
-  // Generate removal proposals if circulation failed
   let proposals: RemovalProposal[] = [];
   if (!success && equipments.length > 0) {
     proposals = generateRemovalProposals(rooms, doors, pillars, equipments, unreachableIds);

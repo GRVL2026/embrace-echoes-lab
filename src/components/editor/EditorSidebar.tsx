@@ -107,7 +107,13 @@ export function EditorSidebar() {
 
       setAnalysisStep("importing");
 
-      const planData = data as { rooms: AIPlanRoom[]; equipment?: AIEquipment[]; scale?: { confidence: string } };
+      const planData = data as {
+        rooms: AIPlanRoom[];
+        equipment?: AIEquipment[];
+        pillars?: { position: { x: number; y: number }; shape?: string; width: number; depth?: number }[];
+        confidence?: { dimensions?: string; notes?: string };
+        scale?: { confidence?: string };
+      };
 
       if (!planData.rooms || planData.rooms.length === 0) {
         toast.error("Aucune pièce détectée dans le plan");

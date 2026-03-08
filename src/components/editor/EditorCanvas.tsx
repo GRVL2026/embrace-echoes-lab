@@ -811,6 +811,16 @@ export function EditorCanvas() {
       }
     }
 
+    // Handle pending equipment click → detect drag threshold
+    if (pendingEquipClick && !draggingEquipment) {
+      const dx = e.clientX - pendingEquipClick.startX;
+      const dy = e.clientY - pendingEquipClick.startY;
+      if (Math.sqrt(dx * dx + dy * dy) > 5) {
+        setDraggingEquipment(pendingEquipClick.equipId);
+        setHasEquipDragged(true);
+      }
+    }
+
     // Handle door dragging
     if (draggingDoor) {
       const door = state.doors.find((d) => d.id === draggingDoor);

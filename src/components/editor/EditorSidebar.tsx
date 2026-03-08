@@ -3,7 +3,8 @@ import { Trash2, Upload, Loader2, FileImage, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
+import { useAutoSave, loadSession } from "@/hooks/useAutoSave";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { Door } from "@/types/editor";
@@ -62,6 +63,29 @@ export function EditorSidebar() {
   const [analysisStep, setAnalysisStep] = useState<AnalysisStep | null>(null);
   const [catalog, setCatalog] = useState<GameEquipment[]>([]);
 
+  // Auto-save on every change
+  useAutoSave(state, catalog);
+
+  // Restore session on mount
+  useEffect(() => {
+    const session = loadSession();
+    if (session) {
+      dispatch({
+        type: "LOAD_STATE",
+        state: {
+          rooms: session.plan.rooms,
+          doors: session.plan.doors,
+          pillars: session.plan.pillars,
+          placedEquipments: session.plan.placedEquipments,
+          gridSize: session.plan.gridSize,
+          circulationPath: session.plan.circulationPath || [],
+        },
+      });
+      if (session.catalog.length > 0) {
+        setCatalog(session.catalog);
+      }
+    }
+  }, []);
   const handleImportPlan = async (file: File) => {
     const isPdf = file.type === "application/pdf";
     const isImage = file.type.startsWith("image/");

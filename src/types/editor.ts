@@ -44,6 +44,13 @@ export type Pillar = {
 
 export type EditorTool = "select" | "wall" | "door" | "pillar" | "pan" | "eraser";
 
+/** Circulation path segment for safety display */
+export type CirculationSegment = {
+  start: Point;
+  end: Point;
+  width: number; // corridor width in cm
+};
+
 export type EditorState = {
   tool: EditorTool;
   rooms: Room[];
@@ -57,6 +64,7 @@ export type EditorState = {
   showAngles: boolean;
   showPillarDistances: boolean;
   placedEquipments: import("@/types/equipment").PlacedEquipment[];
+  circulationPath: CirculationSegment[]; // safety circulation display
 };
 
 export const INITIAL_EDITOR_STATE: EditorState = {
@@ -65,6 +73,7 @@ export const INITIAL_EDITOR_STATE: EditorState = {
   doors: [],
   pillars: [],
   placedEquipments: [],
+  circulationPath: [],
   zoom: 1,
   panOffset: { x: 0, y: 0 },
   gridSize: 20,

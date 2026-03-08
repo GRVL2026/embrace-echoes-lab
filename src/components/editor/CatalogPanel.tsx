@@ -281,7 +281,20 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   const { state, dispatch } = useEditor();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [viewingProduct, setViewingProduct] = useState<GameEquipment | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Filter catalog based on search query
+  const filteredCatalog = useMemo(() => {
+    if (!searchQuery.trim()) return catalog;
+    const query = searchQuery.toLowerCase().trim();
+    return catalog.filter(eq => 
+      eq.name.toLowerCase().includes(query) ||
+      eq.category.toLowerCase().includes(query) ||
+      (eq.vendor && eq.vendor.toLowerCase().includes(query)) ||
+      (eq.tags && eq.tags.some(tag => tag.toLowerCase().includes(query)))
+    );
+  }, [catalog, searchQuery]);
 
   const handleImportFile = (file: File) => {
     const reader = new FileReader();

@@ -1,11 +1,16 @@
+import { useState } from "react";
 import { EditorProvider } from "@/contexts/EditorContext";
 import { EditorToolbar } from "@/components/editor/EditorToolbar";
 import { EditorCanvas } from "@/components/editor/EditorCanvas";
 import { EditorSidebar } from "@/components/editor/EditorSidebar";
+import { PanelRightClose, PanelRightOpen } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import logoImg from "@/assets/logo.png";
 
-
 const SpacePlanner = () => {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
   return (
     <EditorProvider>
       <div className="flex h-screen w-screen overflow-hidden bg-background">
@@ -20,7 +25,6 @@ const SpacePlanner = () => {
           <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-6">
             <div className="flex items-center gap-3">
               <img src={logoImg} alt="Arcade Planner logo" className="h-7 w-auto object-contain" />
-
               <h1 className="font-display text-xl font-bold tracking-tight">
                 <span className="text-primary text-glow-purple">Arcade</span>{" "}
                 <span className="text-secondary text-glow-green">Planner</span>
@@ -33,6 +37,25 @@ const SpacePlanner = () => {
               <span>Avranches Automatic</span>
               <span className="text-primary">•</span>
               <span>Simulateur de salle</span>
+              <Tooltip delayDuration={200}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 ml-2"
+                    onClick={() => setSidebarOpen(!sidebarOpen)}
+                  >
+                    {sidebarOpen ? (
+                      <PanelRightClose className="h-4 w-4" />
+                    ) : (
+                      <PanelRightOpen className="h-4 w-4" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  {sidebarOpen ? "Masquer le panneau" : "Afficher le panneau"}
+                </TooltipContent>
+              </Tooltip>
             </div>
           </header>
 
@@ -41,9 +64,10 @@ const SpacePlanner = () => {
         </div>
 
         {/* Right sidebar */}
-        <EditorSidebar />
+        {sidebarOpen && <EditorSidebar />}
       </div>
-    </EditorProvider>);
+    </EditorProvider>
+  );
 };
 
 export default SpacePlanner;

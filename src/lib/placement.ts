@@ -638,7 +638,7 @@ function makePlacement(equip: GameEquipment, x: number, y: number, rotation: num
   };
 }
 
-/** Generate positions adjacent to a previous placement (side by side, accounting for different sizes) */
+/** Generate positions adjacent to a previous placement (side by side along the wall) */
 function generateAdjacentPositions(
   prevX: number, prevY: number, prevRot: number,
   prevW: number, prevD: number,
@@ -647,9 +647,10 @@ function generateAdjacentPositions(
   const positions: { x: number; y: number; rotation: number }[] = [];
   const rotation = prevRot;
   const rad = prevRot * Math.PI / 180;
-  // Along-wall direction (perpendicular to facing)
-  const wallDirX = -Math.sin(rad);
-  const wallDirY = Math.cos(rad);
+  // Along-wall direction: local +X axis = (cos(rot), sin(rot))
+  // This is perpendicular to the facing direction and runs along the wall surface
+  const wallDirX = Math.cos(rad);
+  const wallDirY = Math.sin(rad);
   // Spacing accounts for half of previous + half of current + gap
   const baseSpacing = prevW / 2 + curW / 2 + gap;
 

@@ -85,6 +85,16 @@ export function EditorCanvas() {
   const [hasEquipDragged, setHasEquipDragged] = useState(false);
   const [hoveredEquipment, setHoveredEquipment] = useState<string | null>(null);
   const [collidingEquipIds, setCollidingEquipIds] = useState<Set<string>>(new Set());
+
+  // Clipboard for copy/paste
+  const clipboardRef = useRef<{ type: "pillar"; data: Pillar } | { type: "equipment"; data: PlacedEquipment } | null>(null);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    x: number; y: number;
+    target: { type: "pillar"; id: string } | { type: "equipment"; id: string };
+  } | null>(null);
+
   const [editingDimension, setEditingDimension] = useState<{
     roomId: string;
     edgeIndex: number;
@@ -724,6 +734,8 @@ export function EditorCanvas() {
 
   // Mouse handlers
   const handleMouseDown = (e: React.MouseEvent) => {
+    // Close context menu on any click
+    if (contextMenu) { setContextMenu(null); if (e.button === 0) return; }
     if (e.button === 1 || (e.button === 0 && state.tool === "pan")) {
       setIsPanning(true);
       setLastPanPos({ x: e.clientX, y: e.clientY });
@@ -1291,6 +1303,30 @@ export function EditorCanvas() {
     setDoorDialog(null);
   };
 
+  // Duplicate helper
+  const duplicateItem = useCallback((item: { type: "pillar"; id: string } | { type: "equipment"; id: string }) => {
+    const OFFSET = 50; // 50cm offset
+    if (item.type === "pillar") {
+      const p = state.pillars.find(pl => pl.id === item.id);
+      if (!p) return;
+      const newPillar: Pillar = {
+        ...p,
+        id: crypto.randomUUID(),
+        position: { x: p.position.x + OFFSET, y: p.position.y + OFFSET },
+      };
+      dispatch({ type: "ADD_PILLAR", pillar: newPillar });
+    } else {
+      const eq = state.placedEquipments.find(e => e.id === item.id);
+      if (!eq) return;
+      const newEquip: PlacedEquipment = {
+        ...eq,
+        id: crypto.randomUUID(),
+        position: { x: eq.position.x + OFFSET, y: eq.position.y + OFFSET },
+      };
+      dispatch({ type: "ADD_PLACED_EQUIPMENT", equipment: newEquip });
+    }
+  }, [state.pillars, state.placedEquipments, dispatch]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -1300,6 +1336,43 @@ export function EditorCanvas() {
         dispatch({ type: "UNDO" });
         return;
       }
+      // Copy: Ctrl+C — copy hovered pillar or equipment
+      if ((e.ctrlKey || e.metaKey) && e.key === "c") {
+        if (hoveredPillar) {
+          const p = state.pillars.find(pl => pl.id === hoveredPillar);
+          if (p) { clipboardRef.current = { type: "pillar", data: { ...p } }; }
+        } else if (hoveredEquipment) {
+          const eq = state.placedEquipments.find(e => e.id === hoveredEquipment);
+          if (eq) { clipboardRef.current = { type: "equipment", data: { ...eq } }; }
+        }
+        return;
+      }
+      // Paste: Ctrl+V — paste from clipboard with offset
+      if ((e.ctrlKey || e.metaKey) && e.key === "v" && clipboardRef.current) {
+        e.preventDefault();
+        const OFFSET = 50;
+        if (clipboardRef.current.type === "pillar") {
+          const p = clipboardRef.current.data;
+          const newPillar: Pillar = {
+            ...p,
+            id: crypto.randomUUID(),
+            position: { x: p.position.x + OFFSET, y: p.position.y + OFFSET },
+          };
+          dispatch({ type: "ADD_PILLAR", pillar: newPillar });
+          // Update clipboard position for subsequent pastes
+          clipboardRef.current = { type: "pillar", data: newPillar };
+        } else {
+          const eq = clipboardRef.current.data;
+          const newEquip: PlacedEquipment = {
+            ...eq,
+            id: crypto.randomUUID(),
+            position: { x: eq.position.x + OFFSET, y: eq.position.y + OFFSET },
+          };
+          dispatch({ type: "ADD_PLACED_EQUIPMENT", equipment: newEquip });
+          clipboardRef.current = { type: "equipment", data: newEquip };
+        }
+        return;
+      }
       switch (e.key.toLowerCase()) {
         case "v": dispatch({ type: "SET_TOOL", tool: "select" }); break;
         case "w": dispatch({ type: "SET_TOOL", tool: "wall" }); break;
@@ -1307,12 +1380,12 @@ export function EditorCanvas() {
         case "p": dispatch({ type: "SET_TOOL", tool: "pillar" }); break;
         case "h": dispatch({ type: "SET_TOOL", tool: "pan" }); break;
         case "e": dispatch({ type: "SET_TOOL", tool: "eraser" }); break;
-        case "escape": setDrawingPoints([]); break;
+        case "escape": setDrawingPoints([]); setContextMenu(null); break;
       }
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [dispatch]);
+  }, [dispatch, hoveredPillar, hoveredEquipment, state.pillars, state.placedEquipments]);
 
   const eraserCursor = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23ff4444' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21'/%3E%3Cpath d='M22 21H7'/%3E%3Cpath d='m5 11 9 9'/%3E%3C/svg%3E") 4 20, auto`;
 
@@ -1346,8 +1419,72 @@ export function EditorCanvas() {
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
         onWheel={handleWheel}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          const world = screenToWorld(e.clientX, e.clientY);
+          const pillar = findPillarAtPoint(world);
+          if (pillar) {
+            const rect = containerRef.current?.getBoundingClientRect();
+            setContextMenu({ x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0), target: { type: "pillar", id: pillar.id } });
+            return;
+          }
+          const equip = findEquipmentAtPoint(world);
+          if (equip) {
+            const rect = containerRef.current?.getBoundingClientRect();
+            setContextMenu({ x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0), target: { type: "equipment", id: equip.id } });
+            return;
+          }
+          setContextMenu(null);
+        }}
         className="absolute inset-0"
       />
+      {/* Context menu */}
+      {contextMenu && (
+        <div
+          className="absolute z-50 min-w-[160px] rounded-md border border-border bg-card shadow-lg py-1"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <button
+            className="w-full px-3 py-1.5 text-left text-sm hover:bg-accent/20 flex items-center gap-2"
+            onClick={() => {
+              // Copy to clipboard
+              if (contextMenu.target.type === "pillar") {
+                const p = state.pillars.find(pl => pl.id === contextMenu.target.id);
+                if (p) clipboardRef.current = { type: "pillar", data: { ...p } };
+              } else {
+                const eq = state.placedEquipments.find(e => e.id === contextMenu.target.id);
+                if (eq) clipboardRef.current = { type: "equipment", data: { ...eq } };
+              }
+              setContextMenu(null);
+            }}
+          >
+            📋 Copier <kbd className="ml-auto text-xs text-muted-foreground">Ctrl+C</kbd>
+          </button>
+          <button
+            className="w-full px-3 py-1.5 text-left text-sm hover:bg-accent/20 flex items-center gap-2"
+            onClick={() => {
+              duplicateItem(contextMenu.target);
+              setContextMenu(null);
+            }}
+          >
+            📑 Dupliquer
+          </button>
+          <div className="border-t border-border my-1" />
+          <button
+            className="w-full px-3 py-1.5 text-left text-sm hover:bg-destructive/20 text-destructive flex items-center gap-2"
+            onClick={() => {
+              if (contextMenu.target.type === "pillar") {
+                dispatch({ type: "DELETE_PILLAR", id: contextMenu.target.id });
+              } else {
+                dispatch({ type: "DELETE_PLACED_EQUIPMENT", id: contextMenu.target.id });
+              }
+              setContextMenu(null);
+            }}
+          >
+            🗑️ Supprimer
+          </button>
+        </div>
+      )}
       {/* Zoom indicator */}
       <div className="absolute bottom-4 right-4 rounded-md border border-border bg-card/80 backdrop-blur-sm px-3 py-1.5 text-xs font-display text-muted-foreground neon-border">
         {Math.round(state.zoom * 100)}%

@@ -364,7 +364,7 @@ export function computeCirculation(
   pillars: Pillar[],
   equipments: PlacedEquipment[],
 ): CirculationSegment[] {
-  if (rooms.length === 0 || equipments.length === 0) return [];
+  if (rooms.length === 0) return [];
 
   // Find largest closed room
   let bestRoom: Room | null = null;
@@ -386,7 +386,6 @@ export function computeCirculation(
   const gridData = buildOccupancyGrid(bestRoom, equipments, pillars, doors, rooms, resolution);
   const { grid, originX, originY, cols, rows, res } = gridData;
 
-  // Convert world coords to grid coords
   const toGrid = (wx: number, wy: number) => ({
     c: Math.floor((wx - originX) / res),
     r: Math.floor((wy - originY) / res),
@@ -402,16 +401,13 @@ export function computeCirculation(
   for (const door of roomDoors) {
     const pos = getDoorWorldPosition(door, rooms);
     if (pos) {
-      // Move door point slightly inside the room (along wall normal)
       const a = bestRoom.points[door.edgeIndex];
       const b = bestRoom.points[(door.edgeIndex + 1) % bestRoom.points.length];
       const dx = b.x - a.x, dy = b.y - a.y;
       const len = Math.sqrt(dx * dx + dy * dy);
       if (len > 0) {
         const nx = -dy / len, ny = dx / len;
-        // Try both directions to find which is inside
         const testIn = { x: pos.x + nx * 50, y: pos.y + ny * 50 };
-        const testOut = { x: pos.x - nx * 50, y: pos.y - ny * 50 };
         if (pointInPolygon(testIn, bestRoom.points)) {
           doorPositions.push({ x: pos.x + nx * HALF_CORRIDOR, y: pos.y + ny * HALF_CORRIDOR });
         } else {
@@ -431,78 +427,107 @@ export function computeCirculation(
     doorPositions.push({ x: cx, y: cy });
   }
 
-  // Target points: equipment positions (we want to reach each equipment)
-  const targets: Point[] = equipments.map(eq => eq.position);
-
-  // Build a network: from each door, find path to each equipment cluster
-  // and between equipment items to create a connected circulation network
   const allSegments: CirculationSegment[] = [];
-
-  // Find path from first door to all equipments using a spanning approach
   const startPos = doorPositions[0];
-  const startGrid = toGrid(startPos.x, startPos.y);
 
-  // Sort targets by distance from door
-  const sortedTargets = [...targets].sort((a, b) => {
-    const da = (a.x - startPos.x) ** 2 + (a.y - startPos.y) ** 2;
-    const db = (b.x - startPos.x) ** 2 + (b.y - startPos.y) ** 2;
-    return da - db;
-  });
-
-  // Use a "greedy nearest neighbor" approach to build a path network
-  const visited = new Set<number>();
-  let currentPos = startPos;
-
-  for (const target of sortedTargets) {
-    const tIdx = targets.indexOf(target);
-    if (visited.has(tIdx)) continue;
-
-    const curGrid = toGrid(currentPos.x, currentPos.y);
-    const tGrid = toGrid(target.x, target.y);
-
-    const pathCells = astar(grid, curGrid.r, curGrid.c, tGrid.r, tGrid.c, rows, cols);
-    if (!pathCells || pathCells.length < 2) continue;
-
-    // Convert grid path to world points
+  // Helper to build path between two world points
+  const buildPath = (from: Point, to: Point): void => {
+    const fromGrid = toGrid(from.x, from.y);
+    const toGrid_ = toGrid(to.x, to.y);
+    const pathCells = astar(grid, fromGrid.r, fromGrid.c, toGrid_.r, toGrid_.c, rows, cols);
+    if (!pathCells || pathCells.length < 2) return;
     const worldPoints = pathCells.map(cell => toWorld(cell.r, cell.c));
-
-    // Simplify then smooth
     const simplified = simplifyPath(worldPoints, resolution * 0.8);
     const smoothed = smoothPath(simplified, 3);
-
-    // Convert to segments
     for (let i = 0; i < smoothed.length - 1; i++) {
-      allSegments.push({
-        start: smoothed[i],
-        end: smoothed[i + 1],
-        width: CORRIDOR_WIDTH,
-      });
+      allSegments.push({ start: smoothed[i], end: smoothed[i + 1], width: CORRIDOR_WIDTH });
     }
+  };
 
-    visited.add(tIdx);
-    currentPos = target;
+  if (equipments.length > 0) {
+    // Path from door to each equipment (greedy nearest neighbor)
+    const targets = equipments.map(eq => eq.position);
+    const sortedTargets = [...targets].sort((a, b) => {
+      const da = (a.x - startPos.x) ** 2 + (a.y - startPos.y) ** 2;
+      const db = (b.x - startPos.x) ** 2 + (b.y - startPos.y) ** 2;
+      return da - db;
+    });
+
+    const visited = new Set<number>();
+    let currentPos = startPos;
+
+    for (const target of sortedTargets) {
+      const tIdx = targets.indexOf(target);
+      if (visited.has(tIdx)) continue;
+      buildPath(currentPos, target);
+      visited.add(tIdx);
+      currentPos = target;
+    }
+  } else {
+    // No equipment: create a circulation path through the room
+    // Generate waypoints along the room interior to form a traversal corridor
+    const pts = bestRoom.points;
+    const minX = Math.min(...pts.map(p => p.x));
+    const maxX = Math.max(...pts.map(p => p.x));
+    const minY = Math.min(...pts.map(p => p.y));
+    const maxY = Math.max(...pts.map(p => p.y));
+    const roomW = maxX - minX, roomH = maxY - minY;
+
+    // Find the farthest point from the door inside the room
+    const farCorners = [
+      { x: minX + HALF_CORRIDOR + 20, y: minY + HALF_CORRIDOR + 20 },
+      { x: maxX - HALF_CORRIDOR - 20, y: minY + HALF_CORRIDOR + 20 },
+      { x: maxX - HALF_CORRIDOR - 20, y: maxY - HALF_CORRIDOR - 20 },
+      { x: minX + HALF_CORRIDOR + 20, y: maxY - HALF_CORRIDOR - 20 },
+      { x: (minX + maxX) / 2, y: (minY + maxY) / 2 }, // center
+    ].filter(p => pointInPolygon(p, pts));
+
+    // Sort by distance from door (farthest first), then path to create a nice loop
+    farCorners.sort((a, b) => {
+      const da = (a.x - startPos.x) ** 2 + (a.y - startPos.y) ** 2;
+      const db = (b.x - startPos.x) ** 2 + (b.y - startPos.y) ** 2;
+      return db - da;
+    });
+
+    if (farCorners.length > 0) {
+      // Path from door to the farthest reachable point
+      const farthest = farCorners[0];
+      buildPath(startPos, farthest);
+
+      // If room is large enough, also add a perpendicular corridor
+      if (roomW > CORRIDOR_WIDTH * 3 && roomH > CORRIDOR_WIDTH * 3 && farCorners.length > 1) {
+        // Find a point that's far from the main path axis
+        const mainDx = farthest.x - startPos.x;
+        const mainDy = farthest.y - startPos.y;
+        const mainLen = Math.sqrt(mainDx * mainDx + mainDy * mainDy) || 1;
+        let bestPerp: Point | null = null;
+        let bestPerpDist = 0;
+        for (const corner of farCorners.slice(1)) {
+          // Distance from this corner to the main axis line
+          const t = ((corner.x - startPos.x) * mainDx + (corner.y - startPos.y) * mainDy) / (mainLen * mainLen);
+          const projX = startPos.x + t * mainDx;
+          const projY = startPos.y + t * mainDy;
+          const perpDist = Math.sqrt((corner.x - projX) ** 2 + (corner.y - projY) ** 2);
+          if (perpDist > bestPerpDist) {
+            bestPerpDist = perpDist;
+            bestPerp = corner;
+          }
+        }
+        if (bestPerp && bestPerpDist > CORRIDOR_WIDTH) {
+          // Connect from midpoint of main path to perpendicular point
+          const midMain = {
+            x: (startPos.x + farthest.x) / 2,
+            y: (startPos.y + farthest.y) / 2,
+          };
+          buildPath(midMain, bestPerp);
+        }
+      }
+    }
   }
 
-  // Also connect additional doors if any
+  // Connect additional doors
   for (let di = 1; di < doorPositions.length; di++) {
-    const doorPos = doorPositions[di];
-    const doorGrid = toGrid(doorPos.x, doorPos.y);
-    // Connect to nearest point on existing path (use start)
-    const sGrid = toGrid(startPos.x, startPos.y);
-    const pathCells = astar(grid, doorGrid.r, doorGrid.c, sGrid.r, sGrid.c, rows, cols);
-    if (!pathCells || pathCells.length < 2) continue;
-
-    const worldPoints = pathCells.map(cell => toWorld(cell.r, cell.c));
-    const simplified = simplifyPath(worldPoints, resolution * 0.8);
-    const smoothed = smoothPath(simplified, 3);
-
-    for (let i = 0; i < smoothed.length - 1; i++) {
-      allSegments.push({
-        start: smoothed[i],
-        end: smoothed[i + 1],
-        width: CORRIDOR_WIDTH,
-      });
-    }
+    buildPath(doorPositions[di], startPos);
   }
 
   return allSegments;

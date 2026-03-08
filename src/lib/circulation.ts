@@ -450,6 +450,14 @@ export function computeCirculation(
   const endPos = doorPositions.length > 1 ? doorPositions[doorPositions.length - 1] : null;
   const unreachableIds: string[] = [];
 
+  // Check if a world point falls in a blocked grid cell
+  const isBlockedWorld = (p: Point): boolean => {
+    const gc = Math.floor((p.x - originX) / res);
+    const gr = Math.floor((p.y - originY) / res);
+    if (gr < 0 || gr >= rows || gc < 0 || gc >= cols) return true;
+    return grid[gr][gc];
+  };
+
   const buildPath = (from: Point, to: Point): boolean => {
     const fromGrid = toGrid(from.x, from.y);
     const toGrid_ = toGrid(to.x, to.y);
@@ -457,7 +465,7 @@ export function computeCirculation(
     if (!pathCells || pathCells.length < 2) return false;
     const worldPoints = pathCells.map(cell => toWorld(cell.r, cell.c));
     const simplified = simplifyPath(worldPoints, resolution * 0.8);
-    const smoothed = smoothPath(simplified, 3);
+    const smoothed = smoothPath(simplified, 3, isBlockedWorld);
     for (let i = 0; i < smoothed.length - 1; i++) {
       allSegments.push({ start: smoothed[i], end: smoothed[i + 1], width: CORRIDOR_WIDTH });
     }

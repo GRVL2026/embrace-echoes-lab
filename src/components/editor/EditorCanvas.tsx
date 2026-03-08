@@ -169,14 +169,15 @@ export function EditorCanvas() {
       // Also check rotation handle zone (so hover persists when moving to handle)
       if (includeHandle) {
         const handleDistCm = pillar.shape === "round"
-          ? (pillar.width / 2 + 20 / state.zoom)
-          : (Math.max(pillar.width, pillar.depth) / 2 + 20 / state.zoom);
-        // Handle is at (0, -handleDistCm) in local space
+          ? (pillar.width / 2 + 30)
+          : (Math.max(pillar.width, pillar.depth) / 2 + 30);
+        // Handle circle hit zone
         const hdx = lx;
         const hdy = ly + handleDistCm;
-        if (hdx * hdx + hdy * hdy < (14 / state.zoom) * (14 / state.zoom)) return pillar;
-        // Also check the stem line between pillar and handle
-        if (Math.abs(lx) < 5 / state.zoom && ly < 0 && ly > -handleDistCm) return pillar;
+        const hitR = Math.max(15, 18 / state.zoom);
+        if (hdx * hdx + hdy * hdy < hitR * hitR) return pillar;
+        // Stem line between pillar and handle
+        if (Math.abs(lx) < hitR && ly < 0 && ly > -handleDistCm) return pillar;
       }
     }
     return null;
@@ -185,18 +186,18 @@ export function EditorCanvas() {
   // Check if world point is on a pillar's rotation handle
   const isOnRotationHandle = useCallback((world: Point, pillar: Pillar, zoom: number): boolean => {
     const handleDistCm = pillar.shape === "round"
-      ? (pillar.width / 2 + 20 / zoom)
-      : (Math.max(pillar.width, pillar.depth) / 2 + 20 / zoom);
+      ? (pillar.width / 2 + 30)
+      : (Math.max(pillar.width, pillar.depth) / 2 + 30);
     const rad = (pillar.rotation || 0) * Math.PI / 180;
-    // Handle is at (0, -handleDistCm) in local space, rotated
     const cosR = Math.cos(rad), sinR = Math.sin(rad);
-    const rotX = handleDistCm * sinR; // 0*cos - (-h)*sin = h*sin
-    const rotY = -handleDistCm * cosR; // 0*sin + (-h)*cos = -h*cos
+    const rotX = handleDistCm * sinR;
+    const rotY = -handleDistCm * cosR;
     const hx = pillar.position.x + rotX;
     const hy = pillar.position.y + rotY;
     const dx = world.x - hx;
     const dy = world.y - hy;
-    return dx * dx + dy * dy < (12 / zoom) * (12 / zoom);
+    const hitR = Math.max(15, 18 / zoom);
+    return dx * dx + dy * dy < hitR * hitR;
   }, []);
 
   // Find placed equipment under a world point
@@ -214,11 +215,12 @@ export function EditorCanvas() {
 
       // Check rotation handle zone
       if (includeHandle) {
-        const handleDistCm = Math.max(eq.width, eq.depth) / 2 + 25 / state.zoom;
+        const handleDistCm = Math.max(eq.width, eq.depth) / 2 + 35;
         const hdx = lx;
         const hdy = ly + handleDistCm;
-        if (hdx * hdx + hdy * hdy < (14 / state.zoom) * (14 / state.zoom)) return eq;
-        if (Math.abs(lx) < 5 / state.zoom && ly < 0 && ly > -handleDistCm) return eq;
+        const hitR = Math.max(15, 18 / state.zoom);
+        if (hdx * hdx + hdy * hdy < hitR * hitR) return eq;
+        if (Math.abs(lx) < hitR && ly < 0 && ly > -handleDistCm) return eq;
       }
     }
     return null;
@@ -226,7 +228,7 @@ export function EditorCanvas() {
 
   // Check if world point is on an equipment's rotation handle
   const isOnEquipmentRotationHandle = useCallback((world: Point, eq: PlacedEquipment, zoom: number): boolean => {
-    const handleDistCm = Math.max(eq.width, eq.depth) / 2 + 25 / zoom;
+    const handleDistCm = Math.max(eq.width, eq.depth) / 2 + 35;
     const rad = (eq.rotation || 0) * Math.PI / 180;
     const cosR = Math.cos(rad), sinR = Math.sin(rad);
     const rotX = handleDistCm * sinR;
@@ -235,7 +237,8 @@ export function EditorCanvas() {
     const hy = eq.position.y + rotY;
     const ddx = world.x - hx;
     const ddy = world.y - hy;
-    return ddx * ddx + ddy * ddy < (12 / zoom) * (12 / zoom);
+    const hitR = Math.max(15, 18 / zoom);
+    return ddx * ddx + ddy * ddy < hitR * hitR;
   }, []);
 
   // Check if a placed equipment collides with walls, pillars, doors, or other equipment
@@ -1984,8 +1987,8 @@ function drawPillars(
     // Rotation handle (above pillar, connected by a line)
     if (isHovered) {
       const handleDist = pillar.shape === "round"
-        ? (pillar.width / 2) * CM_TO_PX + 20 / zoom
-        : (Math.max(pillar.width, pillar.depth) / 2) * CM_TO_PX + 20 / zoom;
+        ? (pillar.width / 2 + 30) * CM_TO_PX
+        : (Math.max(pillar.width, pillar.depth) / 2 + 30) * CM_TO_PX;
       
       // Line from top of pillar to handle
       ctx.beginPath();
@@ -2221,7 +2224,7 @@ function drawPlacedEquipments(
 
     // Rotation handle (when hovered)
     if (isHovered) {
-      const handleDistPx = Math.max(eq.width, eq.depth) / 2 * CM_TO_PX + 25 / zoom;
+      const handleDistPx = (Math.max(eq.width, eq.depth) / 2 + 35) * CM_TO_PX;
       // Stem line
       ctx.beginPath();
       ctx.moveTo(0, -d / 2);

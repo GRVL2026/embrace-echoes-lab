@@ -754,10 +754,10 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
 
       {/* Expanded catalog dialog */}
       <Dialog open={expandedView} onOpenChange={setExpandedView}>
-        <DialogContent className={`h-[85vh] overflow-hidden p-0 ${selectedIds.size > 0 ? 'sm:max-w-6xl' : 'sm:max-w-4xl'}`}>
+        <DialogContent className={`h-[85vh] overflow-hidden p-0 ${totalSelectedCount > 0 ? 'sm:max-w-6xl' : 'sm:max-w-4xl'}`}>
           <div className="flex h-full min-h-0">
             {/* Main catalog area */}
-            <div className={`flex-1 flex flex-col min-h-0 ${selectedIds.size > 0 ? 'border-r border-border' : ''}`}>
+            <div className={`flex-1 flex flex-col min-h-0 ${totalSelectedCount > 0 ? 'border-r border-border' : ''}`}>
               <DialogHeader className="p-4 pb-0 shrink-0">
                 <DialogTitle className="flex items-center gap-2">
                   <Package className="h-5 w-5 text-primary" />
@@ -795,9 +795,10 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
 
                 {/* Expanded catalog grid */}
                 <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-2">
-                  <div className={`grid gap-3 pb-4 ${selectedIds.size > 0 ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'}`}>
+                  <div className={`grid gap-3 pb-4 ${totalSelectedCount > 0 ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'}`}>
                     {filteredCatalog.map((eq) => {
-                      const isSelected = selectedIds.has(eq.id);
+                      const quantity = selectedQuantities.get(eq.id) || 0;
+                      const isSelected = quantity > 0;
                       return (
                         <div
                           key={eq.id}
@@ -839,19 +840,34 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                             )}
                           </div>
                           
-                          {/* Selection checkbox */}
+                          {/* Selection with quantity */}
                           <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
                             <Badge variant="outline" className="text-[10px]">{eq.category}</Badge>
-                            <button
-                              className={`h-6 w-6 rounded border flex items-center justify-center transition-colors ${
-                                isSelected 
-                                  ? "bg-primary border-primary text-primary-foreground" 
-                                  : "border-muted-foreground/30 hover:border-primary"
-                              }`}
-                              onClick={(e) => toggleSelection(eq.id, e)}
-                            >
-                              {isSelected && <Check className="h-4 w-4" />}
-                            </button>
+                            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                              {isSelected && (
+                                <button
+                                  className="h-6 w-6 rounded border border-muted-foreground/30 flex items-center justify-center hover:border-primary hover:bg-primary/10 transition-colors"
+                                  onClick={(e) => decrementQuantity(eq.id, e)}
+                                >
+                                  <Minus className="h-3 w-3" />
+                                </button>
+                              )}
+                              {isSelected && (
+                                <span className="w-6 text-center font-medium text-primary text-sm">
+                                  {quantity}
+                                </span>
+                              )}
+                              <button
+                                className={`h-6 w-6 rounded border flex items-center justify-center transition-colors ${
+                                  isSelected 
+                                    ? "border-primary bg-primary/20 text-primary hover:bg-primary hover:text-primary-foreground" 
+                                    : "border-muted-foreground/30 hover:border-primary hover:bg-primary/10"
+                                }`}
+                                onClick={(e) => incrementQuantity(eq.id, e)}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );
@@ -862,18 +878,18 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
             </div>
 
             {/* Selection sidebar */}
-            {selectedIds.size > 0 && (
+            {totalSelectedCount > 0 && (
               <div className="w-80 flex flex-col bg-muted/30">
                 <div className="p-4 border-b border-border">
                   <div className="flex items-center justify-between">
                     <h3 className="font-semibold text-foreground">
-                      Sélection ({selectedIds.size})
+                      Sélection ({totalSelectedCount} jeu{totalSelectedCount > 1 ? "x" : ""})
                     </h3>
                     <Button
                       variant="ghost"
                       size="sm"
                       className="h-7 text-xs text-muted-foreground"
-                      onClick={() => setSelectedIds(new Set())}
+                      onClick={() => setSelectedQuantities(new Map())}
                     >
                       Tout effacer
                     </Button>
@@ -882,68 +898,104 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
 
                 <ScrollArea className="flex-1">
                   <div className="p-3 space-y-2">
-                    {catalog.filter(eq => selectedIds.has(eq.id)).map((eq) => (
-                      <div
-                        key={eq.id}
-                        className="rounded-lg border border-border bg-background p-2.5 group"
-                      >
-                        <div className="flex gap-2">
-                          {eq.images && eq.images[0] ? (
-                            <img 
-                              src={eq.images[0]} 
-                              alt={eq.name}
-                              className="w-12 h-12 rounded object-contain bg-muted/50 shrink-0"
-                            />
-                          ) : (
-                            <div className="w-12 h-12 rounded bg-muted/50 flex items-center justify-center shrink-0">
-                              <Package className="h-5 w-5 text-muted-foreground/30" />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-medium text-xs text-foreground truncate">{eq.name}</h4>
-                            {eq.vendor && (
-                              <p className="text-[10px] text-muted-foreground truncate">{eq.vendor}</p>
+                    {catalog.filter(eq => selectedQuantities.has(eq.id)).map((eq) => {
+                      const quantity = selectedQuantities.get(eq.id) || 0;
+                      return (
+                        <div
+                          key={eq.id}
+                          className="rounded-lg border border-border bg-background p-2.5 group"
+                        >
+                          <div className="flex gap-2">
+                            {eq.images && eq.images[0] ? (
+                              <img 
+                                src={eq.images[0]} 
+                                alt={eq.name}
+                                className="w-12 h-12 rounded object-contain bg-muted/50 shrink-0"
+                              />
+                            ) : (
+                              <div className="w-12 h-12 rounded bg-muted/50 flex items-center justify-center shrink-0">
+                                <Package className="h-5 w-5 text-muted-foreground/30" />
+                              </div>
                             )}
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className="text-[10px] text-muted-foreground">
-                                {eq.width}×{eq.depth}×{eq.height}cm
-                              </span>
-                              {eq.price && eq.price > 0 && (
-                                <span className="text-[10px] font-medium text-primary">
-                                  {eq.price.toLocaleString("fr-FR")}€
-                                </span>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-medium text-xs text-foreground truncate">{eq.name}</h4>
+                              {eq.vendor && (
+                                <p className="text-[10px] text-muted-foreground truncate">{eq.vendor}</p>
                               )}
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[10px] text-muted-foreground">
+                                  {eq.width}×{eq.depth}×{eq.height}cm
+                                </span>
+                                {eq.price && eq.price > 0 && (
+                                  <span className="text-[10px] font-medium text-primary">
+                                    {eq.price.toLocaleString("fr-FR")}€
+                                  </span>
+                                )}
+                              </div>
+                              {/* Quantity controls in sidebar */}
+                              <div className="flex items-center gap-1 mt-2">
+                                <button
+                                  className="h-5 w-5 rounded border border-muted-foreground/30 flex items-center justify-center hover:border-primary hover:bg-primary/10 transition-colors"
+                                  onClick={() => setSelectedQuantities(prev => {
+                                    const next = new Map(prev);
+                                    const current = next.get(eq.id) || 0;
+                                    if (current <= 1) {
+                                      next.delete(eq.id);
+                                    } else {
+                                      next.set(eq.id, current - 1);
+                                    }
+                                    return next;
+                                  })}
+                                >
+                                  <Minus className="h-2.5 w-2.5" />
+                                </button>
+                                <span className="w-5 text-center font-medium text-primary text-xs">
+                                  {quantity}
+                                </span>
+                                <button
+                                  className="h-5 w-5 rounded border border-primary bg-primary/20 text-primary flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-colors"
+                                  onClick={() => setSelectedQuantities(prev => {
+                                    const next = new Map(prev);
+                                    next.set(eq.id, (next.get(eq.id) || 0) + 1);
+                                    return next;
+                                  })}
+                                >
+                                  <Plus className="h-2.5 w-2.5" />
+                                </button>
+                              </div>
                             </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 text-destructive/60 hover:text-destructive"
+                              onClick={() => {
+                                setSelectedQuantities(prev => {
+                                  const next = new Map(prev);
+                                  next.delete(eq.id);
+                                  return next;
+                                });
+                              }}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 text-destructive/60 hover:text-destructive"
-                            onClick={() => {
-                              setSelectedIds(prev => {
-                                const next = new Set(prev);
-                                next.delete(eq.id);
-                                return next;
-                              });
-                            }}
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </Button>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </ScrollArea>
 
                 {/* Total and action */}
                 <div className="p-4 border-t border-border space-y-3">
-                  {catalog.filter(eq => selectedIds.has(eq.id)).some(eq => eq.price && eq.price > 0) && (
+                  {catalog.filter(eq => selectedQuantities.has(eq.id)).some(eq => eq.price && eq.price > 0) && (
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Total estimé</span>
                       <span className="font-semibold text-foreground">
-                        {catalog
-                          .filter(eq => selectedIds.has(eq.id))
-                          .reduce((sum, eq) => sum + (eq.price || 0), 0)
+                        {Array.from(selectedQuantities.entries())
+                          .reduce((sum, [id, qty]) => {
+                            const eq = catalog.find(e => e.id === id);
+                            return sum + (eq?.price || 0) * qty;
+                          }, 0)
                           .toLocaleString("fr-FR")} €
                       </span>
                     </div>
@@ -953,7 +1005,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                     onClick={() => { handleAutoPlace(); setExpandedView(false); }}
                   >
                     <Play className="h-4 w-4" />
-                    Placer sur le plan
+                    Placer {totalSelectedCount} jeu{totalSelectedCount > 1 ? "x" : ""} sur le plan
                   </Button>
                 </div>
               </div>

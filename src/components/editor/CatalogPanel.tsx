@@ -11,12 +11,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Upload, Package, Play, Trash2, Check, X, Info, Search, Maximize2, Minus, Plus, ChevronDown, ChevronRight } from "lucide-react";
+import { Upload, Package, Play, Trash2, Check, X, Info, Search, Maximize2, Minus, Plus, ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
 import type { GameEquipment, CatalogJSON } from "@/types/equipment";
 import { DEFAULT_SAFETY_ZONE } from "@/types/equipment";
 import { autoPlaceEquipmentWithReport } from "@/lib/placement";
 import { computeCirculation } from "@/lib/circulation";
 import { ProductDialog } from "./ProductDialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 /** Parse Shopify CSV dimensions like "L 1030 x P 2500 x H 2640 mm" or "35X22X12" */
 function parseShopifyDimensions(dimStr: string): { width: number; depth: number; height: number } | null {
@@ -536,6 +537,55 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
     toast.info("Tous les équipements retirés du plan");
   };
 
+  const handleResetPlacements = () => {
+    if (state.placedEquipments.length === 0) {
+      toast.error("Aucun équipement sur le plan");
+      return;
+    }
+    if (state.rooms.filter(r => r.isClosed).length === 0) {
+      toast.error("Aucune salle fermée trouvée");
+      return;
+    }
+
+    // Convert current placements back to GameEquipment for re-placement
+    const equipToReplace: GameEquipment[] = state.placedEquipments.map(pe => {
+      const catalogEntry = catalog.find(c => c.id === pe.equipmentId);
+      return catalogEntry || {
+        id: pe.equipmentId,
+        name: pe.name,
+        category: "autre",
+        width: pe.width,
+        depth: pe.depth,
+        height: 0,
+        safetyZone: pe.safetyZone,
+        color: pe.color,
+      };
+    });
+
+    const placementResult = autoPlaceEquipmentWithReport(
+      equipToReplace,
+      state.rooms,
+      state.doors,
+      state.pillars,
+      [],
+    );
+
+    dispatch({ type: "CLEAR_PLACED_EQUIPMENTS" });
+    dispatch({ type: "ADD_PLACED_EQUIPMENTS", equipments: placementResult.placed });
+
+    const circResult = computeCirculation(state.rooms, state.doors, state.pillars, placementResult.placed);
+    dispatch({ type: "SET_CIRCULATION", circulation: circResult.segments });
+
+    const placed = placementResult.placed.length;
+    const failed = placementResult.notPlaced.length;
+
+    if (failed > 0) {
+      toast.warning(`Implantation réinitialisée : ${placed} placé${placed > 1 ? "s" : ""}, ${failed} non placé${failed > 1 ? "s" : ""}`);
+    } else {
+      toast.success(`Implantation réinitialisée : ${placed} jeu${placed > 1 ? "x" : ""} replacé${placed > 1 ? "s" : ""}`);
+    }
+  };
+
   // Group filtered catalog by category
   const categories = filteredCatalog.reduce<Record<string, GameEquipment[]>>((acc, eq) => {
     const cat = eq.category || "autre";
@@ -775,14 +825,29 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
             <span className="text-xs font-semibold text-foreground">
               Sur le plan ({state.placedEquipments.length})
             </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 text-destructive/60 hover:text-destructive"
-              onClick={handleClearPlacements}
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Tooltip delayDuration={200}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-primary/60 hover:text-primary"
+                    onClick={handleResetPlacements}
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="left">Réinitialiser l'implantation automatique</TooltipContent>
+              </Tooltip>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-destructive/60 hover:text-destructive"
+                onClick={handleClearPlacements}
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
           </div>
           <ScrollArea className="max-h-[150px]">
             <div className="px-2 pb-2 space-y-1">

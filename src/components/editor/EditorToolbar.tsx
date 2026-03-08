@@ -239,6 +239,34 @@ export function EditorToolbar() {
          <TooltipContent side="right">Recentrer la vue</TooltipContent>
        </Tooltip>
 
+      <Tooltip delayDuration={200}>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10"
+            onClick={() => dispatch({ type: "ROTATE_PLAN", degrees: 90 })}
+          >
+            <RotateCw className="h-5 w-5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">Pivoter 90° horaire</TooltipContent>
+      </Tooltip>
+
+      <Tooltip delayDuration={200}>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10"
+            onClick={() => dispatch({ type: "ROTATE_PLAN", degrees: -90 })}
+          >
+            <RotateCcw className="h-5 w-5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">Pivoter 90° anti-horaire</TooltipContent>
+      </Tooltip>
+
       <Separator className="my-1 w-6" />
 
       <Tooltip delayDuration={200}>

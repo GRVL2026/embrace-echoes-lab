@@ -13,6 +13,8 @@ import {
   Triangle,
   Columns,
   Route,
+  RotateCw,
+  RotateCcw,
 } from "lucide-react";
 import { useEditor } from "@/contexts/EditorContext";
 import { Button } from "@/components/ui/button";

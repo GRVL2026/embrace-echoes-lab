@@ -159,9 +159,23 @@ type WallSegment = {
   hasDoor: boolean;
 };
 
+/** Compute polygon winding: positive = CCW, negative = CW */
+function polygonSignedArea(pts: Point[]): number {
+  let area = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const j = (i + 1) % pts.length;
+    area += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
+  }
+  return area / 2;
+}
+
 function getRoomWalls(room: Room, doors: Door[]): WallSegment[] {
   const walls: WallSegment[] = [];
   const pts = room.points;
+  // Determine winding: if signed area > 0, polygon is CCW → flip normals
+  const signedArea = polygonSignedArea(pts);
+  const normalSign = signedArea > 0 ? -1 : 1; // flip for CCW so normals point inward
+
   for (let i = 0; i < pts.length; i++) {
     const j = (i + 1) % pts.length;
     const dx = pts[j].x - pts[i].x;
@@ -170,8 +184,9 @@ function getRoomWalls(room: Room, doors: Door[]): WallSegment[] {
     if (length === 0) continue;
     const ux = dx / length;
     const uy = dy / length;
-    const nx = -uy;
-    const ny = ux;
+    // Normal perpendicular to wall, guaranteed to point inward
+    const nx = -uy * normalSign;
+    const ny = ux * normalSign;
     const hasDoor = doors.some(d => d.roomId === room.id && d.edgeIndex === i);
     walls.push({ start: pts[i], end: pts[j], length, angle: Math.atan2(dy, dx) * 180 / Math.PI, normalX: nx, normalY: ny, edgeIndex: i, hasDoor });
   }

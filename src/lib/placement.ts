@@ -535,7 +535,8 @@ export function autoPlaceEquipmentWithReport(
               }
             }
           }
-        }
+        } // end for orientationRot
+        } // end if (!placed) - fallback to wall/island
 
         if (!placed) {
           console.warn(`Could not place: ${equip.name} (instance ${i + 1}/${count})`);

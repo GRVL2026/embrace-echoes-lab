@@ -331,6 +331,7 @@ type CatalogPanelProps = {
 export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   const { state, dispatch } = useEditor();
   const [selectedQuantities, setSelectedQuantities] = useState<Map<string, number>>(new Map());
+  const [notPlacedIds, setNotPlacedIds] = useState<Set<string>>(new Set()); // Track equipment IDs that couldn't be placed
   const [viewingProduct, setViewingProduct] = useState<GameEquipment | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedView, setExpandedView] = useState(false);
@@ -465,6 +466,9 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
     );
 
     if (placementResult.placed.length === 0) {
+      // Even if nothing placed, mark all as not placed
+      const failedIds = new Set(placementResult.notPlaced.map(e => e.id));
+      setNotPlacedIds(failedIds);
       toast.error("Impossible de placer les jeux sélectionnés (espace insuffisant)");
       return;
     }
@@ -475,7 +479,22 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
     const placed = placementResult.placed.length;
     const failed = placementResult.notPlaced.length;
     
+    // Track which equipment IDs couldn't be placed
+    const failedIds = new Set(placementResult.notPlaced.map(e => e.id));
+    setNotPlacedIds(failedIds);
+    
+    // Clear selection for placed items, keep selection for not-placed items
     if (failed > 0) {
+      const newQuantities = new Map<string, number>();
+      placementResult.notPlaced.forEach(eq => {
+        const currentQty = selected.filter(s => s.id === eq.id).length;
+        const notPlacedQty = placementResult.notPlaced.filter(np => np.id === eq.id).length;
+        if (notPlacedQty > 0) {
+          newQuantities.set(eq.id, notPlacedQty);
+        }
+      });
+      setSelectedQuantities(newQuantities);
+      
       const notPlacedNames = placementResult.notPlaced.map(e => e.name).slice(0, 5).join(", ");
       const moreCount = placementResult.notPlaced.length > 5 ? ` +${placementResult.notPlaced.length - 5} autres` : "";
       toast.warning(
@@ -484,9 +503,8 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
       );
     } else {
       toast.success(`${placed} jeu${placed > 1 ? "x" : ""} placé${placed > 1 ? "s" : ""} avec succès`);
+      setSelectedQuantities(new Map());
     }
-
-    setSelectedQuantities(new Map());
   };
 
   const handleClearPlacements = () => {
@@ -608,7 +626,10 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7"
-                onClick={() => setSelectedQuantities(new Map())}
+                onClick={() => {
+                  setSelectedQuantities(new Map());
+                  setNotPlacedIds(new Set());
+                }}
               >
                 <X className="h-3 w-3" />
               </Button>
@@ -627,11 +648,14 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                     {items.map((eq) => {
                       const quantity = selectedQuantities.get(eq.id) || 0;
                       const isSelected = quantity > 0;
+                      const isNotPlaced = notPlacedIds.has(eq.id);
                       return (
                         <div
                           key={eq.id}
                           className={`w-full rounded-md border p-2 text-left transition-all text-xs cursor-pointer ${
-                            isSelected
+                            isNotPlaced
+                              ? "border-destructive bg-destructive/10"
+                              : isSelected
                               ? "border-primary bg-primary/10"
                               : "border-border bg-surface hover:border-primary/30"
                           }`}

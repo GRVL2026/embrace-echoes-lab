@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Upload, Package, Play, Trash2, Check, X, Info, Search, Maximize2, Minus, Plus } from "lucide-react";
+import { Upload, Package, Play, Trash2, Check, X, Info, Search, Maximize2, Minus, Plus, ChevronDown, ChevronRight } from "lucide-react";
 import type { GameEquipment, CatalogJSON } from "@/types/equipment";
 import { DEFAULT_SAFETY_ZONE } from "@/types/equipment";
 import { autoPlaceEquipmentWithReport } from "@/lib/placement";
@@ -544,15 +544,30 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
     return acc;
   }, {});
 
+  const [catalogOpen, setCatalogOpen] = useState(true);
+
   return (
     <div className="flex flex-col border-t border-border">
       {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b border-border">
-        <h3 className="font-display text-sm font-bold text-foreground flex items-center gap-2">
-          <Package className="h-4 w-4 text-primary" />
-          Catalogue
-        </h3>
-        <div className="flex gap-1">
+      <div className="flex items-center justify-between border-b border-border">
+        <button
+          onClick={() => setCatalogOpen(!catalogOpen)}
+          className="flex items-center gap-2 p-3 hover:bg-muted/30 transition-colors flex-1"
+        >
+          {catalogOpen ? (
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          )}
+          <Package className="h-4 w-4 text-primary shrink-0" />
+          <span className="font-display text-sm font-bold text-foreground">Catalogue</span>
+          {catalog.length > 0 && (
+            <span className="ml-auto rounded-full bg-primary/20 text-primary text-[10px] font-semibold px-1.5 py-0.5 min-w-[18px] text-center">
+              {catalog.length}
+            </span>
+          )}
+        </button>
+        <div className="flex gap-1 pr-2">
           <input
             ref={fileInputRef}
             type="file"
@@ -585,6 +600,9 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
           )}
         </div>
       </div>
+
+      {catalogOpen && (
+      <>
 
       {/* Search bar */}
       {catalog.length > 0 && (
@@ -1068,6 +1086,8 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
           </div>
         </DialogContent>
       </Dialog>
+      </>
+      )}
     </div>
   );
 }

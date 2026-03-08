@@ -288,8 +288,8 @@ function astar(
   return null; // No path found
 }
 
-/** Smooth a path using Chaikin's corner-cutting algorithm */
-function smoothPath(points: Point[], iterations: number = 3): Point[] {
+/** Smooth a path using Chaikin's corner-cutting algorithm, constrained to free cells */
+function smoothPath(points: Point[], iterations: number = 3, isBlocked?: (p: Point) => boolean): Point[] {
   if (points.length < 3) return points;
 
   let current = points;
@@ -297,14 +297,17 @@ function smoothPath(points: Point[], iterations: number = 3): Point[] {
     const next: Point[] = [current[0]]; // Keep start
     for (let i = 0; i < current.length - 1; i++) {
       const p0 = current[i], p1 = current[i + 1];
-      next.push({
+      const q: Point = {
         x: p0.x * 0.75 + p1.x * 0.25,
         y: p0.y * 0.75 + p1.y * 0.25,
-      });
-      next.push({
+      };
+      const r: Point = {
         x: p0.x * 0.25 + p1.x * 0.75,
         y: p0.y * 0.25 + p1.y * 0.75,
-      });
+      };
+      // Only add smoothed point if it doesn't enter a blocked area
+      next.push(isBlocked && isBlocked(q) ? p0 : q);
+      next.push(isBlocked && isBlocked(r) ? p1 : r);
     }
     next.push(current[current.length - 1]); // Keep end
     current = next;

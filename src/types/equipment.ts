@@ -47,8 +47,8 @@ export type CatalogJSON = {
   catalog: GameEquipment[];
 };
 
-// Default safety zone in cm
-export const DEFAULT_SAFETY_ZONE = 140;
+// Default gap between equipment in cm (side by side)
+export const DEFAULT_SAFETY_ZONE = 10;
 
 // PMR extra clearance in cm
 export const PMR_CLEARANCE = 150;

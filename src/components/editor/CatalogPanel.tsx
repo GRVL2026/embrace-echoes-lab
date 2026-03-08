@@ -645,11 +645,14 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                     {items.map((eq) => {
                       const quantity = selectedQuantities.get(eq.id) || 0;
                       const isSelected = quantity > 0;
+                      const isNotPlaced = notPlacedIds.has(eq.id);
                       return (
                         <div
                           key={eq.id}
                           className={`w-full rounded-md border p-2 text-left transition-all text-xs cursor-pointer ${
-                            isSelected
+                            isNotPlaced
+                              ? "border-destructive bg-destructive/10"
+                              : isSelected
                               ? "border-primary bg-primary/10"
                               : "border-border bg-surface hover:border-primary/30"
                           }`}

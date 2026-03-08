@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useCallback, useState } from "react";
 import { useEditor } from "@/contexts/EditorContext";
-import { CM_TO_PX, type Point, type Door, type Pillar } from "@/types/editor";
+import { CM_TO_PX, type Point, type Door, type Pillar, type CirculationSegment } from "@/types/editor";
 import type { PlacedEquipment } from "@/types/equipment";
 import { DoorDialog } from "./DoorDialog";
 import { PillarDialog } from "./PillarDialog";

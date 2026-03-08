@@ -850,6 +850,27 @@ export function EditorCanvas() {
       return;
     }
 
+    // Handle equipment dragging
+    if (draggingEquipment) {
+      const snapped = snapPoint(world);
+      dispatch({ type: "UPDATE_PLACED_EQUIPMENT", id: draggingEquipment, equipment: { position: snapped } });
+      return;
+    }
+
+    // Handle equipment rotation
+    if (rotatingEquipment) {
+      const eq = state.placedEquipments.find((e) => e.id === rotatingEquipment);
+      if (eq) {
+        const angle = Math.atan2(world.x - eq.position.x, -(world.y - eq.position.y));
+        let degrees = angle * 180 / Math.PI;
+        if (state.snapToGrid) {
+          degrees = Math.round(degrees / 15) * 15;
+        }
+        dispatch({ type: "UPDATE_PLACED_EQUIPMENT", id: rotatingEquipment, equipment: { rotation: degrees } });
+      }
+      return;
+    }
+
     // Handle pillar rotation
     if (rotatingPillar) {
       const pillar = state.pillars.find((p) => p.id === rotatingPillar);

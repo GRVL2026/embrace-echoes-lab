@@ -185,7 +185,7 @@ function getRoomWalls(room: Room, doors: Door[]): WallSegment[] {
   const pts = room.points;
   // Determine winding: if signed area > 0, polygon is CCW → flip normals
   const signedArea = polygonSignedArea(pts);
-  const normalSign = signedArea > 0 ? -1 : 1; // flip for CCW so normals point inward
+  const normalSign = signedArea > 0 ? 1 : -1; // CCW → left normal (inward), CW → right normal (inward)
 
   for (let i = 0; i < pts.length; i++) {
     const j = (i + 1) % pts.length;

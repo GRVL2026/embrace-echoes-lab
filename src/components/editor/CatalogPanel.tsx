@@ -288,6 +288,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [viewingProduct, setViewingProduct] = useState<GameEquipment | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [expandedView, setExpandedView] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Filter catalog based on search query

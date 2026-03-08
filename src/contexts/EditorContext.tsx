@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useCallback, type ReactNode } from "react";
-import { type EditorState, type EditorTool, type Point, type Room, type Door, type Pillar, INITIAL_EDITOR_STATE } from "@/types/editor";
+import { type EditorState, type EditorTool, type Point, type Room, type Door, type Pillar, type CirculationSegment, INITIAL_EDITOR_STATE } from "@/types/editor";
 import type { PlacedEquipment } from "@/types/equipment";
 
 type EditorAction =
@@ -21,6 +21,7 @@ type EditorAction =
   | { type: "UPDATE_PLACED_EQUIPMENT"; id: string; equipment: Partial<PlacedEquipment> }
   | { type: "DELETE_PLACED_EQUIPMENT"; id: string }
   | { type: "CLEAR_PLACED_EQUIPMENTS" }
+  | { type: "SET_CIRCULATION"; circulation: CirculationSegment[] }
   | { type: "TOGGLE_SNAP" }
   | { type: "TOGGLE_PILLAR_DISTANCES" }
   | { type: "TOGGLE_DIMENSIONS" }
@@ -126,7 +127,9 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
     case "DELETE_PLACED_EQUIPMENT":
       return { ...state, placedEquipments: state.placedEquipments.filter((e) => e.id !== action.id) };
     case "CLEAR_PLACED_EQUIPMENTS":
-      return { ...state, placedEquipments: [] };
+      return { ...state, placedEquipments: [], circulationPath: [] };
+    case "SET_CIRCULATION":
+      return { ...state, circulationPath: action.circulation };
     case "TOGGLE_SNAP":
       return { ...state, snapToGrid: !state.snapToGrid };
     case "TOGGLE_DIMENSIONS":

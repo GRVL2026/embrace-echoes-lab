@@ -305,10 +305,18 @@ function generateIslandPositions(
   return positions;
 }
 
+/** Circulation path segment */
+export type CirculationSegment = {
+  start: Point;
+  end: Point;
+  width: number; // corridor width in cm
+};
+
 /** Result of auto-placement */
 export type PlacementResult = {
   placed: PlacedEquipment[];
   notPlaced: GameEquipment[];
+  circulation: CirculationSegment[];
 };
 
 /** Auto-place selected equipment in a room with business rules */
@@ -332,7 +340,7 @@ export function autoPlaceEquipmentWithReport(
   existingPlacements: PlacedEquipment[],
 ): PlacementResult {
   if (rooms.length === 0 || selectedEquipments.length === 0) {
-    return { placed: [], notPlaced: selectedEquipments };
+    return { placed: [], notPlaced: selectedEquipments, circulation: [] };
   }
 
   // Find the largest closed room
@@ -354,7 +362,7 @@ export function autoPlaceEquipmentWithReport(
   }
 
   if (!bestRoom) {
-    return { placed: [], notPlaced: selectedEquipments };
+    return { placed: [], notPlaced: selectedEquipments, circulation: [] };
   }
 
   const doorZones = getDoorExclusionZones(rooms, doors);
@@ -531,7 +539,117 @@ export function autoPlaceEquipmentWithReport(
     }
   }
 
-  return { placed: result, notPlaced };
+  // Generate circulation path (perimeter corridor)
+  const circulation = generateCirculationPath(bestRoom, result, CORRIDOR_WIDTH);
+
+  return { placed: result, notPlaced, circulation };
+}
+
+/** Generate the perimeter circulation path around the room */
+function generateCirculationPath(
+  room: Room,
+  placedEquipments: PlacedEquipment[],
+  corridorWidth: number,
+): CirculationSegment[] {
+  const segments: CirculationSegment[] = [];
+  const pts = room.points;
+  
+  if (pts.length < 3) return segments;
+  
+  // Create perimeter corridor: offset each wall inward by corridorWidth
+  for (let i = 0; i < pts.length; i++) {
+    const j = (i + 1) % pts.length;
+    const dx = pts[j].x - pts[i].x;
+    const dy = pts[j].y - pts[i].y;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    if (length === 0) continue;
+    
+    const ux = dx / length;
+    const uy = dy / length;
+    // Interior normal
+    const nx = -uy;
+    const ny = ux;
+    
+    // Offset points inward by half corridor width (center of corridor)
+    const offset = corridorWidth / 2;
+    const start: Point = {
+      x: pts[i].x + nx * offset,
+      y: pts[i].y + ny * offset,
+    };
+    const end: Point = {
+      x: pts[j].x + nx * offset,
+      y: pts[j].y + ny * offset,
+    };
+    
+    segments.push({ start, end, width: corridorWidth });
+  }
+  
+  // Add corridors to access center islands if any equipment is in the center
+  // Find equipment that is not against a wall (more than equipDepth + corridorWidth from any wall)
+  const centerEquipment = placedEquipments.filter(eq => {
+    // Check if equipment is far from all walls
+    for (let i = 0; i < pts.length; i++) {
+      const j = (i + 1) % pts.length;
+      const dist = pointToLineDistance(eq.position, pts[i], pts[j]);
+      if (dist < eq.depth + corridorWidth) return false;
+    }
+    return true;
+  });
+  
+  if (centerEquipment.length > 0) {
+    // Find bounding box of center equipment
+    const minX = Math.min(...centerEquipment.map(e => e.position.x - e.width / 2));
+    const maxX = Math.max(...centerEquipment.map(e => e.position.x + e.width / 2));
+    const minY = Math.min(...centerEquipment.map(e => e.position.y - e.depth / 2));
+    const maxY = Math.max(...centerEquipment.map(e => e.position.y + e.depth / 2));
+    
+    // Room bounds
+    const roomMinX = Math.min(...pts.map(p => p.x));
+    const roomMaxX = Math.max(...pts.map(p => p.x));
+    const roomMinY = Math.min(...pts.map(p => p.y));
+    const roomMaxY = Math.max(...pts.map(p => p.y));
+    
+    // Add vertical corridors on each side of the island
+    // Left corridor
+    if (minX - roomMinX > corridorWidth * 2) {
+      const corridorX = minX - corridorWidth / 2 - 10;
+      segments.push({
+        start: { x: corridorX, y: roomMinY + corridorWidth },
+        end: { x: corridorX, y: roomMaxY - corridorWidth },
+        width: corridorWidth,
+      });
+    }
+    // Right corridor
+    if (roomMaxX - maxX > corridorWidth * 2) {
+      const corridorX = maxX + corridorWidth / 2 + 10;
+      segments.push({
+        start: { x: corridorX, y: roomMinY + corridorWidth },
+        end: { x: corridorX, y: roomMaxY - corridorWidth },
+        width: corridorWidth,
+      });
+    }
+  }
+  
+  return segments;
+}
+
+/** Distance from a point to a line segment */
+function pointToLineDistance(point: Point, lineStart: Point, lineEnd: Point): number {
+  const dx = lineEnd.x - lineStart.x;
+  const dy = lineEnd.y - lineStart.y;
+  const lenSq = dx * dx + dy * dy;
+  
+  if (lenSq === 0) {
+    return Math.sqrt((point.x - lineStart.x) ** 2 + (point.y - lineStart.y) ** 2);
+  }
+  
+  let t = ((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  
+  const projX = lineStart.x + t * dx;
+  const projY = lineStart.y + t * dy;
+  
+  return Math.sqrt((point.x - projX) ** 2 + (point.y - projY) ** 2);
 }
 
 /** Generate positions adjacent to a previous placement */

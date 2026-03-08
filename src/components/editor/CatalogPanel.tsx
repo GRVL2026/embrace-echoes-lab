@@ -470,6 +470,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
     }
 
     dispatch({ type: "ADD_PLACED_EQUIPMENTS", equipments: placementResult.placed });
+    dispatch({ type: "SET_CIRCULATION", circulation: placementResult.circulation });
 
     const placed = placementResult.placed.length;
     const failed = placementResult.notPlaced.length;

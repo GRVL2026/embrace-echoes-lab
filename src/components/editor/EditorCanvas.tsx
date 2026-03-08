@@ -109,6 +109,9 @@ export function EditorCanvas() {
     pillarId: string;
   } | null>(null);
 
+  // Circulation proposal dialog state
+  const [circulationProposals, setCirculationProposals] = useState<RemovalProposal[]>([]);
+
   // Find door under a world point
   const findDoorAtPoint = useCallback((world: Point): Door | null => {
     for (const door of state.doors) {

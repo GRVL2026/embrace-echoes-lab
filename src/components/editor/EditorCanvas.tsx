@@ -1449,6 +1449,26 @@ export function EditorCanvas() {
           />
         );
       })()}
+
+      {/* Circulation proposal dialog */}
+      <CirculationProposalDialog
+        open={circulationProposals.length > 0}
+        proposals={circulationProposals}
+        rooms={state.rooms}
+        doors={state.doors}
+        pillars={state.pillars}
+        allEquipments={state.placedEquipments}
+        onAccept={(proposal) => {
+          // Remove the selected equipment
+          for (const id of proposal.equipmentIdsToRemove) {
+            dispatch({ type: "DELETE_PLACED_EQUIPMENT", id });
+          }
+          // Apply the resulting circulation
+          dispatch({ type: "SET_CIRCULATION", circulation: proposal.resultingCirculation });
+          setCirculationProposals([]);
+        }}
+        onCancel={() => setCirculationProposals([])}
+      />
     </div>
   );
 }

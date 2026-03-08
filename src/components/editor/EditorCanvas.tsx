@@ -186,18 +186,18 @@ export function EditorCanvas() {
   // Check if world point is on a pillar's rotation handle
   const isOnRotationHandle = useCallback((world: Point, pillar: Pillar, zoom: number): boolean => {
     const handleDistCm = pillar.shape === "round"
-      ? (pillar.width / 2 + 20 / zoom)
-      : (Math.max(pillar.width, pillar.depth) / 2 + 20 / zoom);
+      ? (pillar.width / 2 + 30)
+      : (Math.max(pillar.width, pillar.depth) / 2 + 30);
     const rad = (pillar.rotation || 0) * Math.PI / 180;
-    // Handle is at (0, -handleDistCm) in local space, rotated
     const cosR = Math.cos(rad), sinR = Math.sin(rad);
-    const rotX = handleDistCm * sinR; // 0*cos - (-h)*sin = h*sin
-    const rotY = -handleDistCm * cosR; // 0*sin + (-h)*cos = -h*cos
+    const rotX = handleDistCm * sinR;
+    const rotY = -handleDistCm * cosR;
     const hx = pillar.position.x + rotX;
     const hy = pillar.position.y + rotY;
     const dx = world.x - hx;
     const dy = world.y - hy;
-    return dx * dx + dy * dy < (12 / zoom) * (12 / zoom);
+    const hitR = Math.max(15, 18 / zoom);
+    return dx * dx + dy * dy < hitR * hitR;
   }, []);
 
   // Find placed equipment under a world point

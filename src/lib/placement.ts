@@ -127,20 +127,31 @@ function isPlacementValid(
   doorZones: { cx: number; cy: number; w: number; d: number; rot: number }[],
   pillarZones: { cx: number; cy: number; w: number; d: number; rot: number }[],
   existingPlacements: PlacedEquipment[],
+  debug: boolean = false,
 ): boolean {
   // Must be inside room (position already accounts for wall margin)
-  if (!rectInsidePolygon(cx, cy, w, d, rot, room.points)) return false;
+  if (!rectInsidePolygon(cx, cy, w, d, rot, room.points)) {
+    if (debug) console.log(`[placement] OUTSIDE room at (${cx.toFixed(0)},${cy.toFixed(0)}) ${w}x${d} rot=${rot.toFixed(0)}`);
+    return false;
+  }
   // Must not overlap door exclusion zones
   for (const dz of doorZones) {
-    if (rectsOverlap(cx, cy, w, d, rot, dz.cx, dz.cy, dz.w, dz.d, dz.rot)) return false;
+    if (rectsOverlap(cx, cy, w, d, rot, dz.cx, dz.cy, dz.w, dz.d, dz.rot)) {
+      if (debug) console.log(`[placement] DOOR overlap at (${cx.toFixed(0)},${cy.toFixed(0)})`);
+      return false;
+    }
   }
   // Must not overlap pillars
   for (const pz of pillarZones) {
-    if (rectsOverlap(cx, cy, w + 20, d + 20, rot, pz.cx, pz.cy, pz.w, pz.d, pz.rot)) return false;
+    if (rectsOverlap(cx, cy, w + 20, d + 20, rot, pz.cx, pz.cy, pz.w, pz.d, pz.rot)) {
+      if (debug) console.log(`[placement] PILLAR overlap at (${cx.toFixed(0)},${cy.toFixed(0)})`);
+      return false;
+    }
   }
   // Must not overlap other equipment (with gap)
   for (const pe of existingPlacements) {
     if (rectsOverlap(cx, cy, w + gap, d + gap, rot, pe.position.x, pe.position.y, pe.width + gap, pe.depth + gap, pe.rotation)) {
+      if (debug) console.log(`[placement] EQUIP overlap with ${pe.name} at (${cx.toFixed(0)},${cy.toFixed(0)})`);
       return false;
     }
   }
@@ -501,6 +512,7 @@ export function autoPlaceEquipmentWithReport(
         if (placed) continue;
 
         // ── RULE 1: Try wall positions (preferred walls for this category first, then all) ──
+        let debugCount = 0;
         for (const wallSet of [preferredWalls, walls]) {
           if (placed) break;
           for (const orientRot of [0, 90]) {
@@ -519,8 +531,14 @@ export function autoPlaceEquipmentWithReport(
             }
             allWallPos.sort((a, b) => a.score - b.score);
 
+            if (allWallPos.length === 0) {
+              console.warn(`[placement] ${equip.name}: No wall positions generated for orient=${orientRot}, walls=${wallSet.length}`);
+            }
+
             for (const pos of allWallPos) {
-              if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, gap, bestRoom, doorZones, pillarZones, placements)) {
+              const doDebug = debugCount < 5;
+              if (doDebug) debugCount++;
+              if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, gap, bestRoom, doorZones, pillarZones, placements, doDebug)) {
                 const p = makePlacement(equip, pos.x, pos.y, pos.rotation, w, d);
                 placements.push(p);
                 result.push(p);

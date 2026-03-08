@@ -126,6 +126,7 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
   const handleNewProject = () => {
     dispatch({ type: "RESET" });
     onLoadCatalog([]);
+    clearSession();
     setCurrentProjectId(null);
     setCurrentProjectName("Nouveau projet");
     toast.info("Nouveau projet créé");

@@ -703,6 +703,7 @@ export function EditorCanvas() {
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
+    screenMouseRef.current = { x: e.clientX, y: e.clientY };
     const world = screenToWorld(e.clientX, e.clientY);
     setMousePos(world);
 

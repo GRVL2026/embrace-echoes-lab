@@ -2,6 +2,7 @@ import { EditorProvider } from "@/contexts/EditorContext";
 import { EditorToolbar } from "@/components/editor/EditorToolbar";
 import { EditorCanvas } from "@/components/editor/EditorCanvas";
 import { EditorSidebar } from "@/components/editor/EditorSidebar";
+import logoImg from "@/assets/logo.png";
 
 
 const SpacePlanner = () => {

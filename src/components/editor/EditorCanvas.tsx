@@ -1304,7 +1304,7 @@ export function EditorCanvas() {
   };
 
   // Duplicate helper
-  const duplicateItem = useCallback((item: { type: "pillar"; id: string } | { type: "equipment"; id: string }) => {
+  const duplicateItem = useCallback((item: { type: "pillar"; id: string } | { type: "equipment"; id: string } | { type: "door"; id: string }) => {
     const OFFSET = 50; // 50cm offset
     if (item.type === "pillar") {
       const p = state.pillars.find(pl => pl.id === item.id);
@@ -1315,7 +1315,7 @@ export function EditorCanvas() {
         position: { x: p.position.x + OFFSET, y: p.position.y + OFFSET },
       };
       dispatch({ type: "ADD_PILLAR", pillar: newPillar });
-    } else {
+    } else if (item.type === "equipment") {
       const eq = state.placedEquipments.find(e => e.id === item.id);
       if (!eq) return;
       const newEquip: PlacedEquipment = {
@@ -1324,8 +1324,35 @@ export function EditorCanvas() {
         position: { x: eq.position.x + OFFSET, y: eq.position.y + OFFSET },
       };
       dispatch({ type: "ADD_PLACED_EQUIPMENT", equipment: newEquip });
+    } else if (item.type === "door") {
+      const door = state.doors.find(d => d.id === item.id);
+      if (!door) return;
+      const room = state.rooms.find(r => r.id === door.roomId);
+      if (!room) return;
+      const edgeLen = (() => {
+        const a = room.points[door.edgeIndex];
+        const b = room.points[(door.edgeIndex + 1) % room.points.length];
+        return Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2);
+      })();
+      // Offset along the wall by door width + 20cm gap
+      const shiftCm = door.width + 20;
+      const shiftRatio = shiftCm / edgeLen;
+      let newRatio = door.positionRatio + shiftRatio;
+      // If it doesn't fit to the right, try left
+      if (newRatio + door.width / 2 / edgeLen > 1) {
+        newRatio = door.positionRatio - shiftRatio;
+      }
+      // Clamp
+      const halfRatio = (door.width / 2) / edgeLen;
+      newRatio = Math.max(halfRatio, Math.min(1 - halfRatio, newRatio));
+      const newDoor: Door = {
+        ...door,
+        id: crypto.randomUUID(),
+        positionRatio: newRatio,
+      };
+      dispatch({ type: "ADD_DOOR", door: newDoor });
     }
-  }, [state.pillars, state.placedEquipments, dispatch]);
+  }, [state.pillars, state.placedEquipments, state.doors, state.rooms, dispatch]);
 
   // Keyboard shortcuts
   useEffect(() => {

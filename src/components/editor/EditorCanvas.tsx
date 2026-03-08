@@ -4,6 +4,7 @@ import { CM_TO_PX, type Point, type Door, type Pillar, type CirculationSegment }
 import type { PlacedEquipment } from "@/types/equipment";
 import { DoorDialog } from "./DoorDialog";
 import { PillarDialog } from "./PillarDialog";
+import { computeCirculation } from "@/lib/circulation";
 
 export function EditorCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -786,6 +787,10 @@ export function EditorCanvas() {
       if (hoveredEquipment) {
         dispatch({ type: "DELETE_PLACED_EQUIPMENT", id: hoveredEquipment });
         setHoveredEquipment(null);
+        // Recompute circulation after delete
+        const remaining = state.placedEquipments.filter(e => e.id !== hoveredEquipment);
+        const circ = computeCirculation(state.rooms, state.doors, state.pillars, remaining);
+        dispatch({ type: "SET_CIRCULATION", circulation: circ });
         return;
       }
       // Check pillar
@@ -1178,8 +1183,18 @@ export function EditorCanvas() {
     if (draggingDoor) setDraggingDoor(null);
     if (draggingPillar) setDraggingPillar(null);
     if (rotatingPillar) setRotatingPillar(null);
-    if (draggingEquipment) setDraggingEquipment(null);
-    if (rotatingEquipment) setRotatingEquipment(null);
+    if (draggingEquipment) {
+      setDraggingEquipment(null);
+      // Recompute circulation after equipment move
+      const circ = computeCirculation(state.rooms, state.doors, state.pillars, state.placedEquipments);
+      dispatch({ type: "SET_CIRCULATION", circulation: circ });
+    }
+    if (rotatingEquipment) {
+      setRotatingEquipment(null);
+      // Recompute circulation after equipment rotate
+      const circ = computeCirculation(state.rooms, state.doors, state.pillars, state.placedEquipments);
+      dispatch({ type: "SET_CIRCULATION", circulation: circ });
+    }
   };
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -2030,68 +2045,135 @@ function drawCirculationPath(
   zoom: number,
 ) {
   if (segments.length === 0) return;
-  
-  // Draw corridor fill (semi-transparent green)
-  ctx.fillStyle = "hsla(142, 70%, 45%, 0.15)";
-  ctx.strokeStyle = "hsla(142, 70%, 45%, 0.6)";
-  ctx.lineWidth = 2 / zoom;
-  ctx.setLineDash([8 / zoom, 4 / zoom]);
-  
-  segments.forEach((seg) => {
-    const startX = seg.start.x * CM_TO_PX;
-    const startY = seg.start.y * CM_TO_PX;
-    const endX = seg.end.x * CM_TO_PX;
-    const endY = seg.end.y * CM_TO_PX;
-    const width = seg.width * CM_TO_PX;
-    
-    // Calculate perpendicular offset for corridor width
-    const dx = endX - startX;
-    const dy = endY - startY;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    if (len === 0) return;
-    
-    const nx = -dy / len; // perpendicular
-    const ny = dx / len;
-    const hw = width / 2;
-    
-    // Draw corridor as a rectangle
+
+  const hw = (segments[0]?.width || 140) * CM_TO_PX / 2;
+
+  // Build a continuous polyline from segments (each segment is a small piece of the smooth path)
+  // Group segments into continuous chains
+  const chains: Point[][] = [];
+  let currentChain: Point[] = [];
+
+  for (const seg of segments) {
+    if (currentChain.length === 0) {
+      currentChain.push(seg.start, seg.end);
+    } else {
+      const last = currentChain[currentChain.length - 1];
+      const dist = Math.sqrt((last.x - seg.start.x) ** 2 + (last.y - seg.start.y) ** 2);
+      if (dist < 30) {
+        // Continue the chain
+        currentChain.push(seg.end);
+      } else {
+        // Start new chain
+        chains.push(currentChain);
+        currentChain = [seg.start, seg.end];
+      }
+    }
+  }
+  if (currentChain.length > 0) chains.push(currentChain);
+
+  // Draw each chain as a smooth filled corridor
+  for (const chain of chains) {
+    if (chain.length < 2) continue;
+
+    // Build left and right offset polylines for corridor edges
+    const leftEdge: Point[] = [];
+    const rightEdge: Point[] = [];
+
+    for (let i = 0; i < chain.length; i++) {
+      let nx: number, ny: number;
+      if (i === 0) {
+        const dx = chain[1].x - chain[0].x;
+        const dy = chain[1].y - chain[0].y;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        nx = -dy / len; ny = dx / len;
+      } else if (i === chain.length - 1) {
+        const dx = chain[i].x - chain[i - 1].x;
+        const dy = chain[i].y - chain[i - 1].y;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        nx = -dy / len; ny = dx / len;
+      } else {
+        // Average normal of adjacent segments
+        const dx1 = chain[i].x - chain[i - 1].x;
+        const dy1 = chain[i].y - chain[i - 1].y;
+        const len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1) || 1;
+        const dx2 = chain[i + 1].x - chain[i].x;
+        const dy2 = chain[i + 1].y - chain[i].y;
+        const len2 = Math.sqrt(dx2 * dx2 + dy2 * dy2) || 1;
+        nx = (-dy1 / len1 + -dy2 / len2) / 2;
+        ny = (dx1 / len1 + dx2 / len2) / 2;
+        const nLen = Math.sqrt(nx * nx + ny * ny) || 1;
+        nx /= nLen; ny /= nLen;
+      }
+
+      leftEdge.push({ x: chain[i].x * CM_TO_PX + nx * hw, y: chain[i].y * CM_TO_PX + ny * hw });
+      rightEdge.push({ x: chain[i].x * CM_TO_PX - nx * hw, y: chain[i].y * CM_TO_PX - ny * hw });
+    }
+
+    // Draw filled corridor
     ctx.beginPath();
-    ctx.moveTo(startX + nx * hw, startY + ny * hw);
-    ctx.lineTo(endX + nx * hw, endY + ny * hw);
-    ctx.lineTo(endX - nx * hw, endY - ny * hw);
-    ctx.lineTo(startX - nx * hw, startY - ny * hw);
+    ctx.moveTo(leftEdge[0].x, leftEdge[0].y);
+    for (let i = 1; i < leftEdge.length; i++) {
+      ctx.lineTo(leftEdge[i].x, leftEdge[i].y);
+    }
+    for (let i = rightEdge.length - 1; i >= 0; i--) {
+      ctx.lineTo(rightEdge[i].x, rightEdge[i].y);
+    }
     ctx.closePath();
+    ctx.fillStyle = "hsla(142, 70%, 45%, 0.1)";
     ctx.fill();
+
+    // Draw corridor edges (dashed)
+    ctx.setLineDash([8 / zoom, 4 / zoom]);
+    ctx.strokeStyle = "hsla(142, 70%, 45%, 0.5)";
+    ctx.lineWidth = 1.5 / zoom;
+
+    ctx.beginPath();
+    ctx.moveTo(leftEdge[0].x, leftEdge[0].y);
+    for (let i = 1; i < leftEdge.length; i++) ctx.lineTo(leftEdge[i].x, leftEdge[i].y);
     ctx.stroke();
-  });
-  
-  ctx.setLineDash([]);
-  
-  // Draw "1.40m" label in the center of the first segment
-  if (segments.length > 0) {
-    const seg = segments[0];
-    const midX = ((seg.start.x + seg.end.x) / 2) * CM_TO_PX;
-    const midY = ((seg.start.y + seg.end.y) / 2) * CM_TO_PX;
-    
+
+    ctx.beginPath();
+    ctx.moveTo(rightEdge[0].x, rightEdge[0].y);
+    for (let i = 1; i < rightEdge.length; i++) ctx.lineTo(rightEdge[i].x, rightEdge[i].y);
+    ctx.stroke();
+
+    // Draw centerline (dotted)
+    ctx.strokeStyle = "hsla(142, 70%, 50%, 0.35)";
+    ctx.lineWidth = 1 / zoom;
+    ctx.setLineDash([4 / zoom, 6 / zoom]);
+    ctx.beginPath();
+    ctx.moveTo(chain[0].x * CM_TO_PX, chain[0].y * CM_TO_PX);
+    for (let i = 1; i < chain.length; i++) {
+      ctx.lineTo(chain[i].x * CM_TO_PX, chain[i].y * CM_TO_PX);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Draw "1.40m" label at the midpoint of the first chain
+  if (chains.length > 0 && chains[0].length > 1) {
+    const midIdx = Math.floor(chains[0].length / 2);
+    const midPt = chains[0][midIdx];
+    const midX = midPt.x * CM_TO_PX;
+    const midY = midPt.y * CM_TO_PX;
+
     ctx.save();
-    ctx.fillStyle = "hsla(142, 70%, 35%, 0.9)";
-    ctx.font = `bold ${12 / zoom}px Inter`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    
-    // Background for label
     const text = "Circulation 1.40m";
+    ctx.font = `bold ${11 / zoom}px Inter`;
     const textMetrics = ctx.measureText(text);
-    const padding = 6 / zoom;
+    const padding = 5 / zoom;
+
     ctx.fillStyle = "hsla(142, 70%, 95%, 0.9)";
     ctx.fillRect(
       midX - textMetrics.width / 2 - padding,
-      midY - 8 / zoom - padding,
+      midY - 7 / zoom - padding,
       textMetrics.width + padding * 2,
-      16 / zoom + padding * 2
+      14 / zoom + padding * 2
     );
-    
+
     ctx.fillStyle = "hsla(142, 70%, 30%, 1)";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
     ctx.fillText(text, midX, midY);
     ctx.restore();
   }

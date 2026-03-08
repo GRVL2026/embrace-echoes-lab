@@ -128,8 +128,8 @@ function isPlacementValid(
   pillarZones: { cx: number; cy: number; w: number; d: number; rot: number }[],
   existingPlacements: PlacedEquipment[],
 ): boolean {
-  // Must be inside room with wall margin
-  if (!rectInsidePolygon(cx, cy, w + WALL_MARGIN * 2, d + WALL_MARGIN * 2, rot, room.points)) return false;
+  // Must be inside room (position already accounts for wall margin)
+  if (!rectInsidePolygon(cx, cy, w, d, rot, room.points)) return false;
   // Must not overlap door exclusion zones
   for (const dz of doorZones) {
     if (rectsOverlap(cx, cy, w, d, rot, dz.cx, dz.cy, dz.w, dz.d, dz.rot)) return false;

@@ -73,6 +73,7 @@ export function DoorDialog({ open, wallLength, initialValues, onConfirm, onCance
       openDirectionRight: leafCount === "double" ? directionRight : undefined,
       openSide,
       leafCount,
+      isMainDoor,
     });
   };
 

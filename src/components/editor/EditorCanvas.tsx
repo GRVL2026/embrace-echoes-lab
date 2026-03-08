@@ -1960,21 +1960,23 @@ function drawPlacedEquipments(
     // Safety zone (dashed outline)
     const szW = (eq.width + eq.safetyZone * 2) * CM_TO_PX;
     const szD = (eq.depth + eq.safetyZone * 2) * CM_TO_PX;
-    ctx.strokeStyle = "hsla(48, 100%, 50%, 0.25)";
+    ctx.strokeStyle = isColliding ? "hsla(0, 85%, 60%, 0.4)" : "hsla(48, 100%, 50%, 0.25)";
     ctx.lineWidth = 1 / zoom;
     ctx.setLineDash([6 / zoom, 4 / zoom]);
     ctx.strokeRect(-szW / 2, -szD / 2, szW, szD);
     ctx.setLineDash([]);
 
     // Equipment body
-    ctx.fillStyle = eq.color.replace(")", ", 0.3)").replace("hsl(", "hsla(");
+    const bodyColor = isColliding ? "hsl(0, 85%, 60%)" : eq.color;
+    const bodyFill = isColliding ? "hsla(0, 85%, 60%, 0.3)" : eq.color.replace(")", ", 0.3)").replace("hsl(", "hsla(");
+    ctx.fillStyle = bodyFill;
     ctx.fillRect(-w / 2, -d / 2, w, d);
-    ctx.strokeStyle = isHovered ? "hsl(48, 100%, 70%)" : eq.color;
-    ctx.lineWidth = isHovered ? 3 / zoom : 2 / zoom;
+    ctx.strokeStyle = isColliding ? "hsl(0, 85%, 60%)" : (isHovered ? "hsl(48, 100%, 70%)" : eq.color);
+    ctx.lineWidth = isColliding ? 3 / zoom : (isHovered ? 3 / zoom : 2 / zoom);
     ctx.strokeRect(-w / 2, -d / 2, w, d);
 
     // Label
-    ctx.fillStyle = eq.color;
+    ctx.fillStyle = isColliding ? "hsl(0, 85%, 60%)" : eq.color;
     ctx.font = `bold ${Math.max(10, 11 / zoom)}px Inter`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";

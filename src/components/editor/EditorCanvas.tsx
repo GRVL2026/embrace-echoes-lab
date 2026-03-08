@@ -996,6 +996,13 @@ export function EditorCanvas() {
     if (pendingPillarClick && !hasPillarDragged) {
       setPillarDialog({ open: true, pillarId: pendingPillarClick.pillarId });
     }
+    // If we had a pending equipment click and didn't drag → delete with eraser, or just deselect
+    if (pendingEquipClick && !hasEquipDragged) {
+      if (state.tool === "eraser") {
+        dispatch({ type: "DELETE_PLACED_EQUIPMENT", id: pendingEquipClick.equipId });
+      }
+      // For select tool, clicking without drag does nothing special (could open dialog later)
+    }
 
     setPendingVertexClick(null);
     setHasVertexDragged(false);
@@ -1003,10 +1010,14 @@ export function EditorCanvas() {
     setHasDragged(false);
     setPendingPillarClick(null);
     setHasPillarDragged(false);
+    setPendingEquipClick(null);
+    setHasEquipDragged(false);
     if (draggingVertex) setDraggingVertex(null);
     if (draggingDoor) setDraggingDoor(null);
     if (draggingPillar) setDraggingPillar(null);
     if (rotatingPillar) setRotatingPillar(null);
+    if (draggingEquipment) setDraggingEquipment(null);
+    if (rotatingEquipment) setRotatingEquipment(null);
   };
 
   const handleWheel = (e: React.WheelEvent) => {

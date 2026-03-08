@@ -330,7 +330,7 @@ type CatalogPanelProps = {
 
 export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   const { state, dispatch } = useEditor();
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedQuantities, setSelectedQuantities] = useState<Map<string, number>>(new Map());
   const [viewingProduct, setViewingProduct] = useState<GameEquipment | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedView, setExpandedView] = useState(false);
@@ -347,6 +347,13 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
       (eq.tags && eq.tags.some(tag => tag.toLowerCase().includes(query)))
     );
   }, [catalog, searchQuery]);
+
+  // Total selected items count
+  const totalSelectedCount = useMemo(() => {
+    let total = 0;
+    selectedQuantities.forEach((qty) => { total += qty; });
+    return total;
+  }, [selectedQuantities]);
 
   const handleImportFile = (file: File) => {
     const reader = new FileReader();
@@ -394,12 +401,26 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
     reader.readAsText(file);
   };
 
-  const toggleSelection = (id: string, e: React.MouseEvent) => {
+  const incrementQuantity = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+    setSelectedQuantities(prev => {
+      const next = new Map(prev);
+      const current = next.get(id) || 0;
+      next.set(id, current + 1);
+      return next;
+    });
+  };
+
+  const decrementQuantity = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedQuantities(prev => {
+      const next = new Map(prev);
+      const current = next.get(id) || 0;
+      if (current <= 1) {
+        next.delete(id);
+      } else {
+        next.set(id, current - 1);
+      }
       return next;
     });
   };

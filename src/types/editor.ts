@@ -65,6 +65,7 @@ export type EditorState = {
   showAngles: boolean;
   showPillarDistances: boolean;
   showCirculation: boolean; // toggle circulation path visibility
+  planRotation: number; // 0, 90, 180, 270
   placedEquipments: import("@/types/equipment").PlacedEquipment[];
   circulationPath: CirculationSegment[]; // safety circulation display
 };
@@ -83,7 +84,8 @@ export const INITIAL_EDITOR_STATE: EditorState = {
   showDimensions: true,
   showAngles: false,
   showPillarDistances: false,
-  showCirculation: true, // show by default
+  showCirculation: true,
+  planRotation: 0,
 };
 
 // Scale: 1cm = 0.5px at zoom 1 (allows ~20m horizontal view with sidebar)

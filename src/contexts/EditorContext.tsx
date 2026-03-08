@@ -28,6 +28,7 @@ type EditorAction =
   | { type: "TOGGLE_ANGLES" }
   | { type: "TOGGLE_CIRCULATION" }
   | { type: "SET_GRID_SIZE"; size: number }
+  | { type: "ROTATE_PLAN"; degrees: 90 | -90 }
   | { type: "UNDO" }
   | { type: "RESET" }
   | { type: "LOAD_STATE"; state: Partial<EditorState> };
@@ -39,6 +40,7 @@ const UNDOABLE_ACTIONS = new Set([
   "ADD_PILLAR", "DELETE_PILLAR",
   "ADD_PLACED_EQUIPMENT", "ADD_PLACED_EQUIPMENTS",
   "DELETE_PLACED_EQUIPMENT", "CLEAR_PLACED_EQUIPMENTS",
+  "ROTATE_PLAN",
 ]);
 
 const MAX_UNDO_HISTORY = 50;
@@ -154,6 +156,42 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       return { ...state, showCirculation: !state.showCirculation };
     case "SET_GRID_SIZE":
       return { ...state, gridSize: action.size };
+    case "ROTATE_PLAN": {
+      const deg = action.degrees;
+      const rad = (deg * Math.PI) / 180;
+      const cosA = Math.round(Math.cos(rad));
+      const sinA = Math.round(Math.sin(rad));
+      const rotatePoint = (p: Point): Point => ({
+        x: p.x * cosA - p.y * sinA,
+        y: p.x * sinA + p.y * cosA,
+      });
+      return {
+        ...state,
+        planRotation: ((state.planRotation + deg) % 360 + 360) % 360,
+        rooms: state.rooms.map((r) => ({
+          ...r,
+          points: r.points.map(rotatePoint),
+          walls: r.walls.map((w) => ({
+            ...w,
+            start: rotatePoint(w.start),
+            end: rotatePoint(w.end),
+          })),
+        })),
+        pillars: state.pillars.map((p) => ({
+          ...p,
+          position: rotatePoint(p.position),
+          rotation: p.rotation + deg,
+        })),
+        placedEquipments: state.placedEquipments.map((e) => ({
+          ...e,
+          position: {
+            x: e.position.x * cosA - e.position.y * sinA,
+            y: e.position.x * sinA + e.position.y * cosA,
+          },
+          rotation: (e.rotation || 0) + deg,
+        })),
+      };
+    }
     case "RESET":
       return INITIAL_EDITOR_STATE;
     case "LOAD_STATE":

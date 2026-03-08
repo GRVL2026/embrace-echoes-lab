@@ -18,7 +18,8 @@ const SpacePlanner = () => {
           {/* Top bar */}
           <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-6">
             <div className="flex items-center gap-3">
-              
+              <div className="flex h-7 w-7 items-center justify-center rounded border border-dashed border-muted-foreground/30" title="Emplacement logo" />
+
               <h1 className="font-display text-xl font-bold tracking-tight">
                 <span className="text-primary text-glow-purple">Arcade</span>{" "}
                 <span className="text-secondary text-glow-green">Planner</span>

@@ -362,7 +362,7 @@ export function autoPlaceEquipmentWithReport(
   }
 
   if (!bestRoom) {
-    return { placed: [], notPlaced: selectedEquipments };
+    return { placed: [], notPlaced: selectedEquipments, circulation: [] };
   }
 
   const doorZones = getDoorExclusionZones(rooms, doors);

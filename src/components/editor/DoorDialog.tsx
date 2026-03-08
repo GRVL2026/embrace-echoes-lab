@@ -137,7 +137,8 @@ export function DoorDialog({ open, wallLength, initialValues, onConfirm, onCance
             </Label>
           </div>
 
-
+          <div className="space-y-2">
+            <Label>Type de porte</Label>
             <div className="flex gap-2">
               <Button
                 type="button"

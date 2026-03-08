@@ -82,6 +82,7 @@ export function EditorCanvas() {
   const [pendingEquipClick, setPendingEquipClick] = useState<{ equipId: string; startX: number; startY: number } | null>(null);
   const [hasEquipDragged, setHasEquipDragged] = useState(false);
   const [hoveredEquipment, setHoveredEquipment] = useState<string | null>(null);
+  const [collidingEquipIds, setCollidingEquipIds] = useState<Set<string>>(new Set());
   const [editingDimension, setEditingDimension] = useState<{
     roomId: string;
     edgeIndex: number;
@@ -221,6 +222,152 @@ export function EditorCanvas() {
     const ddy = world.y - hy;
     return ddx * ddx + ddy * ddy < (12 / zoom) * (12 / zoom);
   }, []);
+
+  // Check if a placed equipment collides with walls, pillars, doors, or other equipment
+  const checkEquipmentCollision = useCallback((eqId: string): boolean => {
+    const eq = state.placedEquipments.find(e => e.id === eqId);
+    if (!eq) return false;
+    const rad = (eq.rotation || 0) * Math.PI / 180;
+    const cosR = Math.cos(rad), sinR = Math.sin(rad);
+    // Get the 4 corners of the equipment in world space
+    const hw = eq.width / 2, hd = eq.depth / 2;
+    const corners = [
+      { x: -hw, y: -hd }, { x: hw, y: -hd },
+      { x: hw, y: hd }, { x: -hw, y: hd },
+    ].map(c => ({
+      x: eq.position.x + c.x * Math.cos(rad) - c.y * Math.sin(rad),
+      y: eq.position.y + c.x * Math.sin(rad) + c.y * Math.cos(rad),
+    }));
+
+    // Helper: get axes for SAT from polygon corners
+    const getAxes = (pts: { x: number; y: number }[]) => {
+      const axes: { x: number; y: number }[] = [];
+      for (let i = 0; i < pts.length; i++) {
+        const next = pts[(i + 1) % pts.length];
+        const edge = { x: next.x - pts[i].x, y: next.y - pts[i].y };
+        const len = Math.sqrt(edge.x * edge.x + edge.y * edge.y);
+        if (len > 0) axes.push({ x: -edge.y / len, y: edge.x / len });
+      }
+      return axes;
+    };
+
+    const project = (pts: { x: number; y: number }[], axis: { x: number; y: number }) => {
+      let min = Infinity, max = -Infinity;
+      for (const p of pts) {
+        const d = p.x * axis.x + p.y * axis.y;
+        if (d < min) min = d;
+        if (d > max) max = d;
+      }
+      return { min, max };
+    };
+
+    const satOverlap = (a: { x: number; y: number }[], b: { x: number; y: number }[]) => {
+      const axes = [...getAxes(a), ...getAxes(b)];
+      for (const axis of axes) {
+        const pa = project(a, axis), pb = project(b, axis);
+        if (pa.max < pb.min || pb.max < pa.min) return false;
+      }
+      return true;
+    };
+
+    // Point-to-segment distance
+    const ptSegDist = (px: number, py: number, ax: number, ay: number, bx: number, by: number) => {
+      const dx = bx - ax, dy = by - ay;
+      const len2 = dx * dx + dy * dy;
+      if (len2 === 0) return Math.sqrt((px - ax) ** 2 + (py - ay) ** 2);
+      const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+      const projX = ax + t * dx, projY = ay + t * dy;
+      return Math.sqrt((px - projX) ** 2 + (py - projY) ** 2);
+    };
+
+    // Check collision with walls (line segments)
+    for (const room of state.rooms) {
+      const edgeCount = room.isClosed ? room.points.length : room.points.length - 1;
+      for (let i = 0; i < edgeCount; i++) {
+        const a = room.points[i], b = room.points[(i + 1) % room.points.length];
+        // Check if any corner is very close to wall or if wall segment intersects equipment
+        // Use a thin rectangle around the wall segment for SAT
+        const wdx = b.x - a.x, wdy = b.y - a.y;
+        const wlen = Math.sqrt(wdx * wdx + wdy * wdy);
+        if (wlen === 0) continue;
+        const thickness = 5; // wall thickness in cm
+        const nx = -wdy / wlen * thickness, ny = wdx / wlen * thickness;
+        const wallRect = [
+          { x: a.x + nx, y: a.y + ny }, { x: b.x + nx, y: b.y + ny },
+          { x: b.x - nx, y: b.y - ny }, { x: a.x - nx, y: a.y - ny },
+        ];
+        if (satOverlap(corners, wallRect)) return true;
+      }
+    }
+
+    // Check collision with pillars
+    for (const pillar of state.pillars) {
+      if (pillar.shape === "round") {
+        // Circle vs OBB: check distance from circle center to closest point on OBB
+        const dx = pillar.position.x - eq.position.x;
+        const dy = pillar.position.y - eq.position.y;
+        const lx = dx * cosR + dy * sinR;
+        const ly = -dx * sinR + dy * cosR;
+        const clampX = Math.max(-hw, Math.min(hw, lx));
+        const clampY = Math.max(-hd, Math.min(hd, ly));
+        const distSq = (lx - clampX) ** 2 + (ly - clampY) ** 2;
+        if (distSq < (pillar.width / 2) ** 2) return true;
+      } else {
+        const pRad = (pillar.rotation || 0) * Math.PI / 180;
+        const phw = pillar.width / 2, phd = pillar.depth / 2;
+        const pillarCorners = [
+          { x: -phw, y: -phd }, { x: phw, y: -phd },
+          { x: phw, y: phd }, { x: -phw, y: phd },
+        ].map(c => ({
+          x: pillar.position.x + c.x * Math.cos(pRad) - c.y * Math.sin(pRad),
+          y: pillar.position.y + c.x * Math.sin(pRad) + c.y * Math.cos(pRad),
+        }));
+        if (satOverlap(corners, pillarCorners)) return true;
+      }
+    }
+
+    // Check collision with other equipment
+    for (const other of state.placedEquipments) {
+      if (other.id === eqId) continue;
+      const oRad = (other.rotation || 0) * Math.PI / 180;
+      const ohw = other.width / 2, ohd = other.depth / 2;
+      const otherCorners = [
+        { x: -ohw, y: -ohd }, { x: ohw, y: -ohd },
+        { x: ohw, y: ohd }, { x: -ohw, y: ohd },
+      ].map(c => ({
+        x: other.position.x + c.x * Math.cos(oRad) - c.y * Math.sin(oRad),
+        y: other.position.y + c.x * Math.sin(oRad) + c.y * Math.cos(oRad),
+      }));
+      if (satOverlap(corners, otherCorners)) return true;
+    }
+
+    // Check collision with door exclusion zones
+    for (const door of state.doors) {
+      const room = state.rooms.find(r => r.id === door.roomId);
+      if (!room || door.edgeIndex >= room.points.length) continue;
+      const a = room.points[door.edgeIndex];
+      const b = room.points[(door.edgeIndex + 1) % room.points.length];
+      const wdx = b.x - a.x, wdy = b.y - a.y;
+      const wlen = Math.sqrt(wdx * wdx + wdy * wdy);
+      if (wlen === 0) continue;
+      const ux = wdx / wlen, uy = wdy / wlen;
+      const cx = a.x + ux * door.positionRatio * wlen;
+      const cy = a.y + uy * door.positionRatio * wlen;
+      const doorHW = door.width / 2;
+      // Door exclusion zone: rectangle in front of door
+      const nx = -uy, ny = ux; // normal to wall
+      const depth = 150; // exclusion depth in cm
+      const doorRect = [
+        { x: cx - ux * doorHW + nx * depth, y: cy - uy * doorHW + ny * depth },
+        { x: cx + ux * doorHW + nx * depth, y: cy + uy * doorHW + ny * depth },
+        { x: cx + ux * doorHW - nx * depth, y: cy + uy * doorHW - ny * depth },
+        { x: cx - ux * doorHW - nx * depth, y: cy - uy * doorHW - ny * depth },
+      ];
+      if (satOverlap(corners, doorRect)) return true;
+    }
+
+    return false;
+  }, [state.placedEquipments, state.rooms, state.pillars, state.doors]);
 
   // Convert screen coords to world coords (cm)
   const screenToWorld = useCallback(
@@ -397,9 +544,18 @@ export function EditorCanvas() {
         drawCirculationPath(ctx, state.circulationPath, state.zoom);
       }
 
+      // Compute collision set for placed equipments
+      const collisionSet = new Set<string>();
+      if (draggingEquipment || rotatingEquipment) {
+        const checkId = draggingEquipment || rotatingEquipment;
+        if (checkId && checkEquipmentCollision(checkId)) {
+          collisionSet.add(checkId);
+        }
+      }
+
       // Draw placed equipments
       if (state.placedEquipments.length > 0) {
-        drawPlacedEquipments(ctx, state.placedEquipments, state.zoom, hoveredEquipment);
+        drawPlacedEquipments(ctx, state.placedEquipments, state.zoom, hoveredEquipment, collisionSet);
       }
 
       // Draw current drawing
@@ -1786,6 +1942,7 @@ function drawPlacedEquipments(
   equipments: PlacedEquipment[],
   zoom: number,
   hoveredEquipId?: string | null,
+  collidingIds?: Set<string>,
 ) {
   equipments.forEach((eq) => {
     const cx = eq.position.x * CM_TO_PX;
@@ -1794,6 +1951,7 @@ function drawPlacedEquipments(
     const d = eq.depth * CM_TO_PX;
     const rot = (eq.rotation || 0) * Math.PI / 180;
     const isHovered = eq.id === hoveredEquipId;
+    const isColliding = collidingIds?.has(eq.id) ?? false;
 
     ctx.save();
     ctx.translate(cx, cy);
@@ -1802,21 +1960,23 @@ function drawPlacedEquipments(
     // Safety zone (dashed outline)
     const szW = (eq.width + eq.safetyZone * 2) * CM_TO_PX;
     const szD = (eq.depth + eq.safetyZone * 2) * CM_TO_PX;
-    ctx.strokeStyle = "hsla(48, 100%, 50%, 0.25)";
+    ctx.strokeStyle = isColliding ? "hsla(0, 85%, 60%, 0.4)" : "hsla(48, 100%, 50%, 0.25)";
     ctx.lineWidth = 1 / zoom;
     ctx.setLineDash([6 / zoom, 4 / zoom]);
     ctx.strokeRect(-szW / 2, -szD / 2, szW, szD);
     ctx.setLineDash([]);
 
     // Equipment body
-    ctx.fillStyle = eq.color.replace(")", ", 0.3)").replace("hsl(", "hsla(");
+    const bodyColor = isColliding ? "hsl(0, 85%, 60%)" : eq.color;
+    const bodyFill = isColliding ? "hsla(0, 85%, 60%, 0.3)" : eq.color.replace(")", ", 0.3)").replace("hsl(", "hsla(");
+    ctx.fillStyle = bodyFill;
     ctx.fillRect(-w / 2, -d / 2, w, d);
-    ctx.strokeStyle = isHovered ? "hsl(48, 100%, 70%)" : eq.color;
-    ctx.lineWidth = isHovered ? 3 / zoom : 2 / zoom;
+    ctx.strokeStyle = isColliding ? "hsl(0, 85%, 60%)" : (isHovered ? "hsl(48, 100%, 70%)" : eq.color);
+    ctx.lineWidth = isColliding ? 3 / zoom : (isHovered ? 3 / zoom : 2 / zoom);
     ctx.strokeRect(-w / 2, -d / 2, w, d);
 
     // Label
-    ctx.fillStyle = eq.color;
+    ctx.fillStyle = isColliding ? "hsl(0, 85%, 60%)" : eq.color;
     ctx.font = `bold ${Math.max(10, 11 / zoom)}px Inter`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";

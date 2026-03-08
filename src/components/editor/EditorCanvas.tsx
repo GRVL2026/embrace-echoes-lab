@@ -544,9 +544,18 @@ export function EditorCanvas() {
         drawCirculationPath(ctx, state.circulationPath, state.zoom);
       }
 
+      // Compute collision set for placed equipments
+      const collisionSet = new Set<string>();
+      if (draggingEquipment || rotatingEquipment) {
+        const checkId = draggingEquipment || rotatingEquipment;
+        if (checkId && checkEquipmentCollision(checkId)) {
+          collisionSet.add(checkId);
+        }
+      }
+
       // Draw placed equipments
       if (state.placedEquipments.length > 0) {
-        drawPlacedEquipments(ctx, state.placedEquipments, state.zoom, hoveredEquipment);
+        drawPlacedEquipments(ctx, state.placedEquipments, state.zoom, hoveredEquipment, collisionSet);
       }
 
       // Draw current drawing

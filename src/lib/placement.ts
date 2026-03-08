@@ -420,47 +420,51 @@ export function autoPlaceEquipmentWithReport(
       const sz = equip.safetyZone;
       
       // Track last placement for this equipment type to place duplicates adjacent
-      let lastPlacement: { x: number; y: number; rotation: number; wall?: WallSegment } | null = null;
+      let lastPlacement: { x: number; y: number; rotation: number; w: number; d: number; wall?: WallSegment } | null = null;
 
       for (let i = 0; i < count; i++) {
         let placed = false;
 
+        // If we have a previous placement of the same equipment, try adjacent positions FIRST
+        // using the SAME dimensions and rotation as the previous one
+        if (lastPlacement) {
+          const adjW = lastPlacement.w;
+          const adjD = lastPlacement.d;
+          const adjacentPositions = generateAdjacentPositions(
+            lastPlacement.x, lastPlacement.y, lastPlacement.rotation,
+            adjW, adjD, sz, step
+          );
+          
+          for (const pos of adjacentPositions) {
+            if (isPlacementValid(pos.x, pos.y, adjW, adjD, pos.rotation, sz, bestRoom, doorZones, pillarZones, placements)) {
+              const placement: PlacedEquipment = {
+                id: crypto.randomUUID(),
+                equipmentId: equip.id,
+                position: { x: pos.x, y: pos.y },
+                rotation: pos.rotation,
+                name: equip.name,
+                width: adjW,
+                depth: adjD,
+                safetyZone: sz,
+                color: equip.color || "hsl(263, 85%, 68%)",
+              };
+              placements.push(placement);
+              result.push(placement);
+              lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w: adjW, d: adjD };
+              placed = true;
+              break;
+            }
+          }
+        }
+
+        // If adjacent placement failed or no previous placement, try wall positions
+        if (!placed) {
         // Try each orientation
         for (const orientationRot of [0, 90]) {
           if (placed) break;
           
           const w = orientationRot === 0 ? equip.width : equip.depth;
           const d = orientationRot === 0 ? equip.depth : equip.width;
-
-          // If we have a previous placement of the same equipment, try adjacent positions first
-          if (lastPlacement) {
-            const adjacentPositions = generateAdjacentPositions(
-              lastPlacement.x, lastPlacement.y, lastPlacement.rotation,
-              w, d, sz, step
-            );
-            
-            for (const pos of adjacentPositions) {
-              if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, sz, bestRoom, doorZones, pillarZones, placements)) {
-                const placement: PlacedEquipment = {
-                  id: crypto.randomUUID(),
-                  equipmentId: equip.id,
-                  position: { x: pos.x, y: pos.y },
-                  rotation: pos.rotation,
-                  name: equip.name,
-                  width: w,
-                  depth: d,
-                  safetyZone: sz,
-                  color: equip.color || "hsl(263, 85%, 68%)",
-                };
-                placements.push(placement);
-                result.push(placement);
-                lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation };
-                placed = true;
-                break;
-              }
-            }
-            if (placed) break;
-          }
 
           // PHASE 1: Try wall positions first
           const allWallPositions: { x: number; y: number; rotation: number; score: number; wall: WallSegment }[] = [];

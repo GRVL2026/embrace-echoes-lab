@@ -626,7 +626,10 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7"
-                onClick={() => setSelectedQuantities(new Map())}
+                onClick={() => {
+                  setSelectedQuantities(new Map());
+                  setNotPlacedIds(new Set());
+                }}
               >
                 <X className="h-3 w-3" />
               </Button>

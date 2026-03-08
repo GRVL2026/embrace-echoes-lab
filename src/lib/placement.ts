@@ -305,10 +305,18 @@ function generateIslandPositions(
   return positions;
 }
 
+/** Circulation path segment */
+export type CirculationSegment = {
+  start: Point;
+  end: Point;
+  width: number; // corridor width in cm
+};
+
 /** Result of auto-placement */
 export type PlacementResult = {
   placed: PlacedEquipment[];
   notPlaced: GameEquipment[];
+  circulation: CirculationSegment[];
 };
 
 /** Auto-place selected equipment in a room with business rules */

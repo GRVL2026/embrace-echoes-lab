@@ -20,7 +20,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Save, FolderOpen, FilePlus, Trash2, Menu } from "lucide-react";
+import { Save, FolderOpen, FilePlus, Trash2, Menu, Gamepad2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   listProjects,

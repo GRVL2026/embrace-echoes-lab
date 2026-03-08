@@ -536,6 +536,55 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
     toast.info("Tous les équipements retirés du plan");
   };
 
+  const handleResetPlacements = () => {
+    if (state.placedEquipments.length === 0) {
+      toast.error("Aucun équipement sur le plan");
+      return;
+    }
+    if (state.rooms.filter(r => r.isClosed).length === 0) {
+      toast.error("Aucune salle fermée trouvée");
+      return;
+    }
+
+    // Convert current placements back to GameEquipment for re-placement
+    const equipToReplace: GameEquipment[] = state.placedEquipments.map(pe => {
+      const catalogEntry = catalog.find(c => c.id === pe.equipmentId);
+      return catalogEntry || {
+        id: pe.equipmentId,
+        name: pe.name,
+        category: "autre",
+        width: pe.width,
+        depth: pe.depth,
+        height: 0,
+        safetyZone: pe.safetyZone,
+        color: pe.color,
+      };
+    });
+
+    const placementResult = autoPlaceEquipmentWithReport(
+      equipToReplace,
+      state.rooms,
+      state.doors,
+      state.pillars,
+      [],
+    );
+
+    dispatch({ type: "CLEAR_PLACED_EQUIPMENTS" });
+    dispatch({ type: "ADD_PLACED_EQUIPMENTS", equipments: placementResult.placed });
+
+    const circResult = computeCirculation(state.rooms, state.doors, state.pillars, placementResult.placed);
+    dispatch({ type: "SET_CIRCULATION", circulation: circResult.segments });
+
+    const placed = placementResult.placed.length;
+    const failed = placementResult.notPlaced.length;
+
+    if (failed > 0) {
+      toast.warning(`Implantation réinitialisée : ${placed} placé${placed > 1 ? "s" : ""}, ${failed} non placé${failed > 1 ? "s" : ""}`);
+    } else {
+      toast.success(`Implantation réinitialisée : ${placed} jeu${placed > 1 ? "x" : ""} replacé${placed > 1 ? "s" : ""}`);
+    }
+  };
+
   // Group filtered catalog by category
   const categories = filteredCatalog.reduce<Record<string, GameEquipment[]>>((acc, eq) => {
     const cat = eq.category || "autre";

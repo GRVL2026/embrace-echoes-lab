@@ -473,27 +473,7 @@ export function autoPlaceEquipmentWithReport(
           }
         }
 
-        // ── RULE 2: No wall space → center island, corridor must pass at 2cm in front ──
-        if (!placed) {
-          for (const orientRot of [0, 90]) {
-            if (placed) break;
-            const w = orientRot === 0 ? equip.width : equip.depth;
-            const d = orientRot === 0 ? equip.depth : equip.width;
-            const islandPos = generateIslandPositions(bestRoom, w, d, step);
-
-            for (const pos of islandPos) {
-              const finalRot = (pos.rotation + orientRot) % 360;
-              if (isPlacementValid(pos.x, pos.y, w, d, finalRot, gap, bestRoom, doorZones, pillarZones, placements)) {
-                const p = makePlacement(equip, pos.x, pos.y, finalRot, w, d);
-                placements.push(p);
-                result.push(p);
-                lastPlacement = { x: pos.x, y: pos.y, rotation: finalRot, w, d };
-                placed = true;
-                break;
-              }
-            }
-          }
-        }
+        // No island placement: equipment back MUST be against a wall
 
         if (!placed) {
           console.warn(`Could not place: ${equip.name} (instance ${i + 1}/${count})`);

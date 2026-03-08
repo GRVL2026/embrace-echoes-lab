@@ -1987,8 +1987,8 @@ function drawPillars(
     // Rotation handle (above pillar, connected by a line)
     if (isHovered) {
       const handleDist = pillar.shape === "round"
-        ? (pillar.width / 2) * CM_TO_PX + 20 / zoom
-        : (Math.max(pillar.width, pillar.depth) / 2) * CM_TO_PX + 20 / zoom;
+        ? (pillar.width / 2 + 30) * CM_TO_PX
+        : (Math.max(pillar.width, pillar.depth) / 2 + 30) * CM_TO_PX;
       
       // Line from top of pillar to handle
       ctx.beginPath();

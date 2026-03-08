@@ -473,7 +473,27 @@ export function autoPlaceEquipmentWithReport(
           }
         }
 
-        // No island placement: equipment back MUST be against a wall
+        // ── RULE 2b: Fallback — try placing back against a pillar ──
+        if (!placed) {
+          for (const orientRot of [0, 90]) {
+            if (placed) break;
+            const w = orientRot === 0 ? equip.width : equip.depth;
+            const d = orientRot === 0 ? equip.depth : equip.width;
+            const pillarPositions = generatePillarBackedPositions(pillars, w, d, step);
+            const gap2 = isSameRef ? SAME_REF_GAP : DIFFERENT_GAP;
+
+            for (const pos of pillarPositions) {
+              if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, gap2, bestRoom!, doorZones, pillarZones, placements)) {
+                const p = makePlacement(equip, pos.x, pos.y, pos.rotation, w, d);
+                placements.push(p);
+                result.push(p);
+                lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w, d };
+                placed = true;
+                break;
+              }
+            }
+          }
+        }
 
         if (!placed) {
           console.warn(`Could not place: ${equip.name} (instance ${i + 1}/${count})`);

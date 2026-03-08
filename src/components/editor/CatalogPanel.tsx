@@ -1,10 +1,11 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useEditor } from "@/contexts/EditorContext";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Upload, Package, Play, Trash2, Check, X, Info } from "lucide-react";
+import { Upload, Package, Play, Trash2, Check, X, Info, Search } from "lucide-react";
 import type { GameEquipment, CatalogJSON } from "@/types/equipment";
 import { DEFAULT_SAFETY_ZONE } from "@/types/equipment";
 import { autoPlaceEquipment } from "@/lib/placement";

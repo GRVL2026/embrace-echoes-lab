@@ -21,6 +21,7 @@ type EditorAction =
   | { type: "UPDATE_PLACED_EQUIPMENT"; id: string; equipment: Partial<PlacedEquipment> }
   | { type: "DELETE_PLACED_EQUIPMENT"; id: string }
   | { type: "CLEAR_PLACED_EQUIPMENTS" }
+  | { type: "SET_CIRCULATION"; circulation: CirculationSegment[] }
   | { type: "TOGGLE_SNAP" }
   | { type: "TOGGLE_PILLAR_DISTANCES" }
   | { type: "TOGGLE_DIMENSIONS" }

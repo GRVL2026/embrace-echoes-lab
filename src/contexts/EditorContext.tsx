@@ -28,6 +28,7 @@ type EditorAction =
   | { type: "TOGGLE_ANGLES" }
   | { type: "TOGGLE_CIRCULATION" }
   | { type: "SET_GRID_SIZE"; size: number }
+  | { type: "ROTATE_PLAN"; degrees: 90 | -90 }
   | { type: "UNDO" }
   | { type: "RESET" }
   | { type: "LOAD_STATE"; state: Partial<EditorState> };

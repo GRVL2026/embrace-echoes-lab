@@ -1436,6 +1436,53 @@ export function EditorCanvas() {
         }}
         className="absolute inset-0"
       />
+      {/* Context menu */}
+      {contextMenu && (
+        <div
+          className="absolute z-50 min-w-[160px] rounded-md border border-border bg-card shadow-lg py-1"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <button
+            className="w-full px-3 py-1.5 text-left text-sm hover:bg-accent/20 flex items-center gap-2"
+            onClick={() => {
+              // Copy to clipboard
+              if (contextMenu.target.type === "pillar") {
+                const p = state.pillars.find(pl => pl.id === contextMenu.target.id);
+                if (p) clipboardRef.current = { type: "pillar", data: { ...p } };
+              } else {
+                const eq = state.placedEquipments.find(e => e.id === contextMenu.target.id);
+                if (eq) clipboardRef.current = { type: "equipment", data: { ...eq } };
+              }
+              setContextMenu(null);
+            }}
+          >
+            📋 Copier <kbd className="ml-auto text-xs text-muted-foreground">Ctrl+C</kbd>
+          </button>
+          <button
+            className="w-full px-3 py-1.5 text-left text-sm hover:bg-accent/20 flex items-center gap-2"
+            onClick={() => {
+              duplicateItem(contextMenu.target);
+              setContextMenu(null);
+            }}
+          >
+            📑 Dupliquer
+          </button>
+          <div className="border-t border-border my-1" />
+          <button
+            className="w-full px-3 py-1.5 text-left text-sm hover:bg-destructive/20 text-destructive flex items-center gap-2"
+            onClick={() => {
+              if (contextMenu.target.type === "pillar") {
+                dispatch({ type: "DELETE_PILLAR", id: contextMenu.target.id });
+              } else {
+                dispatch({ type: "DELETE_PLACED_EQUIPMENT", id: contextMenu.target.id });
+              }
+              setContextMenu(null);
+            }}
+          >
+            🗑️ Supprimer
+          </button>
+        </div>
+      )}
       {/* Zoom indicator */}
       <div className="absolute bottom-4 right-4 rounded-md border border-border bg-card/80 backdrop-blur-sm px-3 py-1.5 text-xs font-display text-muted-foreground neon-border">
         {Math.round(state.zoom * 100)}%

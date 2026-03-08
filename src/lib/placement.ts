@@ -492,10 +492,14 @@ export function autoPlaceEquipmentWithReport(
     // Walls assigned to this category (preferred), fallback to all walls
     const preferredWalls = categoryWallMap.get(category) || walls;
 
+    // Track last placement across the whole category so different refs stay grouped
+    let categoryLastPlacement: { x: number; y: number; rotation: number; w: number; d: number } | null = null;
+
     for (const group of sortedGroups) {
       const equip = group.equip;
       const count = group.count;
-      let lastPlacement: { x: number; y: number; rotation: number; w: number; d: number } | null = null;
+      // Inherit last placement from previous group in same category
+      let lastPlacement: { x: number; y: number; rotation: number; w: number; d: number } | null = categoryLastPlacement;
 
       for (let i = 0; i < count; i++) {
         let placed = false;

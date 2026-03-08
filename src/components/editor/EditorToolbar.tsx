@@ -240,8 +240,8 @@ export function EditorToolbar() {
                   dispatch({ type: "SET_ZOOM", zoom: 1 });
                   dispatch({ type: "SET_PAN", offset: { x: window.innerWidth / 3, y: window.innerHeight / 3 } });
                 }
-              }
-           >
+              }}
+            >
              <Locate className="h-5 w-5" />
            </Button>
          </TooltipTrigger>

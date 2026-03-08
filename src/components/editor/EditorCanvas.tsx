@@ -734,6 +734,8 @@ export function EditorCanvas() {
 
   // Mouse handlers
   const handleMouseDown = (e: React.MouseEvent) => {
+    // Close context menu on any click
+    if (contextMenu) { setContextMenu(null); if (e.button === 0) return; }
     if (e.button === 1 || (e.button === 0 && state.tool === "pan")) {
       setIsPanning(true);
       setLastPanPos({ x: e.clientX, y: e.clientY });

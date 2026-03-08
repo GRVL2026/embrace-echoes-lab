@@ -10,6 +10,22 @@ export type CirculationSegment = {
   width: number;
 };
 
+export type RemovalProposal = {
+  id: string;
+  label: string;
+  equipmentIdsToRemove: string[];
+  removedNames: string[];
+  resultingCirculation: CirculationSegment[];
+  remainingEquipments: PlacedEquipment[];
+};
+
+export type CirculationResult = {
+  segments: CirculationSegment[];
+  success: boolean; // true = all equipments reachable
+  unreachableCount: number; // number of equipments not reachable
+  proposals: RemovalProposal[]; // suggestions if !success
+};
+
 /** Build an occupancy grid for pathfinding. true = blocked */
 function buildOccupancyGrid(
   room: Room,

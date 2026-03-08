@@ -1942,6 +1942,7 @@ function drawPlacedEquipments(
   equipments: PlacedEquipment[],
   zoom: number,
   hoveredEquipId?: string | null,
+  collidingIds?: Set<string>,
 ) {
   equipments.forEach((eq) => {
     const cx = eq.position.x * CM_TO_PX;
@@ -1950,6 +1951,7 @@ function drawPlacedEquipments(
     const d = eq.depth * CM_TO_PX;
     const rot = (eq.rotation || 0) * Math.PI / 180;
     const isHovered = eq.id === hoveredEquipId;
+    const isColliding = collidingIds?.has(eq.id) ?? false;
 
     ctx.save();
     ctx.translate(cx, cy);

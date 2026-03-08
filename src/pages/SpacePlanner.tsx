@@ -2,6 +2,7 @@ import { EditorProvider } from "@/contexts/EditorContext";
 import { EditorToolbar } from "@/components/editor/EditorToolbar";
 import { EditorCanvas } from "@/components/editor/EditorCanvas";
 import { EditorSidebar } from "@/components/editor/EditorSidebar";
+import logoImg from "@/assets/logo.png";
 
 const SpacePlanner = () => {
   return (
@@ -17,6 +18,7 @@ const SpacePlanner = () => {
           {/* Top bar */}
           <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-6">
             <div className="flex items-center gap-3">
+              <img src={logoImg} alt="Arcade Planner logo" className="h-7 w-7 object-contain" />
               <h1 className="font-display text-xl font-bold tracking-tight">
                 <span className="text-primary text-glow-purple">Arcade</span>{" "}
                 <span className="text-secondary text-glow-green">Planner</span>

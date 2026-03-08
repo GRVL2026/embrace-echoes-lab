@@ -76,6 +76,12 @@ export function EditorCanvas() {
   const [hasPillarDragged, setHasPillarDragged] = useState(false);
   const [hoveredPillar, setHoveredPillar] = useState<string | null>(null);
   const [hasVertexDragged, setHasVertexDragged] = useState(false);
+  // Equipment drag & rotate state
+  const [draggingEquipment, setDraggingEquipment] = useState<string | null>(null);
+  const [rotatingEquipment, setRotatingEquipment] = useState<string | null>(null);
+  const [pendingEquipClick, setPendingEquipClick] = useState<{ equipId: string; startX: number; startY: number } | null>(null);
+  const [hasEquipDragged, setHasEquipDragged] = useState(false);
+  const [hoveredEquipment, setHoveredEquipment] = useState<string | null>(null);
   const [editingDimension, setEditingDimension] = useState<{
     roomId: string;
     edgeIndex: number;

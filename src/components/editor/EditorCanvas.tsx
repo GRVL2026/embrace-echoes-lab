@@ -13,6 +13,57 @@ export function EditorCanvas() {
   const [lastPanPos, setLastPanPos] = useState<Point>({ x: 0, y: 0 });
   const [drawingPoints, setDrawingPoints] = useState<Point[]>([]);
   const [mousePos, setMousePos] = useState<Point>({ x: 0, y: 0 });
+  const screenMouseRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Auto-pan when drawing walls and mouse is near canvas edges
+  const AUTO_PAN_EDGE = 60; // px from edge to trigger
+  const AUTO_PAN_SPEED = 8; // px per frame
+  const autoPanRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const isDrawing = drawingPoints.length > 0 && state.tool === "wall";
+    if (!isDrawing) {
+      if (autoPanRef.current) {
+        cancelAnimationFrame(autoPanRef.current);
+        autoPanRef.current = null;
+      }
+      return;
+    }
+
+    const tick = () => {
+      const container = containerRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const mx = screenMouseRef.current.x;
+      const my = screenMouseRef.current.y;
+
+      let dx = 0, dy = 0;
+      if (mx < rect.left + AUTO_PAN_EDGE) dx = AUTO_PAN_SPEED;
+      else if (mx > rect.right - AUTO_PAN_EDGE) dx = -AUTO_PAN_SPEED;
+      if (my < rect.top + AUTO_PAN_EDGE) dy = AUTO_PAN_SPEED;
+      else if (my > rect.bottom - AUTO_PAN_EDGE) dy = -AUTO_PAN_SPEED;
+
+      if (dx !== 0 || dy !== 0) {
+        dispatch({
+          type: "SET_PAN",
+          offset: {
+            x: state.panOffset.x + dx,
+            y: state.panOffset.y + dy,
+          },
+        });
+      }
+
+      autoPanRef.current = requestAnimationFrame(tick);
+    };
+
+    autoPanRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (autoPanRef.current) {
+        cancelAnimationFrame(autoPanRef.current);
+        autoPanRef.current = null;
+      }
+    };
+  }, [drawingPoints.length > 0, state.tool, state.panOffset, dispatch]);
   const [hoveredWall, setHoveredWall] = useState<{ roomId: string; edgeIndex: number } | null>(null);
   const [draggingDoor, setDraggingDoor] = useState<string | null>(null);
   const [pendingDoorClick, setPendingDoorClick] = useState<{ doorId: string; startX: number; startY: number } | null>(null);
@@ -652,6 +703,7 @@ export function EditorCanvas() {
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
+    screenMouseRef.current = { x: e.clientX, y: e.clientY };
     const world = screenToWorld(e.clientX, e.clientY);
     setMousePos(world);
 

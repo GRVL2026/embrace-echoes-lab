@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { Upload, Package, Play, Trash2, Check, X, Info, Search, Maximize2, Minus, Plus } from "lucide-react";
 import type { GameEquipment, CatalogJSON } from "@/types/equipment";
 import { DEFAULT_SAFETY_ZONE } from "@/types/equipment";
-import { autoPlaceEquipment } from "@/lib/placement";
+import { autoPlaceEquipmentWithReport } from "@/lib/placement";
 import { ProductDialog } from "./ProductDialog";
 
 /** Parse Shopify CSV dimensions like "L 1030 x P 2500 x H 2640 mm" or "35X22X12" */

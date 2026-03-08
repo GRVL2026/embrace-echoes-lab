@@ -512,6 +512,7 @@ export function autoPlaceEquipmentWithReport(
         if (placed) continue;
 
         // ── RULE 1: Try wall positions (preferred walls for this category first, then all) ──
+        let debugCount = 0;
         for (const wallSet of [preferredWalls, walls]) {
           if (placed) break;
           for (const orientRot of [0, 90]) {
@@ -530,8 +531,14 @@ export function autoPlaceEquipmentWithReport(
             }
             allWallPos.sort((a, b) => a.score - b.score);
 
+            if (allWallPos.length === 0) {
+              console.warn(`[placement] ${equip.name}: No wall positions generated for orient=${orientRot}, walls=${wallSet.length}`);
+            }
+
             for (const pos of allWallPos) {
-              if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, gap, bestRoom, doorZones, pillarZones, placements)) {
+              const doDebug = debugCount < 5;
+              if (doDebug) debugCount++;
+              if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, gap, bestRoom, doorZones, pillarZones, placements, doDebug)) {
                 const p = makePlacement(equip, pos.x, pos.y, pos.rotation, w, d);
                 placements.push(p);
                 result.push(p);

@@ -365,19 +365,30 @@ export function autoPlaceEquipmentWithReport(
   const result: PlacedEquipment[] = [];
   const notPlaced: GameEquipment[] = [];
 
-  // Group equipment by category for clustering
-  const byCategory = new Map<string, GameEquipment[]>();
+  // Group equipment by ID first (to keep duplicates together), then by category
+  const byEquipmentId = new Map<string, { equip: GameEquipment; count: number }>();
   for (const equip of selectedEquipments) {
-    const cat = equip.category || "autre";
+    const existing = byEquipmentId.get(equip.id);
+    if (existing) {
+      existing.count++;
+    } else {
+      byEquipmentId.set(equip.id, { equip, count: 1 });
+    }
+  }
+
+  // Group by category, keeping equipment groups intact
+  const byCategory = new Map<string, { equip: GameEquipment; count: number }[]>();
+  for (const group of byEquipmentId.values()) {
+    const cat = group.equip.category || "autre";
     if (!byCategory.has(cat)) byCategory.set(cat, []);
-    byCategory.get(cat)!.push(equip);
+    byCategory.get(cat)!.push(group);
   }
 
   // Sort categories by total area (largest first)
   const sortedCategories = Array.from(byCategory.entries())
     .sort((a, b) => {
-      const areaA = a[1].reduce((sum, e) => sum + e.width * e.depth, 0);
-      const areaB = b[1].reduce((sum, e) => sum + e.width * e.depth, 0);
+      const areaA = a[1].reduce((sum, g) => sum + g.equip.width * g.equip.depth * g.count, 0);
+      const areaB = b[1].reduce((sum, g) => sum + g.equip.width * g.equip.depth * g.count, 0);
       return areaB - areaA;
     });
 
@@ -387,75 +398,85 @@ export function autoPlaceEquipmentWithReport(
 
   const step = 25; // 25cm grid step
 
-  for (const [category, equipments] of sortedCategories) {
-    // Sort equipment in this category by area (largest first)
-    const sorted = [...equipments].sort((a, b) => (b.width * b.depth) - (a.width * a.depth));
+  for (const [category, equipmentGroups] of sortedCategories) {
+    // Sort equipment groups by total area (largest first)
+    const sortedGroups = [...equipmentGroups].sort((a, b) => 
+      (b.equip.width * b.equip.depth * b.count) - (a.equip.width * a.equip.depth * a.count)
+    );
 
-    for (const equip of sorted) {
-      let placed = false;
+    for (const group of sortedGroups) {
+      const equip = group.equip;
+      const count = group.count;
       const sz = equip.safetyZone;
+      
+      // Track last placement for this equipment type to place duplicates adjacent
+      let lastPlacement: { x: number; y: number; rotation: number; wall?: WallSegment } | null = null;
 
-      // Try each orientation
-      for (const orientationRot of [0, 90]) {
-        if (placed) break;
-        
-        const w = orientationRot === 0 ? equip.width : equip.depth;
-        const d = orientationRot === 0 ? equip.depth : equip.width;
+      for (let i = 0; i < count; i++) {
+        let placed = false;
 
-        // PHASE 1: Try wall positions first
-        const allWallPositions: { x: number; y: number; rotation: number; score: number; wall: WallSegment }[] = [];
-        
-        for (const wall of walls) {
-          // Skip walls with doors for larger equipment
-          if (wall.hasDoor && w > 100) continue;
+        // Try each orientation
+        for (const orientationRot of [0, 90]) {
+          if (placed) break;
           
-          const positions = generateWallPositions(wall, w, d, sz, step);
-          for (const pos of positions) {
-            // Adjust rotation based on equipment orientation
-            const finalRot = (pos.rotation + orientationRot) % 360;
-            allWallPositions.push({ ...pos, rotation: finalRot, wall });
-          }
-        }
+          const w = orientationRot === 0 ? equip.width : equip.depth;
+          const d = orientationRot === 0 ? equip.depth : equip.width;
 
-        // Sort by score (lower is better)
-        allWallPositions.sort((a, b) => a.score - b.score);
-
-        for (const pos of allWallPositions) {
-          if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, sz, bestRoom, doorZones, pillarZones, placements)) {
-            const placement: PlacedEquipment = {
-              id: crypto.randomUUID(),
-              equipmentId: equip.id,
-              position: { x: pos.x, y: pos.y },
-              rotation: pos.rotation,
-              name: equip.name,
-              width: w,
-              depth: d,
-              safetyZone: sz,
-              color: equip.color || "hsl(263, 85%, 68%)",
-            };
-            placements.push(placement);
-            result.push(placement);
-            placed = true;
+          // If we have a previous placement of the same equipment, try adjacent positions first
+          if (lastPlacement) {
+            const adjacentPositions = generateAdjacentPositions(
+              lastPlacement.x, lastPlacement.y, lastPlacement.rotation,
+              w, d, sz, step
+            );
             
-            // Update wall occupancy
-            const occ = wallOccupancy.get(pos.wall.edgeIndex) || 0;
-            wallOccupancy.set(pos.wall.edgeIndex, occ + w + sz);
-            break;
+            for (const pos of adjacentPositions) {
+              if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, sz, bestRoom, doorZones, pillarZones, placements)) {
+                const placement: PlacedEquipment = {
+                  id: crypto.randomUUID(),
+                  equipmentId: equip.id,
+                  position: { x: pos.x, y: pos.y },
+                  rotation: pos.rotation,
+                  name: equip.name,
+                  width: w,
+                  depth: d,
+                  safetyZone: sz,
+                  color: equip.color || "hsl(263, 85%, 68%)",
+                };
+                placements.push(placement);
+                result.push(placement);
+                lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation };
+                placed = true;
+                break;
+              }
+            }
+            if (placed) break;
           }
-        }
 
-        // PHASE 2: If wall placement failed, try center island (back-to-back)
-        if (!placed) {
-          const islandPositions = generateIslandPositions(bestRoom, w, d, sz, placements, step);
+          // PHASE 1: Try wall positions first
+          const allWallPositions: { x: number; y: number; rotation: number; score: number; wall: WallSegment }[] = [];
           
-          for (const pos of islandPositions) {
-            const finalRot = (pos.rotation + orientationRot) % 360;
-            if (isPlacementValid(pos.x, pos.y, w, d, finalRot, sz, bestRoom, doorZones, pillarZones, placements)) {
+          for (const wall of walls) {
+            // Skip walls with doors for larger equipment
+            if (wall.hasDoor && w > 100) continue;
+            
+            const positions = generateWallPositions(wall, w, d, sz, step);
+            for (const pos of positions) {
+              // Adjust rotation based on equipment orientation
+              const finalRot = (pos.rotation + orientationRot) % 360;
+              allWallPositions.push({ ...pos, rotation: finalRot, wall });
+            }
+          }
+
+          // Sort by score (lower is better)
+          allWallPositions.sort((a, b) => a.score - b.score);
+
+          for (const pos of allWallPositions) {
+            if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, sz, bestRoom, doorZones, pillarZones, placements)) {
               const placement: PlacedEquipment = {
                 id: crypto.randomUUID(),
                 equipmentId: equip.id,
                 position: { x: pos.x, y: pos.y },
-                rotation: finalRot,
+                rotation: pos.rotation,
                 name: equip.name,
                 width: w,
                 depth: d,
@@ -464,19 +485,94 @@ export function autoPlaceEquipmentWithReport(
               };
               placements.push(placement);
               result.push(placement);
+              lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, wall: pos.wall };
               placed = true;
+              
+              // Update wall occupancy
+              const occ = wallOccupancy.get(pos.wall.edgeIndex) || 0;
+              wallOccupancy.set(pos.wall.edgeIndex, occ + w + sz);
               break;
             }
           }
-        }
-      }
 
-      if (!placed) {
-        console.warn(`Could not place: ${equip.name}`);
-        notPlaced.push(equip);
+          // PHASE 2: If wall placement failed, try center island (back-to-back)
+          if (!placed) {
+            const islandPositions = generateIslandPositions(bestRoom, w, d, sz, placements, step);
+            
+            for (const pos of islandPositions) {
+              const finalRot = (pos.rotation + orientationRot) % 360;
+              if (isPlacementValid(pos.x, pos.y, w, d, finalRot, sz, bestRoom, doorZones, pillarZones, placements)) {
+                const placement: PlacedEquipment = {
+                  id: crypto.randomUUID(),
+                  equipmentId: equip.id,
+                  position: { x: pos.x, y: pos.y },
+                  rotation: finalRot,
+                  name: equip.name,
+                  width: w,
+                  depth: d,
+                  safetyZone: sz,
+                  color: equip.color || "hsl(263, 85%, 68%)",
+                };
+                placements.push(placement);
+                result.push(placement);
+                lastPlacement = { x: pos.x, y: pos.y, rotation: finalRot };
+                placed = true;
+                break;
+              }
+            }
+          }
+        }
+
+        if (!placed) {
+          console.warn(`Could not place: ${equip.name} (instance ${i + 1}/${count})`);
+          notPlaced.push(equip);
+        }
       }
     }
   }
 
   return { placed: result, notPlaced };
+}
+
+/** Generate positions adjacent to a previous placement */
+function generateAdjacentPositions(
+  prevX: number, prevY: number, prevRot: number,
+  w: number, d: number, sz: number,
+  step: number,
+): { x: number; y: number; rotation: number }[] {
+  const positions: { x: number; y: number; rotation: number }[] = [];
+  
+  // Keep the same rotation for uniformity
+  const rotation = prevRot;
+  
+  // Calculate offset based on rotation (place side by side)
+  const rad = prevRot * Math.PI / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  
+  // Spacing between equipment (width + small gap between safety zones)
+  const spacing = w + 10; // 10cm gap
+  
+  // Try positions to the left and right along the equipment's orientation
+  // "Left" and "Right" relative to the equipment's facing direction
+  const offsets = [
+    { dx: spacing, dy: 0 },   // Right
+    { dx: -spacing, dy: 0 },  // Left
+    { dx: spacing * 2, dy: 0 },   // Further right
+    { dx: -spacing * 2, dy: 0 },  // Further left
+  ];
+  
+  for (const offset of offsets) {
+    // Rotate offset based on equipment rotation
+    const rotatedDx = offset.dx * cos - offset.dy * sin;
+    const rotatedDy = offset.dx * sin + offset.dy * cos;
+    
+    positions.push({
+      x: prevX + rotatedDx,
+      y: prevY + rotatedDy,
+      rotation,
+    });
+  }
+  
+  return positions;
 }

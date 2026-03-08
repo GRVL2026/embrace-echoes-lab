@@ -1363,14 +1363,18 @@ export function EditorCanvas() {
         dispatch({ type: "UNDO" });
         return;
       }
-      // Copy: Ctrl+C — copy hovered pillar or equipment
+      // Copy: Ctrl+C — copy hovered pillar, equipment, or door under cursor
       if ((e.ctrlKey || e.metaKey) && e.key === "c") {
         if (hoveredPillar) {
           const p = state.pillars.find(pl => pl.id === hoveredPillar);
           if (p) { clipboardRef.current = { type: "pillar", data: { ...p } }; }
         } else if (hoveredEquipment) {
-          const eq = state.placedEquipments.find(e => e.id === hoveredEquipment);
+          const eq = state.placedEquipments.find(el => el.id === hoveredEquipment);
           if (eq) { clipboardRef.current = { type: "equipment", data: { ...eq } }; }
+        } else {
+          // Check if cursor is over a door
+          const doorUnder = findDoorAtPoint(mousePos);
+          if (doorUnder) { clipboardRef.current = { type: "door", data: { ...doorUnder } }; }
         }
         return;
       }

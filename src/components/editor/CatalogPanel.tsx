@@ -588,10 +588,10 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
       ) : (
         <>
           {/* Selection actions */}
-          {selectedIds.size > 0 && (
+          {totalSelectedCount > 0 && (
             <div className="flex items-center gap-2 p-2 bg-primary/10 border-b border-border">
               <span className="text-xs text-primary font-medium flex-1">
-                {selectedIds.size} sélectionné{selectedIds.size > 1 ? "s" : ""}
+                {totalSelectedCount} jeu{totalSelectedCount > 1 ? "x" : ""} ({selectedQuantities.size} type{selectedQuantities.size > 1 ? "s" : ""})
               </span>
               <Button size="sm" className="h-7 gap-1 text-xs" onClick={handleAutoPlace}>
                 <Play className="h-3 w-3" />
@@ -601,7 +601,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7"
-                onClick={() => setSelectedIds(new Set())}
+                onClick={() => setSelectedQuantities(new Map())}
               >
                 <X className="h-3 w-3" />
               </Button>
@@ -618,7 +618,8 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                   </p>
                   <div className="space-y-1">
                     {items.map((eq) => {
-                      const isSelected = selectedIds.has(eq.id);
+                      const quantity = selectedQuantities.get(eq.id) || 0;
+                      const isSelected = quantity > 0;
                       return (
                         <div
                           key={eq.id}
@@ -653,16 +654,32 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                             >
                               <Info className="h-3.5 w-3.5 text-muted-foreground" />
                             </Button>
-                            <button
-                              className={`h-5 w-5 rounded border flex items-center justify-center shrink-0 transition-colors ${
-                                isSelected 
-                                  ? "bg-primary border-primary text-primary-foreground" 
-                                  : "border-muted-foreground/30 hover:border-primary"
-                              }`}
-                              onClick={(e) => toggleSelection(eq.id, e)}
-                            >
-                              {isSelected && <Check className="h-3 w-3" />}
-                            </button>
+                            {/* Quantity controls */}
+                            <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                              {isSelected && (
+                                <button
+                                  className="h-5 w-5 rounded border border-muted-foreground/30 flex items-center justify-center hover:border-primary hover:bg-primary/10 transition-colors"
+                                  onClick={(e) => decrementQuantity(eq.id, e)}
+                                >
+                                  <Minus className="h-3 w-3" />
+                                </button>
+                              )}
+                              {isSelected && (
+                                <span className="w-5 text-center font-medium text-primary text-xs">
+                                  {quantity}
+                                </span>
+                              )}
+                              <button
+                                className={`h-5 w-5 rounded border flex items-center justify-center transition-colors ${
+                                  isSelected 
+                                    ? "border-primary bg-primary/20 text-primary hover:bg-primary hover:text-primary-foreground" 
+                                    : "border-muted-foreground/30 hover:border-primary hover:bg-primary/10"
+                                }`}
+                                onClick={(e) => incrementQuantity(eq.id, e)}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </button>
+                            </div>
                           </div>
                           <div className="flex gap-2 mt-1 text-muted-foreground">
                             <span>{eq.width}×{eq.depth}cm</span>

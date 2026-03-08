@@ -701,8 +701,8 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                 )}
 
                 {/* Expanded catalog grid */}
-                <ScrollArea className="flex-1 h-[60vh]">
-                  <div className={`grid gap-3 ${selectedIds.size > 0 ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'}`}>
+                <div className="flex-1 overflow-y-auto overscroll-contain">
+                  <div className={`grid gap-3 pb-4 ${selectedIds.size > 0 ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'}`}>
                     {filteredCatalog.map((eq) => {
                       const isSelected = selectedIds.has(eq.id);
                       return (
@@ -764,7 +764,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                       );
                     })}
                   </div>
-                </ScrollArea>
+                </div>
               </div>
             </div>
 

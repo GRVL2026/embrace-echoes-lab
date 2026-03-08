@@ -424,7 +424,7 @@ export function EditorCanvas() {
       }
     }, 300);
     return () => { if (circulationTimerRef.current) clearTimeout(circulationTimerRef.current); };
-  }, [state.rooms, state.doors, state.pillars, state.placedEquipments.length]);
+  }, [state.rooms, state.doors, state.pillars, state.placedEquipments]);
 
   useEffect(() => {
     const canvas = canvasRef.current;

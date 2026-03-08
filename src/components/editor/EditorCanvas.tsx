@@ -1716,3 +1716,77 @@ function drawPlacedEquipments(
     ctx.restore();
   });
 }
+
+// Draw circulation path (safety corridors)
+function drawCirculationPath(
+  ctx: CanvasRenderingContext2D,
+  segments: CirculationSegment[],
+  zoom: number,
+) {
+  if (segments.length === 0) return;
+  
+  // Draw corridor fill (semi-transparent green)
+  ctx.fillStyle = "hsla(142, 70%, 45%, 0.15)";
+  ctx.strokeStyle = "hsla(142, 70%, 45%, 0.6)";
+  ctx.lineWidth = 2 / zoom;
+  ctx.setLineDash([8 / zoom, 4 / zoom]);
+  
+  segments.forEach((seg) => {
+    const startX = seg.start.x * CM_TO_PX;
+    const startY = seg.start.y * CM_TO_PX;
+    const endX = seg.end.x * CM_TO_PX;
+    const endY = seg.end.y * CM_TO_PX;
+    const width = seg.width * CM_TO_PX;
+    
+    // Calculate perpendicular offset for corridor width
+    const dx = endX - startX;
+    const dy = endY - startY;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len === 0) return;
+    
+    const nx = -dy / len; // perpendicular
+    const ny = dx / len;
+    const hw = width / 2;
+    
+    // Draw corridor as a rectangle
+    ctx.beginPath();
+    ctx.moveTo(startX + nx * hw, startY + ny * hw);
+    ctx.lineTo(endX + nx * hw, endY + ny * hw);
+    ctx.lineTo(endX - nx * hw, endY - ny * hw);
+    ctx.lineTo(startX - nx * hw, startY - ny * hw);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  });
+  
+  ctx.setLineDash([]);
+  
+  // Draw "1.40m" label in the center of the first segment
+  if (segments.length > 0) {
+    const seg = segments[0];
+    const midX = ((seg.start.x + seg.end.x) / 2) * CM_TO_PX;
+    const midY = ((seg.start.y + seg.end.y) / 2) * CM_TO_PX;
+    
+    ctx.save();
+    ctx.fillStyle = "hsla(142, 70%, 35%, 0.9)";
+    ctx.font = `bold ${12 / zoom}px Inter`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    
+    // Background for label
+    const text = "Circulation 1.40m";
+    const textMetrics = ctx.measureText(text);
+    const padding = 6 / zoom;
+    ctx.fillStyle = "hsla(142, 70%, 95%, 0.9)";
+    ctx.fillRect(
+      midX - textMetrics.width / 2 - padding,
+      midY - 8 / zoom - padding,
+      textMetrics.width + padding * 2,
+      16 / zoom + padding * 2
+    );
+    
+    ctx.fillStyle = "hsla(142, 70%, 30%, 1)";
+    ctx.fillText(text, midX, midY);
+    ctx.restore();
+  }
+}

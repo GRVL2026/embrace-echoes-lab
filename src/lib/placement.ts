@@ -204,7 +204,7 @@ function getRoomWalls(room: Room, doors: Door[]): WallSegment[] {
   return walls;
 }
 
-/** Generate wall positions (back against wall, facing inward) */
+/** Generate wall positions (back against wall, front/dimensions facing inward) */
 function generateWallPositions(
   wall: WallSegment,
   equipWidth: number,
@@ -212,8 +212,9 @@ function generateWallPositions(
   step: number = 20,
 ): { x: number; y: number; rotation: number; score: number; wall: WallSegment }[] {
   const positions: { x: number; y: number; rotation: number; score: number; wall: WallSegment }[] = [];
-  // Equipment back against the wall, facing inward
-  const rotation = (wall.angle + 90 + 360) % 360;
+  // Equipment front (local +Y, where dimensions label is drawn) faces inward (along wall normal)
+  // Back (local -Y) faces the wall
+  const rotation = ((Math.atan2(-wall.normalX, wall.normalY) * 180 / Math.PI) + 360) % 360;
   // Distance from wall surface to equipment center
   const distFromWall = equipDepth / 2 + WALL_MARGIN;
   const margin = equipWidth / 2 + 5; // small margin from wall corners

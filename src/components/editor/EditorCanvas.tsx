@@ -1489,13 +1489,15 @@ export function EditorCanvas() {
           <button
             className="w-full px-3 py-1.5 text-left text-sm hover:bg-accent/20 flex items-center gap-2"
             onClick={() => {
-              // Copy to clipboard
               if (contextMenu.target.type === "pillar") {
                 const p = state.pillars.find(pl => pl.id === contextMenu.target.id);
                 if (p) clipboardRef.current = { type: "pillar", data: { ...p } };
-              } else {
+              } else if (contextMenu.target.type === "equipment") {
                 const eq = state.placedEquipments.find(e => e.id === contextMenu.target.id);
                 if (eq) clipboardRef.current = { type: "equipment", data: { ...eq } };
+              } else {
+                const d = state.doors.find(d => d.id === contextMenu.target.id);
+                if (d) clipboardRef.current = { type: "door", data: { ...d } };
               }
               setContextMenu(null);
             }}
@@ -1517,8 +1519,10 @@ export function EditorCanvas() {
             onClick={() => {
               if (contextMenu.target.type === "pillar") {
                 dispatch({ type: "DELETE_PILLAR", id: contextMenu.target.id });
-              } else {
+              } else if (contextMenu.target.type === "equipment") {
                 dispatch({ type: "DELETE_PLACED_EQUIPMENT", id: contextMenu.target.id });
+              } else {
+                dispatch({ type: "DELETE_DOOR", id: contextMenu.target.id });
               }
               setContextMenu(null);
             }}

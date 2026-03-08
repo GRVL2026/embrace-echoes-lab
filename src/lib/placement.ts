@@ -607,6 +607,8 @@ export function autoPlaceEquipmentWithReport(
           notPlaced.push(equip);
         }
       }
+      // Update category-level tracking
+      if (lastPlacement) categoryLastPlacement = lastPlacement;
     }
   }
 

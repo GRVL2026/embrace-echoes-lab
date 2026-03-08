@@ -402,7 +402,7 @@ export function computeCirculation(
   }
   if (!bestRoom) return emptyResult;
 
-  const resolution = 20;
+  const resolution = 10; // finer grid for smoother, non-snapped paths
   const gridData = buildOccupancyGrid(bestRoom, equipments, pillars, doors, rooms, resolution);
   const { grid, originX, originY, cols, rows, res } = gridData;
 

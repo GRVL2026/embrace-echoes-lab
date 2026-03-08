@@ -430,8 +430,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   };
 
   const handleAutoPlace = () => {
-    const selected = catalog.filter(e => selectedIds.has(e.id));
-    if (selected.length === 0) {
+    if (selectedQuantities.size === 0) {
       toast.error("Sélectionnez au moins un jeu");
       return;
     }
@@ -445,6 +444,17 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
       toast.error("Aucune salle fermée trouvée");
       return;
     }
+
+    // Build array with duplicates based on quantities
+    const selected: GameEquipment[] = [];
+    selectedQuantities.forEach((qty, id) => {
+      const eq = catalog.find(e => e.id === id);
+      if (eq) {
+        for (let i = 0; i < qty; i++) {
+          selected.push(eq);
+        }
+      }
+    });
 
     const newPlacements = autoPlaceEquipment(
       selected,
@@ -462,14 +472,14 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
     dispatch({ type: "ADD_PLACED_EQUIPMENTS", equipments: newPlacements });
 
     const placed = newPlacements.length;
-    const failed = selected.length - placed;
+    const failed = totalSelectedCount - placed;
     if (failed > 0) {
       toast.warning(`${placed} jeu${placed > 1 ? "x" : ""} placé${placed > 1 ? "s" : ""}, ${failed} impossible${failed > 1 ? "s" : ""} à placer`);
     } else {
       toast.success(`${placed} jeu${placed > 1 ? "x" : ""} placé${placed > 1 ? "s" : ""} avec succès`);
     }
 
-    setSelectedIds(new Set());
+    setSelectedQuantities(new Map());
   };
 
   const handleClearPlacements = () => {

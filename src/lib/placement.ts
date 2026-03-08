@@ -502,7 +502,22 @@ export function autoPlaceEquipmentWithReport(
         const isSameRef = lastPlacement !== null;
         const gap = isSameRef ? SAME_REF_GAP : DIFFERENT_GAP;
 
-        // ── RULE 3: If same ref, try adjacent to previous placement first ──
+        // ── RULE 3a: If same ref already on plan (existing or just placed), try adjacent ──
+        // First check existing placements for same equipmentId
+        if (!lastPlacement) {
+          const existingSameRef = placements.find(p => p.equipmentId === equip.id);
+          if (existingSameRef) {
+            lastPlacement = {
+              x: existingSameRef.position.x,
+              y: existingSameRef.position.y,
+              rotation: existingSameRef.rotation,
+              w: existingSameRef.width,
+              d: existingSameRef.depth,
+            };
+          }
+        }
+
+        // ── RULE 3b: If same ref, try adjacent to previous placement first ──
         if (lastPlacement) {
           const adjPositions = generateAdjacentPositions(
             lastPlacement.x, lastPlacement.y, lastPlacement.rotation,

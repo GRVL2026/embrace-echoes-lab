@@ -242,12 +242,22 @@ export function EditorSidebar() {
     }
   };
 
+  // Budget estimation
+  const budgetTotal = useMemo(() => {
+    let total = 0;
+    state.placedEquipments.forEach((eq) => {
+      const catItem = catalog.find(c => c.id === eq.equipmentId);
+      if (catItem?.price) total += catItem.price;
+    });
+    return total;
+  }, [state.placedEquipments, catalog]);
+
   return (
     <div className="flex w-72 flex-col border-l border-border bg-card/50 backdrop-blur-sm">
       {/* Header */}
       <div className="border-b border-border p-4 flex items-center justify-between">
         <div>
-          <h2 className="font-display text-lg font-bold text-foreground">Salles</h2>
+          <h2 className="font-display text-lg font-bold text-foreground">Projet</h2>
           <p className="text-xs text-muted-foreground mt-1">
             {state.rooms.length === 0 && state.pillars.length === 0
               ? "Dessinez ou importez un plan"
@@ -257,202 +267,237 @@ export function EditorSidebar() {
         <ProjectMenu catalog={catalog} onLoadCatalog={setCatalog} />
       </div>
 
-      {/* Import button + progress */}
-      <div className="border-b border-border p-4">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*,application/pdf"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) handleImportPlan(file);
-          }}
-        />
-        <Button
-          variant="outline"
-          className="w-full gap-2"
-          disabled={isAnalyzing}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          {isAnalyzing ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {analysisStep ? STEP_LABELS[analysisStep] : "Analyse…"}
-            </>
-          ) : (
-            <>
-              <Upload className="h-4 w-4" />
-              Importer un plan
-            </>
-          )}
-        </Button>
-
-        {/* Progress bar */}
-        {isAnalyzing && analysisStep && (
-          <div className="mt-3 space-y-1.5">
-            <Progress value={STEP_PROGRESS[analysisStep]} className="h-2" />
-            <p className="text-[10px] text-muted-foreground text-center">
-              {STEP_LABELS[analysisStep]}
-            </p>
-          </div>
-        )}
-
-        {!isAnalyzing && (
-          <div className="flex items-center gap-2 mt-2 justify-center">
-            <FileImage className="h-3 w-3 text-muted-foreground" />
-            <FileText className="h-3 w-3 text-muted-foreground" />
-            <p className="text-[10px] text-muted-foreground">
-              Images (JPG, PNG) et PDF supportés
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Rooms list */}
       <ScrollArea className="flex-1">
-        <div className="space-y-2 p-4">
-          {state.rooms.length === 0 && (
-            <div className="rounded-lg border border-dashed border-border p-6 text-center">
-              <p className="text-sm text-muted-foreground">
-                Utilisez l'outil{" "}
-                <span className="text-secondary font-medium">Mur (W)</span> pour
-                dessiner ou importez une image de plan.
-              </p>
-            </div>
-          )}
-          {state.rooms.map((room) => {
-            let area = 0;
-            const pts = room.points;
-            if (room.isClosed) {
-              for (let i = 0; i < pts.length; i++) {
-                const j = (i + 1) % pts.length;
-                area += pts[i].x * pts[j].y;
-                area -= pts[j].x * pts[i].y;
-              }
-              area = Math.abs(area) / 2 / 10000;
-            }
+        {/* === Section Import === */}
+        <SidebarSection title="Import" icon={FileUp} defaultOpen={state.rooms.length === 0}>
+          <div className="p-3 pt-0">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,application/pdf"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleImportPlan(file);
+              }}
+            />
+            <Button
+              variant="outline"
+              className="w-full gap-2"
+              disabled={isAnalyzing}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {isAnalyzing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {analysisStep ? STEP_LABELS[analysisStep] : "Analyse…"}
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4" />
+                  Importer un plan
+                </>
+              )}
+            </Button>
 
-            let pillarArea = 0;
-            if (room.isClosed) {
-              state.pillars.forEach((pillar) => {
-                const { x: testX, y: testY } = pillar.position;
-                let inside = false;
-                for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-                  const xi = pts[i].x, yi = pts[i].y;
-                  const xj = pts[j].x, yj = pts[j].y;
-                  if (((yi > testY) !== (yj > testY)) && (testX < (xj - xi) * (testY - yi) / (yj - yi) + xi)) {
-                    inside = !inside;
-                  }
-                }
-                if (inside) {
-                  if (pillar.shape === "round") {
-                    const r = pillar.width / 2;
-                    pillarArea += Math.PI * r * r / 10000;
-                  } else {
-                    pillarArea += (pillar.width * pillar.depth) / 10000;
-                  }
-                }
-              });
-            }
-
-            const netArea = area - pillarArea;
-
-            let perimeter = 0;
-            const edgeCount = room.isClosed ? pts.length : pts.length - 1;
-            for (let i = 0; i < edgeCount; i++) {
-              const j = (i + 1) % pts.length;
-              const dx = pts[j].x - pts[i].x;
-              const dy = pts[j].y - pts[i].y;
-              perimeter += Math.sqrt(dx * dx + dy * dy);
-            }
-
-            const doorCount = state.doors.filter((d) => d.roomId === room.id).length;
-
-            return (
-              <div
-                key={room.id}
-                className="rounded-lg border border-border bg-surface p-3 transition-colors hover:border-primary/40"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-display font-semibold text-sm text-foreground">
-                    {room.name}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-destructive/60 hover:text-destructive"
-                    onClick={() => dispatch({ type: "DELETE_ROOM", id: room.id })}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-                <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                  {room.isClosed && (
-                    <>
-                      <div>
-                        <span className="text-accent">{area.toFixed(1)}</span> m² brut
-                      </div>
-                      <div>
-                        <span className="text-accent">{netArea.toFixed(1)}</span> m² net
-                      </div>
-                    </>
-                  )}
-                  <div>
-                    <span className="text-accent">
-                      {(perimeter / 100).toFixed(1)}
-                    </span>{" "}
-                    m {room.isClosed ? "périmètre" : "longueur"}
-                  </div>
-                  <div>
-                    {pts.length} <span>points</span>
-                  </div>
-                  {doorCount > 0 && (
-                    <div>
-                      {doorCount} <span>porte{doorCount > 1 ? "s" : ""}</span>
-                    </div>
-                  )}
-                </div>
+            {isAnalyzing && analysisStep && (
+              <div className="mt-3 space-y-1.5">
+                <Progress value={STEP_PROGRESS[analysisStep]} className="h-2" />
+                <p className="text-[10px] text-muted-foreground text-center">
+                  {STEP_LABELS[analysisStep]}
+                </p>
               </div>
-            );
-          })}
+            )}
 
-          {/* Pillars section */}
-          {state.pillars.length > 0 && (
-            <div className="mt-4">
-              <h3 className="font-display text-sm font-semibold text-foreground mb-2">Poteaux</h3>
-              {state.pillars.map((pillar) => (
+            {!isAnalyzing && (
+              <div className="flex items-center gap-2 mt-2 justify-center">
+                <FileImage className="h-3 w-3 text-muted-foreground" />
+                <FileText className="h-3 w-3 text-muted-foreground" />
+                <p className="text-[10px] text-muted-foreground">
+                  Images (JPG, PNG) et PDF supportés
+                </p>
+              </div>
+            )}
+          </div>
+        </SidebarSection>
+
+        {/* === Section Salle === */}
+        <SidebarSection title="Salle" icon={Home} badge={state.rooms.length || undefined}>
+          <div className="space-y-2 p-3 pt-0">
+            {state.rooms.length === 0 && (
+              <div className="rounded-lg border border-dashed border-border p-6 text-center">
+                <p className="text-sm text-muted-foreground">
+                  Utilisez l'outil{" "}
+                  <span className="text-secondary font-medium">Mur (W)</span> pour
+                  dessiner ou importez une image de plan.
+                </p>
+              </div>
+            )}
+            {state.rooms.map((room) => {
+              let area = 0;
+              const pts = room.points;
+              if (room.isClosed) {
+                for (let i = 0; i < pts.length; i++) {
+                  const j = (i + 1) % pts.length;
+                  area += pts[i].x * pts[j].y;
+                  area -= pts[j].x * pts[i].y;
+                }
+                area = Math.abs(area) / 2 / 10000;
+              }
+
+              let pillarArea = 0;
+              if (room.isClosed) {
+                state.pillars.forEach((pillar) => {
+                  const { x: testX, y: testY } = pillar.position;
+                  let inside = false;
+                  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+                    const xi = pts[i].x, yi = pts[i].y;
+                    const xj = pts[j].x, yj = pts[j].y;
+                    if (((yi > testY) !== (yj > testY)) && (testX < (xj - xi) * (testY - yi) / (yj - yi) + xi)) {
+                      inside = !inside;
+                    }
+                  }
+                  if (inside) {
+                    if (pillar.shape === "round") {
+                      const r = pillar.width / 2;
+                      pillarArea += Math.PI * r * r / 10000;
+                    } else {
+                      pillarArea += (pillar.width * pillar.depth) / 10000;
+                    }
+                  }
+                });
+              }
+
+              const netArea = area - pillarArea;
+
+              let perimeter = 0;
+              const edgeCount = room.isClosed ? pts.length : pts.length - 1;
+              for (let i = 0; i < edgeCount; i++) {
+                const j = (i + 1) % pts.length;
+                const dx = pts[j].x - pts[i].x;
+                const dy = pts[j].y - pts[i].y;
+                perimeter += Math.sqrt(dx * dx + dy * dy);
+              }
+
+              const doorCount = state.doors.filter((d) => d.roomId === room.id).length;
+
+              return (
                 <div
-                  key={pillar.id}
-                  className="rounded-lg border border-border bg-surface p-3 transition-colors hover:border-primary/40 mb-2"
+                  key={room.id}
+                  className="rounded-lg border border-border bg-surface p-3 transition-colors hover:border-primary/40"
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-display font-semibold text-sm text-foreground">
-                      {pillar.shape === "round" ? "Poteau rond" : "Poteau carré"}
+                      {room.name}
                     </span>
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 text-destructive/60 hover:text-destructive"
-                      onClick={() => dispatch({ type: "DELETE_PILLAR", id: pillar.id })}
+                      onClick={() => dispatch({ type: "DELETE_ROOM", id: room.id })}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    <span className="text-accent">
-                      {pillar.shape === "round"
-                        ? `Ø${pillar.width}cm`
-                        : `${pillar.width}×${pillar.depth}cm`}
-                    </span>
-                    {" · "}
-                    <span>{Math.round(pillar.position.x)}cm, {Math.round(pillar.position.y)}cm</span>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                    {room.isClosed && (
+                      <>
+                        <div>
+                          <span className="text-accent">{area.toFixed(1)}</span> m² brut
+                        </div>
+                        <div>
+                          <span className="text-accent">{netArea.toFixed(1)}</span> m² net
+                        </div>
+                      </>
+                    )}
+                    <div>
+                      <span className="text-accent">
+                        {(perimeter / 100).toFixed(1)}
+                      </span>{" "}
+                      m {room.isClosed ? "périmètre" : "longueur"}
+                    </div>
+                    <div>
+                      {pts.length} <span>points</span>
+                    </div>
+                    {doorCount > 0 && (
+                      <div>
+                        {doorCount} <span>porte{doorCount > 1 ? "s" : ""}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              );
+            })}
+
+            {/* Pillars section */}
+            {state.pillars.length > 0 && (
+              <div className="mt-2">
+                <h4 className="font-display text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">Poteaux</h4>
+                {state.pillars.map((pillar) => (
+                  <div
+                    key={pillar.id}
+                    className="rounded-lg border border-border bg-surface p-3 transition-colors hover:border-primary/40 mb-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-display font-semibold text-sm text-foreground">
+                        {pillar.shape === "round" ? "Poteau rond" : "Poteau carré"}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive/60 hover:text-destructive"
+                        onClick={() => dispatch({ type: "DELETE_PILLAR", id: pillar.id })}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      <span className="text-accent">
+                        {pillar.shape === "round"
+                          ? `Ø${pillar.width}cm`
+                          : `${pillar.width}×${pillar.depth}cm`}
+                      </span>
+                      {" · "}
+                      <span>{Math.round(pillar.position.x)}cm, {Math.round(pillar.position.y)}cm</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </SidebarSection>
+
+        {/* === Section Budget === */}
+        <SidebarSection title="Budget" icon={Wallet} defaultOpen={state.placedEquipments.length > 0}>
+          <div className="p-3 pt-0">
+            {state.placedEquipments.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-2">
+                Placez des jeux pour voir l'estimation
+              </p>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Jeux placés</span>
+                  <span className="text-accent font-semibold">{state.placedEquipments.length}</span>
+                </div>
+                {budgetTotal > 0 && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Budget estimé</span>
+                    <span className="text-primary font-bold">
+                      {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(budgetTotal)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Catégories</span>
+                  <span className="text-accent font-semibold">
+                    {new Set(state.placedEquipments.map(e => catalog.find(c => c.id === e.equipmentId)?.category).filter(Boolean)).size}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </SidebarSection>
       </ScrollArea>
 
       {/* Catalog panel */}

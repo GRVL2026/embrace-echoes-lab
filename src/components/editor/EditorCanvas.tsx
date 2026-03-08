@@ -85,6 +85,16 @@ export function EditorCanvas() {
   const [hasEquipDragged, setHasEquipDragged] = useState(false);
   const [hoveredEquipment, setHoveredEquipment] = useState<string | null>(null);
   const [collidingEquipIds, setCollidingEquipIds] = useState<Set<string>>(new Set());
+
+  // Clipboard for copy/paste
+  const clipboardRef = useRef<{ type: "pillar"; data: Pillar } | { type: "equipment"; data: PlacedEquipment } | null>(null);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    x: number; y: number;
+    target: { type: "pillar"; id: string } | { type: "equipment"; id: string };
+  } | null>(null);
+
   const [editingDimension, setEditingDimension] = useState<{
     roomId: string;
     edgeIndex: number;

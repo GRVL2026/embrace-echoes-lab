@@ -1468,18 +1468,14 @@ export function EditorCanvas() {
         onContextMenu={(e) => {
           e.preventDefault();
           const world = screenToWorld(e.clientX, e.clientY);
+          const rect = containerRef.current?.getBoundingClientRect();
+          const menuPos = { x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0) };
           const pillar = findPillarAtPoint(world);
-          if (pillar) {
-            const rect = containerRef.current?.getBoundingClientRect();
-            setContextMenu({ x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0), target: { type: "pillar", id: pillar.id } });
-            return;
-          }
+          if (pillar) { setContextMenu({ ...menuPos, target: { type: "pillar", id: pillar.id } }); return; }
           const equip = findEquipmentAtPoint(world);
-          if (equip) {
-            const rect = containerRef.current?.getBoundingClientRect();
-            setContextMenu({ x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0), target: { type: "equipment", id: equip.id } });
-            return;
-          }
+          if (equip) { setContextMenu({ ...menuPos, target: { type: "equipment", id: equip.id } }); return; }
+          const door = findDoorAtPoint(world);
+          if (door) { setContextMenu({ ...menuPos, target: { type: "door", id: door.id } }); return; }
           setContextMenu(null);
         }}
         className="absolute inset-0"

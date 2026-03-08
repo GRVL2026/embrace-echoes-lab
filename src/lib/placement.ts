@@ -123,15 +123,16 @@ function getPillarExclusionZones(pillars: Pillar[]): { cx: number; cy: number; r
 
 /** Check if an equipment placement is valid */
 function isPlacementValid(
-  cx: number, cy: number, w: number, d: number, rot: number, safetyZone: number,
+  cx: number, cy: number, w: number, d: number, rot: number, gapBetweenEquipment: number,
   room: Room,
   doorZones: { cx: number; cy: number; w: number; d: number; rot: number }[],
   pillarZones: ReturnType<typeof getPillarExclusionZones>,
   existingPlacements: PlacedEquipment[],
 ): boolean {
-  // 1. Equipment + safety zone must be inside room
-  const totalW = w + safetyZone * 2;
-  const totalD = d + safetyZone * 2;
+  // 1. Equipment must be inside room (with small margin from walls)
+  const wallMargin = 5; // 5cm from walls
+  const totalW = w + wallMargin * 2;
+  const totalD = d + wallMargin * 2;
   if (!rectInsidePolygon(cx, cy, totalW, totalD, rot, room.points)) return false;
 
   // 2. Must not overlap door exclusion zones
@@ -144,9 +145,10 @@ function isPlacementValid(
     if (rectsOverlap(cx, cy, w + 20, d + 20, rot, pz.cx, pz.cy, pz.w, pz.d, pz.rot)) return false;
   }
 
-  // 4. Must not overlap other placed equipment (including their safety zones)
+  // 4. Must not overlap other placed equipment (with gap between them)
   for (const pe of existingPlacements) {
-    if (rectsOverlap(cx, cy, w + safetyZone, d + safetyZone, rot, pe.position.x, pe.position.y, pe.width + pe.safetyZone, pe.depth + pe.safetyZone, pe.rotation)) {
+    const gap = gapBetweenEquipment; // Gap between equipment (e.g., 10cm)
+    if (rectsOverlap(cx, cy, w + gap, d + gap, rot, pe.position.x, pe.position.y, pe.width + gap, pe.depth + gap, pe.rotation)) {
       return false;
     }
   }

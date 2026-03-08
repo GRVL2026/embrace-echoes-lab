@@ -399,7 +399,7 @@ export function EditorCanvas() {
 
       // Draw placed equipments
       if (state.placedEquipments.length > 0) {
-        drawPlacedEquipments(ctx, state.placedEquipments, state.zoom);
+        drawPlacedEquipments(ctx, state.placedEquipments, state.zoom, hoveredEquipment);
       }
 
       // Draw current drawing

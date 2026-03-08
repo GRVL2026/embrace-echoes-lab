@@ -472,63 +472,25 @@ export function computeCirculation(
     return true;
   };
 
-  if (equipments.length > 0) {
-    // If we have 2+ doors, sort equipments along the axis between first and last door
-    // so the path naturally flows door1 → equipments → door2
-    let sortedEquipments: PlacedEquipment[];
-    if (endPos) {
-      const axisX = endPos.x - startPos.x;
-      const axisY = endPos.y - startPos.y;
-      const axisLen2 = axisX * axisX + axisY * axisY;
-      if (axisLen2 > 0) {
-        sortedEquipments = [...equipments].sort((a, b) => {
-          const ta = ((a.position.x - startPos.x) * axisX + (a.position.y - startPos.y) * axisY) / axisLen2;
-          const tb = ((b.position.x - startPos.x) * axisX + (b.position.y - startPos.y) * axisY) / axisLen2;
-          return ta - tb;
-        });
-      } else {
-        sortedEquipments = [...equipments].sort((a, b) => {
-          const da = (a.position.x - startPos.x) ** 2 + (a.position.y - startPos.y) ** 2;
-          const db = (b.position.x - startPos.x) ** 2 + (b.position.y - startPos.y) ** 2;
-          return da - db;
-        });
-      }
-    } else {
-      sortedEquipments = [...equipments].sort((a, b) => {
-        const da = (a.position.x - startPos.x) ** 2 + (a.position.y - startPos.y) ** 2;
-        const db = (b.position.x - startPos.x) ** 2 + (b.position.y - startPos.y) ** 2;
-        return da - db;
-      });
-    }
-
+  if (doorPositions.length >= 2) {
+    // Simply connect doors in order — A* will naturally route through
+    // the free corridor space in front of equipment (no need to visit each equipment center)
     let currentPos = startPos;
-    for (const eq of sortedEquipments) {
-      const ok = buildPath(currentPos, eq.position);
-      if (!ok) {
-        unreachableIds.push(eq.id);
-      } else {
-        currentPos = eq.position;
-      }
+    for (let di = 1; di < doorPositions.length; di++) {
+      buildPath(currentPos, doorPositions[di]);
+      currentPos = doorPositions[di];
     }
-
-    // After visiting all equipments, connect to the last door (and any intermediate doors)
-    if (endPos) {
-      buildPath(currentPos, endPos);
-    }
-    // Connect any intermediate doors (index 1 to length-2) to the main path
-    for (let di = 1; di < doorPositions.length - 1; di++) {
-      // Find the nearest point on the main chain to branch from
-      buildPath(doorPositions[di], startPos);
-    }
+  } else if (equipments.length > 0) {
+    // Single door: find the farthest reachable point to show the corridor extent
+    // Pick equipment centers projected to the nearest free cell as waypoints
+    const farthest = [...equipments].sort((a, b) => {
+      const da = (a.position.x - startPos.x) ** 2 + (a.position.y - startPos.y) ** 2;
+      const db = (b.position.x - startPos.x) ** 2 + (b.position.y - startPos.y) ** 2;
+      return db - da;
+    })[0];
+    // Path toward the farthest equipment area (A* will find a free route)
+    buildPath(startPos, farthest.position);
   } else {
-    // No equipment — connect doors directly if multiple
-    if (endPos) {
-      buildPath(startPos, endPos);
-    }
-    // Connect intermediate doors
-    for (let di = 1; di < doorPositions.length - 1; di++) {
-      buildPath(doorPositions[di], startPos);
-    }
 
     // If only one door (or after door connections), basic room traversal
     if (doorPositions.length <= 1) {

@@ -139,6 +139,8 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       return { ...state, showAngles: !state.showAngles };
     case "TOGGLE_PILLAR_DISTANCES":
       return { ...state, showPillarDistances: !state.showPillarDistances };
+    case "TOGGLE_CIRCULATION":
+      return { ...state, showCirculation: !state.showCirculation };
     case "SET_GRID_SIZE":
       return { ...state, gridSize: action.size };
     case "RESET":

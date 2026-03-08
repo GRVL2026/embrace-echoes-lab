@@ -114,6 +114,20 @@ export function EditorToolbar() {
         <TooltipContent side="right">Distances murs-poteaux</TooltipContent>
       </Tooltip>
 
+      <Tooltip delayDuration={200}>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn("h-10 w-10", state.showCirculation && "bg-green-500/20 text-green-500")}
+            onClick={() => dispatch({ type: "TOGGLE_CIRCULATION" })}
+          >
+            <Route className="h-5 w-5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">Afficher circulation (1.40m)</TooltipContent>
+      </Tooltip>
+
       {/* Scale toggle: m ↔ cm */}
       <Tooltip delayDuration={200}>
         <TooltipTrigger asChild>

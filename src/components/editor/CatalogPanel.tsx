@@ -824,14 +824,29 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
             <span className="text-xs font-semibold text-foreground">
               Sur le plan ({state.placedEquipments.length})
             </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 text-destructive/60 hover:text-destructive"
-              onClick={handleClearPlacements}
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Tooltip delayDuration={200}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-primary/60 hover:text-primary"
+                    onClick={handleResetPlacements}
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="left">Réinitialiser l'implantation automatique</TooltipContent>
+              </Tooltip>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-destructive/60 hover:text-destructive"
+                onClick={handleClearPlacements}
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
           </div>
           <ScrollArea className="max-h-[150px]">
             <div className="px-2 pb-2 space-y-1">

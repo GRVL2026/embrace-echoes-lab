@@ -156,6 +156,10 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
             <FilePlus className="h-4 w-4" />
             Nouveau projet
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleLoadHyperNova} className="gap-2">
+            <Gamepad2 className="h-4 w-4" />
+            Démo HYPER NOVA
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleOpenSave} className="gap-2">
             <Save className="h-4 w-4" />

@@ -17,47 +17,92 @@ import { DEFAULT_SAFETY_ZONE } from "@/types/equipment";
 import { autoPlaceEquipment } from "@/lib/placement";
 import { ProductDialog } from "./ProductDialog";
 
-/** Parse Shopify CSV dimensions like "L 1030 x P 2500 x H 2640 mm" */
+/** Parse Shopify CSV dimensions like "L 1030 x P 2500 x H 2640 mm" or "35X22X12" */
 function parseShopifyDimensions(dimStr: string): { width: number; depth: number; height: number } | null {
-  if (!dimStr) return null;
-  // Match patterns like "L 1030 x P 2500 x H 2640 mm" or "L1030xP2500xH2640"
-  const match = dimStr.match(/L\s*(\d+)\s*x?\s*P\s*(\d+)\s*x?\s*H\s*(\d+)/i);
-  if (match) {
+  if (!dimStr || !dimStr.trim()) return null;
+  const s = dimStr.trim();
+  
+  // Pattern 1: "L 1030 x P 2500 x H 2640 mm" (mm → cm)
+  const lph = s.match(/L\s*(\d+)\s*x?\s*P\s*(\d+)\s*x?\s*H\s*(\d+)/i);
+  if (lph) {
     return {
-      width: parseInt(match[1], 10) / 10, // mm to cm
-      depth: parseInt(match[2], 10) / 10,
-      height: parseInt(match[3], 10) / 10,
+      width: parseInt(lph[1], 10) / 10,
+      depth: parseInt(lph[2], 10) / 10,
+      height: parseInt(lph[3], 10) / 10,
     };
   }
+
+  // Pattern 2: "L 1030 x P 2500 x H 2640" with various separators
+  const lphLoose = s.match(/L\s*[:\s]*(\d+)\s*[x×\s]+P\s*[:\s]*(\d+)\s*[x×\s]+H\s*[:\s]*(\d+)/i);
+  if (lphLoose) {
+    return {
+      width: parseInt(lphLoose[1], 10) / 10,
+      depth: parseInt(lphLoose[2], 10) / 10,
+      height: parseInt(lphLoose[3], 10) / 10,
+    };
+  }
+
+  // Pattern 3: "NNNxNNNxNNN" or "NNN X NNN X NNN" (plain dimensions, assumed cm)
+  const plain = s.match(/(\d+)\s*[xX×]\s*(\d+)\s*[xX×]\s*(\d+)/);
+  if (plain) {
+    return {
+      width: parseInt(plain[1], 10),
+      depth: parseInt(plain[2], 10),
+      height: parseInt(plain[3], 10),
+    };
+  }
+
   return null;
 }
 
 /** Parse Shopify CSV export into GameEquipment[] */
 function parseShopifyCSV(text: string): GameEquipment[] {
-  const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-  if (lines.length < 2) throw new Error("Le CSV doit contenir au moins un en-tête et une ligne de données");
-
-  // Parse header - handle quoted fields
-  const parseCSVLine = (line: string): string[] => {
-    const result: string[] = [];
+  // Proper CSV parsing that handles multi-line quoted fields
+  const parseCSVFull = (csv: string): string[][] => {
+    const rows: string[][] = [];
     let current = "";
     let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i];
+    let row: string[] = [];
+    
+    for (let i = 0; i < csv.length; i++) {
+      const char = csv[i];
+      
       if (char === '"') {
-        inQuotes = !inQuotes;
+        if (inQuotes && i + 1 < csv.length && csv[i + 1] === '"') {
+          current += '"';
+          i++; // skip escaped quote
+        } else {
+          inQuotes = !inQuotes;
+        }
       } else if (char === ',' && !inQuotes) {
-        result.push(current.trim());
+        row.push(current.trim());
+        current = "";
+      } else if ((char === '\n' || char === '\r') && !inQuotes) {
+        if (char === '\r' && i + 1 < csv.length && csv[i + 1] === '\n') {
+          i++; // skip \r\n
+        }
+        row.push(current.trim());
+        if (row.some(cell => cell.length > 0)) {
+          rows.push(row);
+        }
+        row = [];
         current = "";
       } else {
         current += char;
       }
     }
-    result.push(current.trim());
-    return result;
+    // Last row
+    row.push(current.trim());
+    if (row.some(cell => cell.length > 0)) {
+      rows.push(row);
+    }
+    return rows;
   };
 
-  const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase());
+  const allRows = parseCSVFull(text);
+  if (allRows.length < 2) throw new Error("Le CSV doit contenir au moins un en-tête et une ligne de données");
+
+  const headers = allRows[0].map(h => h.toLowerCase());
   
   // Find column indices
   const findCol = (...names: string[]) => headers.findIndex(h => names.some(n => h.includes(n)));
@@ -101,8 +146,8 @@ function parseShopifyCSV(text: string): GameEquipment[] {
     stock: string;
   }>();
 
-  for (let i = 1; i < lines.length; i++) {
-    const cols = parseCSVLine(lines[i]);
+  for (let i = 1; i < allRows.length; i++) {
+    const cols = allRows[i];
     const handle = handleIdx >= 0 ? cols[handleIdx] : "";
     if (!handle) continue;
 

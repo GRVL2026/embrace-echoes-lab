@@ -1,14 +1,16 @@
 import { useEditor } from "@/contexts/EditorContext";
-import { Trash2, Upload, Loader2 } from "lucide-react";
+import { Trash2, Upload, Loader2, FileImage, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Progress } from "@/components/ui/progress";
 import { useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { Door } from "@/types/editor";
-import type { GameEquipment } from "@/types/equipment";
+import type { GameEquipment, PlacedEquipment } from "@/types/equipment";
 import { CatalogPanel } from "./CatalogPanel";
 import { ProjectMenu } from "./ProjectMenu";
+import { pdfToImage } from "@/lib/pdfUtils";
 
 type AIPlanDoor = {
   edgeIndex: number;
@@ -19,6 +21,15 @@ type AIPlanDoor = {
   leafCount: "single" | "double";
 };
 
+type AIEquipment = {
+  name: string;
+  category: string;
+  position: { x: number; y: number };
+  width: number;
+  depth: number;
+  rotation: number;
+};
+
 type AIPlanRoom = {
   name: string;
   points: { x: number; y: number }[];
@@ -26,48 +37,84 @@ type AIPlanRoom = {
   doors?: AIPlanDoor[];
 };
 
+type AnalysisStep = "reading" | "converting" | "analyzing" | "importing" | "done";
+
+const STEP_LABELS: Record<AnalysisStep, string> = {
+  reading: "Lecture du fichier…",
+  converting: "Conversion PDF → image…",
+  analyzing: "Analyse IA en cours…",
+  importing: "Import des données…",
+  done: "Terminé !",
+};
+
+const STEP_PROGRESS: Record<AnalysisStep, number> = {
+  reading: 10,
+  converting: 25,
+  analyzing: 60,
+  importing: 90,
+  done: 100,
+};
+
 export function EditorSidebar() {
   const { state, dispatch } = useEditor();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisStep, setAnalysisStep] = useState<AnalysisStep | null>(null);
   const [catalog, setCatalog] = useState<GameEquipment[]>([]);
 
   const handleImportPlan = async (file: File) => {
-    if (!file.type.startsWith("image/")) {
-      toast.error("Veuillez sélectionner une image");
+    const isPdf = file.type === "application/pdf";
+    const isImage = file.type.startsWith("image/");
+
+    if (!isPdf && !isImage) {
+      toast.error("Format non supporté. Utilisez une image (JPG, PNG) ou un PDF.");
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error("L'image ne doit pas dépasser 10 Mo");
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error("Le fichier ne doit pas dépasser 20 Mo");
       return;
     }
 
     setIsAnalyzing(true);
-    toast.info("Analyse du plan en cours...", { duration: 10000, id: "analyzing" });
+    setAnalysisStep("reading");
 
     try {
-      // Convert to base64
-      const buffer = await file.arrayBuffer();
-      const base64 = btoa(
-        new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
-      );
+      let base64: string;
+      let mimeType: string;
+
+      if (isPdf) {
+        setAnalysisStep("converting");
+        const result = await pdfToImage(file, { scale: 2.5 });
+        base64 = result.base64;
+        mimeType = result.mimeType;
+      } else {
+        const buffer = await file.arrayBuffer();
+        base64 = btoa(
+          new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
+        );
+        mimeType = file.type;
+      }
+
+      setAnalysisStep("analyzing");
 
       const { data, error } = await supabase.functions.invoke("analyze-plan", {
-        body: { imageBase64: base64, mimeType: file.type },
+        body: { imageBase64: base64, mimeType },
       });
 
       if (error) throw new Error(error.message || "Erreur lors de l'analyse");
       if (data?.error) throw new Error(data.error);
 
-      const planData = data as { rooms: AIPlanRoom[] };
+      setAnalysisStep("importing");
+
+      const planData = data as { rooms: AIPlanRoom[]; equipment?: AIEquipment[]; scale?: { confidence: string } };
 
       if (!planData.rooms || planData.rooms.length === 0) {
         toast.error("Aucune pièce détectée dans le plan");
         return;
       }
 
-      // Inject rooms and doors into editor
+      // Inject rooms and doors
       planData.rooms.forEach((aiRoom) => {
         const roomId = crypto.randomUUID();
 
@@ -82,7 +129,6 @@ export function EditorSidebar() {
           },
         });
 
-        // Add doors for this room
         if (aiRoom.doors) {
           aiRoom.doors.forEach((aiDoor) => {
             const door: Door = {
@@ -100,16 +146,43 @@ export function EditorSidebar() {
         }
       });
 
-      toast.dismiss("analyzing");
+      // Inject detected equipment
+      let equipCount = 0;
+      if (planData.equipment && planData.equipment.length > 0) {
+        planData.equipment.forEach((eq) => {
+          const placed: PlacedEquipment = {
+            id: crypto.randomUUID(),
+            equipmentId: `ai-detected-${crypto.randomUUID()}`,
+            position: eq.position,
+            rotation: eq.rotation || 0,
+            name: eq.name,
+            width: eq.width || 100,
+            depth: eq.depth || 80,
+            safetyZone: 10,
+            color: getCategoryColor(eq.category),
+          };
+          dispatch({ type: "PLACE_EQUIPMENT", equipment: placed });
+          equipCount++;
+        });
+      }
+
+      setAnalysisStep("done");
+
+      const scaleInfo = planData.scale?.confidence
+        ? ` (précision: ${planData.scale.confidence})`
+        : "";
+
       toast.success(
-        `Plan importé : ${planData.rooms.length} pièce${planData.rooms.length > 1 ? "s" : ""} détectée${planData.rooms.length > 1 ? "s" : ""}`
+        `Plan importé : ${planData.rooms.length} pièce${planData.rooms.length > 1 ? "s" : ""}${equipCount > 0 ? `, ${equipCount} équipement${equipCount > 1 ? "s" : ""}` : ""}${scaleInfo}`
       );
     } catch (err) {
       console.error("Import error:", err);
-      toast.dismiss("analyzing");
       toast.error(err instanceof Error ? err.message : "Erreur lors de l'import du plan");
     } finally {
-      setIsAnalyzing(false);
+      setTimeout(() => {
+        setIsAnalyzing(false);
+        setAnalysisStep(null);
+      }, 1500);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
@@ -129,12 +202,12 @@ export function EditorSidebar() {
         <ProjectMenu catalog={catalog} onLoadCatalog={setCatalog} />
       </div>
 
-      {/* Import button */}
+      {/* Import button + progress */}
       <div className="border-b border-border p-4">
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept="image/*,application/pdf"
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
@@ -150,18 +223,35 @@ export function EditorSidebar() {
           {isAnalyzing ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
-              Analyse en cours...
+              {analysisStep ? STEP_LABELS[analysisStep] : "Analyse…"}
             </>
           ) : (
             <>
               <Upload className="h-4 w-4" />
-              Importer un plan (image)
+              Importer un plan
             </>
           )}
         </Button>
-        <p className="text-[10px] text-muted-foreground mt-2 text-center">
-          L'IA analysera l'image pour extraire les pièces, dimensions et portes
-        </p>
+
+        {/* Progress bar */}
+        {isAnalyzing && analysisStep && (
+          <div className="mt-3 space-y-1.5">
+            <Progress value={STEP_PROGRESS[analysisStep]} className="h-2" />
+            <p className="text-[10px] text-muted-foreground text-center">
+              {STEP_LABELS[analysisStep]}
+            </p>
+          </div>
+        )}
+
+        {!isAnalyzing && (
+          <div className="flex items-center gap-2 mt-2 justify-center">
+            <FileImage className="h-3 w-3 text-muted-foreground" />
+            <FileText className="h-3 w-3 text-muted-foreground" />
+            <p className="text-[10px] text-muted-foreground">
+              Images (JPG, PNG) et PDF supportés
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Rooms list */}
@@ -177,7 +267,6 @@ export function EditorSidebar() {
             </div>
           )}
           {state.rooms.map((room) => {
-            // Calculate area (only meaningful for closed rooms)
             let area = 0;
             const pts = room.points;
             if (room.isClosed) {
@@ -189,7 +278,6 @@ export function EditorSidebar() {
               area = Math.abs(area) / 2 / 10000;
             }
 
-            // Calculate pillar area inside this room (in m²)
             let pillarArea = 0;
             if (room.isClosed) {
               state.pillars.forEach((pillar) => {
@@ -215,7 +303,6 @@ export function EditorSidebar() {
 
             const netArea = area - pillarArea;
 
-            // Calculate perimeter
             let perimeter = 0;
             const edgeCount = room.isClosed ? pts.length : pts.length - 1;
             for (let i = 0; i < edgeCount; i++) {
@@ -317,4 +404,15 @@ export function EditorSidebar() {
       <CatalogPanel catalog={catalog} setCatalog={setCatalog} />
     </div>
   );
+}
+
+/** Returns a HSL color based on equipment category */
+function getCategoryColor(category: string): string {
+  const cat = category?.toLowerCase() || "";
+  if (cat.includes("arcade") || cat.includes("borne")) return "hsl(280, 70%, 50%)";
+  if (cat.includes("billard")) return "hsl(140, 60%, 40%)";
+  if (cat.includes("bar") || cat.includes("comptoir")) return "hsl(30, 70%, 45%)";
+  if (cat.includes("flipper") || cat.includes("pinball")) return "hsl(200, 70%, 50%)";
+  if (cat.includes("mobilier") || cat.includes("table") || cat.includes("chaise")) return "hsl(50, 50%, 45%)";
+  return "hsl(210, 40%, 55%)";
 }

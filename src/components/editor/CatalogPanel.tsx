@@ -1,10 +1,11 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useEditor } from "@/contexts/EditorContext";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Upload, Package, Play, Trash2, Check, X, Info } from "lucide-react";
+import { Upload, Package, Play, Trash2, Check, X, Info, Search } from "lucide-react";
 import type { GameEquipment, CatalogJSON } from "@/types/equipment";
 import { DEFAULT_SAFETY_ZONE } from "@/types/equipment";
 import { autoPlaceEquipment } from "@/lib/placement";
@@ -280,7 +281,20 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   const { state, dispatch } = useEditor();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [viewingProduct, setViewingProduct] = useState<GameEquipment | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Filter catalog based on search query
+  const filteredCatalog = useMemo(() => {
+    if (!searchQuery.trim()) return catalog;
+    const query = searchQuery.toLowerCase().trim();
+    return catalog.filter(eq => 
+      eq.name.toLowerCase().includes(query) ||
+      eq.category.toLowerCase().includes(query) ||
+      (eq.vendor && eq.vendor.toLowerCase().includes(query)) ||
+      (eq.tags && eq.tags.some(tag => tag.toLowerCase().includes(query)))
+    );
+  }, [catalog, searchQuery]);
 
   const handleImportFile = (file: File) => {
     const reader = new FileReader();
@@ -390,8 +404,8 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
     toast.info("Tous les équipements retirés du plan");
   };
 
-  // Group by category
-  const categories = catalog.reduce<Record<string, GameEquipment[]>>((acc, eq) => {
+  // Group filtered catalog by category
+  const categories = filteredCatalog.reduce<Record<string, GameEquipment[]>>((acc, eq) => {
     const cat = eq.category || "autre";
     if (!acc[cat]) acc[cat] = [];
     acc[cat].push(eq);
@@ -428,6 +442,36 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
           </Button>
         </div>
       </div>
+
+      {/* Search bar */}
+      {catalog.length > 0 && (
+        <div className="p-2 border-b border-border">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Rechercher (nom, type, fournisseur...)"
+              className="h-8 pl-8 text-xs"
+            />
+            {searchQuery && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6"
+                onClick={() => setSearchQuery("")}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
+          {searchQuery && (
+            <p className="text-[10px] text-muted-foreground mt-1.5 px-1">
+              {filteredCatalog.length} résultat{filteredCatalog.length > 1 ? "s" : ""} sur {catalog.length}
+            </p>
+          )}
+        </div>
+      )}
 
       {catalog.length === 0 ? (
         <div className="p-4">

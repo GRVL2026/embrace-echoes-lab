@@ -1301,6 +1301,30 @@ export function EditorCanvas() {
     setDoorDialog(null);
   };
 
+  // Duplicate helper
+  const duplicateItem = useCallback((item: { type: "pillar"; id: string } | { type: "equipment"; id: string }) => {
+    const OFFSET = 50; // 50cm offset
+    if (item.type === "pillar") {
+      const p = state.pillars.find(pl => pl.id === item.id);
+      if (!p) return;
+      const newPillar: Pillar = {
+        ...p,
+        id: crypto.randomUUID(),
+        position: { x: p.position.x + OFFSET, y: p.position.y + OFFSET },
+      };
+      dispatch({ type: "ADD_PILLAR", pillar: newPillar });
+    } else {
+      const eq = state.placedEquipments.find(e => e.id === item.id);
+      if (!eq) return;
+      const newEquip: PlacedEquipment = {
+        ...eq,
+        id: crypto.randomUUID(),
+        position: { x: eq.position.x + OFFSET, y: eq.position.y + OFFSET },
+      };
+      dispatch({ type: "ADD_PLACED_EQUIPMENT", equipment: newEquip });
+    }
+  }, [state.pillars, state.placedEquipments, dispatch]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -1310,6 +1334,43 @@ export function EditorCanvas() {
         dispatch({ type: "UNDO" });
         return;
       }
+      // Copy: Ctrl+C — copy hovered pillar or equipment
+      if ((e.ctrlKey || e.metaKey) && e.key === "c") {
+        if (hoveredPillar) {
+          const p = state.pillars.find(pl => pl.id === hoveredPillar);
+          if (p) { clipboardRef.current = { type: "pillar", data: { ...p } }; }
+        } else if (hoveredEquipment) {
+          const eq = state.placedEquipments.find(e => e.id === hoveredEquipment);
+          if (eq) { clipboardRef.current = { type: "equipment", data: { ...eq } }; }
+        }
+        return;
+      }
+      // Paste: Ctrl+V — paste from clipboard with offset
+      if ((e.ctrlKey || e.metaKey) && e.key === "v" && clipboardRef.current) {
+        e.preventDefault();
+        const OFFSET = 50;
+        if (clipboardRef.current.type === "pillar") {
+          const p = clipboardRef.current.data;
+          const newPillar: Pillar = {
+            ...p,
+            id: crypto.randomUUID(),
+            position: { x: p.position.x + OFFSET, y: p.position.y + OFFSET },
+          };
+          dispatch({ type: "ADD_PILLAR", pillar: newPillar });
+          // Update clipboard position for subsequent pastes
+          clipboardRef.current = { type: "pillar", data: newPillar };
+        } else {
+          const eq = clipboardRef.current.data;
+          const newEquip: PlacedEquipment = {
+            ...eq,
+            id: crypto.randomUUID(),
+            position: { x: eq.position.x + OFFSET, y: eq.position.y + OFFSET },
+          };
+          dispatch({ type: "ADD_PLACED_EQUIPMENT", equipment: newEquip });
+          clipboardRef.current = { type: "equipment", data: newEquip };
+        }
+        return;
+      }
       switch (e.key.toLowerCase()) {
         case "v": dispatch({ type: "SET_TOOL", tool: "select" }); break;
         case "w": dispatch({ type: "SET_TOOL", tool: "wall" }); break;
@@ -1317,12 +1378,12 @@ export function EditorCanvas() {
         case "p": dispatch({ type: "SET_TOOL", tool: "pillar" }); break;
         case "h": dispatch({ type: "SET_TOOL", tool: "pan" }); break;
         case "e": dispatch({ type: "SET_TOOL", tool: "eraser" }); break;
-        case "escape": setDrawingPoints([]); break;
+        case "escape": setDrawingPoints([]); setContextMenu(null); break;
       }
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [dispatch]);
+  }, [dispatch, hoveredPillar, hoveredEquipment, state.pillars, state.placedEquipments]);
 
   const eraserCursor = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23ff4444' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21'/%3E%3Cpath d='M22 21H7'/%3E%3Cpath d='m5 11 9 9'/%3E%3C/svg%3E") 4 20, auto`;
 

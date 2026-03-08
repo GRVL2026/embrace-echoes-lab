@@ -83,6 +83,6 @@ export const INITIAL_EDITOR_STATE: EditorState = {
   showPillarDistances: false,
 };
 
-// Scale: 1cm = 1px at zoom 1 (allows ~20m horizontal view on standard screens)
-export const CM_TO_PX = 1;
+// Scale: 1cm = 0.5px at zoom 1 (allows ~20m horizontal view with sidebar)
+export const CM_TO_PX = 0.5;
 export const SAFETY_ZONE_CM = 140; // 1m40 zone de circulation

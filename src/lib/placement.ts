@@ -539,7 +539,10 @@ export function autoPlaceEquipmentWithReport(
     }
   }
 
-  return { placed: result, notPlaced };
+  // Generate circulation path (perimeter corridor)
+  const circulation = generateCirculationPath(bestRoom, result, CORRIDOR_WIDTH);
+
+  return { placed: result, notPlaced, circulation };
 }
 
 /** Generate positions adjacent to a previous placement */

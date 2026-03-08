@@ -169,14 +169,15 @@ export function EditorCanvas() {
       // Also check rotation handle zone (so hover persists when moving to handle)
       if (includeHandle) {
         const handleDistCm = pillar.shape === "round"
-          ? (pillar.width / 2 + 20 / state.zoom)
-          : (Math.max(pillar.width, pillar.depth) / 2 + 20 / state.zoom);
-        // Handle is at (0, -handleDistCm) in local space
+          ? (pillar.width / 2 + 30)
+          : (Math.max(pillar.width, pillar.depth) / 2 + 30);
+        // Handle circle hit zone
         const hdx = lx;
         const hdy = ly + handleDistCm;
-        if (hdx * hdx + hdy * hdy < (14 / state.zoom) * (14 / state.zoom)) return pillar;
-        // Also check the stem line between pillar and handle
-        if (Math.abs(lx) < 5 / state.zoom && ly < 0 && ly > -handleDistCm) return pillar;
+        const hitR = Math.max(15, 18 / state.zoom);
+        if (hdx * hdx + hdy * hdy < hitR * hitR) return pillar;
+        // Stem line between pillar and handle
+        if (Math.abs(lx) < hitR && ly < 0 && ly > -handleDistCm) return pillar;
       }
     }
     return null;

@@ -787,6 +787,10 @@ export function EditorCanvas() {
       if (hoveredEquipment) {
         dispatch({ type: "DELETE_PLACED_EQUIPMENT", id: hoveredEquipment });
         setHoveredEquipment(null);
+        // Recompute circulation after delete
+        const remaining = state.placedEquipments.filter(e => e.id !== hoveredEquipment);
+        const circ = computeCirculation(state.rooms, state.doors, state.pillars, remaining);
+        dispatch({ type: "SET_CIRCULATION", circulation: circ });
         return;
       }
       // Check pillar

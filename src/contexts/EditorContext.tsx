@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useCallback, type ReactNode } from "react";
-import { type EditorState, type EditorTool, type Point, type Room, type Door, type Pillar, INITIAL_EDITOR_STATE } from "@/types/editor";
+import { type EditorState, type EditorTool, type Point, type Room, type Door, type Pillar, type CirculationSegment, INITIAL_EDITOR_STATE } from "@/types/editor";
 import type { PlacedEquipment } from "@/types/equipment";
 
 type EditorAction =

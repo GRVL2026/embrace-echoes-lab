@@ -406,7 +406,19 @@ export function EditorCanvas() {
     return () => window.removeEventListener("resize", resize);
   }, []);
 
-  // Draw loop
+  // Recompute circulation when rooms/doors/pillars change (debounced)
+  const circulationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const hasClosedRoom = state.rooms.some(r => r.isClosed);
+    if (!hasClosedRoom) return;
+    if (circulationTimerRef.current) clearTimeout(circulationTimerRef.current);
+    circulationTimerRef.current = setTimeout(() => {
+      const circ = computeCirculation(state.rooms, state.doors, state.pillars, state.placedEquipments);
+      dispatch({ type: "SET_CIRCULATION", circulation: circ });
+    }, 300);
+    return () => { if (circulationTimerRef.current) clearTimeout(circulationTimerRef.current); };
+  }, [state.rooms, state.doors, state.pillars, state.placedEquipments.length]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;

@@ -156,6 +156,40 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       return { ...state, showCirculation: !state.showCirculation };
     case "SET_GRID_SIZE":
       return { ...state, gridSize: action.size };
+    case "ROTATE_PLAN": {
+      const deg = action.degrees;
+      const rad = (deg * Math.PI) / 180;
+      const cosA = Math.round(Math.cos(rad));
+      const sinA = Math.round(Math.sin(rad));
+      const rotatePoint = (p: Point): Point => ({
+        x: p.x * cosA - p.y * sinA,
+        y: p.x * sinA + p.y * cosA,
+      });
+      return {
+        ...state,
+        planRotation: ((state.planRotation + deg) % 360 + 360) % 360,
+        rooms: state.rooms.map((r) => ({
+          ...r,
+          points: r.points.map(rotatePoint),
+          walls: r.walls.map((w) => ({
+            ...w,
+            start: rotatePoint(w.start),
+            end: rotatePoint(w.end),
+          })),
+        })),
+        pillars: state.pillars.map((p) => ({
+          ...p,
+          position: rotatePoint(p.position),
+          rotation: p.rotation + deg,
+        })),
+        placedEquipments: state.placedEquipments.map((e) => ({
+          ...e,
+          x: e.x * cosA - e.y * sinA,
+          y: e.x * sinA + e.y * cosA,
+          rotation: (e.rotation || 0) + deg,
+        })),
+      };
+    }
     case "RESET":
       return INITIAL_EDITOR_STATE;
     case "LOAD_STATE":

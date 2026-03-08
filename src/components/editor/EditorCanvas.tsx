@@ -2268,10 +2268,74 @@ function deduplicateChain(chain: Point[], minDist: number): Point[] {
       result.push(chain[i]);
     }
   }
-  // Always keep last point
   const last = chain[chain.length - 1];
   const rLast = result[result.length - 1];
   if (last.x !== rLast.x || last.y !== rLast.y) result.push(last);
+  return result;
+}
+
+// Extra Chaikin smoothing pass on a polyline (visual only)
+function visualSmooth(points: Point[], iterations: number): Point[] {
+  if (points.length < 3) return points;
+  let current = points;
+  for (let iter = 0; iter < iterations; iter++) {
+    const next: Point[] = [current[0]];
+    for (let i = 0; i < current.length - 1; i++) {
+      const p0 = current[i], p1 = current[i + 1];
+      next.push({ x: p0.x * 0.75 + p1.x * 0.25, y: p0.y * 0.75 + p1.y * 0.25 });
+      next.push({ x: p0.x * 0.25 + p1.x * 0.75, y: p0.y * 0.25 + p1.y * 0.75 });
+    }
+    next.push(current[current.length - 1]);
+    current = next;
+  }
+  return current;
+}
+
+// Build offset polyline with miter-limit to avoid self-intersecting corners
+function buildOffsetPolyline(chain: Point[], offset: number): Point[] {
+  const result: Point[] = [];
+  const MITER_LIMIT = 2.0;
+
+  for (let i = 0; i < chain.length; i++) {
+    let nx: number, ny: number;
+    if (i === 0) {
+      const dx = chain[1].x - chain[0].x;
+      const dy = chain[1].y - chain[0].y;
+      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+      nx = -dy / len; ny = dx / len;
+    } else if (i === chain.length - 1) {
+      const dx = chain[i].x - chain[i - 1].x;
+      const dy = chain[i].y - chain[i - 1].y;
+      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+      nx = -dy / len; ny = dx / len;
+    } else {
+      const dx1 = chain[i].x - chain[i - 1].x;
+      const dy1 = chain[i].y - chain[i - 1].y;
+      const len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1) || 1;
+      const dx2 = chain[i + 1].x - chain[i].x;
+      const dy2 = chain[i + 1].y - chain[i].y;
+      const len2 = Math.sqrt(dx2 * dx2 + dy2 * dy2) || 1;
+      const n1x = -dy1 / len1, n1y = dx1 / len1;
+      const n2x = -dy2 / len2, n2y = dx2 / len2;
+      nx = (n1x + n2x) / 2;
+      ny = (n1y + n2y) / 2;
+      const nLen = Math.sqrt(nx * nx + ny * ny);
+      if (nLen < 0.001) {
+        nx = n1x; ny = n1y;
+      } else {
+        nx /= nLen; ny /= nLen;
+        const dot = n1x * nx + n1y * ny;
+        const miterScale = dot > 0.001 ? 1 / dot : MITER_LIMIT;
+        const clampedScale = Math.min(miterScale, MITER_LIMIT);
+        nx *= clampedScale; ny *= clampedScale;
+      }
+    }
+
+    result.push({
+      x: chain[i].x * CM_TO_PX + nx * offset,
+      y: chain[i].y * CM_TO_PX + ny * offset,
+    });
+  }
   return result;
 }
 
@@ -2305,46 +2369,17 @@ function drawCirculationPath(
   }
   if (currentChain.length > 0) chains.push(currentChain);
 
-  // Draw each chain
   for (let ci = 0; ci < chains.length; ci++) {
-    // Deduplicate to remove near-overlapping points from fine grid
-    const chain = deduplicateChain(chains[ci], 5);
+    // Deduplicate → extra visual smoothing → deduplicate again
+    let chain = deduplicateChain(chains[ci], 8);
+    chain = visualSmooth(chain, 2);
+    chain = deduplicateChain(chain, 3);
     if (chain.length < 2) continue;
 
-    // Build left and right offset polylines for corridor edges
-    const leftEdge: Point[] = [];
-    const rightEdge: Point[] = [];
+    const leftEdge = buildOffsetPolyline(chain, hw);
+    const rightEdge = buildOffsetPolyline(chain, -hw);
 
-    for (let i = 0; i < chain.length; i++) {
-      let nx: number, ny: number;
-      if (i === 0) {
-        const dx = chain[1].x - chain[0].x;
-        const dy = chain[1].y - chain[0].y;
-        const len = Math.sqrt(dx * dx + dy * dy) || 1;
-        nx = -dy / len; ny = dx / len;
-      } else if (i === chain.length - 1) {
-        const dx = chain[i].x - chain[i - 1].x;
-        const dy = chain[i].y - chain[i - 1].y;
-        const len = Math.sqrt(dx * dx + dy * dy) || 1;
-        nx = -dy / len; ny = dx / len;
-      } else {
-        const dx1 = chain[i].x - chain[i - 1].x;
-        const dy1 = chain[i].y - chain[i - 1].y;
-        const len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1) || 1;
-        const dx2 = chain[i + 1].x - chain[i].x;
-        const dy2 = chain[i + 1].y - chain[i].y;
-        const len2 = Math.sqrt(dx2 * dx2 + dy2 * dy2) || 1;
-        nx = (-dy1 / len1 + -dy2 / len2) / 2;
-        ny = (dx1 / len1 + dx2 / len2) / 2;
-        const nLen = Math.sqrt(nx * nx + ny * ny) || 1;
-        nx /= nLen; ny /= nLen;
-      }
-
-      leftEdge.push({ x: chain[i].x * CM_TO_PX + nx * hw, y: chain[i].y * CM_TO_PX + ny * hw });
-      rightEdge.push({ x: chain[i].x * CM_TO_PX - nx * hw, y: chain[i].y * CM_TO_PX - ny * hw });
-    }
-
-    // Filled corridor (subtle)
+    // Filled corridor
     ctx.beginPath();
     ctx.moveTo(leftEdge[0].x, leftEdge[0].y);
     for (let i = 1; i < leftEdge.length; i++) ctx.lineTo(leftEdge[i].x, leftEdge[i].y);
@@ -2353,10 +2388,11 @@ function drawCirculationPath(
     ctx.fillStyle = "hsla(142, 70%, 45%, 0.07)";
     ctx.fill();
 
-    // Corridor edges — solid thin lines
-    ctx.strokeStyle = "hsla(142, 70%, 50%, 0.35)";
+    // Corridor edges — solid thin lines with round joins
+    ctx.strokeStyle = "hsla(142, 70%, 50%, 0.3)";
     ctx.lineWidth = 1 / zoom;
     ctx.setLineDash([]);
+    ctx.lineJoin = "round";
 
     ctx.beginPath();
     ctx.moveTo(leftEdge[0].x, leftEdge[0].y);
@@ -2368,10 +2404,12 @@ function drawCirculationPath(
     for (let i = 1; i < rightEdge.length; i++) ctx.lineTo(rightEdge[i].x, rightEdge[i].y);
     ctx.stroke();
 
-    // Centerline — smooth dashed
-    ctx.strokeStyle = "hsla(142, 70%, 55%, 0.5)";
+    // Centerline — smooth dashed with round caps
+    ctx.strokeStyle = "hsla(142, 70%, 55%, 0.45)";
     ctx.lineWidth = 1.5 / zoom;
-    ctx.setLineDash([12 / zoom, 8 / zoom]);
+    ctx.setLineDash([14 / zoom, 10 / zoom]);
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
     ctx.beginPath();
     ctx.moveTo(chain[0].x * CM_TO_PX, chain[0].y * CM_TO_PX);
     for (let i = 1; i < chain.length; i++) {
@@ -2379,19 +2417,22 @@ function drawCirculationPath(
     }
     ctx.stroke();
     ctx.setLineDash([]);
+    ctx.lineCap = "butt";
 
-    // Start/end markers (small circles)
+    // Start/end markers
     for (const pt of [chain[0], chain[chain.length - 1]]) {
       ctx.beginPath();
-      ctx.arc(pt.x * CM_TO_PX, pt.y * CM_TO_PX, 4 / zoom, 0, Math.PI * 2);
+      ctx.arc(pt.x * CM_TO_PX, pt.y * CM_TO_PX, 3.5 / zoom, 0, Math.PI * 2);
       ctx.fillStyle = "hsla(142, 70%, 50%, 0.6)";
       ctx.fill();
     }
   }
 
-  // Label at midpoint of first chain
+  // Label
   if (chains.length > 0 && chains[0].length > 1) {
-    const chain0 = deduplicateChain(chains[0], 5);
+    let chain0 = deduplicateChain(chains[0], 8);
+    chain0 = visualSmooth(chain0, 2);
+    chain0 = deduplicateChain(chain0, 3);
     const midIdx = Math.floor(chain0.length / 2);
     const midPt = chain0[midIdx];
     const midX = midPt.x * CM_TO_PX;
@@ -2403,7 +2444,6 @@ function drawCirculationPath(
     const tw = ctx.measureText(text).width;
     const pad = 4 / zoom;
 
-    // Background pill
     const rx = midX - tw / 2 - pad;
     const ry = midY - 6 / zoom - pad;
     const rw = tw + pad * 2;

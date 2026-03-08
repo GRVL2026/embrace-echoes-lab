@@ -186,10 +186,6 @@ function parseShopifyCSV(text: string): GameEquipment[] {
   // Convert to GameEquipment
   const items: GameEquipment[] = [];
   
-  console.log("[CSV Debug] dimIdx:", dimIdx, "header count:", headers.length);
-  console.log("[CSV Debug] First 3 products dimensions raw:");
-  let debugCount = 0;
-  
   for (const [handle, product] of productMap) {
     if (!product.title) continue;
 
@@ -198,11 +194,6 @@ function parseShopifyCSV(text: string): GameEquipment[] {
     const width = dims?.width || 100;
     const depth = dims?.depth || 100;
     const height = dims?.height || 200;
-    
-    if (debugCount < 5) {
-      console.log(`[CSV Debug] "${product.title}" → raw dim: "${product.dimensions}" → parsed:`, dims, `→ ${width}x${depth}x${height}cm`);
-      debugCount++;
-    }
 
     // Parse tags
     const tags = product.tags

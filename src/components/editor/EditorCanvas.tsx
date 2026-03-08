@@ -1201,15 +1201,11 @@ export function EditorCanvas() {
     if (rotatingPillar) setRotatingPillar(null);
     if (draggingEquipment) {
       setDraggingEquipment(null);
-      // Recompute circulation after equipment move
-      const circ = computeCirculation(state.rooms, state.doors, state.pillars, state.placedEquipments);
-      dispatch({ type: "SET_CIRCULATION", circulation: circ });
+      // Circulation will recompute via useEffect
     }
     if (rotatingEquipment) {
       setRotatingEquipment(null);
-      // Recompute circulation after equipment rotate
-      const circ = computeCirculation(state.rooms, state.doors, state.pillars, state.placedEquipments);
-      dispatch({ type: "SET_CIRCULATION", circulation: circ });
+      // Circulation will recompute via useEffect
     }
   };
 

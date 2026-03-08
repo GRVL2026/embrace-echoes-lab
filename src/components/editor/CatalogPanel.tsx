@@ -478,8 +478,8 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
     
     // Compute dynamic circulation using pathfinding
     const allEquipments = [...state.placedEquipments, ...placementResult.placed];
-    const circulation = computeCirculation(state.rooms, state.doors, state.pillars, allEquipments);
-    dispatch({ type: "SET_CIRCULATION", circulation });
+    const circResult = computeCirculation(state.rooms, state.doors, state.pillars, allEquipments);
+    dispatch({ type: "SET_CIRCULATION", circulation: circResult.segments });
 
     const placed = placementResult.placed.length;
     const failed = placementResult.notPlaced.length;

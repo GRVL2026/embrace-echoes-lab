@@ -63,6 +63,29 @@ export function EditorSidebar() {
   const [analysisStep, setAnalysisStep] = useState<AnalysisStep | null>(null);
   const [catalog, setCatalog] = useState<GameEquipment[]>([]);
 
+  // Auto-save on every change
+  useAutoSave(state, catalog);
+
+  // Restore session on mount
+  useEffect(() => {
+    const session = loadSession();
+    if (session) {
+      dispatch({
+        type: "LOAD_STATE",
+        state: {
+          rooms: session.plan.rooms,
+          doors: session.plan.doors,
+          pillars: session.plan.pillars,
+          placedEquipments: session.plan.placedEquipments,
+          gridSize: session.plan.gridSize,
+          circulationPath: session.plan.circulationPath || [],
+        },
+      });
+      if (session.catalog.length > 0) {
+        setCatalog(session.catalog);
+      }
+    }
+  }, []);
   const handleImportPlan = async (file: File) => {
     const isPdf = file.type === "application/pdf";
     const isImage = file.type.startsWith("image/");

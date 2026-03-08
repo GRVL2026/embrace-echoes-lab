@@ -417,8 +417,11 @@ export function EditorCanvas() {
     if (!hasClosedRoom) return;
     if (circulationTimerRef.current) clearTimeout(circulationTimerRef.current);
     circulationTimerRef.current = setTimeout(() => {
-      const circ = computeCirculation(state.rooms, state.doors, state.pillars, state.placedEquipments);
-      dispatch({ type: "SET_CIRCULATION", circulation: circ });
+      const result = computeCirculation(state.rooms, state.doors, state.pillars, state.placedEquipments);
+      dispatch({ type: "SET_CIRCULATION", circulation: result.segments });
+      if (!result.success && result.proposals.length > 0 && state.placedEquipments.length > 0) {
+        setCirculationProposals(result.proposals);
+      }
     }, 300);
     return () => { if (circulationTimerRef.current) clearTimeout(circulationTimerRef.current); };
   }, [state.rooms, state.doors, state.pillars, state.placedEquipments.length]);

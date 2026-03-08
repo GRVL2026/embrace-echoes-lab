@@ -521,20 +521,27 @@ export function autoPlaceEquipmentWithReport(
           }
         }
 
-        // ── RULE 3b: If same ref, try adjacent to previous placement first ──
+        // ── RULE 3b: If same category/ref, try adjacent to previous placement first ──
         if (lastPlacement) {
-          const adjPositions = generateAdjacentPositions(
-            lastPlacement.x, lastPlacement.y, lastPlacement.rotation,
-            lastPlacement.w, lastPlacement.d, SAME_REF_GAP
-          );
-          for (const pos of adjPositions) {
-            if (isPlacementValid(pos.x, pos.y, lastPlacement.w, lastPlacement.d, pos.rotation, SAME_REF_GAP, bestRoom, doorZones, pillarZones, placements)) {
-              const p = makePlacement(equip, pos.x, pos.y, pos.rotation, lastPlacement.w, lastPlacement.d);
-              placements.push(p);
-              result.push(p);
-              lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w: lastPlacement.w, d: lastPlacement.d };
-              placed = true;
-              break;
+          // Try both orientations for the current equipment
+          for (const orientRot of [0, 90]) {
+            if (placed) break;
+            const curW = orientRot === 0 ? equip.width : equip.depth;
+            const curD = orientRot === 0 ? equip.depth : equip.width;
+            const adjPositions = generateAdjacentPositions(
+              lastPlacement.x, lastPlacement.y, lastPlacement.rotation,
+              lastPlacement.w, lastPlacement.d,
+              curW, curD, SAME_REF_GAP
+            );
+            for (const pos of adjPositions) {
+              if (isPlacementValid(pos.x, pos.y, curW, curD, pos.rotation, SAME_REF_GAP, bestRoom, doorZones, pillarZones, placements)) {
+                const p = makePlacement(equip, pos.x, pos.y, pos.rotation, curW, curD);
+                placements.push(p);
+                result.push(p);
+                lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w: curW, d: curD };
+                placed = true;
+                break;
+              }
             }
           }
         }

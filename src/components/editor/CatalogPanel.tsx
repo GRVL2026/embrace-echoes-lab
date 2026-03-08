@@ -146,8 +146,8 @@ function parseShopifyCSV(text: string): GameEquipment[] {
     stock: string;
   }>();
 
-  for (let i = 1; i < lines.length; i++) {
-    const cols = parseCSVLine(lines[i]);
+  for (let i = 1; i < allRows.length; i++) {
+    const cols = allRows[i];
     const handle = handleIdx >= 0 ? cols[handleIdx] : "";
     if (!handle) continue;
 

@@ -82,6 +82,7 @@ export function EditorCanvas() {
   const [pendingEquipClick, setPendingEquipClick] = useState<{ equipId: string; startX: number; startY: number } | null>(null);
   const [hasEquipDragged, setHasEquipDragged] = useState(false);
   const [hoveredEquipment, setHoveredEquipment] = useState<string | null>(null);
+  const [collidingEquipIds, setCollidingEquipIds] = useState<Set<string>>(new Set());
   const [editingDimension, setEditingDimension] = useState<{
     roomId: string;
     edgeIndex: number;

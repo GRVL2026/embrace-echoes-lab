@@ -63,6 +63,7 @@ export type EditorState = {
   showDimensions: boolean;
   showAngles: boolean;
   showPillarDistances: boolean;
+  showCirculation: boolean; // toggle circulation path visibility
   placedEquipments: import("@/types/equipment").PlacedEquipment[];
   circulationPath: CirculationSegment[]; // safety circulation display
 };

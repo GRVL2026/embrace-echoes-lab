@@ -286,9 +286,7 @@ function generatePillarBackedPositions(
 }
 
 
- * Equipment is oriented so the front (dimension side) faces outward, 
- * ensuring the corridor can pass at CORRIDOR_FRONT_GAP from the front.
- */
+/** Generate center island positions (kept for reference) */
 function generateIslandPositions(
   room: Room,
   equipWidth: number,

@@ -661,18 +661,18 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
 
       {/* Expanded catalog dialog */}
       <Dialog open={expandedView} onOpenChange={setExpandedView}>
-        <DialogContent className={`max-h-[90vh] overflow-hidden p-0 ${selectedIds.size > 0 ? 'sm:max-w-6xl' : 'sm:max-w-4xl'}`}>
-          <div className="flex h-full">
+        <DialogContent className={`h-[85vh] overflow-hidden p-0 ${selectedIds.size > 0 ? 'sm:max-w-6xl' : 'sm:max-w-4xl'}`}>
+          <div className="flex h-full min-h-0">
             {/* Main catalog area */}
-            <div className={`flex-1 flex flex-col ${selectedIds.size > 0 ? 'border-r border-border' : ''}`}>
-              <DialogHeader className="p-4 pb-0">
+            <div className={`flex-1 flex flex-col min-h-0 ${selectedIds.size > 0 ? 'border-r border-border' : ''}`}>
+              <DialogHeader className="p-4 pb-0 shrink-0">
                 <DialogTitle className="flex items-center gap-2">
                   <Package className="h-5 w-5 text-primary" />
                   Catalogue ({catalog.length} jeux)
                 </DialogTitle>
               </DialogHeader>
               
-              <div className="p-4 pt-2 flex-1 flex flex-col min-h-0">
+              <div className="p-4 pt-2 flex-1 flex flex-col min-h-0 overflow-hidden">
                 {/* Search in expanded view */}
                 <div className="relative mb-4">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

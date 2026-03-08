@@ -910,6 +910,14 @@ export function EditorCanvas() {
       setHoveredPillar(null);
     }
 
+    // Hover detection for placed equipment (select tool)
+    if (state.tool === "select" || state.tool === "eraser") {
+      const eq = findEquipmentAtPoint(world, true);
+      setHoveredEquipment(eq ? eq.id : null);
+    } else if (hoveredEquipment) {
+      setHoveredEquipment(null);
+    }
+
     if (isPanning) {
       const dx = e.clientX - lastPanPos.x;
       const dy = e.clientY - lastPanPos.y;

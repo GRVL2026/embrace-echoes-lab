@@ -338,7 +338,34 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   const [viewingProduct, setViewingProduct] = useState<GameEquipment | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedView, setExpandedView] = useState(false);
+  const [loadingShopify, setLoadingShopify] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleLoadShopify = async () => {
+    setLoadingShopify(true);
+    try {
+      const products = await fetchShopifyCatalog();
+      if (products.length === 0) {
+        toast.info("Aucun produit trouvé dans votre store Shopify");
+        return;
+      }
+      // Merge: replace existing items with same id, add new ones
+      setCatalog(prev => {
+        const existingIds = new Set(prev.map(e => e.id));
+        const newItems = products.filter(p => !existingIds.has(p.id));
+        const updatedExisting = prev.map(e => {
+          const updated = products.find(p => p.id === e.id);
+          return updated || e;
+        });
+        return [...updatedExisting, ...newItems];
+      });
+      toast.success(`${products.length} produit${products.length > 1 ? "s" : ""} chargé${products.length > 1 ? "s" : ""} depuis Shopify`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erreur de chargement Shopify");
+    } finally {
+      setLoadingShopify(false);
+    }
+  };
 
   // Filter catalog based on search query
   const filteredCatalog = useMemo(() => {

@@ -657,6 +657,20 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
               if (fileInputRef.current) fileInputRef.current.value = "";
             }}
           />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={handleLoadShopify}
+                disabled={loadingShopify}
+              >
+                {loadingShopify ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShoppingBag className="h-3.5 w-3.5" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Charger depuis Shopify</TooltipContent>
+          </Tooltip>
           <Button
             variant="ghost"
             size="icon"

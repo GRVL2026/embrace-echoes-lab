@@ -1,7 +1,7 @@
 import { toast } from "sonner";
 import type { GameEquipment } from "@/types/equipment";
 import { DEFAULT_SAFETY_ZONE } from "@/types/equipment";
-import { supabase } from "@/integrations/supabase/client";
+
 
 // Color palette for equipment categories
 const CATEGORY_COLORS: Record<string, string> = {

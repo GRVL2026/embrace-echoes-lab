@@ -2,10 +2,6 @@ import { toast } from "sonner";
 import type { GameEquipment } from "@/types/equipment";
 import { DEFAULT_SAFETY_ZONE } from "@/types/equipment";
 
-const SHOPIFY_API_VERSION = '2025-07';
-const SHOPIFY_STORE_PERMANENT_DOMAIN = 'zhx0nb-11.myshopify.com';
-const SHOPIFY_STOREFRONT_URL = `https://${SHOPIFY_STORE_PERMANENT_DOMAIN}/api/${SHOPIFY_API_VERSION}/graphql.json`;
-const SHOPIFY_STOREFRONT_TOKEN = 'f36741b7243852cec60caa6969e7a434';
 
 // Color palette for equipment categories
 const CATEGORY_COLORS: Record<string, string> = {
@@ -31,109 +27,18 @@ function getCategoryColor(category: string): string {
   return CATEGORY_COLORS[key] || CATEGORY_COLORS.default;
 }
 
-async function storefrontApiRequest(query: string, variables: Record<string, unknown> = {}) {
-  const response = await fetch(SHOPIFY_STOREFRONT_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Shopify-Storefront-Access-Token': SHOPIFY_STOREFRONT_TOKEN,
-    },
-    body: JSON.stringify({ query, variables }),
-  });
-
-  if (response.status === 402) {
-    toast.error("Shopify: abonnement requis", {
-      description: "L'accès API Shopify nécessite un plan payant actif.",
-    });
-    return null;
-  }
-
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
-  }
-
-  const data = await response.json();
-  if (data.errors) {
-    throw new Error(`Shopify: ${data.errors.map((e: { message: string }) => e.message).join(', ')}`);
-  }
-  return data;
-}
-
-const PRODUCTS_QUERY = `
-  query GetProducts($first: Int!, $after: String, $query: String) {
-    products(first: $first, after: $after, query: $query) {
-      pageInfo {
-        hasNextPage
-        endCursor
-      }
-      edges {
-        node {
-          id
-          title
-          description
-          handle
-          productType
-          vendor
-          tags
-          priceRange {
-            minVariantPrice {
-              amount
-              currencyCode
-            }
-          }
-          images(first: 5) {
-            edges {
-              node {
-                url
-                altText
-              }
-            }
-          }
-          variants(first: 10) {
-            edges {
-              node {
-                id
-                title
-                price {
-                  amount
-                  currencyCode
-                }
-                availableForSale
-                selectedOptions {
-                  name
-                  value
-                }
-              }
-            }
-          }
-          metafields(identifiers: [
-            { namespace: "custom", key: "dimensions" },
-            { namespace: "custom", key: "power" },
-            { namespace: "custom", key: "screen" },
-            { namespace: "custom", key: "capacity" },
-            { namespace: "custom", key: "tickets" },
-            { namespace: "custom", key: "weight" },
-            { namespace: "custom", key: "warranty" }
-          ]) {
-            key
-            value
-          }
-        }
-      }
-    }
-  }
-`;
-
 /** Parse dimensions like "L 1030 x P 2500 x H 2640 mm" or "35X22X12" */
 function parseDimensions(dimStr: string): { width: number; depth: number; height: number } | null {
   if (!dimStr?.trim()) return null;
   const s = dimStr.trim();
 
+  // Pattern: "L 1030 x P 2500 x H 2640" (mm → cm)
   const lph = s.match(/L\s*[:\s]*(\d+)\s*[x×\s]+P\s*[:\s]*(\d+)\s*[x×\s]+H\s*[:\s]*(\d+)/i);
   if (lph) {
     return { width: parseInt(lph[1], 10) / 10, depth: parseInt(lph[2], 10) / 10, height: parseInt(lph[3], 10) / 10 };
   }
 
+  // Pattern: "NNNxNNNxNNN" (assumed cm)
   const plain = s.match(/(\d+)\s*[xX×]\s*(\d+)\s*[xX×]\s*(\d+)/);
   if (plain) {
     return { width: parseInt(plain[1], 10), depth: parseInt(plain[2], 10), height: parseInt(plain[3], 10) };
@@ -142,7 +47,7 @@ function parseDimensions(dimStr: string): { width: number; depth: number; height
   return null;
 }
 
-interface ShopifyProductNode {
+interface ShopifyAdminProduct {
   id: string;
   title: string;
   description: string;
@@ -150,80 +55,98 @@ interface ShopifyProductNode {
   productType: string;
   vendor: string;
   tags: string[];
-  priceRange: { minVariantPrice: { amount: string; currencyCode: string } };
-  images: { edges: Array<{ node: { url: string; altText: string | null } }> };
-  variants: { edges: Array<{ node: { id: string; title: string; price: { amount: string; currencyCode: string }; availableForSale: boolean; selectedOptions: Array<{ name: string; value: string }> } }> };
-  metafields: Array<{ key: string; value: string } | null>;
+  price: string;
+  currency: string;
+  images: string[];
+  metafields: Record<string, string>;
 }
 
-function shopifyProductToEquipment(product: ShopifyProductNode): GameEquipment {
-  const dimMeta = product.metafields?.find(m => m?.key === "dimensions");
-  const dims = dimMeta ? parseDimensions(dimMeta.value) : null;
+function shopifyProductToEquipment(product: ShopifyAdminProduct): GameEquipment {
+  // Try to find dimensions from metafields (various possible keys)
+  let dims: { width: number; depth: number; height: number } | null = null;
 
-  // Also try to extract dimensions from description
-  const descDims = !dims ? parseDimensions(product.description || "") : null;
-  const finalDims = dims || descDims;
+  // Search all metafields for dimension data
+  for (const [key, value] of Object.entries(product.metafields)) {
+    if (key.toLowerCase().includes("dimension") || key.toLowerCase().includes("size") || key.toLowerCase().includes("taille")) {
+      dims = parseDimensions(value);
+      if (dims) break;
+    }
+  }
 
-  const price = parseFloat(product.priceRange.minVariantPrice.amount);
+  // Fallback: try to extract from description HTML
+  if (!dims && product.description) {
+    // Strip HTML tags for parsing
+    const textDesc = product.description.replace(/<[^>]*>/g, " ");
+    dims = parseDimensions(textDesc);
+  }
+
+  const price = parseFloat(product.price);
   const category = product.productType || "autre";
 
-  const powerMeta = product.metafields?.find(m => m?.key === "power");
-  const screenMeta = product.metafields?.find(m => m?.key === "screen");
-  const capacityMeta = product.metafields?.find(m => m?.key === "capacity");
-  const ticketsMeta = product.metafields?.find(m => m?.key === "tickets");
-  const warrantyMeta = product.metafields?.find(m => m?.key === "warranty");
+  // Extract specs from metafields
+  const findMeta = (keyword: string) => {
+    for (const [key, value] of Object.entries(product.metafields)) {
+      if (key.toLowerCase().includes(keyword)) return value;
+    }
+    return undefined;
+  };
 
   return {
-    id: product.handle, // use handle as stable ID
+    id: product.handle,
     name: product.title,
     category,
-    width: finalDims?.width || 100,
-    depth: finalDims?.depth || 100,
-    height: finalDims?.height || 200,
+    width: dims?.width || 100,
+    depth: dims?.depth || 100,
+    height: dims?.height || 200,
     safetyZone: DEFAULT_SAFETY_ZONE,
     color: getCategoryColor(category),
     description: product.description || undefined,
     vendor: product.vendor || undefined,
     price: price > 0 ? price : undefined,
-    images: product.images.edges.map(e => e.node.url),
+    images: product.images.length > 0 ? product.images : undefined,
     tags: product.tags.length > 0 ? product.tags : undefined,
-    warranty: warrantyMeta?.value || undefined,
+    warranty: findMeta("warranty") || findMeta("garantie"),
     specs: {
-      power: powerMeta?.value || undefined,
-      screen: screenMeta?.value || undefined,
-      capacity: capacityMeta?.value || undefined,
-      tickets: ticketsMeta?.value?.toLowerCase() === "oui" ? true :
-               ticketsMeta?.value?.toLowerCase() === "non" ? false : undefined,
+      power: findMeta("power") || findMeta("puissance"),
+      screen: findMeta("screen") || findMeta("ecran") || findMeta("écran"),
+      capacity: findMeta("capacity") || findMeta("capacit") || findMeta("joueur"),
+      tickets: (() => {
+        const v = findMeta("ticket");
+        if (!v) return undefined;
+        return v.toLowerCase() === "oui" ? true : v.toLowerCase() === "non" ? false : undefined;
+      })(),
     },
   };
 }
 
 /**
- * Fetch all products from Shopify Storefront API, paginating automatically.
+ * Fetch all products from Shopify via Admin API edge function.
  * Returns GameEquipment[] ready for the catalog.
  */
 export async function fetchShopifyCatalog(searchQuery?: string): Promise<GameEquipment[]> {
-  const allProducts: GameEquipment[] = [];
-  let cursor: string | null = null;
-  let hasNextPage = true;
-  const pageSize = 50;
+  const params = new URLSearchParams();
+  if (searchQuery?.trim()) params.set("query", searchQuery.trim());
 
-  while (hasNextPage) {
-    const variables: Record<string, unknown> = { first: pageSize };
-    if (cursor) variables.after = cursor;
-    if (searchQuery?.trim()) variables.query = searchQuery.trim();
+  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+  const url = `https://${projectId}.supabase.co/functions/v1/shopify-catalog${params.toString() ? `?${params}` : ""}`;
+  
+  const response = await fetch(url, {
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
 
-    const data = await storefrontApiRequest(PRODUCTS_QUERY, variables);
-    if (!data) return allProducts; // billing error
-
-    const products = data.data.products;
-    for (const edge of products.edges) {
-      allProducts.push(shopifyProductToEquipment(edge.node));
-    }
-
-    hasNextPage = products.pageInfo.hasNextPage;
-    cursor = products.pageInfo.endCursor;
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.error || `Erreur ${response.status}`);
   }
 
-  return allProducts;
+  const result = await response.json();
+
+  if (result.error) {
+    throw new Error(result.error);
+  }
+
+  const products: ShopifyAdminProduct[] = result.products || [];
+  return products.map(shopifyProductToEquipment);
 }

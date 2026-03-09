@@ -11,13 +11,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Upload, Package, Play, Trash2, Check, X, Info, Search, Maximize2, Minus, Plus, ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
+import { Upload, Package, Play, Trash2, Check, X, Info, Search, Maximize2, Minus, Plus, ChevronDown, ChevronRight, RefreshCw, ShoppingBag, Loader2 } from "lucide-react";
 import type { GameEquipment, CatalogJSON } from "@/types/equipment";
 import { DEFAULT_SAFETY_ZONE } from "@/types/equipment";
 import { autoPlaceEquipmentWithReport } from "@/lib/placement";
 import { computeCirculation } from "@/lib/circulation";
 import { ProductDialog } from "./ProductDialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { fetchShopifyCatalog } from "@/lib/shopifyApi";
 
 /** Parse Shopify CSV dimensions like "L 1030 x P 2500 x H 2640 mm" or "35X22X12" */
 function parseShopifyDimensions(dimStr: string): { width: number; depth: number; height: number } | null {
@@ -337,7 +338,34 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   const [viewingProduct, setViewingProduct] = useState<GameEquipment | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedView, setExpandedView] = useState(false);
+  const [loadingShopify, setLoadingShopify] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleLoadShopify = async () => {
+    setLoadingShopify(true);
+    try {
+      const products = await fetchShopifyCatalog();
+      if (products.length === 0) {
+        toast.info("Aucun produit trouvé dans votre store Shopify");
+        return;
+      }
+      // Merge: replace existing items with same id, add new ones
+      setCatalog(prev => {
+        const existingIds = new Set(prev.map(e => e.id));
+        const newItems = products.filter(p => !existingIds.has(p.id));
+        const updatedExisting = prev.map(e => {
+          const updated = products.find(p => p.id === e.id);
+          return updated || e;
+        });
+        return [...updatedExisting, ...newItems];
+      });
+      toast.success(`${products.length} produit${products.length > 1 ? "s" : ""} chargé${products.length > 1 ? "s" : ""} depuis Shopify`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erreur de chargement Shopify");
+    } finally {
+      setLoadingShopify(false);
+    }
+  };
 
   // Filter catalog based on search query
   const filteredCatalog = useMemo(() => {
@@ -629,6 +657,20 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
               if (fileInputRef.current) fileInputRef.current.value = "";
             }}
           />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={handleLoadShopify}
+                disabled={loadingShopify}
+              >
+                {loadingShopify ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShoppingBag className="h-3.5 w-3.5" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Charger depuis Shopify</TooltipContent>
+          </Tooltip>
           <Button
             variant="ghost"
             size="icon"
@@ -689,17 +731,29 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
           <div className="rounded-lg border border-dashed border-border p-4 text-center">
             <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
             <p className="text-xs text-muted-foreground">
-              Importez un fichier CSV ou JSON pour charger le catalogue
+              Chargez votre catalogue depuis Shopify ou importez un fichier CSV/JSON
             </p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-3 gap-1.5 text-xs"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload className="h-3 w-3" />
-              Importer
-            </Button>
+            <div className="flex flex-col gap-2 mt-3">
+              <Button
+                variant="default"
+                size="sm"
+                className="gap-1.5 text-xs w-full"
+                onClick={handleLoadShopify}
+                disabled={loadingShopify}
+              >
+                {loadingShopify ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShoppingBag className="h-3 w-3" />}
+                {loadingShopify ? "Chargement..." : "Charger depuis Shopify"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs w-full"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="h-3 w-3" />
+                Importer CSV / JSON
+              </Button>
+            </div>
           </div>
         </div>
       ) : (

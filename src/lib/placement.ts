@@ -120,12 +120,11 @@ function getPillarExclusionZones(pillars: Pillar[]): { cx: number; cy: number; w
   }));
 }
 
-/** Get the front clearance zone: a rectangle extending from the equipment's front face */
+/** Get the front clearance zone: a rectangle extending from the equipment's front face.
+ * The zone covers 100% of the equipment width and extends CORRIDOR_WIDTH outward. */
 function getFrontClearanceZone(
   cx: number, cy: number, w: number, d: number, rot: number, clearanceDepth: number,
 ): { cx: number; cy: number; w: number; d: number; rot: number } {
-  // The front of equipment is in the +Y local direction (facing inward from wall)
-  // We project a zone from the front face outward
   const rad = rot * Math.PI / 180;
   const cos = Math.cos(rad);
   const sin = Math.sin(rad);
@@ -135,10 +134,12 @@ function getFrontClearanceZone(
   // Center of clearance zone: shifted forward from equipment center by half depth + half clearance
   const zoneCx = cx + frontDirX * (d / 2 + clearanceDepth / 2);
   const zoneCy = cy + frontDirY * (d / 2 + clearanceDepth / 2);
-  return { cx: zoneCx, cy: zoneCy, w: w - 10, d: clearanceDepth, rot }; // slightly narrower than equipment
+  // Full equipment width — 100% of the front must be accessible
+  return { cx: zoneCx, cy: zoneCy, w, d: clearanceDepth, rot };
 }
 
-/** Check if an equipment placement is valid (no overlap with walls, doors, pillars, other equipment) */
+/** Check if an equipment placement is valid (no overlap with walls, doors, pillars, other equipment,
+ *  AND front accessibility is maintained for all equipment) */
 function isPlacementValid(
   cx: number, cy: number, w: number, d: number, rot: number, gap: number,
   room: Room,
@@ -147,7 +148,7 @@ function isPlacementValid(
   existingPlacements: PlacedEquipment[],
   debug: boolean = false,
 ): boolean {
-  // Must be inside room (position already accounts for wall margin)
+  // Must be inside room
   if (!rectInsidePolygon(cx, cy, w, d, rot, room.points)) {
     if (debug) console.log(`[placement] OUTSIDE room at (${cx.toFixed(0)},${cy.toFixed(0)}) ${w}x${d} rot=${rot.toFixed(0)}`);
     return false;
@@ -173,16 +174,29 @@ function isPlacementValid(
       return false;
     }
   }
-  // ── ACCESSIBILITY CHECK: Front face must not be blocked by other equipment ──
-  // Project a clearance zone from the front face (corridor-width deep)
-  const clearanceZone = getFrontClearanceZone(cx, cy, w, d, rot, CORRIDOR_WIDTH);
+
+  // ── FORWARD CHECK: New equipment's front must not be blocked by existing equipment ──
+  const newFrontZone = getFrontClearanceZone(cx, cy, w, d, rot, CORRIDOR_WIDTH);
   for (const pe of existingPlacements) {
-    if (rectsOverlap(clearanceZone.cx, clearanceZone.cy, clearanceZone.w, clearanceZone.d, clearanceZone.rot,
+    if (rectsOverlap(newFrontZone.cx, newFrontZone.cy, newFrontZone.w, newFrontZone.d, newFrontZone.rot,
       pe.position.x, pe.position.y, pe.width, pe.depth, pe.rotation)) {
       if (debug) console.log(`[placement] FRONT BLOCKED by ${pe.name} at (${cx.toFixed(0)},${cy.toFixed(0)})`);
       return false;
     }
   }
+
+  // ── REVERSE CHECK: New equipment must not block the front of any already-placed equipment ──
+  for (const pe of existingPlacements) {
+    const existingFrontZone = getFrontClearanceZone(
+      pe.position.x, pe.position.y, pe.width, pe.depth, pe.rotation, CORRIDOR_WIDTH
+    );
+    if (rectsOverlap(existingFrontZone.cx, existingFrontZone.cy, existingFrontZone.w, existingFrontZone.d, existingFrontZone.rot,
+      cx, cy, w, d, rot)) {
+      if (debug) console.log(`[placement] WOULD BLOCK FRONT of ${pe.name} at (${cx.toFixed(0)},${cy.toFixed(0)})`);
+      return false;
+    }
+  }
+
   return true;
 }
 

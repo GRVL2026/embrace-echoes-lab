@@ -127,13 +127,6 @@ export async function fetchShopifyCatalog(searchQuery?: string): Promise<GameEqu
   const params = new URLSearchParams();
   if (searchQuery?.trim()) params.set("query", searchQuery.trim());
 
-  const { data, error } = await supabase.functions.invoke("shopify-catalog", {
-    body: null,
-    method: "GET",
-    headers: {},
-  });
-
-  // supabase.functions.invoke doesn't support query params well for GET, use fetch directly
   const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
   const url = `https://${projectId}.supabase.co/functions/v1/shopify-catalog${params.toString() ? `?${params}` : ""}`;
   

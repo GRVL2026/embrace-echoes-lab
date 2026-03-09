@@ -731,17 +731,29 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
           <div className="rounded-lg border border-dashed border-border p-4 text-center">
             <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
             <p className="text-xs text-muted-foreground">
-              Importez un fichier CSV ou JSON pour charger le catalogue
+              Chargez votre catalogue depuis Shopify ou importez un fichier CSV/JSON
             </p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-3 gap-1.5 text-xs"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload className="h-3 w-3" />
-              Importer
-            </Button>
+            <div className="flex flex-col gap-2 mt-3">
+              <Button
+                variant="default"
+                size="sm"
+                className="gap-1.5 text-xs w-full"
+                onClick={handleLoadShopify}
+                disabled={loadingShopify}
+              >
+                {loadingShopify ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShoppingBag className="h-3 w-3" />}
+                {loadingShopify ? "Chargement..." : "Charger depuis Shopify"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs w-full"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="h-3 w-3" />
+                Importer CSV / JSON
+              </Button>
+            </div>
           </div>
         </div>
       ) : (

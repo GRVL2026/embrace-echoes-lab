@@ -375,16 +375,110 @@ function getDoorWorldPosition(door: Door, rooms: Room[]): Point | null {
 
 /** Get the "front" waypoint of an equipment: placed just outside the inflated obstacle zone
  *  so A* can actually reach it. The grid inflates equipment by HALF_CORRIDOR, so the waypoint
- *  must be at least depth/2 + HALF_CORRIDOR from center. We add 5cm margin. */
+ *  must be at least depth/2 + HALF_CORRIDOR from center. We add 20cm margin for grid resolution safety. */
 function getEquipmentFrontWaypoint(eq: PlacedEquipment): Point {
   const rad = (eq.rotation || 0) * Math.PI / 180;
   const cos = Math.cos(rad), sin = Math.sin(rad);
   // Front face offset must clear the inflated obstacle zone in the grid
-  const frontOffset = eq.depth / 2 + HALF_CORRIDOR + 5; // just outside blocked zone
+  const frontOffset = eq.depth / 2 + HALF_CORRIDOR + 20; // 20cm past blocked zone edge
   return {
     x: eq.position.x + (-sin) * frontOffset,
     y: eq.position.y + cos * frontOffset,
   };
+}
+
+/** Group equipment by wall (same rotation ±5° and similar front-Y or front-X).
+ *  Returns groups with sweep waypoints at the extremes of each group. */
+function buildWallSweepWaypoints(equipments: PlacedEquipment[]): { id: string; point: Point }[] {
+  if (equipments.length === 0) return [];
+
+  // Group by rotation (rounded to nearest 90°)
+  const rotGroups = new Map<number, PlacedEquipment[]>();
+  for (const eq of equipments) {
+    const normRot = Math.round(eq.rotation / 90) * 90 % 360;
+    if (!rotGroups.has(normRot)) rotGroups.set(normRot, []);
+    rotGroups.get(normRot)!.push(eq);
+  }
+
+  const waypoints: { id: string; point: Point }[] = [];
+
+  for (const [rot, group] of rotGroups) {
+    if (group.length <= 2) {
+      // Small group: individual waypoints
+      for (const eq of group) {
+        waypoints.push({ id: eq.id, point: getEquipmentFrontWaypoint(eq) });
+      }
+      continue;
+    }
+
+    // For larger groups on the same wall, sub-group by front-line position
+    // Equipment on the same wall share the same "front distance" from wall
+    const rad = rot * Math.PI / 180;
+    const cos = Math.cos(rad), sin = Math.sin(rad);
+
+    // Front direction: (-sin, cos) — perpendicular to width axis
+    // "Front line" coordinate = projection onto front direction
+    const frontLineCoord = (eq: PlacedEquipment) => {
+      return eq.position.x * (-sin) + eq.position.y * cos;
+    };
+    // "Along wall" coordinate = projection onto width axis
+    const wallCoord = (eq: PlacedEquipment) => {
+      return eq.position.x * cos + eq.position.y * sin;
+    };
+
+    // Sub-group by similar front-line coordinate (within 50cm = same wall depth)
+    const subGroups: PlacedEquipment[][] = [];
+    const sorted = [...group].sort((a, b) => frontLineCoord(a) - frontLineCoord(b));
+    let currentSubGroup: PlacedEquipment[] = [sorted[0]];
+    for (let i = 1; i < sorted.length; i++) {
+      if (Math.abs(frontLineCoord(sorted[i]) - frontLineCoord(currentSubGroup[0])) < 50) {
+        currentSubGroup.push(sorted[i]);
+      } else {
+        subGroups.push(currentSubGroup);
+        currentSubGroup = [sorted[i]];
+      }
+    }
+    subGroups.push(currentSubGroup);
+
+    for (const subGroup of subGroups) {
+      if (subGroup.length <= 2) {
+        for (const eq of subGroup) {
+          waypoints.push({ id: eq.id, point: getEquipmentFrontWaypoint(eq) });
+        }
+        continue;
+      }
+
+      // Same wall group with 3+ equipment: create sweep waypoints
+      // Sort by position along the wall
+      subGroup.sort((a, b) => wallCoord(a) - wallCoord(b));
+
+      const leftmost = subGroup[0];
+      const rightmost = subGroup[subGroup.length - 1];
+      const middle = subGroup[Math.floor(subGroup.length / 2)];
+
+      // Create waypoints at left extreme, middle, and right extreme
+      // This forces the corridor to sweep the full length
+      waypoints.push({ id: leftmost.id, point: getEquipmentFrontWaypoint(leftmost) });
+      if (subGroup.length > 3) {
+        waypoints.push({ id: middle.id, point: getEquipmentFrontWaypoint(middle) });
+      }
+      waypoints.push({ id: rightmost.id, point: getEquipmentFrontWaypoint(rightmost) });
+
+      // Mark remaining equipment as "covered" by sweep (use leftmost's waypoint as reference)
+      // They don't need individual waypoints since the sweep passes in front of all of them
+      for (const eq of subGroup) {
+        if (eq !== leftmost && eq !== rightmost && eq !== middle) {
+          // Still add to waypoints list so unreachable tracking works, but use nearest extreme
+          const leftDist = Math.abs(wallCoord(eq) - wallCoord(leftmost));
+          const rightDist = Math.abs(wallCoord(eq) - wallCoord(rightmost));
+          const nearest = leftDist < rightDist ? leftmost : rightmost;
+          waypoints.push({ id: eq.id, point: getEquipmentFrontWaypoint(nearest) });
+        }
+      }
+    }
+  }
+
+  return waypoints;
 }
 
 /** Order waypoints using nearest-neighbor heuristic for shortest tour */
@@ -411,6 +505,8 @@ function orderWaypoints(start: Point, waypoints: Point[]): Point[] {
  * Compute dynamic circulation paths.
  * Starts from the main door, visits the front of every equipment (2cm gap),
  * tries to loop back to the main door, otherwise backtracks.
+ * Groups same-wall equipment to create sweep waypoints ensuring
+ * the corridor visually passes in front of all equipment on each wall.
  */
 export function computeCirculation(
   rooms: Room[],
@@ -496,8 +592,8 @@ export function computeCirculation(
     const pathCells = astar(grid, fromGrid.r, fromGrid.c, toGrid_.r, toGrid_.c, rows, cols);
     if (!pathCells || pathCells.length < 2) return false;
     const worldPoints = pathCells.map(cell => toWorld(cell.r, cell.c));
-    const simplified = simplifyPath(worldPoints, resolution * 0.8);
-    const smoothed = smoothPath(simplified, 3, isBlockedWorld);
+    const simplified = simplifyPath(worldPoints, resolution * 0.5); // less aggressive simplification
+    const smoothed = smoothPath(simplified, 2, isBlockedWorld); // fewer smoothing iterations
     for (let i = 0; i < smoothed.length - 1; i++) {
       allSegments.push({ start: smoothed[i], end: smoothed[i + 1], width: CORRIDOR_WIDTH });
     }
@@ -505,16 +601,24 @@ export function computeCirculation(
   };
 
   if (equipments.length > 0) {
-    // Compute front waypoints for each equipment
-    const waypoints = equipments.map(eq => ({
-      id: eq.id,
-      point: getEquipmentFrontWaypoint(eq),
-    }));
+    // Build wall-sweep waypoints (groups same-wall equipment, creates sweep at extremes)
+    const waypoints = buildWallSweepWaypoints(equipments);
+
+    // Deduplicate waypoints that share the same point (from sweep grouping)
+    const uniqueWaypoints: { id: string; point: Point }[] = [];
+    const seenPoints = new Set<string>();
+    for (const wp of waypoints) {
+      const key = `${Math.round(wp.point.x)},${Math.round(wp.point.y)}`;
+      if (!seenPoints.has(key)) {
+        seenPoints.add(key);
+        uniqueWaypoints.push(wp);
+      }
+    }
 
     // Order waypoints nearest-neighbor starting from the main door
-    const orderedPoints = orderWaypoints(startPos, waypoints.map(w => w.point));
+    const orderedPoints = orderWaypoints(startPos, uniqueWaypoints.map(w => w.point));
     const orderedWithIds = orderedPoints.map(p => {
-      const wp = waypoints.find(w => w.point.x === p.x && w.point.y === p.y)!;
+      const wp = uniqueWaypoints.find(w => w.point.x === p.x && w.point.y === p.y)!;
       return wp;
     });
 
@@ -529,11 +633,19 @@ export function computeCirculation(
       }
     }
 
+    // Map back: any equipment whose waypoint was unreachable
+    // For sweep groups, individual equipment shares waypoints with extremes
+    // Check if any equipment ID from original list isn't covered
+    const coveredIds = new Set(waypoints.filter(w => !unreachableIds.includes(w.id)).map(w => w.id));
+    for (const eq of equipments) {
+      if (!coveredIds.has(eq.id) && !unreachableIds.includes(eq.id)) {
+        unreachableIds.push(eq.id);
+      }
+    }
+
     // Try to loop back to start (boucle)
     const loopOk = buildPath(currentPos, startPos);
     if (!loopOk) {
-      // Fallback: retrace path back (aller-retour) — just path back to start
-      // The corridor already covers all equipment fronts, so we just need to get back
       buildPath(currentPos, startPos); // may fail in tight spaces, that's ok
     }
   } else if (roomDoors.length === 0) {

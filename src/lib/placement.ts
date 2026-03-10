@@ -538,7 +538,7 @@ export function autoPlaceEquipmentWithReport(
 
   const byCategory = new Map<string, { equip: GameEquipment; count: number }[]>();
   for (const group of byEquipmentId.values()) {
-    const cat = group.equip.category || "autre";
+    const cat = (group.equip.category || "autre").toLowerCase().replace(/s$/, ""); // normalize: "Flippers" → "flipper"
     if (!byCategory.has(cat)) byCategory.set(cat, []);
     byCategory.get(cat)!.push(group);
   }
@@ -657,7 +657,10 @@ export function autoPlaceEquipmentWithReport(
               let proximityBonus = 0;
               if (categoryLastPlacement) {
                 const dist = Math.hypot(pos.x - categoryLastPlacement.x, pos.y - categoryLastPlacement.y);
-                proximityBonus = dist / 10;
+                // Strong proximity bonus: heavily penalize distance from category group
+                // Also strongly penalize being on a different wall than the category
+                const wallMismatch = (wall.edgeIndex !== categoryLastPlacement.wallEdgeIndex) ? 500 : 0;
+                proximityBonus = dist * 2 + wallMismatch;
               }
               allWallPos.push({
                 x: pos.x, y: pos.y, rotation: pos.rotation,

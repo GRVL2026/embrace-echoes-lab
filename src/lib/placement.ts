@@ -997,12 +997,26 @@ export function autoPlaceEquipmentWithReport(
         const d = equip.depth;
         const centerPositions = generateCenterPlacementPositions(bestRoom, w, d, playerClearance, step);
 
-        // Sort by proximity to last center placement for grouping
+        // Sort by proximity to last center placement — strongly prefer same-axis alignment (side-by-side)
         if (centerLast) {
+          const lastRad = centerLast.rotation * Math.PI / 180;
+          const lastCos = Math.cos(lastRad);
+          const lastSin = Math.sin(lastRad);
           centerPositions.sort((a, b) => {
-            const distA = Math.hypot(a.x - centerLast!.x, a.y - centerLast!.y);
-            const distB = Math.hypot(b.x - centerLast!.x, b.y - centerLast!.y);
-            return distA - distB;
+            // For side-by-side: prefer positions that differ mainly along the width axis (lateral)
+            // and minimally along the depth axis
+            const dxA = a.x - centerLast!.x, dyA = a.y - centerLast!.y;
+            const dxB = b.x - centerLast!.x, dyB = b.y - centerLast!.y;
+            // Depth offset (along front/back direction) — penalize heavily
+            const depthA = Math.abs(dxA * (-lastSin) + dyA * lastCos);
+            const depthB = Math.abs(dxB * (-lastSin) + dyB * lastCos);
+            // Lateral offset (along width direction) — prefer close
+            const latA = Math.abs(dxA * lastCos + dyA * lastSin);
+            const latB = Math.abs(dxB * lastCos + dyB * lastSin);
+            // Score: heavily penalize depth misalignment, lightly penalize lateral distance
+            const scoreA = depthA * 10 + latA;
+            const scoreB = depthB * 10 + latB;
+            return scoreA - scoreB;
           });
         }
 

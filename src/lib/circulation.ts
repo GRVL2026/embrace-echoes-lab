@@ -586,12 +586,14 @@ export function computeCirculation(
     const dx = b.x - a.x, dy = b.y - a.y;
     const len = Math.sqrt(dx * dx + dy * dy);
     if (len > 0) {
-      const nx = -dy / len, ny = dx / len;
+      let nx = -dy / len, ny = dx / len;
       const testIn = { x: pos.x + nx * 50, y: pos.y + ny * 50 };
-      if (pointInPolygon(testIn, bestRoom!.points)) {
-        return { x: pos.x + nx * HALF_CORRIDOR, y: pos.y + ny * HALF_CORRIDOR };
+      if (!pointInPolygon(testIn, bestRoom!.points)) {
+        nx = -nx; ny = -ny;
       }
-      return { x: pos.x - nx * HALF_CORRIDOR, y: pos.y - ny * HALF_CORRIDOR };
+      // Step inward just enough to be inside the room and in a free grid cell
+      // Use a small offset (30cm) to avoid wall-blocked cells, then A* handles the rest
+      return { x: pos.x + nx * 30, y: pos.y + ny * 30 };
     }
     return pos;
   };

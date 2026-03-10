@@ -586,9 +586,67 @@ export function autoPlaceEquipmentWithReport(
   const result: PlacedEquipment[] = [];
   const notPlaced: GameEquipment[] = [];
 
-  // ── Group by category, then by equipment ID ──
-  const byEquipmentId = new Map<string, { equip: GameEquipment; count: number }>();
+  // ── Separate center-placement equipment (palet, power puck) from wall-based equipment ──
+  const centerEquipments: GameEquipment[] = [];
+  const wallEquipments: GameEquipment[] = [];
   for (const equip of selectedEquipments) {
+    if (equip.centerPlacement) centerEquipments.push(equip);
+    else wallEquipments.push(equip);
+  }
+
+  const step = 5; // 5cm precision — no grid snapping
+
+  // ── PHASE 1: Place center-placement equipment first (independent of categories) ──
+  {
+    const byId = new Map<string, { equip: GameEquipment; count: number }>();
+    for (const equip of centerEquipments) {
+      const existing = byId.get(equip.id);
+      if (existing) existing.count++;
+      else byId.set(equip.id, { equip, count: 1 });
+    }
+
+    let centerLast: { x: number; y: number; rotation: number; w: number; d: number } | null = null;
+
+    for (const group of byId.values()) {
+      const equip = group.equip;
+      const playerClearance = equip.playerClearance || 100;
+      for (let i = 0; i < group.count; i++) {
+        const w = equip.width;
+        const d = equip.depth;
+        const centerPositions = generateCenterPlacementPositions(bestRoom, w, d, playerClearance, step);
+
+        // Sort by proximity to last center placement for grouping
+        if (centerLast) {
+          centerPositions.sort((a, b) => {
+            const distA = Math.hypot(a.x - centerLast!.x, a.y - centerLast!.y);
+            const distB = Math.hypot(b.x - centerLast!.x, b.y - centerLast!.y);
+            return distA - distB;
+          });
+        }
+
+        let placed = false;
+        for (const pos of centerPositions) {
+          if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, DIFFERENT_GAP, bestRoom, doorZones, pillarZones, placements)) {
+            const p = makePlacement(equip, pos.x, pos.y, pos.rotation, w, d);
+            placements.push(p);
+            result.push(p);
+            centerLast = { x: pos.x, y: pos.y, rotation: pos.rotation, w, d };
+            placed = true;
+            console.log(`[placement] Center-placed ${equip.name} at (${pos.x.toFixed(0)},${pos.y.toFixed(0)})`);
+            break;
+          }
+        }
+        if (!placed) {
+          console.warn(`[placement] Could not center-place: ${equip.name}`);
+          notPlaced.push(equip);
+        }
+      }
+    }
+  }
+
+  // ── PHASE 2: Place wall-based equipment grouped by category ──
+  const byEquipmentId = new Map<string, { equip: GameEquipment; count: number }>();
+  for (const equip of wallEquipments) {
     const existing = byEquipmentId.get(equip.id);
     if (existing) existing.count++;
     else byEquipmentId.set(equip.id, { equip, count: 1 });
@@ -609,10 +667,7 @@ export function autoPlaceEquipmentWithReport(
       return areaB - areaA;
     });
 
-  const step = 5; // 5cm precision — no grid snapping
-
   // Per-category last placement tracker — each category starts fresh on longest available wall
-  // Within a category, equipment chains via adjacency for tight grouping
   let categoryLastPlacement: {
     x: number; y: number; rotation: number; w: number; d: number;
     wallEdgeIndex?: number;

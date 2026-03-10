@@ -5,6 +5,7 @@ import { Room3D } from "./Room3D";
 import { Equipment3D } from "./Equipment3D";
 import { ArcadeLighting } from "./ArcadeLighting";
 import { Pillar3D } from "./Pillar3D";
+import { Door3D } from "./Door3D";
 
 export function Viewer3D() {
   const { state } = useEditor();

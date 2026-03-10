@@ -640,7 +640,8 @@ export function autoPlaceEquipmentWithReport(
 
         let placed = false;
         for (const pos of centerPositions) {
-          if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, DIFFERENT_GAP, bestRoom, doorZones, pillarZones, placements)) {
+          // Center tables need CORRIDOR_WIDTH (140cm) gap to other equipment on long sides
+          if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, CORRIDOR_WIDTH, bestRoom, doorZones, pillarZones, placements)) {
             const p = makePlacement(equip, pos.x, pos.y, pos.rotation, w, d);
             placements.push(p);
             result.push(p);

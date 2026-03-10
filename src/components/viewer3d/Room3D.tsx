@@ -17,8 +17,10 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true }: Prop
     // Convert cm → meters, 2D y → 3D z
     const pts = room.points.map((p) => new THREE.Vector2(p.x / 100, p.y / 100));
 
-    // Floor shape
-    const floorShape = new THREE.Shape(pts);
+    // Floor shape — negate Y to compensate for -PI/2 X rotation (which maps shape Y → -Z)
+    const floorPts = room.points.map((p) => new THREE.Vector2(p.x / 100, -p.y / 100));
+    floorPts.reverse(); // preserve correct winding after negation
+    const floorShape = new THREE.Shape(floorPts);
 
     // Build wall segments
     const walls: { start: THREE.Vector2; end: THREE.Vector2 }[] = [];

@@ -2402,27 +2402,18 @@ function drawCirculationPath(
       ctx.lineTo(last.x * CM_TO_PX, last.y * CM_TO_PX);
     };
 
-    // Filled corridor — thick rounded line
+    // Outer corridor edges — dark border
     tracePath();
-    ctx.strokeStyle = "hsla(142, 70%, 45%, 0.07)";
+    ctx.strokeStyle = "hsla(142, 70%, 40%, 0.35)";
     ctx.lineWidth = corridorWidthPx;
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
     ctx.stroke();
 
-    // Corridor edges — two strokes (outer thick, inner erase technique via layering)
-    // Outer edge line
+    // Inner fill — lighter center
     tracePath();
-    ctx.strokeStyle = "hsla(142, 70%, 50%, 0.25)";
-    ctx.lineWidth = corridorWidthPx;
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
-    ctx.stroke();
-
-    // Inner fill to cover center (same as corridor fill but slightly smaller)
-    tracePath();
-    ctx.strokeStyle = "hsla(142, 70%, 45%, 0.07)";
-    ctx.lineWidth = corridorWidthPx - 1.5 / zoom;
+    ctx.strokeStyle = "hsla(142, 70%, 50%, 0.06)";
+    ctx.lineWidth = corridorWidthPx - 3 / zoom;
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
     ctx.stroke();

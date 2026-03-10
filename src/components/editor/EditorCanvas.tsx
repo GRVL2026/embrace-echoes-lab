@@ -2381,51 +2381,59 @@ function drawCirculationPath(
   if (currentChain.length > 0) chains.push(currentChain);
 
   for (let ci = 0; ci < chains.length; ci++) {
-    // Deduplicate → extra visual smoothing → deduplicate again
     let chain = deduplicateChain(chains[ci], 8);
-    chain = visualSmooth(chain, 2);
+    chain = visualSmooth(chain, 5); // many iterations for very smooth curves
     chain = deduplicateChain(chain, 3);
     if (chain.length < 2) continue;
 
-    const leftEdge = buildOffsetPolyline(chain, hw);
-    const rightEdge = buildOffsetPolyline(chain, -hw);
+    const corridorWidthPx = (segments[0]?.width || 140) * CM_TO_PX;
 
-    // Filled corridor
-    ctx.beginPath();
-    ctx.moveTo(leftEdge[0].x, leftEdge[0].y);
-    for (let i = 1; i < leftEdge.length; i++) ctx.lineTo(leftEdge[i].x, leftEdge[i].y);
-    for (let i = rightEdge.length - 1; i >= 0; i--) ctx.lineTo(rightEdge[i].x, rightEdge[i].y);
-    ctx.closePath();
-    ctx.fillStyle = "hsla(142, 70%, 45%, 0.07)";
-    ctx.fill();
+    // Helper to trace the chain path
+    const tracePath = () => {
+      ctx.beginPath();
+      ctx.moveTo(chain[0].x * CM_TO_PX, chain[0].y * CM_TO_PX);
+      // Use quadratic curves between midpoints for extra smoothness
+      for (let i = 1; i < chain.length - 1; i++) {
+        const mx = (chain[i].x + chain[i + 1].x) / 2 * CM_TO_PX;
+        const my = (chain[i].y + chain[i + 1].y) / 2 * CM_TO_PX;
+        ctx.quadraticCurveTo(chain[i].x * CM_TO_PX, chain[i].y * CM_TO_PX, mx, my);
+      }
+      const last = chain[chain.length - 1];
+      ctx.lineTo(last.x * CM_TO_PX, last.y * CM_TO_PX);
+    };
 
-    // Corridor edges — solid thin lines with round joins
-    ctx.strokeStyle = "hsla(142, 70%, 50%, 0.3)";
-    ctx.lineWidth = 1 / zoom;
-    ctx.setLineDash([]);
+    // Filled corridor — thick rounded line
+    tracePath();
+    ctx.strokeStyle = "hsla(142, 70%, 45%, 0.07)";
+    ctx.lineWidth = corridorWidthPx;
     ctx.lineJoin = "round";
-
-    ctx.beginPath();
-    ctx.moveTo(leftEdge[0].x, leftEdge[0].y);
-    for (let i = 1; i < leftEdge.length; i++) ctx.lineTo(leftEdge[i].x, leftEdge[i].y);
+    ctx.lineCap = "round";
     ctx.stroke();
 
-    ctx.beginPath();
-    ctx.moveTo(rightEdge[0].x, rightEdge[0].y);
-    for (let i = 1; i < rightEdge.length; i++) ctx.lineTo(rightEdge[i].x, rightEdge[i].y);
+    // Corridor edges — two strokes (outer thick, inner erase technique via layering)
+    // Outer edge line
+    tracePath();
+    ctx.strokeStyle = "hsla(142, 70%, 50%, 0.25)";
+    ctx.lineWidth = corridorWidthPx;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
     ctx.stroke();
 
-    // Centerline — smooth dashed with round caps
+    // Inner fill to cover center (same as corridor fill but slightly smaller)
+    tracePath();
+    ctx.strokeStyle = "hsla(142, 70%, 45%, 0.07)";
+    ctx.lineWidth = corridorWidthPx - 1.5 / zoom;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke();
+
+    // Centerline — smooth dashed with quadratic curves
     ctx.strokeStyle = "hsla(142, 70%, 55%, 0.45)";
     ctx.lineWidth = 1.5 / zoom;
     ctx.setLineDash([14 / zoom, 10 / zoom]);
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(chain[0].x * CM_TO_PX, chain[0].y * CM_TO_PX);
-    for (let i = 1; i < chain.length; i++) {
-      ctx.lineTo(chain[i].x * CM_TO_PX, chain[i].y * CM_TO_PX);
-    }
+    tracePath();
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.lineCap = "butt";

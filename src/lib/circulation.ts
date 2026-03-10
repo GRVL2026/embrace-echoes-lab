@@ -428,28 +428,32 @@ function buildWallSweepWaypoints(
       nx = -nx; ny = -ny;
     }
 
-    // Waypoint distance from wall: just outside the equipment inflation zone
-    // Equipment center is at ~depth/2 + 5cm from wall, inflation adds HALF_CORRIDOR
-    // So blocked zone extends to depth + 5 + HALF_CORRIDOR from wall
-    // Place waypoint just outside that with small margin
-    const maxDepth = Math.max(...group.equipment.map(eq => Math.max(eq.depth, eq.width)));
-    const waypointDistFromWall = maxDepth + HALF_CORRIDOR + 15;
+    // Waypoint placed just in front of equipment face (not relative to wall)
+    // Equipment front face = center + depth/2 in inward direction
+    // Waypoint = front face + HALF_CORRIDOR + small margin
+    const frontMargin = HALF_CORRIDOR + 10; // corridor center just in front of equipment
 
     // Project each equipment onto wall axis to get position along wall
     const projections = group.equipment.map(eq => {
       const px = eq.position.x - a.x, py = eq.position.y - a.y;
       const along = px * ux + py * uy; // position along wall
-      return { eq, along };
+      // Distance from equipment center to its front face (in inward normal direction)
+      const eqHalfDepth = Math.max(eq.depth, eq.width) / 2;
+      return { eq, along, eqHalfDepth };
     });
     projections.sort((a, b) => a.along - b.along);
 
-    // Create waypoints at extremes (and middle for large groups)
-    const makeWaypoint = (along: number): Point => {
-      // Clamp along to stay within wall bounds with margin
-      const clamped = Math.max(HALF_CORRIDOR + 30, Math.min(wallLen - HALF_CORRIDOR - 30, along));
+    // Create waypoint in front of a specific equipment
+    const makeWaypointForEq = (proj: typeof projections[0]): Point => {
+      const clamped = Math.max(HALF_CORRIDOR + 30, Math.min(wallLen - HALF_CORRIDOR - 30, proj.along));
+      const distFromWall = proj.eqHalfDepth + frontMargin;
+      // Use equipment's actual position projected onto the wall normal for depth
+      // but use wall-relative positioning for the along-axis
+      const eqDistFromWall = (proj.eq.position.x - a.x) * nx + (proj.eq.position.y - a.y) * ny;
+      const wpDist = eqDistFromWall + proj.eqHalfDepth + frontMargin;
       return {
-        x: a.x + ux * clamped + nx * waypointDistFromWall,
-        y: a.y + uy * clamped + ny * waypointDistFromWall,
+        x: a.x + ux * clamped + nx * wpDist,
+        y: a.y + uy * clamped + ny * wpDist,
       };
     };
 
@@ -457,19 +461,17 @@ function buildWallSweepWaypoints(
     const rightProj = projections[projections.length - 1];
 
     // Left extreme waypoint
-    const leftWp = makeWaypoint(leftProj.along);
-    waypoints.push({ id: leftProj.eq.id, point: leftWp });
+    waypoints.push({ id: leftProj.eq.id, point: makeWaypointForEq(leftProj) });
 
     // Right extreme waypoint (if different from left)
     if (projections.length > 1) {
-      const rightWp = makeWaypoint(rightProj.along);
-      waypoints.push({ id: rightProj.eq.id, point: rightWp });
+      waypoints.push({ id: rightProj.eq.id, point: makeWaypointForEq(rightProj) });
     }
 
     // Middle waypoint for large groups
     if (projections.length > 4) {
       const midProj = projections[Math.floor(projections.length / 2)];
-      waypoints.push({ id: midProj.eq.id, point: makeWaypoint(midProj.along) });
+      waypoints.push({ id: midProj.eq.id, point: makeWaypointForEq(midProj) });
     }
 
     // Map remaining equipment to nearest extreme (for unreachable tracking)

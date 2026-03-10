@@ -782,18 +782,6 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
             </div>
           )}
 
-          {/* Catalog list only shown in expanded dialog */}
-          <div className="p-3 text-center">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 text-xs"
-              onClick={() => setExpandedView(true)}
-            >
-              <Maximize2 className="h-3 w-3" />
-              Voir le catalogue ({catalog.length} jeux)
-            </Button>
-          </div>
         </>
       )}
 

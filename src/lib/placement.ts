@@ -257,7 +257,9 @@ function isPlacementValid(
   }
 
   // ── RULE 2 REVERSE: New equipment must not block the front of any existing equipment ──
+  // Skip for center-placement tables (they have no "front")
   for (const pe of existingPlacements) {
+    if (pe.centerPlacement) continue; // tables have no front zone
     if (isSideBySide(cx, cy, w, d, rot, pe)) continue;
 
     const existingFrontZone = getFrontClearanceZone(

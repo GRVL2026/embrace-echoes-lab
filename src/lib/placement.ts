@@ -705,7 +705,7 @@ export function autoPlaceEquipmentWithReport(
           notPlaced.push(equip);
         }
 
-        if (lastPlacement) globalLastPlacement = lastPlacement;
+        if (lastPlacement) categoryLastPlacement = lastPlacement;
       }
     }
   }

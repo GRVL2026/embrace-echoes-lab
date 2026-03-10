@@ -521,7 +521,8 @@ export function autoPlaceEquipmentWithReport(
     for (const group of sortedGroups) {
       const equip = group.equip;
       const count = group.count;
-      let lastPlacement = categoryLastPlacement ? { ...categoryLastPlacement } : null;
+      // Each reference group starts fresh — don't inherit from previous reference
+      let lastPlacement: typeof categoryLastPlacement = null;
 
       for (let i = 0; i < count; i++) {
         let placed = false;

@@ -19,7 +19,7 @@ export function Viewer3D() {
     : 0;
 
   return (
-    <div className="flex-1 w-full h-full bg-black">
+    <div className="flex-1 w-full h-full" style={{ background: "#dce4ec" }}>
       <Canvas
         shadows
         camera={{

@@ -83,6 +83,7 @@ const visibilityToggles: { key: VisKey; label: string; icon: React.ElementType }
   { key: "doors", label: "Portes", icon: DoorOpen },
   { key: "pillars", label: "Poteaux", icon: Columns },
   { key: "grid", label: "Grille", icon: Grid3X3 },
+  { key: "circulation", label: "Circulation", icon: Route },
 ];
 
 export function Viewer3DToolbar({ settings, onChange }: Props) {

@@ -428,11 +428,12 @@ function buildWallSweepWaypoints(
       nx = -nx; ny = -ny;
     }
 
-    // Waypoint distance from wall: must clear wall blocked zone + equipment inflated zone
-    // Wall blocks HALF_CORRIDOR, equipment depth varies, inflated by HALF_CORRIDOR
-    // Safe distance: max equipment depth + CORRIDOR_WIDTH + 30cm margin
+    // Waypoint distance from wall: just outside the equipment inflation zone
+    // Equipment center is at ~depth/2 + 5cm from wall, inflation adds HALF_CORRIDOR
+    // So blocked zone extends to depth + 5 + HALF_CORRIDOR from wall
+    // Place waypoint just outside that with small margin
     const maxDepth = Math.max(...group.equipment.map(eq => Math.max(eq.depth, eq.width)));
-    const waypointDistFromWall = maxDepth + CORRIDOR_WIDTH + 30;
+    const waypointDistFromWall = maxDepth + HALF_CORRIDOR + 15;
 
     // Project each equipment onto wall axis to get position along wall
     const projections = group.equipment.map(eq => {

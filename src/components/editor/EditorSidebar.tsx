@@ -498,11 +498,10 @@ export function EditorSidebar() {
             )}
           </div>
         </SidebarSection>
-      </div>
 
-      {/* Catalog panel */}
-      <CatalogPanel catalog={catalog} setCatalog={setCatalog} />
-    </div>
+        {/* Catalog panel */}
+        <CatalogPanel catalog={catalog} setCatalog={setCatalog} />
+      </div>
   );
 }
 

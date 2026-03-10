@@ -178,6 +178,30 @@ function checkFaceToFace(
   return true;
 }
 
+/** Check if two equipment are side-by-side (same rotation, aligned laterally along the wall).
+ *  This means their front clearance zones naturally overlap but shouldn't block each other. */
+function isSideBySide(
+  cx: number, cy: number, w: number, d: number, rot: number,
+  pe: PlacedEquipment,
+): boolean {
+  // Must share same rotation (tolerance 5°)
+  const rotDiff = Math.abs(((rot - pe.rotation) % 360 + 360) % 360);
+  if (rotDiff > 5 && rotDiff < 355) return false;
+
+  // Project the vector between centers onto the front direction
+  const front = getFrontDirection(rot);
+  const dx = pe.position.x - cx;
+  const dy = pe.position.y - cy;
+  // Lateral offset (along wall) vs depth offset (along front)
+  const depthOffset = Math.abs(dx * front.x + dy * front.y);
+  const lateralOffset = Math.abs(dx * (-front.y) + dy * front.x);
+
+  // Side-by-side: mostly lateral separation, minimal depth separation
+  const maxDepthTolerance = (d / 2 + pe.depth / 2) * 0.3; // allow small depth misalignment
+  const minLateralOverlap = 1; // at least 1cm apart laterally
+  return depthOffset <= maxDepthTolerance && lateralOffset >= minLateralOverlap;
+}
+
 /** Check if an equipment placement is valid */
 function isPlacementValid(
   cx: number, cy: number, w: number, d: number, rot: number, gap: number,

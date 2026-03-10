@@ -560,7 +560,7 @@ function generateCenterPlacementPositions(
     // Room is wider (X axis is long): orient table's longest dimension along X
     const rotation = equipWidth >= equipDepth ? 0 : 90;
     const xMargin = longestDim / 2 + playerClearance;
-    const yMinMargin = shortestDim / 2 + WALL_MARGIN; // just clear the wall
+    const yMinMargin = shortestDim / 2 + CORRIDOR_WIDTH; // must leave 1.40m for corridor between table and wall equipment
     const centerX = (minX + maxX) / 2;
 
     // Scan all valid Y positions — prefer closer to top wall (minY) to leave corridor below

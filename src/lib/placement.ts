@@ -464,8 +464,14 @@ function checkCenterTableGap(
   const gapAlongWidth = sepAlongWidth - halfW - peHW;
   const gapAlongDepth = sepAlongDepth - halfD - peHD;
 
-  // If separated on both axes (diagonal), no constraint issue
-  if (gapAlongWidth > 0 && gapAlongDepth > 0) return true;
+  // If separated on both axes (diagonal)
+  if (gapAlongWidth > 0 && gapAlongDepth > 0) {
+    if (!pe.centerPlacement) {
+      // Wall equipment: corridor must be able to pass — need CORRIDOR_WIDTH on at least one axis
+      return gapAlongWidth >= CORRIDOR_WIDTH || gapAlongDepth >= CORRIDOR_WIDTH;
+    }
+    return true;
+  }
 
   // Physical overlap on both axes
   if (gapAlongWidth <= 0 && gapAlongDepth <= 0) return false;

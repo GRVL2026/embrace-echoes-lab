@@ -622,7 +622,8 @@ export function computeCirculation(
       return wp;
     });
 
-    // Build path: door → wp1 → wp2 → ... → wpN
+    // Build path: door → wp1 → wp2 → ... → wpN (aller simple, pas de boucle retour)
+    // Le corridor est conçu comme un chemin aller-retour sur le même tracé
     let currentPos = startPos;
     for (const wp of orderedWithIds) {
       const ok = buildPath(currentPos, wp.point);
@@ -634,8 +635,6 @@ export function computeCirculation(
     }
 
     // Map back: any equipment whose waypoint was unreachable
-    // For sweep groups, individual equipment shares waypoints with extremes
-    // Check if any equipment ID from original list isn't covered
     const coveredIds = new Set(waypoints.filter(w => !unreachableIds.includes(w.id)).map(w => w.id));
     for (const eq of equipments) {
       if (!coveredIds.has(eq.id) && !unreachableIds.includes(eq.id)) {
@@ -643,11 +642,7 @@ export function computeCirculation(
       }
     }
 
-    // Try to loop back to start (boucle)
-    const loopOk = buildPath(currentPos, startPos);
-    if (!loopOk) {
-      buildPath(currentPos, startPos); // may fail in tight spaces, that's ok
-    }
+    // Pas de boucle retour — le visiteur emprunte le même corridor en sens inverse
   } else if (roomDoors.length === 0) {
     // No doors, no equipment — nothing to show
   }

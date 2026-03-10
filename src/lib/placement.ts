@@ -215,8 +215,16 @@ function isPlacementValid(
   }
 
   // ── RULE 2: Front clearance zone (cone) must not be blocked ──
+  // Skip front-zone checks for equipment placed side-by-side (same rotation, aligned laterally)
   const newFrontZone = getFrontClearanceZone(cx, cy, w, d, rot, CORRIDOR_WIDTH);
+  const frontDir = getFrontDirection(rot);
+  const wallDirX = -frontDir.y; // lateral direction along the wall
+  const wallDirY = frontDir.x;
+
   for (const pe of existingPlacements) {
+    // Check if this neighbor is side-by-side (same rotation, aligned along wall axis)
+    if (isSideBySide(cx, cy, w, d, rot, pe)) continue;
+
     if (rectsOverlap(newFrontZone.cx, newFrontZone.cy, newFrontZone.w, newFrontZone.d, newFrontZone.rot,
       pe.position.x, pe.position.y, pe.width, pe.depth, pe.rotation)) {
       if (debug) console.log(`[placement] FRONT BLOCKED by ${pe.name} at (${cx.toFixed(0)},${cy.toFixed(0)})`);
@@ -226,6 +234,8 @@ function isPlacementValid(
 
   // ── RULE 2 REVERSE: New equipment must not block the front of any existing equipment ──
   for (const pe of existingPlacements) {
+    if (isSideBySide(cx, cy, w, d, rot, pe)) continue;
+
     const existingFrontZone = getFrontClearanceZone(
       pe.position.x, pe.position.y, pe.width, pe.depth, pe.rotation, CORRIDOR_WIDTH
     );

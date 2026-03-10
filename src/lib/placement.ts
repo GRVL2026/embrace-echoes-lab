@@ -885,8 +885,8 @@ export function autoPlaceEquipmentWithReport(
                 const dist = Math.hypot(pos.x - categoryLastPlacement.x, pos.y - categoryLastPlacement.y);
                 // Strong proximity bonus: heavily penalize distance from category group
                 // Also strongly penalize being on a different wall than the category
-                const wallMismatch = (wall.edgeIndex !== categoryLastPlacement.wallEdgeIndex) ? 500 : 0;
-                proximityBonus = dist * 2 + wallMismatch;
+                const wallMismatch = (wall.edgeIndex !== categoryLastPlacement.wallEdgeIndex) ? 2000 : 0;
+                proximityBonus = dist * 3 + wallMismatch;
               }
               allWallPos.push({
                 x: pos.x, y: pos.y, rotation: pos.rotation,

@@ -906,6 +906,54 @@ export function autoPlaceEquipmentWithReport(
     }
   }
 
+  // ── PHASE 2: Place center-placement tables AFTER wall equipment (corridor has priority) ──
+  {
+    const byId = new Map<string, { equip: GameEquipment; count: number }>();
+    for (const equip of centerEquipments) {
+      const existing = byId.get(equip.id);
+      if (existing) existing.count++;
+      else byId.set(equip.id, { equip, count: 1 });
+    }
+
+    let centerLast: { x: number; y: number; rotation: number; w: number; d: number } | null = null;
+
+    for (const group of byId.values()) {
+      const equip = group.equip;
+      const playerClearance = equip.playerClearance || 100;
+      for (let i = 0; i < group.count; i++) {
+        const w = equip.width;
+        const d = equip.depth;
+        const centerPositions = generateCenterPlacementPositions(bestRoom, w, d, playerClearance, step);
+
+        // Sort by proximity to last center placement for grouping
+        if (centerLast) {
+          centerPositions.sort((a, b) => {
+            const distA = Math.hypot(a.x - centerLast!.x, a.y - centerLast!.y);
+            const distB = Math.hypot(b.x - centerLast!.x, b.y - centerLast!.y);
+            return distA - distB;
+          });
+        }
+
+        let placed = false;
+        for (const pos of centerPositions) {
+          if (isCenterPlacementValid(pos.x, pos.y, w, d, pos.rotation, playerClearance, bestRoom, doorZones, pillarZones, placements)) {
+            const p = makePlacement(equip, pos.x, pos.y, pos.rotation, w, d);
+            placements.push(p);
+            result.push(p);
+            centerLast = { x: pos.x, y: pos.y, rotation: pos.rotation, w, d };
+            placed = true;
+            console.log(`[placement] Center-placed ${equip.name} at (${pos.x.toFixed(0)},${pos.y.toFixed(0)})`);
+            break;
+          }
+        }
+        if (!placed) {
+          console.warn(`[placement] Could not center-place: ${equip.name}`);
+          notPlaced.push(equip);
+        }
+      }
+    }
+  }
+
   const circulation = generateCirculationPath(bestRoom, result, CORRIDOR_WIDTH);
   return { placed: result, notPlaced, circulation };
 }

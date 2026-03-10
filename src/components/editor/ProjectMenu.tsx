@@ -42,6 +42,7 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
   const { state, dispatch } = useEditor();
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [currentProjectName, setCurrentProjectName] = useState("Nouveau projet");
+  const [isExporting, setIsExporting] = useState(false);
 
   // Save dialog
   const [saveOpen, setSaveOpen] = useState(false);

@@ -553,14 +553,17 @@ export function autoPlaceEquipmentWithReport(
 
   const step = 5; // 5cm precision — no grid snapping
 
-  // Global last placement tracker — persists across ALL categories
-  // so equipment continues sequentially along walls without resetting
-  let globalLastPlacement: {
+  // Per-category last placement tracker — each category starts fresh on longest available wall
+  // Within a category, equipment chains via adjacency for tight grouping
+  let categoryLastPlacement: {
     x: number; y: number; rotation: number; w: number; d: number;
     wallEdgeIndex?: number;
   } | null = null;
 
   for (const [category, equipmentGroups] of sortedCategories) {
+    // Reset for each new category — forces STEP 3 (longest wall) instead of adjacency
+    categoryLastPlacement = null;
+
     // Sort equipment groups by area (largest first)
     const sortedGroups = [...equipmentGroups].sort((a, b) =>
       (b.equip.width * b.equip.depth * b.count) - (a.equip.width * a.equip.depth * a.count)
@@ -569,8 +572,8 @@ export function autoPlaceEquipmentWithReport(
     for (const group of sortedGroups) {
       const equip = group.equip;
       const count = group.count;
-      // Inherit global last placement to continue sequentially along walls
-      let lastPlacement = globalLastPlacement;
+      // Inherit from same category's last placement for grouping
+      let lastPlacement = categoryLastPlacement;
 
       for (let i = 0; i < count; i++) {
         let placed = false;

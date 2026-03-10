@@ -4,7 +4,6 @@ import type { Room } from "@/types/editor";
 type Props = { rooms: Room[] };
 
 export function ArcadeLighting({ rooms }: Props) {
-  // Compute center of all rooms for main light positioning
   const center = useMemo(() => {
     const pts = rooms.flatMap((r) => r.points);
     if (!pts.length) return { x: 0, z: 0 };
@@ -16,50 +15,29 @@ export function ArcadeLighting({ rooms }: Props) {
 
   return (
     <>
-      {/* Main overhead — dim warm */}
+      {/* Bright ambient */}
+      <ambientLight intensity={0.6} color="#ffffff" />
+
+      {/* Main sun-like directional */}
       <directionalLight
-        position={[center.x, 8, center.z]}
-        intensity={0.3}
-        color="#ffeedd"
+        position={[center.x + 5, 10, center.z + 5]}
+        intensity={1.2}
+        color="#fffaf0"
         castShadow
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
       />
 
-      {/* Neon purple accent */}
-      <pointLight
-        position={[center.x - 3, 2.5, center.z - 2]}
-        intensity={8}
-        color="#9B5CFF"
-        distance={12}
-        decay={2}
+      {/* Fill light from opposite side */}
+      <directionalLight
+        position={[center.x - 4, 6, center.z - 4]}
+        intensity={0.4}
+        color="#e8f0ff"
       />
 
-      {/* Neon cyan accent */}
-      <pointLight
-        position={[center.x + 3, 2.5, center.z + 2]}
-        intensity={8}
-        color="#00e5ff"
-        distance={12}
-        decay={2}
-      />
-
-      {/* Neon magenta accent */}
-      <pointLight
-        position={[center.x, 2.5, center.z - 3]}
-        intensity={5}
-        color="#ff00aa"
-        distance={10}
-        decay={2}
-      />
-
-      {/* Green floor wash */}
-      <pointLight
-        position={[center.x + 2, 0.3, center.z + 3]}
-        intensity={3}
-        color="#ADFF00"
-        distance={8}
-        decay={2}
+      {/* Soft hemisphere for natural sky/ground bounce */}
+      <hemisphereLight
+        args={["#b0d4ff", "#e8e0d0", 0.5]}
       />
     </>
   );

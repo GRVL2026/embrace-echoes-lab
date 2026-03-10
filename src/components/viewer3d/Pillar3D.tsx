@@ -20,7 +20,7 @@ export function Pillar3D({ pillar }: Props) {
       ) : (
         <boxGeometry args={[w, h, d]} />
       )}
-      <meshStandardMaterial color="#2a2a3e" roughness={0.6} metalness={0.1} />
+      <meshStandardMaterial color="#c0c0c0" roughness={0.6} metalness={0.1} />
     </mesh>
   );
 }

@@ -95,9 +95,9 @@ export function Room3D({ room, doors }: Props) {
             >
               <boxGeometry args={[segLength, WALL_HEIGHT, WALL_THICKNESS]} />
               <meshStandardMaterial
-                color="#1a1a2e"
-                roughness={0.7}
-                metalness={0.05}
+                color="#f0f0f0"
+                roughness={0.8}
+                metalness={0.02}
               />
             </mesh>
           );

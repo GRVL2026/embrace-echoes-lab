@@ -54,7 +54,7 @@ export function Equipment3D({ equipment }: Props) {
         position={[0, h / 2 + 0.05, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
         fontSize={0.12}
-        color="white"
+        color="#222222"
         anchorX="center"
         anchorY="middle"
         maxWidth={w * 0.9}

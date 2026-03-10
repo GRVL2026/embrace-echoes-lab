@@ -57,10 +57,10 @@ export function Viewer3D() {
           args={[50, 50]}
           cellSize={1}
           cellThickness={0.5}
-          cellColor="#1a1a3e"
+          cellColor="#c0c0c0"
           sectionSize={5}
           sectionThickness={1}
-          sectionColor="#2a2a5e"
+          sectionColor="#999999"
           fadeDistance={30}
           infiniteGrid
         />

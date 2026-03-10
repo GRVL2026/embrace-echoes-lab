@@ -266,17 +266,25 @@ export async function generateDossierPDF(
   drawHeader(doc, "Vues 3D", "Perspectives et projections du projet");
 
   if (views) {
-    const grid = [
-      { key: "top" as const, label: "Vue de dessus", x: MARGIN, y: 45 },
-      { key: "front" as const, label: "Vue de face", x: MARGIN + CONTENT_W / 2 + 3, y: 45 },
-      { key: "side" as const, label: "Vue de côté", x: MARGIN, y: 172 },
-      { key: "perspective" as const, label: "Perspective", x: MARGIN + CONTENT_W / 2 + 3, y: 172 },
-    ];
     const cellW = CONTENT_W / 2 - 3;
-    const cellH = 118;
+    const cellH = 76;
+    const gapX = 6;
+    const gapY = 10;
+    const startY = 45;
 
-    grid.forEach(({ key, label, x, y }) => {
-      // Dark cell background
+    const grid = [
+      { key: "top" as const, label: "Vue de dessus", col: 0, row: 0 },
+      { key: "front" as const, label: "Vue de face", col: 1, row: 0 },
+      { key: "side" as const, label: "Vue de côté", col: 0, row: 1 },
+      { key: "perspective" as const, label: "Perspective", col: 1, row: 1 },
+      { key: "perspectiveOpen" as const, label: "Sans murs", col: 0, row: 2 },
+      { key: "perspectiveCorridor" as const, label: "Corridor de circulation", col: 1, row: 2 },
+    ];
+
+    grid.forEach(({ key, label, col, row }) => {
+      const x = MARGIN + col * (cellW + gapX);
+      const y = startY + row * (cellH + gapY);
+
       setFill(doc, DARK_SURFACE);
       doc.rect(x, y, cellW, cellH, "F");
 
@@ -284,15 +292,13 @@ export async function generateDossierPDF(
         doc.addImage(views![key], "PNG", x, y, cellW, cellH, undefined, "FAST");
       }
 
-      // Purple border
       doc.setDrawColor(PURPLE[0], PURPLE[1], PURPLE[2]);
       doc.setLineWidth(0.4);
       doc.rect(x, y, cellW, cellH, "S");
 
-      // Label
-      doc.setFontSize(8);
+      doc.setFontSize(7);
       setColor(doc, LIGHT);
-      doc.text(label, x + cellW / 2, y + cellH + 6, { align: "center" });
+      doc.text(label, x + cellW / 2, y + cellH + 5, { align: "center" });
     });
   } else {
     doc.setFontSize(12);

@@ -690,7 +690,8 @@ function generateAdjacentPositions(
   const rad = prevRot * Math.PI / 180;
   const wallDirX = Math.cos(rad);
   const wallDirY = Math.sin(rad);
-  const baseSpacing = prevW / 2 + curW / 2 + gap;
+  // Add tiny epsilon (0.5cm) to prevent exact-edge overlap detection by SAT
+  const baseSpacing = prevW / 2 + curW / 2 + Math.max(gap, 0.5);
 
   for (const mult of [1, -1, 2, -2, 3, -3, 4, -4, 5, -5]) {
     const sign = mult > 0 ? 1 : -1;

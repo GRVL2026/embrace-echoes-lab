@@ -206,9 +206,9 @@ function isPlacementValid(
       return false;
     }
   }
-  // Must not overlap other equipment (with gap)
+  // Must not overlap other equipment (with gap — only expand ONE rect to avoid doubling)
   for (const pe of existingPlacements) {
-    if (rectsOverlap(cx, cy, w + gap, d + gap, rot, pe.position.x, pe.position.y, pe.width + gap, pe.depth + gap, pe.rotation)) {
+    if (rectsOverlap(cx, cy, w + gap * 2, d + gap * 2, rot, pe.position.x, pe.position.y, pe.width, pe.depth, pe.rotation)) {
       if (debug) console.log(`[placement] EQUIP overlap with ${pe.name} at (${cx.toFixed(0)},${cy.toFixed(0)})`);
       return false;
     }
@@ -521,7 +521,8 @@ export function autoPlaceEquipmentWithReport(
     for (const group of sortedGroups) {
       const equip = group.equip;
       const count = group.count;
-      let lastPlacement = categoryLastPlacement ? { ...categoryLastPlacement } : null;
+      // Each reference group starts fresh — don't inherit from previous reference
+      let lastPlacement: typeof categoryLastPlacement = null;
 
       for (let i = 0; i < count; i++) {
         let placed = false;
@@ -595,7 +596,7 @@ export function autoPlaceEquipmentWithReport(
         {
           const w = equip.width;
           const d = equip.depth;
-          const gap = lastPlacement ? DIFFERENT_GAP : DIFFERENT_GAP;
+          const gap = SAME_REF_GAP;
 
           // Build all wall positions, sorted: longest walls first, no-door preferred
           const allWallPos: { x: number; y: number; rotation: number; score: number; wallEdgeIndex: number }[] = [];
@@ -689,7 +690,7 @@ function generateAdjacentPositions(
   const rad = prevRot * Math.PI / 180;
   const wallDirX = Math.cos(rad);
   const wallDirY = Math.sin(rad);
-  const baseSpacing = prevW / 2 + curW / 2 + gap + 1;
+  const baseSpacing = prevW / 2 + curW / 2 + gap;
 
   for (const mult of [1, -1, 2, -2, 3, -3, 4, -4, 5, -5]) {
     const sign = mult > 0 ? 1 : -1;

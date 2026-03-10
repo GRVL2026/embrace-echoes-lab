@@ -578,6 +578,36 @@ export function autoPlaceEquipmentWithReport(
       for (let i = 0; i < count; i++) {
         let placed = false;
 
+        // ── CENTER PLACEMENT: Games played from short sides (palet, power puck) ──
+        if (equip.centerPlacement) {
+          const w = equip.width;
+          const d = equip.depth;
+          const playerClearance = equip.playerClearance || 100;
+          const centerPositions = generateCenterPlacementPositions(bestRoom, w, d, playerClearance, step);
+          
+          // If we have a previous center placement, sort by proximity
+          if (lastPlacement) {
+            centerPositions.sort((a, b) => {
+              const distA = Math.hypot(a.x - lastPlacement!.x, a.y - lastPlacement!.y);
+              const distB = Math.hypot(b.x - lastPlacement!.x, b.y - lastPlacement!.y);
+              return distA - distB;
+            });
+          }
+          
+          for (const pos of centerPositions) {
+            if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, DIFFERENT_GAP, bestRoom, doorZones, pillarZones, placements)) {
+              const p = makePlacement(equip, pos.x, pos.y, pos.rotation, w, d);
+              placements.push(p);
+              result.push(p);
+              lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w, d };
+              placed = true;
+              console.log(`[placement] Center-placed ${equip.name} at (${pos.x.toFixed(0)},${pos.y.toFixed(0)})`);
+              break;
+            }
+          }
+          if (placed) { if (lastPlacement) categoryLastPlacement = lastPlacement; continue; }
+        }
+
         // Check existing placements for same equipmentId (from previous placement sessions)
         if (!lastPlacement) {
           const existingSameRef = placements.find(p => p.equipmentId === equip.id);

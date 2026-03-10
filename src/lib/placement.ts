@@ -724,56 +724,7 @@ export function autoPlaceEquipmentWithReport(
 
   const step = 5; // 5cm precision — no grid snapping
 
-  // ── PHASE 1: Place center-placement equipment first (independent of categories) ──
-  {
-    const byId = new Map<string, { equip: GameEquipment; count: number }>();
-    for (const equip of centerEquipments) {
-      const existing = byId.get(equip.id);
-      if (existing) existing.count++;
-      else byId.set(equip.id, { equip, count: 1 });
-    }
-
-    let centerLast: { x: number; y: number; rotation: number; w: number; d: number } | null = null;
-
-    for (const group of byId.values()) {
-      const equip = group.equip;
-      const playerClearance = equip.playerClearance || 100;
-      for (let i = 0; i < group.count; i++) {
-        const w = equip.width;
-        const d = equip.depth;
-        const centerPositions = generateCenterPlacementPositions(bestRoom, w, d, playerClearance, step);
-
-        // Sort by proximity to last center placement for grouping
-        if (centerLast) {
-          centerPositions.sort((a, b) => {
-            const distA = Math.hypot(a.x - centerLast!.x, a.y - centerLast!.y);
-            const distB = Math.hypot(b.x - centerLast!.x, b.y - centerLast!.y);
-            return distA - distB;
-          });
-        }
-
-        let placed = false;
-        for (const pos of centerPositions) {
-          // Center tables: directional gap (long sides can touch other tables, short sides need playerClearance)
-          if (isCenterPlacementValid(pos.x, pos.y, w, d, pos.rotation, playerClearance, bestRoom, doorZones, pillarZones, placements)) {
-            const p = makePlacement(equip, pos.x, pos.y, pos.rotation, w, d);
-            placements.push(p);
-            result.push(p);
-            centerLast = { x: pos.x, y: pos.y, rotation: pos.rotation, w, d };
-            placed = true;
-            console.log(`[placement] Center-placed ${equip.name} at (${pos.x.toFixed(0)},${pos.y.toFixed(0)})`);
-            break;
-          }
-        }
-        if (!placed) {
-          console.warn(`[placement] Could not center-place: ${equip.name}`);
-          notPlaced.push(equip);
-        }
-      }
-    }
-  }
-
-  // ── PHASE 2: Place wall-based equipment grouped by category ──
+  // ── PHASE 1: Place WALL-based equipment first (they have priority for walls & corridor) ──
   const byEquipmentId = new Map<string, { equip: GameEquipment; count: number }>();
   for (const equip of wallEquipments) {
     const existing = byEquipmentId.get(equip.id);

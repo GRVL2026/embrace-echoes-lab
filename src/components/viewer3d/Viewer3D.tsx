@@ -47,6 +47,11 @@ export function Viewer3D() {
           <Pillar3D key={pillar.id} pillar={pillar} />
         ))}
 
+        {/* Doors */}
+        {state.doors.map((door) => (
+          <Door3D key={door.id} door={door} rooms={state.rooms} />
+        ))}
+
         {/* Equipment */}
         {state.placedEquipments.map((eq) => (
           <Equipment3D key={eq.id} equipment={eq} />

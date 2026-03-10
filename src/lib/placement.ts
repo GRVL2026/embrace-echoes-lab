@@ -4,8 +4,8 @@ import { DOOR_EXCLUSION_DEPTH } from "@/types/equipment";
 
 // Corridor width for accessibility
 const CORRIDOR_WIDTH = 140; // 1.4m
-// Gap between same-reference equipment
-const SAME_REF_GAP = 5; // 5cm
+// Gap between same-reference equipment (touching)
+const SAME_REF_GAP = 0; // 0cm — collés
 // Gap between different equipment
 const DIFFERENT_GAP = 10; // 10cm
 // Margin from wall (back of equipment to wall)

@@ -447,7 +447,6 @@ export function autoPlaceEquipmentWithReport(
     return { placed: [], notPlaced: selectedEquipments, circulation: [] };
   }
 
-  // Find the largest closed room
   let bestRoom: Room | null = null;
   let bestArea = 0;
   for (const room of rooms) {
@@ -470,10 +469,11 @@ export function autoPlaceEquipmentWithReport(
   const pillarZones = getPillarExclusionZones(pillars);
   const walls = getRoomWalls(bestRoom, doors);
 
+  // Sort walls by length descending (RULE 3: prefer longest walls)
+  const wallsByLength = [...walls].sort((a, b) => b.length - a.length);
+
   const pts = bestRoom.points;
-  const rMinX = Math.min(...pts.map(p => p.x)), rMaxX = Math.max(...pts.map(p => p.x));
-  const rMinY = Math.min(...pts.map(p => p.y)), rMaxY = Math.max(...pts.map(p => p.y));
-  console.log(`[placement] Room bounds: x[${rMinX},${rMaxX}] y[${rMinY},${rMaxY}], ${walls.length} walls, signedArea=${polygonSignedArea(pts).toFixed(0)}`);
+  console.log(`[placement] Room: ${walls.length} walls, area=${bestArea.toFixed(0)}`);
 
   const placements: PlacedEquipment[] = [...existingPlacements];
   const result: PlacedEquipment[] = [];
@@ -502,76 +502,31 @@ export function autoPlaceEquipmentWithReport(
       return areaB - areaA;
     });
 
-  // ── RULE 3: Sort walls by length (longest first) for each category ──
-  const nonDoorWalls = walls.filter(w => !w.hasDoor);
-  const doorWalls = walls.filter(w => w.hasDoor);
-  // Sort all walls by length descending so longest walls are preferred
-  const wallsByLength = [...nonDoorWalls, ...doorWalls].sort((a, b) => b.length - a.length);
-
-  // Assign walls to categories: each category gets the longest available wall(s)
-  // that can fit its total equipment width
-  const categoryWallMap = new Map<string, WallSegment[]>();
-  const assignedWallIndices = new Set<number>();
-
-  for (const [cat, groups] of sortedCategories) {
-    // Calculate total width needed for this category (all units side by side)
-    const totalUnits = groups.reduce((sum, g) => sum + g.count, 0);
-    const maxWidth = Math.max(...groups.map(g => g.equip.width));
-    const totalWidthNeeded = totalUnits * (maxWidth + SAME_REF_GAP);
-
-    const catWalls: WallSegment[] = [];
-    
-    // RULE 3: Find the longest wall that can fit all units of this category
-    for (const wall of wallsByLength) {
-      if (assignedWallIndices.has(wall.edgeIndex)) continue;
-      if (wall.length >= totalWidthNeeded) {
-        catWalls.push(wall);
-        assignedWallIndices.add(wall.edgeIndex);
-        break;
-      }
-    }
-
-    // If no single wall fits all, take multiple walls
-    if (catWalls.length === 0) {
-      let remainingWidth = totalWidthNeeded;
-      for (const wall of wallsByLength) {
-        if (assignedWallIndices.has(wall.edgeIndex)) continue;
-        catWalls.push(wall);
-        assignedWallIndices.add(wall.edgeIndex);
-        remainingWidth -= wall.length;
-        if (remainingWidth <= 0) break;
-      }
-    }
-
-    // Fallback: if nothing assigned, use all walls
-    if (catWalls.length === 0) {
-      categoryWallMap.set(cat, wallsByLength);
-    } else {
-      categoryWallMap.set(cat, catWalls);
-    }
-  }
-
   const step = 20;
 
+  // Track which wall each category started on, so different refs in the same category
+  // try to stay on the same wall
   for (const [category, equipmentGroups] of sortedCategories) {
+    // Sort equipment groups by area (largest first)
     const sortedGroups = [...equipmentGroups].sort((a, b) =>
       (b.equip.width * b.equip.depth * b.count) - (a.equip.width * a.equip.depth * a.count)
     );
 
-    const preferredWalls = categoryWallMap.get(category) || walls;
-    let categoryLastPlacement: { x: number; y: number; rotation: number; w: number; d: number } | null = null;
+    // Track last placement and its wall for the whole category
+    let categoryLastPlacement: {
+      x: number; y: number; rotation: number; w: number; d: number;
+      wallEdgeIndex?: number;
+    } | null = null;
 
     for (const group of sortedGroups) {
       const equip = group.equip;
       const count = group.count;
-      let lastPlacement: { x: number; y: number; rotation: number; w: number; d: number } | null = categoryLastPlacement;
+      let lastPlacement = categoryLastPlacement ? { ...categoryLastPlacement } : null;
 
       for (let i = 0; i < count; i++) {
         let placed = false;
-        const isSameRef = lastPlacement !== null;
-        const gap = isSameRef ? SAME_REF_GAP : DIFFERENT_GAP;
 
-        // Check existing placements for same equipmentId
+        // Check existing placements for same equipmentId (from previous placement sessions)
         if (!lastPlacement) {
           const existingSameRef = placements.find(p => p.equipmentId === equip.id);
           if (existingSameRef) {
@@ -585,11 +540,10 @@ export function autoPlaceEquipmentWithReport(
           }
         }
 
-        // ── RULE 1: Adjacent placement must use SAME rotation (same orientation) ──
+        // ── STEP 1: Try adjacent to last placement (same rotation = Rule 1) ──
         if (lastPlacement) {
           const curW = equip.width;
           const curD = equip.depth;
-          // Only try the SAME rotation as last placement (Rule 1: same orientation)
           const adjPositions = generateAdjacentPositions(
             lastPlacement.x, lastPlacement.y, lastPlacement.rotation,
             lastPlacement.w, lastPlacement.d,
@@ -600,27 +554,67 @@ export function autoPlaceEquipmentWithReport(
               const p = makePlacement(equip, pos.x, pos.y, pos.rotation, curW, curD);
               placements.push(p);
               result.push(p);
-              lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w: curW, d: curD };
+              lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w: curW, d: curD, wallEdgeIndex: lastPlacement.wallEdgeIndex };
               placed = true;
               break;
             }
           }
         }
 
-        if (placed) continue;
+        if (placed) { if (lastPlacement) categoryLastPlacement = lastPlacement; continue; }
 
-        // ── Wall positions (preferred walls first = longest walls, then all) ──
-        for (const wallSet of [preferredWalls, walls]) {
-          if (placed) break;
-          // Only try natural wall orientation (no 90° flip) — Rule 1: consistent orientation
+        // ── STEP 2: Try the SAME wall as last placement (stay grouped) ──
+        if (lastPlacement?.wallEdgeIndex !== undefined) {
+          const sameWall = walls.find(w => w.edgeIndex === lastPlacement!.wallEdgeIndex);
+          if (sameWall) {
+            const w = equip.width;
+            const d = equip.depth;
+            const positions = generateWallPositions(sameWall, w, d, step);
+            // Sort by proximity to last placement
+            positions.sort((a, b) => {
+              const distA = Math.hypot(a.x - lastPlacement!.x, a.y - lastPlacement!.y);
+              const distB = Math.hypot(b.x - lastPlacement!.x, b.y - lastPlacement!.y);
+              return distA - distB;
+            });
+            for (const pos of positions) {
+              if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, SAME_REF_GAP, bestRoom, doorZones, pillarZones, placements)) {
+                const p = makePlacement(equip, pos.x, pos.y, pos.rotation, w, d);
+                placements.push(p);
+                result.push(p);
+                lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w, d, wallEdgeIndex: sameWall.edgeIndex };
+                placed = true;
+                break;
+              }
+            }
+          }
+        }
+
+        if (placed) { if (lastPlacement) categoryLastPlacement = lastPlacement; continue; }
+
+        // ── STEP 3: Try all walls sorted by length (RULE 3: prefer longest) ──
+        {
           const w = equip.width;
           const d = equip.depth;
+          const gap = lastPlacement ? DIFFERENT_GAP : DIFFERENT_GAP;
 
-          const allWallPos: { x: number; y: number; rotation: number; score: number; wall: WallSegment }[] = [];
-          for (const wall of wallSet) {
+          // Build all wall positions, sorted: longest walls first, no-door preferred
+          const allWallPos: { x: number; y: number; rotation: number; score: number; wallEdgeIndex: number }[] = [];
+          for (const wall of wallsByLength) {
             if (wall.hasDoor && w > 100) continue;
             const positions = generateWallPositions(wall, w, d, step);
-            allWallPos.push(...positions);
+            for (const pos of positions) {
+              // Bonus: if category already has a wall, prefer positions close to existing category placements
+              let proximityBonus = 0;
+              if (categoryLastPlacement) {
+                const dist = Math.hypot(pos.x - categoryLastPlacement.x, pos.y - categoryLastPlacement.y);
+                proximityBonus = dist / 10; // closer = lower score = better
+              }
+              allWallPos.push({
+                x: pos.x, y: pos.y, rotation: pos.rotation,
+                score: pos.score + proximityBonus,
+                wallEdgeIndex: wall.edgeIndex,
+              });
+            }
           }
           allWallPos.sort((a, b) => a.score - b.score);
 
@@ -629,21 +623,22 @@ export function autoPlaceEquipmentWithReport(
               const p = makePlacement(equip, pos.x, pos.y, pos.rotation, w, d);
               placements.push(p);
               result.push(p);
-              lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w, d };
+              lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w, d, wallEdgeIndex: pos.wallEdgeIndex };
               placed = true;
               break;
             }
           }
         }
 
-        // ── Fallback: pillar-backed positions ──
-        if (!placed) {
+        if (placed) { if (lastPlacement) categoryLastPlacement = lastPlacement; continue; }
+
+        // ── STEP 4: Fallback — pillar-backed positions ──
+        {
           const w = equip.width;
           const d = equip.depth;
           const pillarPositions = generatePillarBackedPositions(pillars, w, d, step);
-
           for (const pos of pillarPositions) {
-            if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, gap, bestRoom!, doorZones, pillarZones, placements)) {
+            if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, DIFFERENT_GAP, bestRoom!, doorZones, pillarZones, placements)) {
               const p = makePlacement(equip, pos.x, pos.y, pos.rotation, w, d);
               placements.push(p);
               result.push(p);
@@ -658,8 +653,9 @@ export function autoPlaceEquipmentWithReport(
           console.warn(`Could not place: ${equip.name} (instance ${i + 1}/${count})`);
           notPlaced.push(equip);
         }
+
+        if (lastPlacement) categoryLastPlacement = lastPlacement;
       }
-      if (lastPlacement) categoryLastPlacement = lastPlacement;
     }
   }
 

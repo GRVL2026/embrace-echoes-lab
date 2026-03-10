@@ -73,6 +73,7 @@ export function Room3D({ room, doors }: Props) {
           color="#e8e8e8"
           roughness={0.5}
           metalness={0.05}
+          {...{} as any}
         />
       </mesh>
 
@@ -98,6 +99,7 @@ export function Room3D({ room, doors }: Props) {
                 color="#f0f0f0"
                 roughness={0.8}
                 metalness={0.02}
+                {...{} as any}
               />
             </mesh>
           );

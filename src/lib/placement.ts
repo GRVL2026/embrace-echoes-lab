@@ -596,7 +596,7 @@ export function autoPlaceEquipmentWithReport(
         {
           const w = equip.width;
           const d = equip.depth;
-          const gap = lastPlacement ? DIFFERENT_GAP : DIFFERENT_GAP;
+          const gap = SAME_REF_GAP;
 
           // Build all wall positions, sorted: longest walls first, no-door preferred
           const allWallPos: { x: number; y: number; rotation: number; score: number; wallEdgeIndex: number }[] = [];

@@ -620,7 +620,7 @@ export function computeCirculation(
 
   if (equipments.length > 0) {
     // Build wall-sweep waypoints (groups same-wall equipment, creates sweep at extremes)
-    const waypoints = buildWallSweepWaypoints(equipments);
+    const waypoints = buildWallSweepWaypoints(equipments, bestRoom);
 
     // Deduplicate waypoints that share the same point (from sweep grouping)
     const uniqueWaypoints: { id: string; point: Point }[] = [];

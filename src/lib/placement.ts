@@ -600,7 +600,7 @@ export function autoPlaceEquipmentWithReport(
             curW, curD, SAME_REF_GAP
           );
           for (const pos of adjPositions) {
-            if (isPlacementValid(pos.x, pos.y, curW, curD, pos.rotation, SAME_REF_GAP, bestRoom, doorZones, pillarZones, placements, true)) {
+            if (isPlacementValid(pos.x, pos.y, curW, curD, pos.rotation, SAME_REF_GAP, bestRoom, doorZones, pillarZones, placements)) {
               const p = makePlacement(equip, pos.x, pos.y, pos.rotation, curW, curD);
               placements.push(p);
               result.push(p);

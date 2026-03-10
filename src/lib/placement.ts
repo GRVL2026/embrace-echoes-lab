@@ -613,7 +613,7 @@ export function autoPlaceEquipmentWithReport(
           }
         }
 
-        if (placed) { if (lastPlacement) globalLastPlacement = lastPlacement; continue; }
+        if (placed) { if (lastPlacement) categoryLastPlacement = lastPlacement; continue; }
 
         // ── STEP 2: Try the SAME wall as last placement (stay grouped) ──
         if (lastPlacement?.wallEdgeIndex !== undefined) {

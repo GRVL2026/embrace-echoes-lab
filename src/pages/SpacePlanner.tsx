@@ -4,6 +4,7 @@ import { EditorToolbar } from "@/components/editor/EditorToolbar";
 import { EditorCanvas } from "@/components/editor/EditorCanvas";
 import { EditorSidebar } from "@/components/editor/EditorSidebar";
 import { Viewer3D } from "@/components/viewer3d/Viewer3D";
+import { Viewer3DToolbar, DEFAULT_3D_SETTINGS, type Viewer3DSettings } from "@/components/viewer3d/Viewer3DToolbar";
 import { PanelRightClose, PanelRightOpen, Box, LayoutGrid } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -13,6 +14,7 @@ import logoImg from "@/assets/logo.png";
 function SpacePlannerInner() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
+  const [viewer3DSettings, setViewer3DSettings] = useState<Viewer3DSettings>(DEFAULT_3D_SETTINGS);
   const { state, dispatch } = useEditor();
 
   const toggleSidebar = useCallback(() => {
@@ -31,9 +33,16 @@ function SpacePlannerInner() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background">
-      {/* Left toolbar */}
+      {/* Left toolbar - switches based on view mode */}
       <div className="flex flex-col items-center justify-center p-2">
-        <EditorToolbar />
+        {viewMode === "2d" ? (
+          <EditorToolbar />
+        ) : (
+          <Viewer3DToolbar
+            settings={viewer3DSettings}
+            onChange={setViewer3DSettings}
+          />
+        )}
       </div>
 
       {/* Canvas area */}
@@ -110,7 +119,16 @@ function SpacePlannerInner() {
         </header>
 
         {/* Main view */}
-        {viewMode === "2d" ? <EditorCanvas /> : <Viewer3D />}
+        {viewMode === "2d" ? (
+          <EditorCanvas />
+        ) : (
+          <Viewer3D
+            settings={viewer3DSettings}
+            onPresetApplied={() =>
+              setViewer3DSettings((s) => ({ ...s, presetView: null }))
+            }
+          />
+        )}
       </div>
 
       {/* Right sidebar */}

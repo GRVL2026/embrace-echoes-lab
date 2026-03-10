@@ -8,9 +8,11 @@ const WALL_THICKNESS = 0.15; // meters
 type Props = {
   room: Room;
   doors: Door[];
+  showFloor?: boolean;
+  showWalls?: boolean;
 };
 
-export function Room3D({ room, doors }: Props) {
+export function Room3D({ room, doors, showFloor = true, showWalls = true }: Props) {
   const { floorShape, wallMeshes } = useMemo(() => {
     // Convert cm → meters, 2D y → 3D z
     const pts = room.points.map((p) => new THREE.Vector2(p.x / 100, p.y / 100));
@@ -67,22 +69,23 @@ export function Room3D({ room, doors }: Props) {
   return (
     <group>
       {/* Floor */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-        <shapeGeometry args={[floorShape]} />
-        <meshStandardMaterial
-          color="#e8e8e8"
-          roughness={0.5}
-          metalness={0.05}
-          {...{} as any}
-        />
-      </mesh>
+      {showFloor && (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+          <shapeGeometry args={[floorShape]} />
+          <meshStandardMaterial
+            color="#e8e8e8"
+            roughness={0.5}
+            metalness={0.05}
+            {...{} as any}
+          />
+        </mesh>
+      )}
 
       {/* Walls */}
-      {wallMeshes.map((wall, wi) =>
+      {showWalls && wallMeshes.map((wall, wi) =>
         wall.segments.map((seg, si) => {
           const segLength = seg.end - seg.start;
           const segCenter = (seg.start + seg.end) / 2;
-          // Position along wall direction
           const cx = wall.origin.x + Math.cos(wall.angle) * segCenter;
           const cz = wall.origin.y + Math.sin(wall.angle) * segCenter;
 

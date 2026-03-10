@@ -31,6 +31,7 @@ export type Viewer3DVisibility = {
   doors: boolean;
   pillars: boolean;
   grid: boolean;
+  circulation: boolean;
 };
 
 export type Viewer3DSettings = {

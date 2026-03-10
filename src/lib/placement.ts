@@ -196,9 +196,9 @@ function isSideBySide(
   cx: number, cy: number, w: number, d: number, rot: number,
   pe: PlacedEquipment,
 ): boolean {
-  // Must share same rotation (tolerance 3°)
+  // Must share same rotation (tolerance 5°)
   const rotDiff = Math.abs(((rot - pe.rotation) % 360 + 360) % 360);
-  if (rotDiff > 3 && rotDiff < 357) return false;
+  if (rotDiff > 5 && rotDiff < 355) return false;
 
   // Project the vector between centers onto the front direction
   const front = getFrontDirection(rot);
@@ -209,8 +209,8 @@ function isSideBySide(
   const lateralOffset = Math.abs(dx * (-front.y) + dy * front.x);
 
   // Side-by-side: mostly lateral separation, minimal depth separation
-  // Strict: depth tolerance is only 15% of combined half-depths (was 30% — caused false positives)
-  const maxDepthTolerance = (d / 2 + pe.depth / 2) * 0.15;
+  // Tolerance 40% of combined half-depths to handle mixed-depth equipment in same category
+  const maxDepthTolerance = (d / 2 + pe.depth / 2) * 0.40;
   const minLateralOverlap = 1; // at least 1cm apart laterally
   return depthOffset <= maxDepthTolerance && lateralOffset >= minLateralOverlap;
 }

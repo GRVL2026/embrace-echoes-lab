@@ -31,7 +31,7 @@ export function Viewer3D() {
         gl={{ antialias: true, toneMapping: 3 /* ACESFilmic */ }}
       >
         {/* Ambient base */}
-        <ambientLight intensity={0.15} color="#1a1a3e" />
+        <ambientLight intensity={0.5} color="#ffffff" />
 
         {/* Arcade lighting */}
         <ArcadeLighting rooms={state.rooms} />

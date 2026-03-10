@@ -502,6 +502,7 @@ export function EditorSidebar() {
         {/* Catalog panel */}
         <CatalogPanel catalog={catalog} setCatalog={setCatalog} />
       </div>
+    </div>
   );
 }
 

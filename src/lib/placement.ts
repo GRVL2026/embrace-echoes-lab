@@ -780,11 +780,15 @@ export function autoPlaceEquipmentWithReport(
       return areaB - areaA;
     });
 
-  // Per-category last placement tracker — each category starts fresh on longest available wall
+  // Per-category placement tracker — tracks ALL placements in the category for centroid calculation
   let categoryLastPlacement: {
     x: number; y: number; rotation: number; w: number; d: number;
     wallEdgeIndex?: number;
   } | null = null;
+  // Track the primary wall for the category (where the first item was placed)
+  let categoryPrimaryWall: number | undefined = undefined;
+  // Track all positions in the category for centroid-based scoring
+  let categoryPositions: { x: number; y: number }[] = [];
 
   for (const [category, equipmentGroups] of sortedCategories) {
     // Reset for each new category — forces STEP 3 (longest wall) instead of adjacency

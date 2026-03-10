@@ -10,6 +10,8 @@ export type GameEquipment = {
   color?: string;  // display color (HSL)
   icon?: string;   // optional emoji or icon name
   pmrAccessible?: boolean; // requires extra clearance for PMR
+  centerPlacement?: boolean; // true = played from short sides, placed as island (palet, power puck)
+  playerClearance?: number; // cm — clearance on short sides for players (default 100)
   model3d?: string; // URL to a .glb/.gltf 3D model file
   
   // Shopify extended fields

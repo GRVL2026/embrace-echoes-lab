@@ -83,6 +83,10 @@ function shopifyProductToEquipment(product: ShopifyAdminProduct): GameEquipment 
   const price = parseFloat(product.price);
   const category = product.productType || "autre";
 
+  // Detect center-placement games (played from short sides, placed as island)
+  const titleLower = product.title.toLowerCase();
+  const isCenterPlacement = /\bpalet\b/.test(titleLower) || /\bpower\s*puck\b/.test(titleLower);
+
   // Extract specs from metafields
   const findMeta = (keyword: string) => {
     for (const [key, value] of Object.entries(product.metafields)) {
@@ -99,6 +103,8 @@ function shopifyProductToEquipment(product: ShopifyAdminProduct): GameEquipment 
     depth: dims?.depth || 100,
     height: dims?.height || 200,
     safetyZone: DEFAULT_SAFETY_ZONE,
+    centerPlacement: isCenterPlacement || undefined,
+    playerClearance: isCenterPlacement ? 100 : undefined,
     color: getCategoryColor(category),
     description: product.description || undefined,
     vendor: product.vendor || undefined,

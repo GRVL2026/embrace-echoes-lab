@@ -42,10 +42,10 @@ export function Equipment3D({ equipment }: Props) {
         <boxGeometry args={[w, h, d]} />
         <meshStandardMaterial
           color={color}
-          roughness={0.4}
-          metalness={0.3}
+          roughness={0.5}
+          metalness={0.1}
           emissive={color}
-          emissiveIntensity={0.15}
+          emissiveIntensity={0.05}
         />
       </mesh>
 
@@ -54,7 +54,7 @@ export function Equipment3D({ equipment }: Props) {
         position={[0, h / 2 + 0.05, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
         fontSize={0.12}
-        color="white"
+        color="#222222"
         anchorX="center"
         anchorY="middle"
         maxWidth={w * 0.9}

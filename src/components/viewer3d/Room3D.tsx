@@ -70,9 +70,9 @@ export function Room3D({ room, doors }: Props) {
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
         <shapeGeometry args={[floorShape]} />
         <meshStandardMaterial
-          color="#0a0a1a"
-          roughness={0.3}
-          metalness={0.1}
+          color="#e8e8e8"
+          roughness={0.5}
+          metalness={0.05}
         />
       </mesh>
 
@@ -95,9 +95,9 @@ export function Room3D({ room, doors }: Props) {
             >
               <boxGeometry args={[segLength, WALL_HEIGHT, WALL_THICKNESS]} />
               <meshStandardMaterial
-                color="#1a1a2e"
-                roughness={0.7}
-                metalness={0.05}
+                color="#f0f0f0"
+                roughness={0.8}
+                metalness={0.02}
               />
             </mesh>
           );

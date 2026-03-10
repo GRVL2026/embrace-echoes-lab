@@ -19,7 +19,7 @@ export function Viewer3D() {
     : 0;
 
   return (
-    <div className="flex-1 w-full h-full bg-black">
+    <div className="flex-1 w-full h-full" style={{ background: "#dce4ec" }}>
       <Canvas
         shadows
         camera={{
@@ -31,7 +31,7 @@ export function Viewer3D() {
         gl={{ antialias: true, toneMapping: 3 /* ACESFilmic */ }}
       >
         {/* Ambient base */}
-        <ambientLight intensity={0.15} color="#1a1a3e" />
+        <ambientLight intensity={0.5} color="#ffffff" />
 
         {/* Arcade lighting */}
         <ArcadeLighting rooms={state.rooms} />
@@ -57,10 +57,10 @@ export function Viewer3D() {
           args={[50, 50]}
           cellSize={1}
           cellThickness={0.5}
-          cellColor="#1a1a3e"
+          cellColor="#c0c0c0"
           sectionSize={5}
           sectionThickness={1}
-          sectionColor="#2a2a5e"
+          sectionColor="#999999"
           fadeDistance={30}
           infiniteGrid
         />

@@ -640,7 +640,7 @@ export function autoPlaceEquipmentWithReport(
           }
         }
 
-        if (placed) { if (lastPlacement) globalLastPlacement = lastPlacement; continue; }
+        if (placed) { if (lastPlacement) categoryLastPlacement = lastPlacement; continue; }
 
         // ── STEP 3: Try all walls sorted by length (RULE 3: prefer longest) ──
         {

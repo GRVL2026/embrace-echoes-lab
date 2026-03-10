@@ -681,7 +681,7 @@ export function autoPlaceEquipmentWithReport(
           }
         }
 
-        if (placed) { if (lastPlacement) globalLastPlacement = lastPlacement; continue; }
+        if (placed) { if (lastPlacement) categoryLastPlacement = lastPlacement; continue; }
 
         // ── STEP 4: Fallback — pillar-backed positions ──
         {

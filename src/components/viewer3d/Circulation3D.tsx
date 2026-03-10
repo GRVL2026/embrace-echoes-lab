@@ -1,12 +1,12 @@
 import { useMemo } from "react";
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { CirculationSegment, Point } from "@/types/editor";
 
 type Props = {
   segments: CirculationSegment[];
 };
 
-/** Deduplicate points that are too close */
 function deduplicateChain(chain: Point[], minDist: number): Point[] {
   if (chain.length < 2) return chain;
   const result = [chain[0]];
@@ -21,7 +21,6 @@ function deduplicateChain(chain: Point[], minDist: number): Point[] {
   return result;
 }
 
-/** Chaikin smoothing */
 function smoothChain(chain: Point[], iterations: number): Point[] {
   let pts = chain;
   for (let iter = 0; iter < iterations; iter++) {
@@ -42,58 +41,13 @@ function smoothChain(chain: Point[], iterations: number): Point[] {
   return pts;
 }
 
-/** Single segment rendered as a flat box on the ground */
-function SegmentQuad({ start, end, width }: { start: THREE.Vector3; end: THREE.Vector3; width: number }) {
-  const dx = end.x - start.x;
-  const dz = end.z - start.z;
-  const length = Math.sqrt(dx * dx + dz * dz);
-  if (length < 0.01) return null;
-
-  const cx = (start.x + end.x) / 2;
-  const cz = (start.z + end.z) / 2;
-  const angle = Math.atan2(dz, dx);
-
-  return (
-    <mesh position={[cx, 0.02, cz]} rotation={[-Math.PI / 2, 0, -angle]} receiveShadow>
-      <planeGeometry args={[length, width]} />
-      <meshStandardMaterial
-        color="hsl(142, 70%, 50%)"
-        emissive="hsl(142, 70%, 40%)"
-        emissiveIntensity={0.2}
-        transparent
-        opacity={0.35}
-        side={THREE.DoubleSide}
-        depthWrite={false}
-      />
-    </mesh>
-  );
-}
-
-/** Circle joint at each waypoint to fill gaps between segments */
-function JointDisc({ position, radius }: { position: THREE.Vector3; radius: number }) {
-  return (
-    <mesh position={[position.x, 0.02, position.z]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-      <circleGeometry args={[radius, 16]} />
-      <meshStandardMaterial
-        color="hsl(142, 70%, 50%)"
-        emissive="hsl(142, 70%, 40%)"
-        emissiveIntensity={0.2}
-        transparent
-        opacity={0.35}
-        side={THREE.DoubleSide}
-        depthWrite={false}
-      />
-    </mesh>
-  );
-}
-
 export function Circulation3D({ segments }: Props) {
-  const renderData = useMemo(() => {
+  const geometry = useMemo(() => {
     if (!segments || segments.length === 0) return null;
 
-    const corridorWidth = (segments[0]?.width || 140) / 100; // cm → m
+    const corridorWidth = (segments[0]?.width || 140) / 100;
+    const halfW = corridorWidth / 2;
 
-    // Build chains from segments
     const chains: Point[][] = [];
     let currentChain: Point[] = [];
 
@@ -115,9 +69,7 @@ export function Circulation3D({ segments }: Props) {
     }
     if (currentChain.length > 0) chains.push(currentChain);
 
-    // Process chains into segment pairs + joint points
-    const quads: { start: THREE.Vector3; end: THREE.Vector3 }[] = [];
-    const joints: THREE.Vector3[] = [];
+    const geometries: THREE.BufferGeometry[] = [];
 
     for (const rawChain of chains) {
       let chain = deduplicateChain(rawChain, 8);
@@ -125,36 +77,63 @@ export function Circulation3D({ segments }: Props) {
       chain = deduplicateChain(chain, 3);
       if (chain.length < 2) continue;
 
-      for (let i = 0; i < chain.length - 1; i++) {
-        const s = new THREE.Vector3(chain[i].x / 100, 0, chain[i].y / 100);
-        const e = new THREE.Vector3(chain[i + 1].x / 100, 0, chain[i + 1].y / 100);
-        quads.push({ start: s, end: e });
+      // Convert to 3D (cm → m)
+      const pts3 = chain.map((p) => new THREE.Vector3(p.x / 100, 0, p.y / 100));
 
-        // Add joint at each interior point
-        if (i > 0) {
-          joints.push(s);
-        }
+      // For each segment, create a plane
+      for (let i = 0; i < pts3.length - 1; i++) {
+        const s = pts3[i];
+        const e = pts3[i + 1];
+        const dx = e.x - s.x;
+        const dz = e.z - s.z;
+        const len = Math.sqrt(dx * dx + dz * dz);
+        if (len < 0.01) continue;
+
+        const plane = new THREE.PlaneGeometry(len, corridorWidth);
+        const cx = (s.x + e.x) / 2;
+        const cz = (s.z + e.z) / 2;
+        const angle = Math.atan2(dz, dx);
+
+        const mat = new THREE.Matrix4();
+        mat.makeRotationX(-Math.PI / 2);
+        mat.premultiply(new THREE.Matrix4().makeRotationY(-angle));
+        mat.premultiply(new THREE.Matrix4().makeTranslation(cx, 0.02, cz));
+        plane.applyMatrix4(mat);
+        geometries.push(plane);
       }
-      // Also add joints at start and end
-      joints.push(new THREE.Vector3(chain[0].x / 100, 0, chain[0].y / 100));
-      joints.push(new THREE.Vector3(chain[chain.length - 1].x / 100, 0, chain[chain.length - 1].y / 100));
+
+      // Disc joints at each point
+      for (const p of pts3) {
+        const disc = new THREE.CircleGeometry(halfW, 16);
+        const mat = new THREE.Matrix4();
+        mat.makeRotationX(-Math.PI / 2);
+        mat.premultiply(new THREE.Matrix4().makeTranslation(p.x, 0.02, p.z));
+        disc.applyMatrix4(mat);
+        geometries.push(disc);
+      }
     }
 
-    return { quads, joints, corridorWidth };
+    if (geometries.length === 0) return null;
+
+    const merged = mergeGeometries(geometries, false);
+    // Dispose source geometries
+    geometries.forEach((g) => g.dispose());
+    return merged;
   }, [segments]);
 
-  if (!renderData) return null;
-
-  const { quads, joints, corridorWidth } = renderData;
+  if (!geometry) return null;
 
   return (
-    <group>
-      {quads.map((q, i) => (
-        <SegmentQuad key={`seg-${i}`} start={q.start} end={q.end} width={corridorWidth} />
-      ))}
-      {joints.map((j, i) => (
-        <JointDisc key={`joint-${i}`} position={j} radius={corridorWidth / 2} />
-      ))}
-    </group>
+    <mesh geometry={geometry} receiveShadow>
+      <meshStandardMaterial
+        color="hsl(142, 70%, 50%)"
+        emissive="hsl(142, 70%, 40%)"
+        emissiveIntensity={0.2}
+        transparent
+        opacity={0.35}
+        side={THREE.DoubleSide}
+        depthWrite={false}
+      />
+    </mesh>
   );
 }

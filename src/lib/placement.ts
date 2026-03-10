@@ -86,6 +86,16 @@ function satOverlap(cornersA: Point[], cornersB: Point[]): boolean {
   return true;
 }
 
+/** Distance from point to segment */
+function ptSegDist(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax, dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return Math.sqrt((px - ax) ** 2 + (py - ay) ** 2);
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+  return Math.sqrt((px - (ax + t * dx)) ** 2 + (py - (ay + t * dy)) ** 2);
+}
+
+
 /** Get door exclusion zone as a rectangle in world coords */
 function getDoorExclusionZones(rooms: Room[], doors: Door[]): { cx: number; cy: number; w: number; d: number; rot: number }[] {
   const zones: { cx: number; cy: number; w: number; d: number; rot: number }[] = [];
@@ -499,6 +509,18 @@ function isCenterPlacementValid(
 ): boolean {
   // Must be inside room
   if (!rectInsidePolygon(cx, cy, w, d, rot, room.points)) return false;
+
+  // Must maintain CORRIDOR_WIDTH from every wall so the corridor can pass
+  const corners = getRectCorners(cx, cy, w, d, rot);
+  const pts = room.points;
+  const edgeCount = room.isClosed ? pts.length : pts.length - 1;
+  for (const corner of corners) {
+    for (let i = 0; i < edgeCount; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      const dist = ptSegDist(corner.x, corner.y, a.x, a.y, b.x, b.y);
+      if (dist < CORRIDOR_WIDTH) return false;
+    }
+  }
   // Must not overlap door exclusion zones
   for (const dz of doorZones) {
     if (rectsOverlap(cx, cy, w, d, rot, dz.cx, dz.cy, dz.w, dz.d, dz.rot)) return false;
@@ -560,7 +582,7 @@ function generateCenterPlacementPositions(
     // Room is wider (X axis is long): orient table's longest dimension along X
     const rotation = equipWidth >= equipDepth ? 0 : 90;
     const xMargin = longestDim / 2 + playerClearance;
-    const yMinMargin = shortestDim / 2 + WALL_MARGIN; // just clear the wall
+    const yMinMargin = shortestDim / 2 + CORRIDOR_WIDTH; // must leave 1.40m for corridor between table and wall equipment
     const centerX = (minX + maxX) / 2;
 
     // Scan all valid Y positions — prefer closer to top wall (minY) to leave corridor below
@@ -579,7 +601,7 @@ function generateCenterPlacementPositions(
     // Room is taller (Y axis is long): orient table's longest dimension along Y
     const rotation = equipDepth >= equipWidth ? 0 : 90;
     const yMargin = longestDim / 2 + playerClearance;
-    const xMinMargin = shortestDim / 2 + WALL_MARGIN;
+    const xMinMargin = shortestDim / 2 + CORRIDOR_WIDTH; // must leave 1.40m for corridor
     const centerY = (minY + maxY) / 2;
 
     for (let x = minX + xMinMargin; x <= maxX - xMinMargin; x += step) {

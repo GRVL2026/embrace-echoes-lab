@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, type LucideIcon } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 type SidebarSectionProps = {
   title: string;
@@ -13,10 +14,10 @@ export function SidebarSection({ title, icon: Icon, defaultOpen = true, badge, c
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <div className="border-b border-border">
+    <div className={`border-b border-border flex flex-col ${open ? "flex-1 min-h-0" : "flex-none"}`}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-2 p-3 hover:bg-muted/30 transition-colors"
+        className="flex w-full items-center gap-2 p-3 hover:bg-muted/30 transition-colors shrink-0"
       >
         {open ? (
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -31,7 +32,11 @@ export function SidebarSection({ title, icon: Icon, defaultOpen = true, badge, c
           </span>
         )}
       </button>
-      {open && <div>{children}</div>}
+      {open && (
+        <ScrollArea className="flex-1 min-h-0">
+          {children}
+        </ScrollArea>
+      )}
     </div>
   );
 }

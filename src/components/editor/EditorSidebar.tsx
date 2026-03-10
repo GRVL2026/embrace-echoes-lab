@@ -267,7 +267,7 @@ export function EditorSidebar() {
         <ProjectMenu catalog={catalog} onLoadCatalog={setCatalog} />
       </div>
 
-      <ScrollArea className="flex-1">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {/* === Section Import === */}
         <SidebarSection title="Import" icon={FileUp} defaultOpen={state.rooms.length === 0}>
           <div className="p-3 pt-0">
@@ -498,7 +498,7 @@ export function EditorSidebar() {
             )}
           </div>
         </SidebarSection>
-      </ScrollArea>
+      </div>
 
       {/* Catalog panel */}
       <CatalogPanel catalog={catalog} setCatalog={setCatalog} />

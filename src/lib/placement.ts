@@ -690,7 +690,7 @@ function generateAdjacentPositions(
   const rad = prevRot * Math.PI / 180;
   const wallDirX = Math.cos(rad);
   const wallDirY = Math.sin(rad);
-  const baseSpacing = prevW / 2 + curW / 2 + gap + 1;
+  const baseSpacing = prevW / 2 + curW / 2 + gap;
 
   for (const mult of [1, -1, 2, -2, 3, -3, 4, -4, 5, -5]) {
     const sign = mult > 0 ? 1 : -1;

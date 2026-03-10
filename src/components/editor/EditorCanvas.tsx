@@ -2381,39 +2381,70 @@ function drawCirculationPath(
   if (currentChain.length > 0) chains.push(currentChain);
 
   for (let ci = 0; ci < chains.length; ci++) {
-    // Deduplicate → extra visual smoothing → deduplicate again
+    // Deduplicate → extra visual smoothing (more iterations) → deduplicate again
     let chain = deduplicateChain(chains[ci], 8);
-    chain = visualSmooth(chain, 2);
+    chain = visualSmooth(chain, 4); // more smoothing for rounder curves
     chain = deduplicateChain(chain, 3);
     if (chain.length < 2) continue;
 
-    const leftEdge = buildOffsetPolyline(chain, hw);
-    const rightEdge = buildOffsetPolyline(chain, -hw);
+    // Use thick stroke with round joins for corridor fill — avoids self-intersecting offset polylines
+    const corridorWidthPx = (segments[0]?.width || 140) * CM_TO_PX;
 
-    // Filled corridor
+    // Filled corridor — draw as thick line with round joins (no self-intersection)
+    ctx.save();
     ctx.beginPath();
-    ctx.moveTo(leftEdge[0].x, leftEdge[0].y);
-    for (let i = 1; i < leftEdge.length; i++) ctx.lineTo(leftEdge[i].x, leftEdge[i].y);
-    for (let i = rightEdge.length - 1; i >= 0; i--) ctx.lineTo(rightEdge[i].x, rightEdge[i].y);
-    ctx.closePath();
-    ctx.fillStyle = "hsla(142, 70%, 45%, 0.07)";
-    ctx.fill();
-
-    // Corridor edges — solid thin lines with round joins
-    ctx.strokeStyle = "hsla(142, 70%, 50%, 0.3)";
-    ctx.lineWidth = 1 / zoom;
-    ctx.setLineDash([]);
+    ctx.moveTo(chain[0].x * CM_TO_PX, chain[0].y * CM_TO_PX);
+    for (let i = 1; i < chain.length; i++) {
+      ctx.lineTo(chain[i].x * CM_TO_PX, chain[i].y * CM_TO_PX);
+    }
+    ctx.strokeStyle = "hsla(142, 70%, 45%, 0.07)";
+    ctx.lineWidth = corridorWidthPx;
     ctx.lineJoin = "round";
-
-    ctx.beginPath();
-    ctx.moveTo(leftEdge[0].x, leftEdge[0].y);
-    for (let i = 1; i < leftEdge.length; i++) ctx.lineTo(leftEdge[i].x, leftEdge[i].y);
+    ctx.lineCap = "round";
     ctx.stroke();
+    ctx.restore();
 
+    // Corridor edges — use thick stroke then clip to get clean outlines
+    // Draw corridor outline as two thin strokes offset by lineWidth rendering
+    ctx.save();
     ctx.beginPath();
-    ctx.moveTo(rightEdge[0].x, rightEdge[0].y);
-    for (let i = 1; i < rightEdge.length; i++) ctx.lineTo(rightEdge[i].x, rightEdge[i].y);
+    ctx.moveTo(chain[0].x * CM_TO_PX, chain[0].y * CM_TO_PX);
+    for (let i = 1; i < chain.length; i++) {
+      ctx.lineTo(chain[i].x * CM_TO_PX, chain[i].y * CM_TO_PX);
+    }
+    ctx.strokeStyle = "hsla(142, 70%, 50%, 0.3)";
+    ctx.lineWidth = corridorWidthPx;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    // Stroke the outline only (not the fill) by using a wider line
     ctx.stroke();
+    // Now "erase" the interior by drawing over with the background-matching fill
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.beginPath();
+    ctx.moveTo(chain[0].x * CM_TO_PX, chain[0].y * CM_TO_PX);
+    for (let i = 1; i < chain.length; i++) {
+      ctx.lineTo(chain[i].x * CM_TO_PX, chain[i].y * CM_TO_PX);
+    }
+    ctx.strokeStyle = "rgba(0,0,0,1)";
+    ctx.lineWidth = corridorWidthPx - 2 / zoom;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke();
+    ctx.restore();
+
+    // Re-draw the filled corridor on top (since we used destination-out)
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(chain[0].x * CM_TO_PX, chain[0].y * CM_TO_PX);
+    for (let i = 1; i < chain.length; i++) {
+      ctx.lineTo(chain[i].x * CM_TO_PX, chain[i].y * CM_TO_PX);
+    }
+    ctx.strokeStyle = "hsla(142, 70%, 45%, 0.07)";
+    ctx.lineWidth = corridorWidthPx - 2 / zoom;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke();
+    ctx.restore();
 
     // Centerline — smooth dashed with round caps
     ctx.strokeStyle = "hsla(142, 70%, 55%, 0.45)";

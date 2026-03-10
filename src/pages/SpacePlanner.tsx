@@ -12,6 +12,7 @@ import logoImg from "@/assets/logo.png";
 
 function SpacePlannerInner() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
   const { state, dispatch } = useEditor();
 
   const toggleSidebar = useCallback(() => {

@@ -431,7 +431,7 @@ function buildWallSweepWaypoints(
     // Waypoint placed just in front of equipment face (not relative to wall)
     // Equipment front face = center + depth/2 in inward direction
     // Waypoint = front face + HALF_CORRIDOR + small margin
-    const frontMargin = HALF_CORRIDOR + 10; // corridor center just in front of equipment
+    const frontMargin = HALF_CORRIDOR + 5; // corridor center tight to equipment face
 
     // Project each equipment onto wall axis to get position along wall
     const projections = group.equipment.map(eq => {

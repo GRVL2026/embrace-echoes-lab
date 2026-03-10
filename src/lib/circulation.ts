@@ -489,7 +489,7 @@ function buildWallSweepWaypoints(
     if (!eq.centerPlacement) continue;
     const rad = (eq.rotation || 0) * Math.PI / 180;
     const cos = Math.cos(rad), sin = Math.sin(rad);
-    const frontOffset = eq.depth / 2 + HALF_CORRIDOR + 20;
+    const frontOffset = eq.depth / 2 + HALF_CORRIDOR + 5;
     waypoints.push({
       id: eq.id,
       point: {

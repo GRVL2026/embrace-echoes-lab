@@ -570,8 +570,8 @@ export function autoPlaceEquipmentWithReport(
     for (const group of sortedGroups) {
       const equip = group.equip;
       const count = group.count;
-      // Each reference group starts fresh — don't inherit from previous reference
-      let lastPlacement: typeof categoryLastPlacement = null;
+      // Inherit from previous group in the same category to stay adjacent
+      let lastPlacement: typeof categoryLastPlacement = categoryLastPlacement ?? null;
 
       for (let i = 0; i < count; i++) {
         let placed = false;
@@ -651,9 +651,9 @@ export function autoPlaceEquipmentWithReport(
           const allWallPos: { x: number; y: number; rotation: number; score: number; wallEdgeIndex: number }[] = [];
           for (const wall of wallsByLength) {
             if (wall.hasDoor && w > 100) continue;
-            // First item of a group: prefer corner positions to maximize wall usage
-            const isFirstOfGroup = !lastPlacement && !categoryLastPlacement;
-            const positions = generateWallPositions(wall, w, d, step, isFirstOfGroup);
+            // Prefer corner for the very first equipment placed (maximize wall usage from a corner)
+            const isVeryFirst = placements.length === 0;
+            const positions = generateWallPositions(wall, w, d, step, isVeryFirst);
             for (const pos of positions) {
               // Bonus: if category already has a wall, prefer positions close to existing category placements
               let proximityBonus = 0;

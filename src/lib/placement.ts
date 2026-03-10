@@ -643,7 +643,7 @@ export function autoPlaceEquipmentWithReport(
         {
           const w = equip.width;
           const d = equip.depth;
-          const gap = DIFFERENT_GAP; // proper gap when jumping to a new wall
+          const gap = SAME_REF_GAP; // same tight spacing on all walls
 
           const allWallPos: { x: number; y: number; rotation: number; score: number; wallEdgeIndex: number }[] = [];
           for (const wall of wallsByLength) {

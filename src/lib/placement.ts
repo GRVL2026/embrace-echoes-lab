@@ -900,6 +900,13 @@ export function autoPlaceEquipmentWithReport(
           const d = equip.depth;
           const gap = SAME_REF_GAP;
 
+          // Check if two walls are adjacent (share a vertex)
+          const isAdjacentWall = (edgeA: number, edgeB: number): boolean => {
+            if (edgeA === edgeB) return true;
+            const totalEdges = walls.length;
+            return (edgeA + 1) % totalEdges === edgeB || (edgeB + 1) % totalEdges === edgeA;
+          };
+
           const allWallPos: { x: number; y: number; rotation: number; score: number; wallEdgeIndex: number }[] = [];
           for (const wall of wallsByLength) {
             const isVeryFirst = placements.length === 0;
@@ -910,8 +917,11 @@ export function autoPlaceEquipmentWithReport(
                 // Use centroid of ALL category placements, not just the last one
                 const centroid = getCentroid(categoryPositions)!;
                 const dist = Math.hypot(pos.x - centroid.x, pos.y - centroid.y);
-                // Massive penalty for different wall than category's primary wall
-                const wallMismatch = (categoryPrimaryWall !== undefined && wall.edgeIndex !== categoryPrimaryWall) ? 5000 : 0;
+                // Wall mismatch: low penalty for adjacent walls (corner clustering allowed), high for distant walls
+                let wallMismatch = 0;
+                if (categoryPrimaryWall !== undefined && wall.edgeIndex !== categoryPrimaryWall) {
+                  wallMismatch = isAdjacentWall(wall.edgeIndex, categoryPrimaryWall) ? 500 : 5000;
+                }
                 proximityBonus = dist * 5 + wallMismatch;
               }
               allWallPos.push({

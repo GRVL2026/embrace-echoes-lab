@@ -647,7 +647,7 @@ export function autoPlaceEquipmentWithReport(
 
           const allWallPos: { x: number; y: number; rotation: number; score: number; wallEdgeIndex: number }[] = [];
           for (const wall of wallsByLength) {
-            if (wall.hasDoor && w > 100) continue;
+            // Door exclusion is already handled by isPlacementValid — don't skip entire walls
             const isVeryFirst = placements.length === 0;
             const positions = generateWallPositions(wall, w, d, step, isVeryFirst);
             for (const pos of positions) {

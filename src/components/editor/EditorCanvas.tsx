@@ -66,6 +66,17 @@ export function EditorCanvas() {
       }
     };
   }, [drawingPoints.length > 0, state.tool, state.panOffset, dispatch]);
+
+  // Prevent browser back/forward gesture on horizontal scroll (two-finger swipe)
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const preventGesture = (e: WheelEvent) => {
+      e.preventDefault();
+    };
+    el.addEventListener("wheel", preventGesture, { passive: false });
+    return () => el.removeEventListener("wheel", preventGesture);
+  }, []);
   const [hoveredWall, setHoveredWall] = useState<{ roomId: string; edgeIndex: number } | null>(null);
   const [draggingDoor, setDraggingDoor] = useState<string | null>(null);
   const [pendingDoorClick, setPendingDoorClick] = useState<{ doorId: string; startX: number; startY: number } | null>(null);

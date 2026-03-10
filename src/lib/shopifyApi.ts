@@ -103,6 +103,8 @@ function shopifyProductToEquipment(product: ShopifyAdminProduct): GameEquipment 
     depth: dims?.depth || 100,
     height: dims?.height || 200,
     safetyZone: DEFAULT_SAFETY_ZONE,
+    centerPlacement: isCenterPlacement || undefined,
+    playerClearance: isCenterPlacement ? 100 : undefined,
     color: getCategoryColor(category),
     description: product.description || undefined,
     vendor: product.vendor || undefined,

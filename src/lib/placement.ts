@@ -208,7 +208,7 @@ function isPlacementValid(
   }
   // Must not overlap other equipment (with gap — only expand ONE rect to avoid doubling)
   for (const pe of existingPlacements) {
-    if (rectsOverlap(cx, cy, w + gap * 2, d + gap * 2, rot, pe.position.x, pe.position.y, pe.width, pe.depth, pe.rotation)) {
+    if (rectsOverlap(cx, cy, w + gap, d + gap, rot, pe.position.x, pe.position.y, pe.width, pe.depth, pe.rotation)) {
       if (debug) console.log(`[placement] EQUIP overlap with ${pe.name} at (${cx.toFixed(0)},${cy.toFixed(0)})`);
       return false;
     }

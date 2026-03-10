@@ -419,65 +419,70 @@ function generatePillarBackedPositions(
 /** Check directional gap between a center table and another equipment.
  *  Tables have no "front" — players stand on SHORT sides (need playerClearance).
  *  LONG sides can touch other tables (gap=0) but need CORRIDOR_WIDTH from wall equipment.
- *  Returns true if the gap constraints are satisfied. */
+ *  
+ *  Key geometry: players stand at the ends of the LONGEST dimension.
+ *  - Separation along the LONG axis → short sides (player sides) face each other → need playerClearance
+ *  - Separation along the SHORT axis → long sides face each other → can touch (table-to-table)
+ */
 function checkCenterTableGap(
   cx: number, cy: number, w: number, d: number, rot: number,
   playerClearance: number,
   pe: PlacedEquipment,
 ): boolean {
-  // Determine table's axis directions
   const rad = rot * Math.PI / 180;
   const cos = Math.cos(rad);
   const sin = Math.sin(rad);
-  // "width" direction (long side of table) = (cos, sin)
-  // "depth" direction (short side / player side) = (-sin, cos)
+  // "width" direction = (cos, sin), "depth" direction = (-sin, cos)
 
   const dx = pe.position.x - cx;
   const dy = pe.position.y - cy;
-  // Project separation onto table axes
-  const sepAlongWidth = Math.abs(dx * cos + dy * sin);   // along long side
-  const sepAlongDepth = Math.abs(dx * (-sin) + dy * cos); // along short side (player side)
+  const sepAlongWidth = Math.abs(dx * cos + dy * sin);
+  const sepAlongDepth = Math.abs(dx * (-sin) + dy * cos);
 
   const halfW = w / 2;
   const halfD = d / 2;
 
-  // Determine the neighbor's half-dimensions along the table's axes
+  // Project neighbor's extent onto our axes
   const peRad = pe.rotation * Math.PI / 180;
   const peCos = Math.cos(peRad);
   const peSin = Math.sin(peRad);
-  // Project neighbor's corners onto our axes to get effective half-extents
   const peHW = (Math.abs(pe.width / 2 * peCos * cos + pe.width / 2 * peSin * sin) +
                 Math.abs(pe.depth / 2 * (-peSin) * cos + pe.depth / 2 * peCos * sin));
   const peHD = (Math.abs(pe.width / 2 * peCos * (-sin) + pe.width / 2 * peSin * cos) +
                 Math.abs(pe.depth / 2 * (-peSin) * (-sin) + pe.depth / 2 * peCos * cos));
 
-  // Check overlap on each axis
   const gapAlongWidth = sepAlongWidth - halfW - peHW;
   const gapAlongDepth = sepAlongDepth - halfD - peHD;
 
-  // If separated on at least one axis, check the relevant gap
-  if (gapAlongWidth > 0 && gapAlongDepth > 0) return true; // diagonal, no issue
+  // If separated on both axes (diagonal), no constraint issue
+  if (gapAlongWidth > 0 && gapAlongDepth > 0) return true;
 
-  if (gapAlongWidth <= 0 && gapAlongDepth <= 0) {
-    // Overlapping on both axes = physical overlap (should be caught by rect overlap check)
-    return false;
-  }
+  // Physical overlap on both axes
+  if (gapAlongWidth <= 0 && gapAlongDepth <= 0) return false;
+
+  // Determine which axis is the LONG dimension (where players stand at ends)
+  const isWidthLong = w >= d;
 
   if (gapAlongWidth > 0) {
-    // Separated along the WIDTH axis (= long side gap)
-    if (pe.centerPlacement) {
-      // Table-to-table on long sides: can touch (gap >= 0)
-      return gapAlongWidth >= 0;
+    if (isWidthLong) {
+      // Separated along the LONG axis → short sides (player sides) face each other
+      return gapAlongWidth >= playerClearance;
     } else {
-      // Table to wall equipment: need corridor
-      return gapAlongWidth >= CORRIDOR_WIDTH;
+      // Separated along the SHORT axis → long sides face each other
+      if (pe.centerPlacement) return gapAlongWidth >= 0; // table-to-table: can touch
+      return gapAlongWidth >= CORRIDOR_WIDTH; // table-to-wall-equip: corridor
     }
   }
 
   if (gapAlongDepth > 0) {
-    // Separated along the DEPTH axis (= short side / player side)
-    // Always need playerClearance on short sides
-    return gapAlongDepth >= playerClearance;
+    if (!isWidthLong) {
+      // depth is the LONG axis → short sides (player sides) face each other
+      return gapAlongDepth >= playerClearance;
+    } else {
+      // depth is the SHORT axis → long sides face each other
+      if (pe.centerPlacement) return gapAlongDepth >= 0; // table-to-table: can touch
+      return gapAlongDepth >= CORRIDOR_WIDTH; // table-to-wall-equip: corridor
+    }
   }
 
   return true;

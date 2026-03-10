@@ -478,9 +478,9 @@ function buildWallSweepWaypoints(
     for (const proj of projections) {
       if (proj.eq.id === leftProj.eq.id || proj.eq.id === rightProj.eq.id) continue;
       if (projections.length > 4 && proj.eq === projections[Math.floor(projections.length / 2)].eq) continue;
-      const nearestPoint = Math.abs(proj.along - leftProj.along) < Math.abs(proj.along - rightProj.along) 
-        ? leftWp : makeWaypoint(rightProj.along);
-      waypoints.push({ id: proj.eq.id, point: nearestPoint });
+      const nearestProj = Math.abs(proj.along - leftProj.along) < Math.abs(proj.along - rightProj.along) 
+        ? leftProj : rightProj;
+      waypoints.push({ id: proj.eq.id, point: makeWaypointForEq(nearestProj) });
     }
   }
 

@@ -97,6 +97,12 @@ function ptSegDist(px: number, py: number, ax: number, ay: number, bx: number, b
   return Math.sqrt((px - (ax + t * dx)) ** 2 + (py - (ay + t * dy)) ** 2);
 }
 
+/** Compute centroid of a set of points */
+function getCentroid(points: { x: number; y: number }[]): { x: number; y: number } | null {
+  if (points.length === 0) return null;
+  const sum = points.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+  return { x: sum.x / points.length, y: sum.y / points.length };
+}
 
 /** Get door exclusion zone as a rectangle in world coords */
 function getDoorExclusionZones(rooms: Room[], doors: Door[]): { cx: number; cy: number; w: number; d: number; rot: number }[] {
@@ -196,9 +202,9 @@ function isSideBySide(
   cx: number, cy: number, w: number, d: number, rot: number,
   pe: PlacedEquipment,
 ): boolean {
-  // Must share same rotation (tolerance 3°)
+  // Must share same rotation (tolerance 5°)
   const rotDiff = Math.abs(((rot - pe.rotation) % 360 + 360) % 360);
-  if (rotDiff > 3 && rotDiff < 357) return false;
+  if (rotDiff > 5 && rotDiff < 355) return false;
 
   // Project the vector between centers onto the front direction
   const front = getFrontDirection(rot);
@@ -209,8 +215,8 @@ function isSideBySide(
   const lateralOffset = Math.abs(dx * (-front.y) + dy * front.x);
 
   // Side-by-side: mostly lateral separation, minimal depth separation
-  // Strict: depth tolerance is only 15% of combined half-depths (was 30% — caused false positives)
-  const maxDepthTolerance = (d / 2 + pe.depth / 2) * 0.15;
+  // Tolerance 40% of combined half-depths to handle mixed-depth equipment in same category
+  const maxDepthTolerance = (d / 2 + pe.depth / 2) * 0.40;
   const minLateralOverlap = 1; // at least 1cm apart laterally
   return depthOffset <= maxDepthTolerance && lateralOffset >= minLateralOverlap;
 }
@@ -780,15 +786,21 @@ export function autoPlaceEquipmentWithReport(
       return areaB - areaA;
     });
 
-  // Per-category last placement tracker — each category starts fresh on longest available wall
+  // Per-category placement tracker — tracks ALL placements in the category for centroid calculation
   let categoryLastPlacement: {
     x: number; y: number; rotation: number; w: number; d: number;
     wallEdgeIndex?: number;
   } | null = null;
+  // Track the primary wall for the category (where the first item was placed)
+  let categoryPrimaryWall: number | undefined = undefined;
+  // Track all positions in the category for centroid-based scoring
+  let categoryPositions: { x: number; y: number }[] = [];
 
   for (const [category, equipmentGroups] of sortedCategories) {
     // Reset for each new category — forces STEP 3 (longest wall) instead of adjacency
     categoryLastPlacement = null;
+    categoryPrimaryWall = undefined;
+    categoryPositions = [];
 
     // Sort equipment groups by area (largest first)
     const sortedGroups = [...equipmentGroups].sort((a, b) =>
@@ -833,6 +845,7 @@ export function autoPlaceEquipmentWithReport(
               placements.push(p);
               result.push(p);
               lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w: curW, d: curD, wallEdgeIndex: lastPlacement.wallEdgeIndex };
+              categoryPositions.push({ x: pos.x, y: pos.y });
               placed = true;
               break;
             }
@@ -841,24 +854,37 @@ export function autoPlaceEquipmentWithReport(
 
         if (placed) { if (lastPlacement) categoryLastPlacement = lastPlacement; continue; }
 
-        // ── STEP 2: Try the SAME wall as last placement (stay grouped) ──
-        if (lastPlacement?.wallEdgeIndex !== undefined) {
-          const sameWall = walls.find(w => w.edgeIndex === lastPlacement!.wallEdgeIndex);
+        // ── STEP 2: Try the SAME wall as category's primary wall first, then last placement wall ──
+        const wallsToTry: number[] = [];
+        if (categoryPrimaryWall !== undefined) wallsToTry.push(categoryPrimaryWall);
+        if (lastPlacement?.wallEdgeIndex !== undefined && !wallsToTry.includes(lastPlacement.wallEdgeIndex)) {
+          wallsToTry.push(lastPlacement.wallEdgeIndex);
+        }
+        
+        for (const wallIdx of wallsToTry) {
+          if (placed) break;
+          const sameWall = walls.find(w => w.edgeIndex === wallIdx);
           if (sameWall) {
             const w = equip.width;
             const d = equip.depth;
             const positions = generateWallPositions(sameWall, w, d, step);
-            positions.sort((a, b) => {
-              const distA = Math.hypot(a.x - lastPlacement!.x, a.y - lastPlacement!.y);
-              const distB = Math.hypot(b.x - lastPlacement!.x, b.y - lastPlacement!.y);
-              return distA - distB;
-            });
+            // Sort by distance to category centroid (not just last placement)
+            const centroid = getCentroid(categoryPositions);
+            const sortRef = centroid || (lastPlacement ? { x: lastPlacement.x, y: lastPlacement.y } : null);
+            if (sortRef) {
+              positions.sort((a, b) => {
+                const distA = Math.hypot(a.x - sortRef.x, a.y - sortRef.y);
+                const distB = Math.hypot(b.x - sortRef.x, b.y - sortRef.y);
+                return distA - distB;
+              });
+            }
             for (const pos of positions) {
               if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, SAME_REF_GAP, bestRoom, doorZones, pillarZones, placements)) {
                 const p = makePlacement(equip, pos.x, pos.y, pos.rotation, w, d);
                 placements.push(p);
                 result.push(p);
                 lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w, d, wallEdgeIndex: sameWall.edgeIndex };
+                categoryPositions.push({ x: pos.x, y: pos.y });
                 placed = true;
                 break;
               }
@@ -872,21 +898,21 @@ export function autoPlaceEquipmentWithReport(
         {
           const w = equip.width;
           const d = equip.depth;
-          const gap = SAME_REF_GAP; // same tight spacing on all walls
+          const gap = SAME_REF_GAP;
 
           const allWallPos: { x: number; y: number; rotation: number; score: number; wallEdgeIndex: number }[] = [];
           for (const wall of wallsByLength) {
-            // Door exclusion is already handled by isPlacementValid — don't skip entire walls
             const isVeryFirst = placements.length === 0;
             const positions = generateWallPositions(wall, w, d, step, isVeryFirst);
             for (const pos of positions) {
               let proximityBonus = 0;
-              if (categoryLastPlacement) {
-                const dist = Math.hypot(pos.x - categoryLastPlacement.x, pos.y - categoryLastPlacement.y);
-                // Strong proximity bonus: heavily penalize distance from category group
-                // Also strongly penalize being on a different wall than the category
-                const wallMismatch = (wall.edgeIndex !== categoryLastPlacement.wallEdgeIndex) ? 2000 : 0;
-                proximityBonus = dist * 3 + wallMismatch;
+              if (categoryPositions.length > 0) {
+                // Use centroid of ALL category placements, not just the last one
+                const centroid = getCentroid(categoryPositions)!;
+                const dist = Math.hypot(pos.x - centroid.x, pos.y - centroid.y);
+                // Massive penalty for different wall than category's primary wall
+                const wallMismatch = (categoryPrimaryWall !== undefined && wall.edgeIndex !== categoryPrimaryWall) ? 5000 : 0;
+                proximityBonus = dist * 5 + wallMismatch;
               }
               allWallPos.push({
                 x: pos.x, y: pos.y, rotation: pos.rotation,
@@ -903,6 +929,9 @@ export function autoPlaceEquipmentWithReport(
               placements.push(p);
               result.push(p);
               lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w, d, wallEdgeIndex: pos.wallEdgeIndex };
+              categoryPositions.push({ x: pos.x, y: pos.y });
+              // Set primary wall on first placement of category
+              if (categoryPrimaryWall === undefined) categoryPrimaryWall = pos.wallEdgeIndex;
               placed = true;
               console.log(`[placement] Placed ${equip.name} on wall ${pos.wallEdgeIndex} at (${pos.x.toFixed(0)},${pos.y.toFixed(0)})`);
               break;

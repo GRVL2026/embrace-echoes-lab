@@ -115,7 +115,7 @@ export async function generateDossierPDF(
   // 3D captures
   let views: ReturnType<typeof capture3DViews> | null = null;
   try {
-    views = capture3DViews(state.rooms, state.doors, state.pillars, state.placedEquipments);
+    views = capture3DViews(state.rooms, state.doors, state.pillars, state.placedEquipments, state.circulationPath || []);
   } catch (e) {
     console.warn("3D capture failed:", e);
   }

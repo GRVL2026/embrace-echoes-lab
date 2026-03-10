@@ -645,7 +645,8 @@ export function computeCirculation(
       return wp;
     });
 
-    // Build path: door → wp1 → wp2 → ... → wpN → door (boucle complète)
+    // Build path: door → wp1 → wp2 → ... → wpN (aller simple, pas de boucle retour)
+    // Le corridor est conçu comme un chemin aller-retour sur le même tracé
     let currentPos = startPos;
     for (const wp of orderedWithIds) {
       const ok = buildPath(currentPos, wp.point);
@@ -664,10 +665,7 @@ export function computeCirculation(
       }
     }
 
-    // Boucle retour : retour au point de départ (porte) pour former un circuit complet
-    if (currentPos !== startPos) {
-      buildPath(currentPos, startPos);
-    }
+    // Pas de boucle retour — le visiteur emprunte le même corridor en sens inverse
   } else if (roomDoors.length === 0) {
     // No doors, no equipment — nothing to show
   }

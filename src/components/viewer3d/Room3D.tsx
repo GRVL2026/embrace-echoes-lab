@@ -12,7 +12,7 @@ type Props = {
   showWalls?: boolean;
 };
 
-export function Room3D({ room, doors }: Props) {
+export function Room3D({ room, doors, showFloor = true, showWalls = true }: Props) {
   const { floorShape, wallMeshes } = useMemo(() => {
     // Convert cm → meters, 2D y → 3D z
     const pts = room.points.map((p) => new THREE.Vector2(p.x / 100, p.y / 100));

@@ -46,6 +46,7 @@ export function Equipment3D({ equipment }: Props) {
           metalness={0.1}
           emissive={color}
           emissiveIntensity={0.05}
+          {...{} as any}
         />
       </mesh>
 

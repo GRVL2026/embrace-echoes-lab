@@ -77,7 +77,7 @@ export function Door3D({ door, rooms }: Props) {
         <meshStandardMaterial color={frameColor} roughness={0.3} metalness={0.4} {...({} as any)} />
       </mesh>
 
-      {/* Floor threshold marker - bright strip */}
+      {/* Floor threshold marker */}
       <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[doorWidthM + 0.2, 0.4]} />
         <meshStandardMaterial
@@ -90,6 +90,67 @@ export function Door3D({ door, rooms }: Props) {
           {...({} as any)}
         />
       </mesh>
+
+      {/* Door swing arc */}
+      {door.leafCount === "single" ? (
+        <mesh
+          position={[
+            door.openDirection === "left" ? -doorWidthM / 2 : doorWidthM / 2,
+            0.01,
+            door.openSide === "interior" ? -0.01 : 0.01,
+          ]}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
+          <circleGeometry args={[doorWidthM, 32, 0, Math.PI / 2]} />
+          <meshStandardMaterial
+            color={isMain ? "#60A5FA" : "#D4A574"}
+            emissive={isMain ? "#3B82F6" : "#A0522D"}
+            emissiveIntensity={0.2}
+            transparent
+            opacity={0.25}
+            side={THREE.DoubleSide}
+            depthWrite={false}
+            {...({} as any)}
+          />
+        </mesh>
+      ) : (
+        <>
+          {/* Left leaf arc */}
+          <mesh
+            position={[-doorWidthM / 2, 0.01, door.openSide === "interior" ? -0.01 : 0.01]}
+            rotation={[-Math.PI / 2, 0, 0]}
+          >
+            <circleGeometry args={[doorWidthM / 2, 32, 0, Math.PI / 2]} />
+            <meshStandardMaterial
+              color={isMain ? "#60A5FA" : "#D4A574"}
+              emissive={isMain ? "#3B82F6" : "#A0522D"}
+              emissiveIntensity={0.2}
+              transparent
+              opacity={0.25}
+              side={THREE.DoubleSide}
+              depthWrite={false}
+              {...({} as any)}
+            />
+          </mesh>
+          {/* Right leaf arc */}
+          <mesh
+            position={[doorWidthM / 2, 0.01, door.openSide === "interior" ? -0.01 : 0.01]}
+            rotation={[-Math.PI / 2, 0, Math.PI / 2]}
+          >
+            <circleGeometry args={[doorWidthM / 2, 32, 0, Math.PI / 2]} />
+            <meshStandardMaterial
+              color={isMain ? "#60A5FA" : "#D4A574"}
+              emissive={isMain ? "#3B82F6" : "#A0522D"}
+              emissiveIntensity={0.2}
+              transparent
+              opacity={0.25}
+              side={THREE.DoubleSide}
+              depthWrite={false}
+              {...({} as any)}
+            />
+          </mesh>
+        </>
+      )}
     </group>
   );
 }

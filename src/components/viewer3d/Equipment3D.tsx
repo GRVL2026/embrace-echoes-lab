@@ -63,11 +63,6 @@ export function Equipment3D({ equipment }: Props) {
         {equipment.name}
       </Text>
 
-      {/* Subtle glow ring at base */}
-      <mesh position={[0, -h / 2 + 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[Math.max(w, d) * 0.5, Math.max(w, d) * 0.55, 32]} />
-        <meshBasicMaterial color={color} transparent opacity={0.3} {...{} as any} />
-      </mesh>
     </group>
   );
 }

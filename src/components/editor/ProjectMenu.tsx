@@ -146,6 +146,24 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
     toast.success("Projet HYPER NOVA chargé (3 salles, 2 poteaux, 30+ équipements)");
   };
 
+  const handleExportDossier = async () => {
+    if (state.rooms.length === 0 && state.placedEquipments.length === 0) {
+      toast.error("Rien à exporter — ajoutez au moins une salle ou des équipements");
+      return;
+    }
+    setIsExporting(true);
+    toast.info("Génération du dossier PDF en cours…");
+    try {
+      await generateDossierPDF(state, catalog, currentProjectName);
+      toast.success("Dossier PDF téléchargé !");
+    } catch (e) {
+      console.error("PDF export error:", e);
+      toast.error("Erreur lors de la génération du PDF");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <>
       <DropdownMenu>

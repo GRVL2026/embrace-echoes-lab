@@ -15,6 +15,7 @@ import {
   DoorOpen,
   Grid3X3,
   Layers,
+  Route,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -31,6 +32,7 @@ export type Viewer3DVisibility = {
   doors: boolean;
   pillars: boolean;
   grid: boolean;
+  circulation: boolean;
 };
 
 export type Viewer3DSettings = {
@@ -50,6 +52,7 @@ export const DEFAULT_3D_SETTINGS: Viewer3DSettings = {
     doors: true,
     pillars: true,
     grid: true,
+    circulation: true,
   },
   lighting: "daylight",
 };
@@ -80,6 +83,7 @@ const visibilityToggles: { key: VisKey; label: string; icon: React.ElementType }
   { key: "doors", label: "Portes", icon: DoorOpen },
   { key: "pillars", label: "Poteaux", icon: Columns },
   { key: "grid", label: "Grille", icon: Grid3X3 },
+  { key: "circulation", label: "Circulation", icon: Route },
 ];
 
 export function Viewer3DToolbar({ settings, onChange }: Props) {

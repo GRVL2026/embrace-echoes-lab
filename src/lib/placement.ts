@@ -86,6 +86,16 @@ function satOverlap(cornersA: Point[], cornersB: Point[]): boolean {
   return true;
 }
 
+/** Distance from point to segment */
+function ptSegDist(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax, dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return Math.sqrt((px - ax) ** 2 + (py - ay) ** 2);
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+  return Math.sqrt((px - (ax + t * dx)) ** 2 + (py - (ay + t * dy)) ** 2);
+}
+
+
 /** Get door exclusion zone as a rectangle in world coords */
 function getDoorExclusionZones(rooms: Room[], doors: Door[]): { cx: number; cy: number; w: number; d: number; rot: number }[] {
   const zones: { cx: number; cy: number; w: number; d: number; rot: number }[] = [];

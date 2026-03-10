@@ -373,12 +373,14 @@ function getDoorWorldPosition(door: Door, rooms: Room[]): Point | null {
   };
 }
 
-/** Get the "front" waypoint of an equipment: 2cm from the front face (side with dimensions/player access) */
+/** Get the "front" waypoint of an equipment: placed just outside the inflated obstacle zone
+ *  so A* can actually reach it. The grid inflates equipment by HALF_CORRIDOR, so the waypoint
+ *  must be at least depth/2 + HALF_CORRIDOR from center. We add 5cm margin. */
 function getEquipmentFrontWaypoint(eq: PlacedEquipment): Point {
   const rad = (eq.rotation || 0) * Math.PI / 180;
   const cos = Math.cos(rad), sin = Math.sin(rad);
-  // Front face is the +y side in local space (depth direction), offset by half depth + 2cm
-  const frontOffset = eq.depth / 2 + 2; // 2cm gap from front
+  // Front face offset must clear the inflated obstacle zone in the grid
+  const frontOffset = eq.depth / 2 + HALF_CORRIDOR + 5; // just outside blocked zone
   return {
     x: eq.position.x + (-sin) * frontOffset,
     y: eq.position.y + cos * frontOffset,

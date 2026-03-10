@@ -415,8 +415,9 @@ function generatePillarBackedPositions(
 }
 
 /** Generate center island positions for equipment played from short sides (palet, power puck).
- *  Places along the room center axis with playerClearance on the short sides (width ends).
- *  Equipment is oriented so its long axis (depth) aligns with the room's main axis. */
+ *  Orients the table's LONGEST dimension along the room's longest axis to minimize corridor obstruction.
+ *  Players stand at the short ends (depth sides) → playerClearance on those ends.
+ *  Also enforces CORRIDOR_WIDTH clearance to nearest walls so the corridor isn't blocked. */
 function generateCenterPlacementPositions(
   room: Room,
   equipWidth: number,
@@ -434,40 +435,51 @@ function generateCenterPlacementPositions(
   const roomHeight = maxY - minY;
   const isWide = roomWidth >= roomHeight;
 
-  // Place equipment in the center band of the room
-  // Long axis (depth) aligned with the room's longer dimension
-  // Short sides (width) need playerClearance
+  // Determine which dimension is longest for the equipment
+  const longestDim = Math.max(equipWidth, equipDepth);
+  const shortestDim = Math.min(equipWidth, equipDepth);
+
   if (isWide) {
-    // Room is wider: equipment depth along X, width along Y
-    // Players stand at left/right ends (X axis) → need playerClearance on X ends
+    // Room is wider (X axis is long): orient table's longest dimension along X
+    // rotation=0 if width >= depth (width along X), rotation=90 if depth > width (depth along X)
+    const rotation = equipWidth >= equipDepth ? 0 : 90;
+    // With this rotation:
+    // - Along X: longestDim
+    // - Along Y: shortestDim
+    // Players at short ends (along X ends) → playerClearance on X
+    // Corridor clearance: need CORRIDOR_WIDTH from top/bottom walls
+    const xMargin = longestDim / 2 + playerClearance;
+    const yMargin = shortestDim / 2 + CORRIDOR_WIDTH; // 140cm corridor clearance to walls
     const centerY = (minY + maxY) / 2;
-    // Scan Y positions around center
-    const yMargin = equipWidth / 2 + WALL_MARGIN;
-    const xMargin = equipDepth / 2 + playerClearance; // clearance for players on short sides
+
     for (let y = minY + yMargin; y <= maxY - yMargin; y += step) {
       for (let x = minX + xMargin; x <= maxX - xMargin; x += step) {
-        // Rotation 90 or 270: depth along X axis, width along Y axis
-        const distFromCenter = Math.abs(y - centerY);
-        const score = 50 + distFromCenter / 10; // prefer center of room
-        positions.push({ x, y, rotation: 90, score });
+        const distFromCenterY = Math.abs(y - centerY);
+        // Prefer center of room (Y), and middle of room (X)
+        const centerX = (minX + maxX) / 2;
+        const distFromCenterX = Math.abs(x - centerX);
+        const score = 50 + distFromCenterY / 5 + distFromCenterX / 20;
+        positions.push({ x, y, rotation, score });
       }
     }
   } else {
-    // Room is taller: equipment depth along Y, width along X
-    // Players stand at top/bottom ends (Y axis) → need playerClearance on Y ends
+    // Room is taller (Y axis is long): orient table's longest dimension along Y
+    const rotation = equipDepth >= equipWidth ? 0 : 90;
+    const yMargin = longestDim / 2 + playerClearance;
+    const xMargin = shortestDim / 2 + CORRIDOR_WIDTH;
     const centerX = (minX + maxX) / 2;
-    const xMargin = equipWidth / 2 + WALL_MARGIN;
-    const yMargin = equipDepth / 2 + playerClearance;
+
     for (let x = minX + xMargin; x <= maxX - xMargin; x += step) {
       for (let y = minY + yMargin; y <= maxY - yMargin; y += step) {
-        const distFromCenter = Math.abs(x - centerX);
-        const score = 50 + distFromCenter / 10;
-        positions.push({ x, y, rotation: 0, score });
+        const distFromCenterX = Math.abs(x - centerX);
+        const centerY = (minY + maxY) / 2;
+        const distFromCenterY = Math.abs(y - centerY);
+        const score = 50 + distFromCenterX / 5 + distFromCenterY / 20;
+        positions.push({ x, y, rotation, score });
       }
     }
   }
 
-  // Sort by score (center-preferred)
   positions.sort((a, b) => a.score - b.score);
   return positions;
 }

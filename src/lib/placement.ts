@@ -1013,8 +1013,8 @@ function generateAdjacentPositions(
   const rad = prevRot * Math.PI / 180;
   const wallDirX = Math.cos(rad);
   const wallDirY = Math.sin(rad);
-  // For touching placement (gap=0), use 0cm spacing. Only add 1cm anti-collision margin when gap > 0.
-  const baseSpacing = prevW / 2 + curW / 2 + gap;
+  // 1cm gap between same-ref items to prevent SAT false positive
+  const baseSpacing = prevW / 2 + curW / 2 + Math.max(gap, 1);
 
   // Depth correction: align back-to-wall when equipment depths differ
   const front = getFrontDirection(prevRot);

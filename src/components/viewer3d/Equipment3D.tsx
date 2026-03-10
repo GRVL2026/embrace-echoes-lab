@@ -42,10 +42,10 @@ export function Equipment3D({ equipment }: Props) {
         <boxGeometry args={[w, h, d]} />
         <meshStandardMaterial
           color={color}
-          roughness={0.4}
-          metalness={0.3}
+          roughness={0.5}
+          metalness={0.1}
           emissive={color}
-          emissiveIntensity={0.15}
+          emissiveIntensity={0.05}
         />
       </mesh>
 

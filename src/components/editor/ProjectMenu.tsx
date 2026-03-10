@@ -21,8 +21,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Save, FolderOpen, FilePlus, Trash2, Menu, Gamepad2 } from "lucide-react";
+import { Save, FolderOpen, FilePlus, Trash2, Menu, Gamepad2, FileDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { generateDossierPDF } from "@/lib/pdfExport";
 import {
   listProjects,
   saveProject,
@@ -41,6 +42,7 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
   const { state, dispatch } = useEditor();
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [currentProjectName, setCurrentProjectName] = useState("Nouveau projet");
+  const [isExporting, setIsExporting] = useState(false);
 
   // Save dialog
   const [saveOpen, setSaveOpen] = useState(false);
@@ -144,6 +146,24 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
     toast.success("Projet HYPER NOVA chargé (3 salles, 2 poteaux, 30+ équipements)");
   };
 
+  const handleExportDossier = async () => {
+    if (state.rooms.length === 0 && state.placedEquipments.length === 0) {
+      toast.error("Rien à exporter — ajoutez au moins une salle ou des équipements");
+      return;
+    }
+    setIsExporting(true);
+    toast.info("Génération du dossier PDF en cours…");
+    try {
+      await generateDossierPDF(state, catalog, currentProjectName);
+      toast.success("Dossier PDF téléchargé !");
+    } catch (e) {
+      console.error("PDF export error:", e);
+      toast.error("Erreur lors de la génération du PDF");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <>
       <DropdownMenu>
@@ -170,6 +190,11 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
           <DropdownMenuItem onClick={handleOpenLoad} className="gap-2">
             <FolderOpen className="h-4 w-4" />
             Ouvrir un projet
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={handleExportDossier} disabled={isExporting} className="gap-2">
+            {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+            Dossier banque (PDF)
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

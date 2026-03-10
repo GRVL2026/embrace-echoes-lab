@@ -12,6 +12,8 @@ const DIFFERENT_GAP = 10; // 10cm
 const WALL_MARGIN = 5; // 5cm
 // Gap between corridor and front of equipment
 const CORRIDOR_FRONT_GAP = 2; // 2cm
+// Minimum face-to-face distance (Rule 4: 1 corridor width)
+const MIN_FACE_TO_FACE = CORRIDOR_WIDTH; // 1.40m
 
 /** Check if a point is inside a polygon (ray-casting) */
 function pointInPolygon(p: Point, polygon: Point[]): boolean {
@@ -101,9 +103,7 @@ function getDoorExclusionZones(rooms: Room[], doors: Door[]): { cx: number; cy: 
     const doorCx = a.x + ux * centerDist;
     const doorCy = a.y + uy * centerDist;
     const rot = Math.atan2(dy, dx) * 180 / Math.PI;
-    // Interior zone
     zones.push({ cx: doorCx + nx * DOOR_EXCLUSION_DEPTH / 2, cy: doorCy + ny * DOOR_EXCLUSION_DEPTH / 2, w: door.width + 40, d: DOOR_EXCLUSION_DEPTH, rot });
-    // Exterior zone
     zones.push({ cx: doorCx - nx * DOOR_EXCLUSION_DEPTH / 2, cy: doorCy - ny * DOOR_EXCLUSION_DEPTH / 2, w: door.width + 40, d: DOOR_EXCLUSION_DEPTH, rot });
   }
   return zones;
@@ -120,26 +120,65 @@ function getPillarExclusionZones(pillars: Pillar[]): { cx: number; cy: number; w
   }));
 }
 
-/** Get the front clearance zone: a rectangle extending from the equipment's front face.
- * The zone covers 100% of the equipment width and extends CORRIDOR_WIDTH outward. */
+/** Get the front direction vector for equipment at given rotation */
+function getFrontDirection(rot: number): { x: number; y: number } {
+  const rad = rot * Math.PI / 180;
+  return { x: -Math.sin(rad), y: Math.cos(rad) };
+}
+
+/** RULE 2: Get the front clearance zone as a CONE (trapezoid) approximated by a rectangle
+ * that widens slightly as it extends outward from the front face.
+ * Uses full equipment width + 10% expansion per side at the far end. */
 function getFrontClearanceZone(
   cx: number, cy: number, w: number, d: number, rot: number, clearanceDepth: number,
 ): { cx: number; cy: number; w: number; d: number; rot: number } {
-  const rad = rot * Math.PI / 180;
-  const cos = Math.cos(rad);
-  const sin = Math.sin(rad);
-  // Front direction in world space (local +Y rotated)
-  const frontDirX = -sin;
-  const frontDirY = cos;
-  // Center of clearance zone: shifted forward from equipment center by half depth + half clearance
-  const zoneCx = cx + frontDirX * (d / 2 + clearanceDepth / 2);
-  const zoneCy = cy + frontDirY * (d / 2 + clearanceDepth / 2);
-  // Full equipment width — 100% of the front must be accessible
-  return { cx: zoneCx, cy: zoneCy, w, d: clearanceDepth, rot };
+  const front = getFrontDirection(rot);
+  // Center of clearance zone: shifted forward from equipment center
+  const zoneCx = cx + front.x * (d / 2 + clearanceDepth / 2);
+  const zoneCy = cy + front.y * (d / 2 + clearanceDepth / 2);
+  // Cone: widen the zone by 20% of width (10% each side) to catch diagonal approaches
+  const coneWidth = w * 1.2;
+  return { cx: zoneCx, cy: zoneCy, w: coneWidth, d: clearanceDepth, rot };
 }
 
-/** Check if an equipment placement is valid (no overlap with walls, doors, pillars, other equipment,
- *  AND front accessibility is maintained for all equipment) */
+/** RULE 4: Check face-to-face distance. If two equipment face each other,
+ * they must be at least MIN_FACE_TO_FACE apart (measured between front faces). */
+function checkFaceToFace(
+  cx: number, cy: number, w: number, d: number, rot: number,
+  existingPlacements: PlacedEquipment[],
+): boolean {
+  const newFront = getFrontDirection(rot);
+  const newFrontCenterX = cx + newFront.x * (d / 2);
+  const newFrontCenterY = cy + newFront.y * (d / 2);
+
+  for (const pe of existingPlacements) {
+    const existFront = getFrontDirection(pe.rotation);
+    const existFrontCenterX = pe.position.x + existFront.x * (pe.depth / 2);
+    const existFrontCenterY = pe.position.y + existFront.y * (pe.depth / 2);
+
+    // Check if they roughly face each other (dot product of front directions < -0.5)
+    const dot = newFront.x * existFront.x + newFront.y * existFront.y;
+    if (dot > -0.5) continue; // Not facing each other
+
+    // Check if they're roughly aligned (front-to-front axis matches facing direction)
+    const dx = existFrontCenterX - newFrontCenterX;
+    const dy = existFrontCenterY - newFrontCenterY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist === 0) continue;
+
+    // Check alignment: the vector between fronts should be roughly along the front direction
+    const alignDot = Math.abs((dx / dist) * newFront.x + (dy / dist) * newFront.y);
+    if (alignDot < 0.5) continue; // Not aligned
+
+    // They face each other and are aligned — check distance
+    if (dist < MIN_FACE_TO_FACE) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Check if an equipment placement is valid */
 function isPlacementValid(
   cx: number, cy: number, w: number, d: number, rot: number, gap: number,
   room: Room,
@@ -175,7 +214,7 @@ function isPlacementValid(
     }
   }
 
-  // ── FORWARD CHECK: New equipment's front must not be blocked by existing equipment ──
+  // ── RULE 2: Front clearance zone (cone) must not be blocked ──
   const newFrontZone = getFrontClearanceZone(cx, cy, w, d, rot, CORRIDOR_WIDTH);
   for (const pe of existingPlacements) {
     if (rectsOverlap(newFrontZone.cx, newFrontZone.cy, newFrontZone.w, newFrontZone.d, newFrontZone.rot,
@@ -185,7 +224,7 @@ function isPlacementValid(
     }
   }
 
-  // ── REVERSE CHECK: New equipment must not block the front of any already-placed equipment ──
+  // ── RULE 2 REVERSE: New equipment must not block the front of any existing equipment ──
   for (const pe of existingPlacements) {
     const existingFrontZone = getFrontClearanceZone(
       pe.position.x, pe.position.y, pe.width, pe.depth, pe.rotation, CORRIDOR_WIDTH
@@ -197,6 +236,12 @@ function isPlacementValid(
     }
   }
 
+  // ── RULE 4: Face-to-face minimum distance ──
+  if (!checkFaceToFace(cx, cy, w, d, rot, existingPlacements)) {
+    if (debug) console.log(`[placement] FACE-TO-FACE too close at (${cx.toFixed(0)},${cy.toFixed(0)})`);
+    return false;
+  }
+
   return true;
 }
 
@@ -205,14 +250,14 @@ type WallSegment = {
   start: Point;
   end: Point;
   length: number;
-  angle: number; // degrees
-  normalX: number; // interior normal
+  angle: number;
+  normalX: number;
   normalY: number;
   edgeIndex: number;
   hasDoor: boolean;
 };
 
-/** Compute polygon winding: positive = CCW, negative = CW */
+/** Compute polygon winding */
 function polygonSignedArea(pts: Point[]): number {
   let area = 0;
   for (let i = 0; i < pts.length; i++) {
@@ -225,9 +270,8 @@ function polygonSignedArea(pts: Point[]): number {
 function getRoomWalls(room: Room, doors: Door[]): WallSegment[] {
   const walls: WallSegment[] = [];
   const pts = room.points;
-  // Determine winding: if signed area > 0, polygon is CCW → flip normals
   const signedArea = polygonSignedArea(pts);
-  const normalSign = signedArea > 0 ? 1 : -1; // CCW → left normal (inward), CW → right normal (inward)
+  const normalSign = signedArea > 0 ? 1 : -1;
 
   for (let i = 0; i < pts.length; i++) {
     const j = (i + 1) % pts.length;
@@ -237,7 +281,6 @@ function getRoomWalls(room: Room, doors: Door[]): WallSegment[] {
     if (length === 0) continue;
     const ux = dx / length;
     const uy = dy / length;
-    // Normal perpendicular to wall, guaranteed to point inward
     const nx = -uy * normalSign;
     const ny = ux * normalSign;
     const hasDoor = doors.some(d => d.roomId === room.id && d.edgeIndex === i);
@@ -246,7 +289,7 @@ function getRoomWalls(room: Room, doors: Door[]): WallSegment[] {
   return walls;
 }
 
-/** Generate wall positions (back against wall, front/dimensions facing inward) */
+/** Generate wall positions */
 function generateWallPositions(
   wall: WallSegment,
   equipWidth: number,
@@ -254,12 +297,9 @@ function generateWallPositions(
   step: number = 20,
 ): { x: number; y: number; rotation: number; score: number; wall: WallSegment }[] {
   const positions: { x: number; y: number; rotation: number; score: number; wall: WallSegment }[] = [];
-  // Equipment front (local +Y, where dimensions label is drawn) faces inward (along wall normal)
-  // Back (local -Y) faces the wall
   const rotation = ((Math.atan2(-wall.normalX, wall.normalY) * 180 / Math.PI) + 360) % 360;
-  // Distance from wall surface to equipment center
   const distFromWall = equipDepth / 2 + WALL_MARGIN;
-  const margin = equipWidth / 2 + 5; // small margin from wall corners
+  const margin = equipWidth / 2 + 5;
   if (wall.length - margin * 2 < 0) return positions;
 
   for (let t = margin; t <= wall.length - margin; t += step) {
@@ -268,7 +308,6 @@ function generateWallPositions(
     const wy = wall.start.y + (wall.end.y - wall.start.y) * ratio;
     const x = wx + wall.normalX * distFromWall;
     const y = wy + wall.normalY * distFromWall;
-    // Prefer walls without doors, positions away from corners
     const distFromEdges = Math.min(t, wall.length - t);
     const cornerPenalty = distFromEdges < 100 ? 10 : 0;
     const doorPenalty = wall.hasDoor ? 50 : 0;
@@ -277,11 +316,7 @@ function generateWallPositions(
   return positions;
 }
 
-/**
- * Generate positions with equipment back against a pillar face.
- * Each pillar has 4 faces (top, bottom, left, right); equipment is placed
- * with its back touching the pillar face, facing outward.
- */
+/** Generate positions with equipment back against a pillar face */
 function generatePillarBackedPositions(
   pillars: Pillar[],
   equipWidth: number,
@@ -299,32 +334,23 @@ function generatePillarBackedPositions(
     const cos = Math.cos(pRot);
     const sin = Math.sin(pRot);
 
-    // 4 faces of the pillar: each defined by direction from center and equipment rotation
     const faces = [
-      { nx: 0, ny: -1, faceLen: pw, rot: 0 },    // top face → equipment faces down (rot 0)
-      { nx: 0, ny: 1, faceLen: pw, rot: 180 },    // bottom face → equipment faces up (rot 180)
-      { nx: -1, ny: 0, faceLen: pd, rot: 90 },    // left face → equipment faces right (rot 90)
-      { nx: 1, ny: 0, faceLen: pd, rot: 270 },    // right face → equipment faces left (rot 270)
+      { nx: 0, ny: -1, faceLen: pw, rot: 0 },
+      { nx: 0, ny: 1, faceLen: pw, rot: 180 },
+      { nx: -1, ny: 0, faceLen: pd, rot: 90 },
+      { nx: 1, ny: 0, faceLen: pd, rot: 270 },
     ];
 
     for (const face of faces) {
-      // Only place if the pillar face is wide enough for the equipment
       if (face.faceLen < equipWidth * 0.5) continue;
-
-      // Distance from pillar center to the face surface + equipment half-depth + margin
       const distToFace = (face.nx !== 0 ? pw / 2 : pd / 2) + equipDepth / 2 + WALL_MARGIN;
-
-      // World-space direction (accounting for pillar rotation)
       const dirX = face.nx * cos - face.ny * sin;
       const dirY = face.nx * sin + face.ny * cos;
-
       const cx = px + dirX * distToFace;
       const cy = py + dirY * distToFace;
       const equipRot = (face.rot + (pillar.rotation || 0) + 360) % 360;
+      positions.push({ x: cx, y: cy, rotation: equipRot, score: 200 });
 
-      positions.push({ x: cx, y: cy, rotation: equipRot, score: 200 }); // higher score = less preferred than walls
-
-      // If the face is wider than the equipment, add offset positions along the face
       if (face.faceLen > equipWidth + step) {
         const along = { x: -face.ny * cos - (-face.nx) * sin, y: -face.ny * sin + (-face.nx) * cos };
         const maxOffset = (face.faceLen - equipWidth) / 2;
@@ -339,8 +365,7 @@ function generatePillarBackedPositions(
   return positions;
 }
 
-
-/** Generate center island positions (kept for reference) */
+/** Generate center island positions */
 function generateIslandPositions(
   room: Room,
   equipWidth: number,
@@ -357,22 +382,14 @@ function generateIslandPositions(
   const roomHeight = maxY - minY;
   const isWide = roomWidth >= roomHeight;
 
-  // Back-to-back gap (two equipment backs together)
   const backToBackGap = 10;
-  // Minimum space needed on each side: corridor + gap + equipment depth
-  const neededSide = CORRIDOR_WIDTH + CORRIDOR_FRONT_GAP + equipDepth / 2;
 
   if (isWide) {
     const centerY = (minY + maxY) / 2;
-    // Row 1: facing up (front = top) → rotation 180
     const row1Y = centerY - backToBackGap / 2 - equipDepth / 2;
-    // Row 2: facing down (front = bottom) → rotation 0
     const row2Y = centerY + backToBackGap / 2 + equipDepth / 2;
-
-    // Check there's enough room for corridor on each side
     if (row1Y - equipDepth / 2 - CORRIDOR_FRONT_GAP - CORRIDOR_WIDTH / 2 < minY + WALL_MARGIN) return positions;
     if (row2Y + equipDepth / 2 + CORRIDOR_FRONT_GAP + CORRIDOR_WIDTH / 2 > maxY - WALL_MARGIN) return positions;
-
     const margin = equipWidth / 2 + WALL_MARGIN + CORRIDOR_WIDTH;
     for (let x = minX + margin; x <= maxX - margin; x += step) {
       positions.push({ x, y: row1Y, rotation: 180, score: 100 });
@@ -380,14 +397,10 @@ function generateIslandPositions(
     }
   } else {
     const centerX = (minX + maxX) / 2;
-    // Row 1: facing left → rotation 270
     const row1X = centerX - backToBackGap / 2 - equipDepth / 2;
-    // Row 2: facing right → rotation 90
     const row2X = centerX + backToBackGap / 2 + equipDepth / 2;
-
     if (row1X - equipDepth / 2 - CORRIDOR_FRONT_GAP - CORRIDOR_WIDTH / 2 < minX + WALL_MARGIN) return positions;
     if (row2X + equipDepth / 2 + CORRIDOR_FRONT_GAP + CORRIDOR_WIDTH / 2 > maxX - WALL_MARGIN) return positions;
-
     const margin = equipWidth / 2 + WALL_MARGIN + CORRIDOR_WIDTH;
     for (let y = minY + margin; y <= maxY - margin; y += step) {
       positions.push({ x: row1X, y, rotation: 270, score: 100 });
@@ -456,22 +469,17 @@ export function autoPlaceEquipmentWithReport(
   const doorZones = getDoorExclusionZones(rooms, doors);
   const pillarZones = getPillarExclusionZones(pillars);
   const walls = getRoomWalls(bestRoom, doors);
-  
-  // DEBUG: log room info
+
   const pts = bestRoom.points;
   const rMinX = Math.min(...pts.map(p => p.x)), rMaxX = Math.max(...pts.map(p => p.x));
   const rMinY = Math.min(...pts.map(p => p.y)), rMaxY = Math.max(...pts.map(p => p.y));
   console.log(`[placement] Room bounds: x[${rMinX},${rMaxX}] y[${rMinY},${rMaxY}], ${walls.length} walls, signedArea=${polygonSignedArea(pts).toFixed(0)}`);
-  if (walls.length > 0) {
-    const w0 = walls[0];
-    console.log(`[placement] Wall0: start(${w0.start.x.toFixed(0)},${w0.start.y.toFixed(0)}) normal(${w0.normalX.toFixed(2)},${w0.normalY.toFixed(2)})`);
-  }
 
   const placements: PlacedEquipment[] = [...existingPlacements];
   const result: PlacedEquipment[] = [];
   const notPlaced: GameEquipment[] = [];
 
-  // ── RULE 4: Group by category, then by equipment ID (same ref together) ──
+  // ── Group by category, then by equipment ID ──
   const byEquipmentId = new Map<string, { equip: GameEquipment; count: number }>();
   for (const equip of selectedEquipments) {
     const existing = byEquipmentId.get(equip.id);
@@ -486,7 +494,7 @@ export function autoPlaceEquipmentWithReport(
     byCategory.get(cat)!.push(group);
   }
 
-  // Sort categories by total area (largest first to place biggest first)
+  // Sort categories by total area (largest first)
   const sortedCategories = Array.from(byCategory.entries())
     .sort((a, b) => {
       const areaA = a[1].reduce((sum, g) => sum + g.equip.width * g.equip.depth * g.count, 0);
@@ -494,53 +502,68 @@ export function autoPlaceEquipmentWithReport(
       return areaB - areaA;
     });
 
-  // ── Assign wall sectors per category (RULE 4) ──
-  // Distribute walls among categories so each category gets a contiguous sector
+  // ── RULE 3: Sort walls by length (longest first) for each category ──
   const nonDoorWalls = walls.filter(w => !w.hasDoor);
   const doorWalls = walls.filter(w => w.hasDoor);
-  // All walls sorted by edge index for spatial contiguity
-  const sortedWalls = [...nonDoorWalls, ...doorWalls].sort((a, b) => a.edgeIndex - b.edgeIndex);
+  // Sort all walls by length descending so longest walls are preferred
+  const wallsByLength = [...nonDoorWalls, ...doorWalls].sort((a, b) => b.length - a.length);
 
-  // Assign wall ranges to categories (simple round-robin of wall groups)
+  // Assign walls to categories: each category gets the longest available wall(s)
+  // that can fit its total equipment width
   const categoryWallMap = new Map<string, WallSegment[]>();
-  if (sortedCategories.length > 0 && sortedWalls.length > 0) {
-    const wallsPerCat = Math.max(1, Math.floor(sortedWalls.length / sortedCategories.length));
-    let wallIdx = 0;
-    for (const [cat] of sortedCategories) {
-      const catWalls: WallSegment[] = [];
-      const end = Math.min(wallIdx + wallsPerCat, sortedWalls.length);
-      for (let i = wallIdx; i < end; i++) {
-        catWalls.push(sortedWalls[i]);
+  const assignedWallIndices = new Set<number>();
+
+  for (const [cat, groups] of sortedCategories) {
+    // Calculate total width needed for this category (all units side by side)
+    const totalUnits = groups.reduce((sum, g) => sum + g.count, 0);
+    const maxWidth = Math.max(...groups.map(g => g.equip.width));
+    const totalWidthNeeded = totalUnits * (maxWidth + SAME_REF_GAP);
+
+    const catWalls: WallSegment[] = [];
+    
+    // RULE 3: Find the longest wall that can fit all units of this category
+    for (const wall of wallsByLength) {
+      if (assignedWallIndices.has(wall.edgeIndex)) continue;
+      if (wall.length >= totalWidthNeeded) {
+        catWalls.push(wall);
+        assignedWallIndices.add(wall.edgeIndex);
+        break;
       }
-      // Last category gets remaining walls
-      if (cat === sortedCategories[sortedCategories.length - 1][0]) {
-        for (let i = end; i < sortedWalls.length; i++) {
-          catWalls.push(sortedWalls[i]);
-        }
+    }
+
+    // If no single wall fits all, take multiple walls
+    if (catWalls.length === 0) {
+      let remainingWidth = totalWidthNeeded;
+      for (const wall of wallsByLength) {
+        if (assignedWallIndices.has(wall.edgeIndex)) continue;
+        catWalls.push(wall);
+        assignedWallIndices.add(wall.edgeIndex);
+        remainingWidth -= wall.length;
+        if (remainingWidth <= 0) break;
       }
+    }
+
+    // Fallback: if nothing assigned, use all walls
+    if (catWalls.length === 0) {
+      categoryWallMap.set(cat, wallsByLength);
+    } else {
       categoryWallMap.set(cat, catWalls);
-      wallIdx = end;
     }
   }
 
   const step = 20;
 
   for (const [category, equipmentGroups] of sortedCategories) {
-    // Sort equipment groups by area (largest first)
     const sortedGroups = [...equipmentGroups].sort((a, b) =>
       (b.equip.width * b.equip.depth * b.count) - (a.equip.width * a.equip.depth * a.count)
     );
 
-    // Walls assigned to this category (preferred), fallback to all walls
     const preferredWalls = categoryWallMap.get(category) || walls;
-
-    // Track last placement across the whole category so different refs stay grouped
     let categoryLastPlacement: { x: number; y: number; rotation: number; w: number; d: number } | null = null;
 
     for (const group of sortedGroups) {
       const equip = group.equip;
       const count = group.count;
-      // Inherit last placement from previous group in same category
       let lastPlacement: { x: number; y: number; rotation: number; w: number; d: number } | null = categoryLastPlacement;
 
       for (let i = 0; i < count; i++) {
@@ -548,8 +571,7 @@ export function autoPlaceEquipmentWithReport(
         const isSameRef = lastPlacement !== null;
         const gap = isSameRef ? SAME_REF_GAP : DIFFERENT_GAP;
 
-        // ── RULE 3a: If same ref already on plan (existing or just placed), try adjacent ──
-        // First check existing placements for same equipmentId
+        // Check existing placements for same equipmentId
         if (!lastPlacement) {
           const existingSameRef = placements.find(p => p.equipmentId === equip.id);
           if (existingSameRef) {
@@ -563,90 +585,71 @@ export function autoPlaceEquipmentWithReport(
           }
         }
 
-        // ── RULE 3b: If same category/ref, try adjacent to previous placement first ──
+        // ── RULE 1: Adjacent placement must use SAME rotation (same orientation) ──
         if (lastPlacement) {
-          // Try both orientations for the current equipment
-          for (const orientRot of [0, 90]) {
-            if (placed) break;
-            const curW = orientRot === 0 ? equip.width : equip.depth;
-            const curD = orientRot === 0 ? equip.depth : equip.width;
-            const adjPositions = generateAdjacentPositions(
-              lastPlacement.x, lastPlacement.y, lastPlacement.rotation,
-              lastPlacement.w, lastPlacement.d,
-              curW, curD, SAME_REF_GAP
-            );
-            for (const pos of adjPositions) {
-              if (isPlacementValid(pos.x, pos.y, curW, curD, pos.rotation, SAME_REF_GAP, bestRoom, doorZones, pillarZones, placements)) {
-                const p = makePlacement(equip, pos.x, pos.y, pos.rotation, curW, curD);
-                placements.push(p);
-                result.push(p);
-                lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w: curW, d: curD };
-                placed = true;
-                break;
-              }
+          const curW = equip.width;
+          const curD = equip.depth;
+          // Only try the SAME rotation as last placement (Rule 1: same orientation)
+          const adjPositions = generateAdjacentPositions(
+            lastPlacement.x, lastPlacement.y, lastPlacement.rotation,
+            lastPlacement.w, lastPlacement.d,
+            curW, curD, SAME_REF_GAP
+          );
+          for (const pos of adjPositions) {
+            if (isPlacementValid(pos.x, pos.y, curW, curD, pos.rotation, SAME_REF_GAP, bestRoom, doorZones, pillarZones, placements)) {
+              const p = makePlacement(equip, pos.x, pos.y, pos.rotation, curW, curD);
+              placements.push(p);
+              result.push(p);
+              lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w: curW, d: curD };
+              placed = true;
+              break;
             }
           }
         }
 
         if (placed) continue;
 
-        // ── RULE 1: Try wall positions (preferred walls for this category first, then all) ──
-        let debugCount = 0;
+        // ── Wall positions (preferred walls first = longest walls, then all) ──
         for (const wallSet of [preferredWalls, walls]) {
           if (placed) break;
-          for (const orientRot of [0, 90]) {
-            if (placed) break;
-            const w = orientRot === 0 ? equip.width : equip.depth;
-            const d = orientRot === 0 ? equip.depth : equip.width;
+          // Only try natural wall orientation (no 90° flip) — Rule 1: consistent orientation
+          const w = equip.width;
+          const d = equip.depth;
 
-            const allWallPos: { x: number; y: number; rotation: number; score: number; wall: WallSegment }[] = [];
-            for (const wall of wallSet) {
-              if (wall.hasDoor && w > 100) continue;
-              const positions = generateWallPositions(wall, w, d, step);
-              for (const pos of positions) {
-                const finalRot = (pos.rotation + orientRot) % 360;
-                allWallPos.push({ ...pos, rotation: finalRot });
-              }
-            }
-            allWallPos.sort((a, b) => a.score - b.score);
+          const allWallPos: { x: number; y: number; rotation: number; score: number; wall: WallSegment }[] = [];
+          for (const wall of wallSet) {
+            if (wall.hasDoor && w > 100) continue;
+            const positions = generateWallPositions(wall, w, d, step);
+            allWallPos.push(...positions);
+          }
+          allWallPos.sort((a, b) => a.score - b.score);
 
-            if (allWallPos.length === 0) {
-              console.warn(`[placement] ${equip.name}: No wall positions generated for orient=${orientRot}, walls=${wallSet.length}`);
-            }
-
-            for (const pos of allWallPos) {
-              const doDebug = debugCount < 5;
-              if (doDebug) debugCount++;
-              if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, gap, bestRoom, doorZones, pillarZones, placements, doDebug)) {
-                const p = makePlacement(equip, pos.x, pos.y, pos.rotation, w, d);
-                placements.push(p);
-                result.push(p);
-                lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w, d };
-                placed = true;
-                break;
-              }
+          for (const pos of allWallPos) {
+            if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, gap, bestRoom, doorZones, pillarZones, placements)) {
+              const p = makePlacement(equip, pos.x, pos.y, pos.rotation, w, d);
+              placements.push(p);
+              result.push(p);
+              lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w, d };
+              placed = true;
+              break;
             }
           }
         }
 
-        // ── RULE 2b: Fallback — try placing back against a pillar ──
+        // ── Fallback: pillar-backed positions ──
         if (!placed) {
-          for (const orientRot of [0, 90]) {
-            if (placed) break;
-            const w = orientRot === 0 ? equip.width : equip.depth;
-            const d = orientRot === 0 ? equip.depth : equip.width;
-            const pillarPositions = generatePillarBackedPositions(pillars, w, d, step);
-            const gap2 = isSameRef ? SAME_REF_GAP : DIFFERENT_GAP;
+          const w = equip.width;
+          const d = equip.depth;
+          const pillarPositions = generatePillarBackedPositions(pillars, w, d, step);
 
-            for (const pos of pillarPositions) {
-              if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, gap2, bestRoom!, doorZones, pillarZones, placements)) {
-                const p = makePlacement(equip, pos.x, pos.y, pos.rotation, w, d);
-                placements.push(p);
-                result.push(p);
-                lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w, d };
-                placed = true;
-                break;
-              }
+          for (const pos of pillarPositions) {
+            if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, gap, bestRoom!, doorZones, pillarZones, placements)) {
+              const p = makePlacement(equip, pos.x, pos.y, pos.rotation, w, d);
+              placements.push(p);
+              result.push(p);
+              lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w, d };
+              placed = true;
+              break;
             }
           }
         }
@@ -656,7 +659,6 @@ export function autoPlaceEquipmentWithReport(
           notPlaced.push(equip);
         }
       }
-      // Update category-level tracking
       if (lastPlacement) categoryLastPlacement = lastPlacement;
     }
   }
@@ -680,27 +682,22 @@ function makePlacement(equip: GameEquipment, x: number, y: number, rotation: num
   };
 }
 
-/** Generate positions adjacent to a previous placement (side by side along the wall) */
+/** Generate positions adjacent to a previous placement (RULE 1: same rotation) */
 function generateAdjacentPositions(
   prevX: number, prevY: number, prevRot: number,
   prevW: number, prevD: number,
   curW: number, curD: number, gap: number,
 ): { x: number; y: number; rotation: number }[] {
   const positions: { x: number; y: number; rotation: number }[] = [];
-  const rotation = prevRot;
+  const rotation = prevRot; // Rule 1: enforce same orientation
   const rad = prevRot * Math.PI / 180;
-  // Along-wall direction: local +X axis = (cos(rot), sin(rot))
-  // This is perpendicular to the facing direction and runs along the wall surface
   const wallDirX = Math.cos(rad);
   const wallDirY = Math.sin(rad);
-  // Spacing: half of previous + half of current + desired gap + small epsilon
-  // The epsilon (1cm) prevents exact-touching collision detection from rejecting valid placements
   const baseSpacing = prevW / 2 + curW / 2 + gap + 1;
 
   for (const mult of [1, -1, 2, -2, 3, -3, 4, -4, 5, -5]) {
     const sign = mult > 0 ? 1 : -1;
     const index = Math.abs(mult);
-    // First step uses base spacing, subsequent steps add full curW + gap
     const dist = baseSpacing + (index - 1) * (curW + gap);
     positions.push({
       x: prevX + wallDirX * dist * sign,

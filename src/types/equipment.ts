@@ -42,6 +42,7 @@ export type PlacedEquipment = {
   depth: number;
   safetyZone: number;
   color: string;
+  centerPlacement?: boolean; // true for tables (palet, power puck) — no "front", players on short sides
 };
 
 /** Sample catalog JSON schema for import */

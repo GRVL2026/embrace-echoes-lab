@@ -257,7 +257,9 @@ function isPlacementValid(
   }
 
   // ── RULE 2 REVERSE: New equipment must not block the front of any existing equipment ──
+  // Skip for center-placement tables (they have no "front")
   for (const pe of existingPlacements) {
+    if (pe.centerPlacement) continue; // tables have no front zone
     if (isSideBySide(cx, cy, w, d, rot, pe)) continue;
 
     const existingFrontZone = getFrontClearanceZone(
@@ -414,6 +416,116 @@ function generatePillarBackedPositions(
   return positions;
 }
 
+/** Check directional gap between a center table and another equipment.
+ *  Tables have no "front" — players stand on SHORT sides (need playerClearance).
+ *  LONG sides can touch other tables (gap=0) but need CORRIDOR_WIDTH from wall equipment.
+ *  Returns true if the gap constraints are satisfied. */
+function checkCenterTableGap(
+  cx: number, cy: number, w: number, d: number, rot: number,
+  playerClearance: number,
+  pe: PlacedEquipment,
+): boolean {
+  // Determine table's axis directions
+  const rad = rot * Math.PI / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  // "width" direction (long side of table) = (cos, sin)
+  // "depth" direction (short side / player side) = (-sin, cos)
+
+  const dx = pe.position.x - cx;
+  const dy = pe.position.y - cy;
+  // Project separation onto table axes
+  const sepAlongWidth = Math.abs(dx * cos + dy * sin);   // along long side
+  const sepAlongDepth = Math.abs(dx * (-sin) + dy * cos); // along short side (player side)
+
+  const halfW = w / 2;
+  const halfD = d / 2;
+
+  // Determine the neighbor's half-dimensions along the table's axes
+  const peRad = pe.rotation * Math.PI / 180;
+  const peCos = Math.cos(peRad);
+  const peSin = Math.sin(peRad);
+  // Project neighbor's corners onto our axes to get effective half-extents
+  const peHW = (Math.abs(pe.width / 2 * peCos * cos + pe.width / 2 * peSin * sin) +
+                Math.abs(pe.depth / 2 * (-peSin) * cos + pe.depth / 2 * peCos * sin));
+  const peHD = (Math.abs(pe.width / 2 * peCos * (-sin) + pe.width / 2 * peSin * cos) +
+                Math.abs(pe.depth / 2 * (-peSin) * (-sin) + pe.depth / 2 * peCos * cos));
+
+  // Check overlap on each axis
+  const gapAlongWidth = sepAlongWidth - halfW - peHW;
+  const gapAlongDepth = sepAlongDepth - halfD - peHD;
+
+  // If separated on at least one axis, check the relevant gap
+  if (gapAlongWidth > 0 && gapAlongDepth > 0) return true; // diagonal, no issue
+
+  if (gapAlongWidth <= 0 && gapAlongDepth <= 0) {
+    // Overlapping on both axes = physical overlap (should be caught by rect overlap check)
+    return false;
+  }
+
+  if (gapAlongWidth > 0) {
+    // Separated along the WIDTH axis (= long side gap)
+    if (pe.centerPlacement) {
+      // Table-to-table on long sides: can touch (gap >= 0)
+      return gapAlongWidth >= 0;
+    } else {
+      // Table to wall equipment: need corridor
+      return gapAlongWidth >= CORRIDOR_WIDTH;
+    }
+  }
+
+  if (gapAlongDepth > 0) {
+    // Separated along the DEPTH axis (= short side / player side)
+    // Always need playerClearance on short sides
+    return gapAlongDepth >= playerClearance;
+  }
+
+  return true;
+}
+
+/** Validate a center-table placement: specific rules for tables */
+function isCenterPlacementValid(
+  cx: number, cy: number, w: number, d: number, rot: number,
+  playerClearance: number,
+  room: Room,
+  doorZones: { cx: number; cy: number; w: number; d: number; rot: number }[],
+  pillarZones: { cx: number; cy: number; w: number; d: number; rot: number }[],
+  existingPlacements: PlacedEquipment[],
+): boolean {
+  // Must be inside room
+  if (!rectInsidePolygon(cx, cy, w, d, rot, room.points)) return false;
+  // Must not overlap door exclusion zones
+  for (const dz of doorZones) {
+    if (rectsOverlap(cx, cy, w, d, rot, dz.cx, dz.cy, dz.w, dz.d, dz.rot)) return false;
+  }
+  // Must not overlap pillars
+  for (const pz of pillarZones) {
+    if (rectsOverlap(cx, cy, w + 20, d + 20, rot, pz.cx, pz.cy, pz.w, pz.d, pz.rot)) return false;
+  }
+  // Physical overlap check (no gap — just touching is OK)
+  for (const pe of existingPlacements) {
+    if (rectsOverlap(cx, cy, w, d, rot, pe.position.x, pe.position.y, pe.width, pe.depth, pe.rotation)) {
+      return false;
+    }
+  }
+  // Directional gap checks
+  for (const pe of existingPlacements) {
+    if (!checkCenterTableGap(cx, cy, w, d, rot, playerClearance, pe)) return false;
+  }
+  // Also check that existing wall equipment's front zones aren't blocked by this table
+  for (const pe of existingPlacements) {
+    if (pe.centerPlacement) continue; // tables don't have front zones
+    const existingFrontZone = getFrontClearanceZone(
+      pe.position.x, pe.position.y, pe.width, pe.depth, pe.rotation, CORRIDOR_WIDTH
+    );
+    if (rectsOverlap(existingFrontZone.cx, existingFrontZone.cy, existingFrontZone.w, existingFrontZone.d, existingFrontZone.rot,
+      cx, cy, w, d, rot)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /** Generate center island positions for equipment played from short sides (palet, power puck).
  *  Orients the table's LONGEST dimension along the room's longest axis to minimize corridor obstruction.
  *  Players stand at the short ends (depth sides) → playerClearance on those ends.
@@ -444,7 +556,6 @@ function generateCenterPlacementPositions(
     const rotation = equipWidth >= equipDepth ? 0 : 90;
     const xMargin = longestDim / 2 + playerClearance;
     const yMinMargin = shortestDim / 2 + WALL_MARGIN; // just clear the wall
-    const yMaxMargin = shortestDim / 2 + CORRIDOR_WIDTH; // corridor side needs 140cm
     const centerX = (minX + maxX) / 2;
 
     // Scan all valid Y positions — prefer closer to top wall (minY) to leave corridor below
@@ -638,8 +749,8 @@ export function autoPlaceEquipmentWithReport(
 
         let placed = false;
         for (const pos of centerPositions) {
-          // Center tables need CORRIDOR_WIDTH (140cm) gap to other equipment on long sides
-          if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, CORRIDOR_WIDTH, bestRoom, doorZones, pillarZones, placements)) {
+          // Center tables: directional gap (long sides can touch other tables, short sides need playerClearance)
+          if (isCenterPlacementValid(pos.x, pos.y, w, d, pos.rotation, playerClearance, bestRoom, doorZones, pillarZones, placements)) {
             const p = makePlacement(equip, pos.x, pos.y, pos.rotation, w, d);
             placements.push(p);
             result.push(p);
@@ -855,6 +966,7 @@ function makePlacement(equip: GameEquipment, x: number, y: number, rotation: num
     depth: d,
     safetyZone: equip.safetyZone,
     color: equip.color || "hsl(263, 85%, 68%)",
+    centerPlacement: equip.centerPlacement,
   };
 }
 

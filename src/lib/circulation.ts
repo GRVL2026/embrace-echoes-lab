@@ -373,109 +373,127 @@ function getDoorWorldPosition(door: Door, rooms: Room[]): Point | null {
   };
 }
 
-/** Get the "front" waypoint of an equipment: placed just outside the inflated obstacle zone
- *  so A* can actually reach it. The grid inflates equipment by HALF_CORRIDOR, so the waypoint
- *  must be at least depth/2 + HALF_CORRIDOR from center. We add 20cm margin for grid resolution safety. */
-function getEquipmentFrontWaypoint(eq: PlacedEquipment): Point {
-  const rad = (eq.rotation || 0) * Math.PI / 180;
-  const cos = Math.cos(rad), sin = Math.sin(rad);
-  // Front face offset must clear the inflated obstacle zone in the grid
-  const frontOffset = eq.depth / 2 + HALF_CORRIDOR + 20; // 20cm past blocked zone edge
-  return {
-    x: eq.position.x + (-sin) * frontOffset,
-    y: eq.position.y + cos * frontOffset,
-  };
-}
-
-/** Group equipment by wall (same rotation ±5° and similar front-Y or front-X).
- *  Returns groups with sweep waypoints at the extremes of each group. */
-function buildWallSweepWaypoints(equipments: PlacedEquipment[]): { id: string; point: Point }[] {
+/** 
+ * Build wall-sweep waypoints by detecting which wall each equipment is placed against.
+ * For each wall with equipment, creates waypoints at the extremes of the equipment row,
+ * positioned at a safe distance from the wall (well within the A* free zone).
+ * For center-placement (island) equipment, creates individual front waypoints.
+ */
+function buildWallSweepWaypoints(
+  equipments: PlacedEquipment[],
+  room: Room,
+): { id: string; point: Point }[] {
   if (equipments.length === 0) return [];
 
-  // Group by rotation (rounded to nearest 90°)
-  const rotGroups = new Map<number, PlacedEquipment[]>();
+  const pts = room.points;
+  const edgeCount = room.isClosed ? pts.length : pts.length - 1;
+
+  // For each equipment, find which wall edge it's closest to (back side)
+  type WallGroup = { edgeIdx: number; equipment: PlacedEquipment[] };
+  const wallGroups = new Map<number, WallGroup>();
+
   for (const eq of equipments) {
-    const normRot = Math.round(eq.rotation / 90) * 90 % 360;
-    if (!rotGroups.has(normRot)) rotGroups.set(normRot, []);
-    rotGroups.get(normRot)!.push(eq);
+    if (eq.centerPlacement) continue; // islands handled separately
+
+    // Find nearest wall edge
+    let bestEdge = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < edgeCount; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      const dist = ptSegDist(eq.position.x, eq.position.y, a.x, a.y, b.x, b.y);
+      if (dist < bestDist) { bestDist = dist; bestEdge = i; }
+    }
+
+    if (!wallGroups.has(bestEdge)) {
+      wallGroups.set(bestEdge, { edgeIdx: bestEdge, equipment: [] });
+    }
+    wallGroups.get(bestEdge)!.equipment.push(eq);
   }
 
   const waypoints: { id: string; point: Point }[] = [];
 
-  for (const [rot, group] of rotGroups) {
-    if (group.length <= 2) {
-      // Small group: individual waypoints
-      for (const eq of group) {
-        waypoints.push({ id: eq.id, point: getEquipmentFrontWaypoint(eq) });
-      }
-      continue;
+  // For each wall with equipment, create sweep waypoints
+  for (const [edgeIdx, group] of wallGroups) {
+    const a = pts[edgeIdx], b = pts[(edgeIdx + 1) % pts.length];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const wallLen = Math.sqrt(dx * dx + dy * dy);
+    if (wallLen === 0) continue;
+
+    // Wall unit vector and inward normal
+    const ux = dx / wallLen, uy = dy / wallLen;
+    // Determine which normal points inward
+    let nx = -uy, ny = ux;
+    const testPt = { x: (a.x + b.x) / 2 + nx * 50, y: (a.y + b.y) / 2 + ny * 50 };
+    if (!pointInPolygon(testPt, pts)) {
+      nx = -nx; ny = -ny;
     }
 
-    // For larger groups on the same wall, sub-group by front-line position
-    // Equipment on the same wall share the same "front distance" from wall
-    const rad = rot * Math.PI / 180;
+    // Waypoint distance from wall: must clear wall blocked zone + equipment inflated zone
+    // Wall blocks HALF_CORRIDOR, equipment depth varies, inflated by HALF_CORRIDOR
+    // Safe distance: max equipment depth + CORRIDOR_WIDTH + 30cm margin
+    const maxDepth = Math.max(...group.equipment.map(eq => Math.max(eq.depth, eq.width)));
+    const waypointDistFromWall = maxDepth + CORRIDOR_WIDTH + 30;
+
+    // Project each equipment onto wall axis to get position along wall
+    const projections = group.equipment.map(eq => {
+      const px = eq.position.x - a.x, py = eq.position.y - a.y;
+      const along = px * ux + py * uy; // position along wall
+      return { eq, along };
+    });
+    projections.sort((a, b) => a.along - b.along);
+
+    // Create waypoints at extremes (and middle for large groups)
+    const makeWaypoint = (along: number): Point => {
+      // Clamp along to stay within wall bounds with margin
+      const clamped = Math.max(HALF_CORRIDOR + 30, Math.min(wallLen - HALF_CORRIDOR - 30, along));
+      return {
+        x: a.x + ux * clamped + nx * waypointDistFromWall,
+        y: a.y + uy * clamped + ny * waypointDistFromWall,
+      };
+    };
+
+    const leftProj = projections[0];
+    const rightProj = projections[projections.length - 1];
+
+    // Left extreme waypoint
+    const leftWp = makeWaypoint(leftProj.along);
+    waypoints.push({ id: leftProj.eq.id, point: leftWp });
+
+    // Right extreme waypoint (if different from left)
+    if (projections.length > 1) {
+      const rightWp = makeWaypoint(rightProj.along);
+      waypoints.push({ id: rightProj.eq.id, point: rightWp });
+    }
+
+    // Middle waypoint for large groups
+    if (projections.length > 4) {
+      const midProj = projections[Math.floor(projections.length / 2)];
+      waypoints.push({ id: midProj.eq.id, point: makeWaypoint(midProj.along) });
+    }
+
+    // Map remaining equipment to nearest extreme (for unreachable tracking)
+    for (const proj of projections) {
+      if (proj.eq.id === leftProj.eq.id || proj.eq.id === rightProj.eq.id) continue;
+      if (projections.length > 4 && proj.eq === projections[Math.floor(projections.length / 2)].eq) continue;
+      const nearestPoint = Math.abs(proj.along - leftProj.along) < Math.abs(proj.along - rightProj.along) 
+        ? leftWp : makeWaypoint(rightProj.along);
+      waypoints.push({ id: proj.eq.id, point: nearestPoint });
+    }
+  }
+
+  // Handle center-placement (island) equipment with individual waypoints
+  for (const eq of equipments) {
+    if (!eq.centerPlacement) continue;
+    const rad = (eq.rotation || 0) * Math.PI / 180;
     const cos = Math.cos(rad), sin = Math.sin(rad);
-
-    // Front direction: (-sin, cos) — perpendicular to width axis
-    // "Front line" coordinate = projection onto front direction
-    const frontLineCoord = (eq: PlacedEquipment) => {
-      return eq.position.x * (-sin) + eq.position.y * cos;
-    };
-    // "Along wall" coordinate = projection onto width axis
-    const wallCoord = (eq: PlacedEquipment) => {
-      return eq.position.x * cos + eq.position.y * sin;
-    };
-
-    // Sub-group by similar front-line coordinate (within 50cm = same wall depth)
-    const subGroups: PlacedEquipment[][] = [];
-    const sorted = [...group].sort((a, b) => frontLineCoord(a) - frontLineCoord(b));
-    let currentSubGroup: PlacedEquipment[] = [sorted[0]];
-    for (let i = 1; i < sorted.length; i++) {
-      if (Math.abs(frontLineCoord(sorted[i]) - frontLineCoord(currentSubGroup[0])) < 50) {
-        currentSubGroup.push(sorted[i]);
-      } else {
-        subGroups.push(currentSubGroup);
-        currentSubGroup = [sorted[i]];
-      }
-    }
-    subGroups.push(currentSubGroup);
-
-    for (const subGroup of subGroups) {
-      if (subGroup.length <= 2) {
-        for (const eq of subGroup) {
-          waypoints.push({ id: eq.id, point: getEquipmentFrontWaypoint(eq) });
-        }
-        continue;
-      }
-
-      // Same wall group with 3+ equipment: create sweep waypoints
-      // Sort by position along the wall
-      subGroup.sort((a, b) => wallCoord(a) - wallCoord(b));
-
-      const leftmost = subGroup[0];
-      const rightmost = subGroup[subGroup.length - 1];
-      const middle = subGroup[Math.floor(subGroup.length / 2)];
-
-      // Create waypoints at left extreme, middle, and right extreme
-      // This forces the corridor to sweep the full length
-      waypoints.push({ id: leftmost.id, point: getEquipmentFrontWaypoint(leftmost) });
-      if (subGroup.length > 3) {
-        waypoints.push({ id: middle.id, point: getEquipmentFrontWaypoint(middle) });
-      }
-      waypoints.push({ id: rightmost.id, point: getEquipmentFrontWaypoint(rightmost) });
-
-      // Mark remaining equipment as "covered" by sweep (use leftmost's waypoint as reference)
-      // They don't need individual waypoints since the sweep passes in front of all of them
-      for (const eq of subGroup) {
-        if (eq !== leftmost && eq !== rightmost && eq !== middle) {
-          // Still add to waypoints list so unreachable tracking works, but use nearest extreme
-          const leftDist = Math.abs(wallCoord(eq) - wallCoord(leftmost));
-          const rightDist = Math.abs(wallCoord(eq) - wallCoord(rightmost));
-          const nearest = leftDist < rightDist ? leftmost : rightmost;
-          waypoints.push({ id: eq.id, point: getEquipmentFrontWaypoint(nearest) });
-        }
-      }
-    }
+    const frontOffset = eq.depth / 2 + HALF_CORRIDOR + 20;
+    waypoints.push({
+      id: eq.id,
+      point: {
+        x: eq.position.x + (-sin) * frontOffset,
+        y: eq.position.y + cos * frontOffset,
+      },
+    });
   }
 
   return waypoints;

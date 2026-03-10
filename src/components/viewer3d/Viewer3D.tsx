@@ -5,6 +5,7 @@ import { Room3D } from "./Room3D";
 import { Equipment3D } from "./Equipment3D";
 import { ArcadeLighting } from "./ArcadeLighting";
 import { Pillar3D } from "./Pillar3D";
+import { Door3D } from "./Door3D";
 
 export function Viewer3D() {
   const { state } = useEditor();
@@ -44,6 +45,11 @@ export function Viewer3D() {
         {/* Pillars */}
         {state.pillars.map((pillar) => (
           <Pillar3D key={pillar.id} pillar={pillar} />
+        ))}
+
+        {/* Doors */}
+        {state.doors.map((door) => (
+          <Door3D key={door.id} door={door} rooms={state.rooms} />
         ))}
 
         {/* Equipment */}

@@ -579,7 +579,7 @@ function generateCenterPlacementPositions(
     // Room is taller (Y axis is long): orient table's longest dimension along Y
     const rotation = equipDepth >= equipWidth ? 0 : 90;
     const yMargin = longestDim / 2 + playerClearance;
-    const xMinMargin = shortestDim / 2 + WALL_MARGIN;
+    const xMinMargin = shortestDim / 2 + CORRIDOR_WIDTH; // must leave 1.40m for corridor
     const centerY = (minY + maxY) / 2;
 
     for (let x = minX + xMinMargin; x <= maxX - xMinMargin; x += step) {

@@ -2382,7 +2382,7 @@ function drawCirculationPath(
 
   for (let ci = 0; ci < chains.length; ci++) {
     let chain = deduplicateChain(chains[ci], 8);
-    chain = visualSmooth(chain, 5); // many iterations for very smooth curves
+    chain = visualSmooth(chain, 1); // 1 iteration: slight corner rounding without blob effect
     chain = deduplicateChain(chain, 3);
     if (chain.length < 2) continue;
 

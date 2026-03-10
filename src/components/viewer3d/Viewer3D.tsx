@@ -6,6 +6,7 @@ import { Room3D } from "./Room3D";
 import { Equipment3D } from "./Equipment3D";
 import { ArcadeLighting } from "./ArcadeLighting";
 import { Pillar3D } from "./Pillar3D";
+import { Circulation3D } from "./Circulation3D";
 import { Door3D } from "./Door3D";
 import * as THREE from "three";
 import type { Viewer3DSettings, PresetView, LightingPreset } from "./Viewer3DToolbar";

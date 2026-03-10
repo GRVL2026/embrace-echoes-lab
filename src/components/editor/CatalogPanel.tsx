@@ -782,93 +782,18 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
             </div>
           )}
 
-          {/* Catalog list */}
-          <ScrollArea className="max-h-[300px]">
-            <div className="p-2 space-y-3">
-              {Object.entries(categories).map(([cat, items]) => (
-                <div key={cat}>
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1 px-1">
-                    {cat}
-                  </p>
-                  <div className="space-y-1">
-                    {items.map((eq) => {
-                      const quantity = selectedQuantities.get(eq.id) || 0;
-                      const isSelected = quantity > 0;
-                      const isNotPlaced = notPlacedIds.has(eq.id);
-                      return (
-                        <div
-                          key={eq.id}
-                          className={`w-full rounded-md border p-2 text-left transition-all text-xs cursor-pointer overflow-hidden ${
-                            isNotPlaced
-                              ? "border-destructive bg-destructive/10"
-                              : isSelected
-                              ? "border-primary bg-primary/10"
-                              : "border-border bg-surface hover:border-primary/30"
-                          }`}
-                          onClick={() => handleViewProduct(eq)}
-                        >
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            {eq.images && eq.images[0] ? (
-                              <img 
-                                src={eq.images[0]} 
-                                alt={eq.name}
-                                className="w-7 h-7 rounded object-contain bg-muted/30 shrink-0"
-                              />
-                            ) : eq.icon ? (
-                              <span className="text-sm shrink-0">{eq.icon}</span>
-                            ) : null}
-                            <span className="font-medium text-foreground truncate min-w-0 flex-1 text-[11px]">
-                              {eq.name}
-                            </span>
-                            {/* Quantity controls */}
-                            <div className="flex items-center gap-0.5 shrink-0 ml-auto" onClick={(e) => e.stopPropagation()}>
-                              {isSelected && (
-                                <button
-                                  className="h-5 w-5 rounded border border-muted-foreground/30 flex items-center justify-center hover:border-primary hover:bg-primary/10 transition-colors"
-                                  onClick={(e) => decrementQuantity(eq.id, e)}
-                                >
-                                  <Minus className="h-2.5 w-2.5" />
-                                </button>
-                              )}
-                              {isSelected && (
-                                <span className="w-4 text-center font-medium text-primary text-[10px]">
-                                  {quantity}
-                                </span>
-                              )}
-                              <button
-                                className={`h-5 w-5 rounded border flex items-center justify-center transition-colors ${
-                                  isSelected 
-                                    ? "border-primary bg-primary/20 text-primary hover:bg-primary hover:text-primary-foreground" 
-                                    : "border-muted-foreground/30 hover:border-primary hover:bg-primary/10"
-                                }`}
-                                onClick={(e) => incrementQuantity(eq.id, e)}
-                              >
-                                <Plus className="h-2.5 w-2.5" />
-                              </button>
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap gap-x-1.5 gap-y-0 mt-1 text-[10px] text-muted-foreground">
-                            <span>{eq.width}×{eq.depth}cm</span>
-                            <span>·</span>
-                            <span>h{eq.height}cm</span>
-                            {eq.price && eq.price > 0 && (
-                              <>
-                                <span>·</span>
-                                <span className="text-primary font-medium">{eq.price.toLocaleString("fr-FR")}€</span>
-                              </>
-                            )}
-                            {eq.pmrAccessible && (
-                              <Badge variant="outline" className="text-[8px] h-3.5 px-1">PMR</Badge>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
+          {/* Catalog list only shown in expanded dialog */}
+          <div className="p-3 text-center">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={() => setExpandedView(true)}
+            >
+              <Maximize2 className="h-3 w-3" />
+              Voir le catalogue ({catalog.length} jeux)
+            </Button>
+          </div>
         </>
       )}
 

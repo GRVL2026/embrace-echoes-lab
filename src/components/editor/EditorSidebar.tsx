@@ -500,48 +500,8 @@ export function EditorSidebar() {
         </SidebarSection>
       </ScrollArea>
 
-      {/* Placed equipment list */}
-      {state.placedEquipments.length > 0 && (
-        <div className="border-t border-border">
-          <div className="flex items-center gap-2 p-3 border-b border-border">
-            <span className="font-display text-sm font-bold text-foreground">Jeux placés</span>
-            <span className="ml-auto rounded-full bg-primary/20 text-primary text-[10px] font-semibold px-1.5 py-0.5 min-w-[18px] text-center">
-              {state.placedEquipments.length}
-            </span>
-          </div>
-          <ScrollArea className="max-h-48">
-            <div className="p-2 space-y-1">
-              {state.placedEquipments.map((eq) => (
-                <div
-                  key={eq.id}
-                  className="flex items-center justify-between rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs hover:border-primary/40 transition-colors"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div
-                      className="h-2.5 w-2.5 rounded-full shrink-0"
-                      style={{ backgroundColor: eq.color }}
-                    />
-                    <span className="text-foreground truncate">{eq.name}</span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 shrink-0 text-destructive/60 hover:text-destructive"
-                    onClick={() => dispatch({ type: "DELETE_PLACED_EQUIPMENT", id: eq.id })}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
-        </div>
-      )}
-
-      {/* Catalog panel (hidden from sidebar, kept for placement logic) */}
-      <div className="hidden">
-        <CatalogPanel catalog={catalog} setCatalog={setCatalog} />
-      </div>
+      {/* Catalog panel */}
+      <CatalogPanel catalog={catalog} setCatalog={setCatalog} />
     </div>
   );
 }

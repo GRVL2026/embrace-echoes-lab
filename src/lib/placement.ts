@@ -4,8 +4,8 @@ import { DOOR_EXCLUSION_DEPTH } from "@/types/equipment";
 
 // Corridor width for accessibility
 const CORRIDOR_WIDTH = 140; // 1.4m
-// Gap between same-reference equipment (touching)
-const SAME_REF_GAP = 0; // 0cm — collés
+// Gap between same-reference equipment (touching but safe from overlap)
+const SAME_REF_GAP = 2; // 2cm — prevents floating-point SAT overlaps
 // Gap between different equipment
 const DIFFERENT_GAP = 10; // 10cm
 // Margin from wall (back of equipment to wall)
@@ -14,6 +14,8 @@ const WALL_MARGIN = 5; // 5cm
 const CORRIDOR_FRONT_GAP = 2; // 2cm
 // Minimum face-to-face distance (Rule 4: 1 corridor width)
 const MIN_FACE_TO_FACE = CORRIDOR_WIDTH; // 1.40m
+// Minimum gap enforced in overlap checks to prevent floating-point collisions
+const MIN_OVERLAP_GAP = 2; // 2cm
 
 /** Check if a point is inside a polygon (ray-casting) */
 function pointInPolygon(p: Point, polygon: Point[]): boolean {
@@ -194,9 +196,9 @@ function isSideBySide(
   cx: number, cy: number, w: number, d: number, rot: number,
   pe: PlacedEquipment,
 ): boolean {
-  // Must share same rotation (tolerance 5°)
+  // Must share same rotation (tolerance 3°)
   const rotDiff = Math.abs(((rot - pe.rotation) % 360 + 360) % 360);
-  if (rotDiff > 5 && rotDiff < 355) return false;
+  if (rotDiff > 3 && rotDiff < 357) return false;
 
   // Project the vector between centers onto the front direction
   const front = getFrontDirection(rot);
@@ -207,7 +209,8 @@ function isSideBySide(
   const lateralOffset = Math.abs(dx * (-front.y) + dy * front.x);
 
   // Side-by-side: mostly lateral separation, minimal depth separation
-  const maxDepthTolerance = (d / 2 + pe.depth / 2) * 0.3; // allow small depth misalignment
+  // Strict: depth tolerance is only 15% of combined half-depths (was 30% — caused false positives)
+  const maxDepthTolerance = (d / 2 + pe.depth / 2) * 0.15;
   const minLateralOverlap = 1; // at least 1cm apart laterally
   return depthOffset <= maxDepthTolerance && lateralOffset >= minLateralOverlap;
 }
@@ -241,8 +244,10 @@ function isPlacementValid(
     }
   }
   // Must not overlap other equipment (with gap — only expand ONE rect to avoid doubling)
+  // Enforce minimum gap to prevent floating-point SAT overlaps
+  const effectiveGap = Math.max(gap, MIN_OVERLAP_GAP);
   for (const pe of existingPlacements) {
-    if (rectsOverlap(cx, cy, w + gap, d + gap, rot, pe.position.x, pe.position.y, pe.width, pe.depth, pe.rotation)) {
+    if (rectsOverlap(cx, cy, w + effectiveGap, d + effectiveGap, rot, pe.position.x, pe.position.y, pe.width, pe.depth, pe.rotation)) {
       if (debug) console.log(`[placement] EQUIP overlap with ${pe.name} at (${cx.toFixed(0)},${cy.toFixed(0)})`);
       return false;
     }
@@ -535,9 +540,9 @@ function isCenterPlacementValid(
   for (const pz of pillarZones) {
     if (rectsOverlap(cx, cy, w + 20, d + 20, rot, pz.cx, pz.cy, pz.w, pz.d, pz.rot)) return false;
   }
-  // Physical overlap check (no gap — just touching is OK)
+  // Physical overlap check — enforce minimum gap to prevent floating-point overlaps
   for (const pe of existingPlacements) {
-    if (rectsOverlap(cx, cy, w, d, rot, pe.position.x, pe.position.y, pe.width, pe.depth, pe.rotation)) {
+    if (rectsOverlap(cx, cy, w + MIN_OVERLAP_GAP, d + MIN_OVERLAP_GAP, rot, pe.position.x, pe.position.y, pe.width, pe.depth, pe.rotation)) {
       return false;
     }
   }
@@ -880,8 +885,8 @@ export function autoPlaceEquipmentWithReport(
                 const dist = Math.hypot(pos.x - categoryLastPlacement.x, pos.y - categoryLastPlacement.y);
                 // Strong proximity bonus: heavily penalize distance from category group
                 // Also strongly penalize being on a different wall than the category
-                const wallMismatch = (wall.edgeIndex !== categoryLastPlacement.wallEdgeIndex) ? 500 : 0;
-                proximityBonus = dist * 2 + wallMismatch;
+                const wallMismatch = (wall.edgeIndex !== categoryLastPlacement.wallEdgeIndex) ? 2000 : 0;
+                proximityBonus = dist * 3 + wallMismatch;
               }
               allWallPos.push({
                 x: pos.x, y: pos.y, rotation: pos.rotation,

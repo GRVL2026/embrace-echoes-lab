@@ -570,8 +570,8 @@ export function autoPlaceEquipmentWithReport(
     for (const group of sortedGroups) {
       const equip = group.equip;
       const count = group.count;
-      // Each reference group starts fresh — don't inherit from previous reference
-      let lastPlacement: typeof categoryLastPlacement = null;
+      // Inherit from previous group in the same category to stay adjacent
+      let lastPlacement: typeof categoryLastPlacement = categoryLastPlacement ?? null;
 
       for (let i = 0; i < count; i++) {
         let placed = false;

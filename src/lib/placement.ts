@@ -855,6 +855,7 @@ function makePlacement(equip: GameEquipment, x: number, y: number, rotation: num
     depth: d,
     safetyZone: equip.safetyZone,
     color: equip.color || "hsl(263, 85%, 68%)",
+    centerPlacement: equip.centerPlacement,
   };
 }
 

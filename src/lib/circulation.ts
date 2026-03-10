@@ -502,24 +502,28 @@ function buildWallSweepWaypoints(
   return waypoints;
 }
 
-/** Order waypoints using nearest-neighbor heuristic for shortest tour */
-function orderWaypoints(start: Point, waypoints: Point[]): Point[] {
+/** Order waypoints along the room perimeter to create a smooth loop.
+ *  Uses angle from room center, starting from the door's angle and going clockwise. */
+function orderWaypointsPerimeter(start: Point, waypoints: { id: string; point: Point }[], roomCenter: Point): { id: string; point: Point }[] {
   if (waypoints.length <= 1) return [...waypoints];
-  const remaining = [...waypoints];
-  const ordered: Point[] = [];
-  let current = start;
-  while (remaining.length > 0) {
-    let bestIdx = 0;
-    let bestDist = Infinity;
-    for (let i = 0; i < remaining.length; i++) {
-      const d = (remaining[i].x - current.x) ** 2 + (remaining[i].y - current.y) ** 2;
-      if (d < bestDist) { bestDist = d; bestIdx = i; }
-    }
-    ordered.push(remaining[bestIdx]);
-    current = remaining[bestIdx];
-    remaining.splice(bestIdx, 1);
-  }
-  return ordered;
+
+  // Compute angle of start (door) relative to room center
+  const startAngle = Math.atan2(start.y - roomCenter.y, start.x - roomCenter.x);
+
+  // For each waypoint, compute its angle relative to room center
+  // Normalize angles relative to startAngle so we go clockwise from the door
+  const withAngles = waypoints.map(wp => {
+    const angle = Math.atan2(wp.point.y - roomCenter.y, wp.point.x - roomCenter.x);
+    // Normalize to [0, 2π) relative to start angle (clockwise)
+    let relAngle = angle - startAngle;
+    if (relAngle < 0) relAngle += Math.PI * 2;
+    return { ...wp, relAngle };
+  });
+
+  // Sort by angle (clockwise from door)
+  withAngles.sort((a, b) => a.relAngle - b.relAngle);
+
+  return withAngles;
 }
 
 /**
@@ -638,15 +642,17 @@ export function computeCirculation(
       }
     }
 
-    // Order waypoints nearest-neighbor starting from the main door
-    const orderedPoints = orderWaypoints(startPos, uniqueWaypoints.map(w => w.point));
-    const orderedWithIds = orderedPoints.map(p => {
-      const wp = uniqueWaypoints.find(w => w.point.x === p.x && w.point.y === p.y)!;
-      return wp;
-    });
+    // Compute room center for perimeter ordering
+    const roomPts = bestRoom!.points;
+    const roomCenter: Point = {
+      x: roomPts.reduce((s, p) => s + p.x, 0) / roomPts.length,
+      y: roomPts.reduce((s, p) => s + p.y, 0) / roomPts.length,
+    };
 
-    // Build path: door → wp1 → wp2 → ... → wpN (aller simple, pas de boucle retour)
-    // Le corridor est conçu comme un chemin aller-retour sur le même tracé
+    // Order waypoints along the perimeter (clockwise loop from door)
+    const orderedWithIds = orderWaypointsPerimeter(startPos, uniqueWaypoints, roomCenter);
+
+    // Build path: door → wp1 → wp2 → ... → wpN → door (loop)
     let currentPos = startPos;
     for (const wp of orderedWithIds) {
       const ok = buildPath(currentPos, wp.point);
@@ -657,6 +663,11 @@ export function computeCirculation(
       }
     }
 
+    // Close the loop: return to door for a clean circuit
+    if (mainDoor && orderedWithIds.length > 0) {
+      buildPath(currentPos, startPos);
+    }
+
     // Map back: any equipment whose waypoint was unreachable
     const coveredIds = new Set(waypoints.filter(w => !unreachableIds.includes(w.id)).map(w => w.id));
     for (const eq of equipments) {
@@ -664,8 +675,6 @@ export function computeCirculation(
         unreachableIds.push(eq.id);
       }
     }
-
-    // Pas de boucle retour — le visiteur emprunte le même corridor en sens inverse
   } else if (roomDoors.length === 0) {
     // No doors, no equipment — nothing to show
   }

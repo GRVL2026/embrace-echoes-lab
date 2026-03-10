@@ -33,9 +33,16 @@ function SpacePlannerInner() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background">
-      {/* Left toolbar */}
+      {/* Left toolbar - switches based on view mode */}
       <div className="flex flex-col items-center justify-center p-2">
-        <EditorToolbar />
+        {viewMode === "2d" ? (
+          <EditorToolbar />
+        ) : (
+          <Viewer3DToolbar
+            settings={viewer3DSettings}
+            onChange={setViewer3DSettings}
+          />
+        )}
       </div>
 
       {/* Canvas area */}

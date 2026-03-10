@@ -97,6 +97,12 @@ function ptSegDist(px: number, py: number, ax: number, ay: number, bx: number, b
   return Math.sqrt((px - (ax + t * dx)) ** 2 + (py - (ay + t * dy)) ** 2);
 }
 
+/** Compute centroid of a set of points */
+function getCentroid(points: { x: number; y: number }[]): { x: number; y: number } | null {
+  if (points.length === 0) return null;
+  const sum = points.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+  return { x: sum.x / points.length, y: sum.y / points.length };
+}
 
 /** Get door exclusion zone as a rectangle in world coords */
 function getDoorExclusionZones(rooms: Room[], doors: Door[]): { cx: number; cy: number; w: number; d: number; rot: number }[] {

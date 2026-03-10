@@ -744,13 +744,19 @@ function generateAdjacentPositions(
   // 1cm gap between same-ref items to prevent SAT false positive
   const baseSpacing = prevW / 2 + curW / 2 + Math.max(gap, 1);
 
+  // Depth correction: align back-to-wall when equipment depths differ
+  const front = getFrontDirection(prevRot);
+  const depthCorrection = (curD - prevD) / 2; // negative = move toward wall (shallower)
+  const corrX = front.x * depthCorrection;
+  const corrY = front.y * depthCorrection;
+
   for (const mult of [1, -1, 2, -2, 3, -3, 4, -4, 5, -5]) {
     const sign = mult > 0 ? 1 : -1;
     const index = Math.abs(mult);
     const dist = baseSpacing + (index - 1) * (curW + gap);
     positions.push({
-      x: prevX + wallDirX * dist * sign,
-      y: prevY + wallDirY * dist * sign,
+      x: prevX + wallDirX * dist * sign + corrX,
+      y: prevY + wallDirY * dist * sign + corrY,
       rotation,
     });
   }

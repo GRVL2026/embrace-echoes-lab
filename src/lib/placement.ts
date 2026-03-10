@@ -900,6 +900,13 @@ export function autoPlaceEquipmentWithReport(
           const d = equip.depth;
           const gap = SAME_REF_GAP;
 
+          // Check if two walls are adjacent (share a vertex)
+          const isAdjacentWall = (edgeA: number, edgeB: number): boolean => {
+            if (edgeA === edgeB) return true;
+            const totalEdges = walls.length;
+            return (edgeA + 1) % totalEdges === edgeB || (edgeB + 1) % totalEdges === edgeA;
+          };
+
           const allWallPos: { x: number; y: number; rotation: number; score: number; wallEdgeIndex: number }[] = [];
           for (const wall of wallsByLength) {
             const isVeryFirst = placements.length === 0;
@@ -910,8 +917,11 @@ export function autoPlaceEquipmentWithReport(
                 // Use centroid of ALL category placements, not just the last one
                 const centroid = getCentroid(categoryPositions)!;
                 const dist = Math.hypot(pos.x - centroid.x, pos.y - centroid.y);
-                // Massive penalty for different wall than category's primary wall
-                const wallMismatch = (categoryPrimaryWall !== undefined && wall.edgeIndex !== categoryPrimaryWall) ? 5000 : 0;
+                // Wall mismatch: low penalty for adjacent walls (corner clustering allowed), high for distant walls
+                let wallMismatch = 0;
+                if (categoryPrimaryWall !== undefined && wall.edgeIndex !== categoryPrimaryWall) {
+                  wallMismatch = isAdjacentWall(wall.edgeIndex, categoryPrimaryWall) ? 500 : 5000;
+                }
                 proximityBonus = dist * 5 + wallMismatch;
               }
               allWallPos.push({
@@ -987,12 +997,26 @@ export function autoPlaceEquipmentWithReport(
         const d = equip.depth;
         const centerPositions = generateCenterPlacementPositions(bestRoom, w, d, playerClearance, step);
 
-        // Sort by proximity to last center placement for grouping
+        // Sort by proximity to last center placement — strongly prefer same-axis alignment (side-by-side)
         if (centerLast) {
+          const lastRad = centerLast.rotation * Math.PI / 180;
+          const lastCos = Math.cos(lastRad);
+          const lastSin = Math.sin(lastRad);
           centerPositions.sort((a, b) => {
-            const distA = Math.hypot(a.x - centerLast!.x, a.y - centerLast!.y);
-            const distB = Math.hypot(b.x - centerLast!.x, b.y - centerLast!.y);
-            return distA - distB;
+            // For side-by-side: prefer positions that differ mainly along the width axis (lateral)
+            // and minimally along the depth axis
+            const dxA = a.x - centerLast!.x, dyA = a.y - centerLast!.y;
+            const dxB = b.x - centerLast!.x, dyB = b.y - centerLast!.y;
+            // Depth offset (along front/back direction) — penalize heavily
+            const depthA = Math.abs(dxA * (-lastSin) + dyA * lastCos);
+            const depthB = Math.abs(dxB * (-lastSin) + dyB * lastCos);
+            // Lateral offset (along width direction) — prefer close
+            const latA = Math.abs(dxA * lastCos + dyA * lastSin);
+            const latB = Math.abs(dxB * lastCos + dyB * lastSin);
+            // Score: heavily penalize depth misalignment, lightly penalize lateral distance
+            const scoreA = depthA * 10 + latA;
+            const scoreB = depthB * 10 + latB;
+            return scoreA - scoreB;
           });
         }
 

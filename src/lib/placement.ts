@@ -4,8 +4,8 @@ import { DOOR_EXCLUSION_DEPTH } from "@/types/equipment";
 
 // Corridor width for accessibility
 const CORRIDOR_WIDTH = 140; // 1.4m
-// Gap between same-reference equipment (touching)
-const SAME_REF_GAP = 0; // 0cm — collés
+// Gap between same-reference equipment (touching but safe from overlap)
+const SAME_REF_GAP = 2; // 2cm — prevents floating-point SAT overlaps
 // Gap between different equipment
 const DIFFERENT_GAP = 10; // 10cm
 // Margin from wall (back of equipment to wall)
@@ -14,6 +14,8 @@ const WALL_MARGIN = 5; // 5cm
 const CORRIDOR_FRONT_GAP = 2; // 2cm
 // Minimum face-to-face distance (Rule 4: 1 corridor width)
 const MIN_FACE_TO_FACE = CORRIDOR_WIDTH; // 1.40m
+// Minimum gap enforced in overlap checks to prevent floating-point collisions
+const MIN_OVERLAP_GAP = 2; // 2cm
 
 /** Check if a point is inside a polygon (ray-casting) */
 function pointInPolygon(p: Point, polygon: Point[]): boolean {

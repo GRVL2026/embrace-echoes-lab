@@ -69,22 +69,23 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true }: Prop
   return (
     <group>
       {/* Floor */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-        <shapeGeometry args={[floorShape]} />
-        <meshStandardMaterial
-          color="#e8e8e8"
-          roughness={0.5}
-          metalness={0.05}
-          {...{} as any}
-        />
-      </mesh>
+      {showFloor && (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+          <shapeGeometry args={[floorShape]} />
+          <meshStandardMaterial
+            color="#e8e8e8"
+            roughness={0.5}
+            metalness={0.05}
+            {...{} as any}
+          />
+        </mesh>
+      )}
 
       {/* Walls */}
-      {wallMeshes.map((wall, wi) =>
+      {showWalls && wallMeshes.map((wall, wi) =>
         wall.segments.map((seg, si) => {
           const segLength = seg.end - seg.start;
           const segCenter = (seg.start + seg.end) / 2;
-          // Position along wall direction
           const cx = wall.origin.x + Math.cos(wall.angle) * segCenter;
           const cz = wall.origin.y + Math.sin(wall.angle) * segCenter;
 

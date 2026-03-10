@@ -119,7 +119,16 @@ function SpacePlannerInner() {
         </header>
 
         {/* Main view */}
-        {viewMode === "2d" ? <EditorCanvas /> : <Viewer3D />}
+        {viewMode === "2d" ? (
+          <EditorCanvas />
+        ) : (
+          <Viewer3D
+            settings={viewer3DSettings}
+            onPresetApplied={() =>
+              setViewer3DSettings((s) => ({ ...s, presetView: null }))
+            }
+          />
+        )}
       </div>
 
       {/* Right sidebar */}

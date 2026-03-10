@@ -329,11 +329,12 @@ function generateWallPositions(
   equipWidth: number,
   equipDepth: number,
   step: number = 20,
+  preferCorner: boolean = false,
 ): { x: number; y: number; rotation: number; score: number; wall: WallSegment }[] {
   const positions: { x: number; y: number; rotation: number; score: number; wall: WallSegment }[] = [];
   const rotation = ((Math.atan2(-wall.normalX, wall.normalY) * 180 / Math.PI) + 360) % 360;
   const distFromWall = equipDepth / 2 + WALL_MARGIN;
-  const margin = equipWidth / 2 + 5;
+  const margin = equipWidth / 2 + WALL_MARGIN; // 5cm from perpendicular wall
   if (wall.length - margin * 2 < 0) return positions;
 
   for (let t = margin; t <= wall.length - margin; t += step) {
@@ -343,10 +344,24 @@ function generateWallPositions(
     const x = wx + wall.normalX * distFromWall;
     const y = wy + wall.normalY * distFromWall;
     const distFromEdges = Math.min(t, wall.length - t);
-    const cornerPenalty = distFromEdges < 100 ? 10 : 0;
+    // Prefer corners: give a bonus (negative score) when close to wall edges
+    const cornerBonus = preferCorner && distFromEdges < equipWidth ? -20 : 0;
     const doorPenalty = wall.hasDoor ? 50 : 0;
-    positions.push({ x, y, rotation, score: cornerPenalty + doorPenalty, wall });
+    positions.push({ x, y, rotation, score: cornerBonus + doorPenalty, wall });
   }
+
+  // Always include exact corner-snapped positions (equipment edge at WALL_MARGIN from corner)
+  for (const t of [margin, wall.length - margin]) {
+    const ratio = t / wall.length;
+    const wx = wall.start.x + (wall.end.x - wall.start.x) * ratio;
+    const wy = wall.start.y + (wall.end.y - wall.start.y) * ratio;
+    const x = wx + wall.normalX * distFromWall;
+    const y = wy + wall.normalY * distFromWall;
+    const cornerBonus = preferCorner ? -30 : 0; // strong preference for corner when requested
+    const doorPenalty = wall.hasDoor ? 50 : 0;
+    positions.push({ x, y, rotation, score: cornerBonus + doorPenalty, wall });
+  }
+
   return positions;
 }
 
@@ -636,7 +651,9 @@ export function autoPlaceEquipmentWithReport(
           const allWallPos: { x: number; y: number; rotation: number; score: number; wallEdgeIndex: number }[] = [];
           for (const wall of wallsByLength) {
             if (wall.hasDoor && w > 100) continue;
-            const positions = generateWallPositions(wall, w, d, step);
+            // First item of a group: prefer corner positions to maximize wall usage
+            const isFirstOfGroup = !lastPlacement && !categoryLastPlacement;
+            const positions = generateWallPositions(wall, w, d, step, isFirstOfGroup);
             for (const pos of positions) {
               // Bonus: if category already has a wall, prefer positions close to existing category placements
               let proximityBonus = 0;

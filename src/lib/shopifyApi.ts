@@ -83,6 +83,10 @@ function shopifyProductToEquipment(product: ShopifyAdminProduct): GameEquipment 
   const price = parseFloat(product.price);
   const category = product.productType || "autre";
 
+  // Detect center-placement games (played from short sides, placed as island)
+  const titleLower = product.title.toLowerCase();
+  const isCenterPlacement = /\bpalet\b/.test(titleLower) || /\bpower\s*puck\b/.test(titleLower);
+
   // Extract specs from metafields
   const findMeta = (keyword: string) => {
     for (const [key, value] of Object.entries(product.metafields)) {

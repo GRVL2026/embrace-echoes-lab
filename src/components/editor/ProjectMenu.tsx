@@ -191,6 +191,11 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
             <FolderOpen className="h-4 w-4" />
             Ouvrir un projet
           </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={handleExportDossier} disabled={isExporting} className="gap-2">
+            {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+            Dossier banque (PDF)
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 

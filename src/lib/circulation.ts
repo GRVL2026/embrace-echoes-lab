@@ -502,24 +502,28 @@ function buildWallSweepWaypoints(
   return waypoints;
 }
 
-/** Order waypoints using nearest-neighbor heuristic for shortest tour */
-function orderWaypoints(start: Point, waypoints: Point[]): Point[] {
+/** Order waypoints along the room perimeter to create a smooth loop.
+ *  Uses angle from room center, starting from the door's angle and going clockwise. */
+function orderWaypointsPerimeter(start: Point, waypoints: { id: string; point: Point }[], roomCenter: Point): { id: string; point: Point }[] {
   if (waypoints.length <= 1) return [...waypoints];
-  const remaining = [...waypoints];
-  const ordered: Point[] = [];
-  let current = start;
-  while (remaining.length > 0) {
-    let bestIdx = 0;
-    let bestDist = Infinity;
-    for (let i = 0; i < remaining.length; i++) {
-      const d = (remaining[i].x - current.x) ** 2 + (remaining[i].y - current.y) ** 2;
-      if (d < bestDist) { bestDist = d; bestIdx = i; }
-    }
-    ordered.push(remaining[bestIdx]);
-    current = remaining[bestIdx];
-    remaining.splice(bestIdx, 1);
-  }
-  return ordered;
+
+  // Compute angle of start (door) relative to room center
+  const startAngle = Math.atan2(start.y - roomCenter.y, start.x - roomCenter.x);
+
+  // For each waypoint, compute its angle relative to room center
+  // Normalize angles relative to startAngle so we go clockwise from the door
+  const withAngles = waypoints.map(wp => {
+    const angle = Math.atan2(wp.point.y - roomCenter.y, wp.point.x - roomCenter.x);
+    // Normalize to [0, 2π) relative to start angle (clockwise)
+    let relAngle = angle - startAngle;
+    if (relAngle < 0) relAngle += Math.PI * 2;
+    return { ...wp, relAngle };
+  });
+
+  // Sort by angle (clockwise from door)
+  withAngles.sort((a, b) => a.relAngle - b.relAngle);
+
+  return withAngles;
 }
 
 /**

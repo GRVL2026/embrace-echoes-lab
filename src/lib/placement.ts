@@ -651,7 +651,9 @@ export function autoPlaceEquipmentWithReport(
           const allWallPos: { x: number; y: number; rotation: number; score: number; wallEdgeIndex: number }[] = [];
           for (const wall of wallsByLength) {
             if (wall.hasDoor && w > 100) continue;
-            const positions = generateWallPositions(wall, w, d, step);
+            // First item of a group: prefer corner positions to maximize wall usage
+            const isFirstOfGroup = !lastPlacement && !categoryLastPlacement;
+            const positions = generateWallPositions(wall, w, d, step, isFirstOfGroup);
             for (const pos of positions) {
               // Bonus: if category already has a wall, prefer positions close to existing category placements
               let proximityBonus = 0;

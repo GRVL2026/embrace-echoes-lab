@@ -8,6 +8,8 @@ const WALL_THICKNESS = 0.15; // meters
 type Props = {
   room: Room;
   doors: Door[];
+  showFloor?: boolean;
+  showWalls?: boolean;
 };
 
 export function Room3D({ room, doors }: Props) {

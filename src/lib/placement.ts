@@ -538,7 +538,7 @@ export function autoPlaceEquipmentWithReport(
 
   const byCategory = new Map<string, { equip: GameEquipment; count: number }[]>();
   for (const group of byEquipmentId.values()) {
-    const cat = group.equip.category || "autre";
+    const cat = (group.equip.category || "autre").toLowerCase().replace(/s$/, ""); // normalize: "Flippers" → "flipper"
     if (!byCategory.has(cat)) byCategory.set(cat, []);
     byCategory.get(cat)!.push(group);
   }

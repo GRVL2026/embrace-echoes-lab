@@ -233,6 +233,11 @@ export function Viewer3D({ settings, onPresetApplied }: Props) {
             <Equipment3D key={eq.id} equipment={eq} />
           ))}
 
+        {/* Circulation path */}
+        {vis.circulation && state.circulationPath && state.circulationPath.length > 0 && (
+          <Circulation3D segments={state.circulationPath} />
+        )}
+
         {/* Ground grid */}
         {vis.grid && (
           <Grid

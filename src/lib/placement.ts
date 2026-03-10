@@ -414,7 +414,65 @@ function generatePillarBackedPositions(
   return positions;
 }
 
-/** Generate center island positions */
+/** Generate center island positions for equipment played from short sides (palet, power puck).
+ *  Places along the room center axis with playerClearance on the short sides (width ends).
+ *  Equipment is oriented so its long axis (depth) aligns with the room's main axis. */
+function generateCenterPlacementPositions(
+  room: Room,
+  equipWidth: number,
+  equipDepth: number,
+  playerClearance: number,
+  step: number = 20,
+): { x: number; y: number; rotation: number; score: number }[] {
+  const positions: { x: number; y: number; rotation: number; score: number }[] = [];
+  const pts = room.points;
+  const minX = Math.min(...pts.map(p => p.x));
+  const maxX = Math.max(...pts.map(p => p.x));
+  const minY = Math.min(...pts.map(p => p.y));
+  const maxY = Math.max(...pts.map(p => p.y));
+  const roomWidth = maxX - minX;
+  const roomHeight = maxY - minY;
+  const isWide = roomWidth >= roomHeight;
+
+  // Place equipment in the center band of the room
+  // Long axis (depth) aligned with the room's longer dimension
+  // Short sides (width) need playerClearance
+  if (isWide) {
+    // Room is wider: equipment depth along X, width along Y
+    // Players stand at left/right ends (X axis) → need playerClearance on X ends
+    const centerY = (minY + maxY) / 2;
+    // Scan Y positions around center
+    const yMargin = equipWidth / 2 + WALL_MARGIN;
+    const xMargin = equipDepth / 2 + playerClearance; // clearance for players on short sides
+    for (let y = minY + yMargin; y <= maxY - yMargin; y += step) {
+      for (let x = minX + xMargin; x <= maxX - xMargin; x += step) {
+        // Rotation 90 or 270: depth along X axis, width along Y axis
+        const distFromCenter = Math.abs(y - centerY);
+        const score = 50 + distFromCenter / 10; // prefer center of room
+        positions.push({ x, y, rotation: 90, score });
+      }
+    }
+  } else {
+    // Room is taller: equipment depth along Y, width along X
+    // Players stand at top/bottom ends (Y axis) → need playerClearance on Y ends
+    const centerX = (minX + maxX) / 2;
+    const xMargin = equipWidth / 2 + WALL_MARGIN;
+    const yMargin = equipDepth / 2 + playerClearance;
+    for (let x = minX + xMargin; x <= maxX - xMargin; x += step) {
+      for (let y = minY + yMargin; y <= maxY - yMargin; y += step) {
+        const distFromCenter = Math.abs(x - centerX);
+        const score = 50 + distFromCenter / 10;
+        positions.push({ x, y, rotation: 0, score });
+      }
+    }
+  }
+
+  // Sort by score (center-preferred)
+  positions.sort((a, b) => a.score - b.score);
+  return positions;
+}
+
+
 function generateIslandPositions(
   room: Room,
   equipWidth: number,

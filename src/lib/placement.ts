@@ -553,25 +553,24 @@ export function autoPlaceEquipmentWithReport(
 
   const step = 5; // 5cm precision — no grid snapping
 
-  // Track which wall each category started on, so different refs in the same category
-  // try to stay on the same wall
+  // Global last placement tracker — persists across ALL categories
+  // so equipment continues sequentially along walls without resetting
+  let globalLastPlacement: {
+    x: number; y: number; rotation: number; w: number; d: number;
+    wallEdgeIndex?: number;
+  } | null = null;
+
   for (const [category, equipmentGroups] of sortedCategories) {
     // Sort equipment groups by area (largest first)
     const sortedGroups = [...equipmentGroups].sort((a, b) =>
       (b.equip.width * b.equip.depth * b.count) - (a.equip.width * a.equip.depth * a.count)
     );
 
-    // Track last placement and its wall for the whole category
-    let categoryLastPlacement: {
-      x: number; y: number; rotation: number; w: number; d: number;
-      wallEdgeIndex?: number;
-    } | null = null;
-
     for (const group of sortedGroups) {
       const equip = group.equip;
       const count = group.count;
-      // Inherit from previous group in the same category to stay adjacent
-      let lastPlacement: typeof categoryLastPlacement = categoryLastPlacement ?? null;
+      // Inherit global last placement to continue sequentially along walls
+      let lastPlacement = globalLastPlacement;
 
       for (let i = 0; i < count; i++) {
         let placed = false;

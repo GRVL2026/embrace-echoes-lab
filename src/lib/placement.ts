@@ -622,9 +622,7 @@ export function autoPlaceEquipmentWithReport(
       (b.equip.width * b.equip.depth * b.count) - (a.equip.width * a.equip.depth * a.count)
     );
 
-    // Rule 7: Determine best wall for this category
-    // Check if the entire category fits on the remaining space of the current wall,
-    // otherwise start on the next wall with most remaining space
+    // Rule 7: track category wall
     let categoryWallEdge: number | undefined = undefined;
     let categoryLastPlacement: {
       x: number; y: number; rotation: number; w: number; d: number; wallEdgeIndex?: number;
@@ -633,16 +631,51 @@ export function autoPlaceEquipmentWithReport(
     for (const group of sortedGroups) {
       const equip = group.equip;
       const count = group.count;
-      let sameRefWallEdgeIndex: number | undefined = undefined;
+      const curW = equip.width;
+      const curD = equip.depth;
+
+      // ═══════════════════════════════════════════════════════════
+      // RULE 3 PRE-CHECK: Find a wall where ALL units of this
+      // reference fit together. This is MORE IMPORTANT than filling
+      // the current wall with mixed references.
+      // ═══════════════════════════════════════════════════════════
+      const totalRefWidth = count * curW + (count - 1) * SAME_REF_GAP;
+
+      // Score each wall for this entire reference group
+      let bestRefWallEdge: number | undefined = undefined;
+      {
+        type WallCandidate = { edgeIndex: number; score: number };
+        const candidates: WallCandidate[] = [];
+
+        for (const wall of wallsByLength) {
+          const used = wallUsedLength.get(wall.edgeIndex) || 0;
+          const available = wall.length - used - WALL_MARGIN * 2;
+          // All units must fit on this wall
+          if (available < totalRefWidth) continue;
+
+          let score = 0;
+          // Prefer the category wall (Rule 7)
+          if (categoryWallEdge !== undefined && wall.edgeIndex === categoryWallEdge) score -= 1000;
+          // Prefer longest walls (Rule 8)
+          score -= wall.length;
+          // Penalty for door walls
+          if (wall.hasDoor) score += 200;
+          candidates.push({ edgeIndex: wall.edgeIndex, score });
+        }
+        candidates.sort((a, b) => a.score - b.score);
+        if (candidates.length > 0) bestRefWallEdge = candidates[0].edgeIndex;
+      }
+
+      console.log(`[placement] Ref "${equip.name}" x${count} needs ${totalRefWidth.toFixed(0)}cm → best wall: ${bestRefWallEdge ?? "none"}`);
+
+      let sameRefWallEdgeIndex: number | undefined = bestRefWallEdge;
 
       for (let i = 0; i < count; i++) {
         let placed = false;
-        const curW = equip.width;
-        const curD = equip.depth;
         const lastPlacement = categoryLastPlacement;
 
-        // ── STEP 1: Adjacent to last placement (Rule 3: same ref together) ──
-        if (lastPlacement) {
+        // ── STEP 1: Adjacent to last placement of same ref (Rule 3) ──
+        if (lastPlacement && i > 0) {
           const adjPositions = generateAdjacentPositions(
             lastPlacement.x, lastPlacement.y, lastPlacement.rotation,
             lastPlacement.w, lastPlacement.d, curW, curD, SAME_REF_GAP,
@@ -656,31 +689,41 @@ export function autoPlaceEquipmentWithReport(
               wallUsedLength.set(lastPlacement.wallEdgeIndex!, (wallUsedLength.get(lastPlacement.wallEdgeIndex!) || 0) + curW);
               wallMaxDepth.set(lastPlacement.wallEdgeIndex!, Math.max(wallMaxDepth.get(lastPlacement.wallEdgeIndex!) || 0, curD));
               placed = true;
+              console.log(`[placement] Adjacent placed ${equip.name} (${i+1}/${count}) on wall ${lastPlacement.wallEdgeIndex}`);
               break;
             }
           }
         }
         if (placed) continue;
 
-        // ── STEP 2: Same wall as last placement (Rule 3 + Rule 7) ──
-        if (lastPlacement?.wallEdgeIndex !== undefined) {
-          const sameWall = walls.find(w => w.edgeIndex === lastPlacement.wallEdgeIndex);
-          if (sameWall) {
-            const positions = generateWallPositions(sameWall, curW, curD, step);
-            positions.sort((a, b) => {
-              const dA = Math.hypot(a.x - lastPlacement.x, a.y - lastPlacement.y);
-              const dB = Math.hypot(b.x - lastPlacement.x, b.y - lastPlacement.y);
-              return dA - dB;
-            });
+        // ── STEP 2: Place on the pre-selected best wall for this ref (Rule 3 + 7) ──
+        if (sameRefWallEdgeIndex !== undefined) {
+          const targetWall = walls.find(w => w.edgeIndex === sameRefWallEdgeIndex);
+          if (targetWall) {
+            const isVeryFirst = placements.length === 0;
+            const positions = generateWallPositions(targetWall, curW, curD, i === 0 ? step : 2, isVeryFirst && i === 0);
+
+            // Sort: prefer near last placement if exists, else near corner
+            if (lastPlacement) {
+              positions.sort((a, b) => {
+                const dA = Math.hypot(a.x - lastPlacement.x, a.y - lastPlacement.y);
+                const dB = Math.hypot(b.x - lastPlacement.x, b.y - lastPlacement.y);
+                return dA - dB;
+              });
+            } else {
+              positions.sort((a, b) => a.score - b.score);
+            }
+
             for (const pos of positions) {
               if (isPlacementValid(pos.x, pos.y, curW, curD, pos.rotation, SAME_REF_GAP, bestRoom!, doorZones, pillarZones, placements)) {
                 const p = makePlacement(equip, pos.x, pos.y, pos.rotation, curW, curD);
                 placements.push(p); result.push(p);
-                categoryLastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w: curW, d: curD, wallEdgeIndex: sameWall.edgeIndex };
-                if (sameRefWallEdgeIndex === undefined) sameRefWallEdgeIndex = sameWall.edgeIndex;
-                wallUsedLength.set(sameWall.edgeIndex, (wallUsedLength.get(sameWall.edgeIndex) || 0) + curW);
-                wallMaxDepth.set(sameWall.edgeIndex, Math.max(wallMaxDepth.get(sameWall.edgeIndex) || 0, curD));
+                categoryLastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w: curW, d: curD, wallEdgeIndex: targetWall.edgeIndex };
+                if (categoryWallEdge === undefined) categoryWallEdge = targetWall.edgeIndex;
+                wallUsedLength.set(targetWall.edgeIndex, (wallUsedLength.get(targetWall.edgeIndex) || 0) + curW);
+                wallMaxDepth.set(targetWall.edgeIndex, Math.max(wallMaxDepth.get(targetWall.edgeIndex) || 0, curD));
                 placed = true;
+                console.log(`[placement] Placed ${equip.name} (${i+1}/${count}) on target wall ${targetWall.edgeIndex}`);
                 break;
               }
             }
@@ -688,61 +731,41 @@ export function autoPlaceEquipmentWithReport(
         }
         if (placed) continue;
 
-        // ── STEP 2b: Force same-ref items on same wall (Rule 3 priority) ──
-        if (i > 0 && sameRefWallEdgeIndex !== undefined) {
-          const refWall = walls.find(w => w.edgeIndex === sameRefWallEdgeIndex);
-          if (refWall) {
-            const positions = generateWallPositions(refWall, curW, curD, 2); // finer step
-            const sameRefPlacements = placements.filter(p => p.equipmentId === equip.id);
-            const centroid = sameRefPlacements.length > 0
-              ? { x: sameRefPlacements.reduce((s, p) => s + p.position.x, 0) / sameRefPlacements.length,
-                  y: sameRefPlacements.reduce((s, p) => s + p.position.y, 0) / sameRefPlacements.length }
-              : null;
-            if (centroid) positions.sort((a, b) => Math.hypot(a.x - centroid.x, a.y - centroid.y) - Math.hypot(b.x - centroid.x, b.y - centroid.y));
-            for (const pos of positions) {
-              if (isPlacementValid(pos.x, pos.y, curW, curD, pos.rotation, SAME_REF_GAP, bestRoom!, doorZones, pillarZones, placements)) {
-                const p = makePlacement(equip, pos.x, pos.y, pos.rotation, curW, curD);
-                placements.push(p); result.push(p);
-                categoryLastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w: curW, d: curD, wallEdgeIndex: refWall.edgeIndex };
-                wallUsedLength.set(refWall.edgeIndex, (wallUsedLength.get(refWall.edgeIndex) || 0) + curW);
-                wallMaxDepth.set(refWall.edgeIndex, Math.max(wallMaxDepth.get(refWall.edgeIndex) || 0, curD));
-                placed = true;
-                console.log(`[placement] Same-ref forced ${equip.name} on wall ${refWall.edgeIndex}`);
-                break;
-              }
-            }
-          }
-        }
-        if (placed) continue;
-
-        // ── STEP 3: All walls scored (Rules 4, 7, 8) ──
+        // ── STEP 3: Fallback — all walls scored, but NEVER split same ref ──
         {
           const allWallPos: { x: number; y: number; rotation: number; score: number; wallEdgeIndex: number }[] = [];
           for (const wall of wallsByLength) {
             const isVeryFirst = placements.length === 0;
             const positions = generateWallPositions(wall, curW, curD, step, isVeryFirst);
+
+            // Rule 3: If this is not the first unit and we already have units placed,
+            // SKIP walls that can't hold ALL remaining units of this ref
+            if (i > 0 && sameRefWallEdgeIndex !== undefined && wall.edgeIndex !== sameRefWallEdgeIndex) {
+              continue; // HARD SKIP — never split same reference across walls
+            }
+
+            // Even for first unit: check if ALL units fit on this wall
+            if (i === 0) {
+              const used = wallUsedLength.get(wall.edgeIndex) || 0;
+              const available = wall.length - used - WALL_MARGIN * 2;
+              if (available < totalRefWidth) continue; // skip walls too small for all units
+            }
+
             for (const pos of positions) {
               let penalty = 0;
 
-              // Rule 3: massive penalty for same-ref on different wall
-              if (i > 0 && sameRefWallEdgeIndex !== undefined && wall.edgeIndex !== sameRefWallEdgeIndex) {
-                penalty += 50000;
-              }
-
               // Rule 7: penalty for splitting category across walls
               if (categoryWallEdge !== undefined && wall.edgeIndex !== categoryWallEdge) {
-                // Check if this category can still fit on the category wall
                 const catWall = walls.find(w => w.edgeIndex === categoryWallEdge);
                 const used = wallUsedLength.get(categoryWallEdge) || 0;
                 const remaining = catWall ? catWall.length - used - WALL_MARGIN * 2 : 0;
-                if (remaining >= curW) {
-                  penalty += 3000; // strong penalty — category wall has space
+                if (remaining >= totalRefWidth) {
+                  penalty += 3000;
                 } else {
-                  penalty += 200; // mild penalty — category wall is full, acceptable to move
+                  penalty += 200;
                 }
               }
 
-              // Proximity to last placement
               if (categoryLastPlacement) {
                 const dist = Math.hypot(pos.x - categoryLastPlacement.x, pos.y - categoryLastPlacement.y);
                 penalty += dist * 2;
@@ -763,7 +786,7 @@ export function autoPlaceEquipmentWithReport(
               wallUsedLength.set(pos.wallEdgeIndex, (wallUsedLength.get(pos.wallEdgeIndex) || 0) + curW);
               wallMaxDepth.set(pos.wallEdgeIndex, Math.max(wallMaxDepth.get(pos.wallEdgeIndex) || 0, curD));
               placed = true;
-              console.log(`[placement] Placed ${equip.name} on wall ${pos.wallEdgeIndex} at (${pos.x.toFixed(0)},${pos.y.toFixed(0)})`);
+              console.log(`[placement] Fallback placed ${equip.name} (${i+1}/${count}) on wall ${pos.wallEdgeIndex}`);
               break;
             }
           }

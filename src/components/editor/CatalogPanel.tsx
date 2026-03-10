@@ -625,7 +625,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   const [catalogOpen, setCatalogOpen] = useState(true);
 
   return (
-    <div className="flex flex-col border-t border-border">
+    <div className={`flex flex-col border-t border-border ${catalogOpen ? "flex-1 min-h-0" : "flex-none"}`}>
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border">
         <button
@@ -787,8 +787,8 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
 
       {/* Placed equipments */}
       {state.placedEquipments.length > 0 && (
-        <div className="border-t border-border">
-          <div className="flex items-center justify-between p-2">
+        <div className="border-t border-border flex-1 min-h-0 flex flex-col">
+          <div className="flex items-center justify-between p-2 shrink-0">
             <span className="text-xs font-semibold text-foreground">
               Sur le plan ({state.placedEquipments.length})
             </span>
@@ -816,7 +816,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
               </Button>
             </div>
           </div>
-          <ScrollArea className="max-h-[150px]">
+          <ScrollArea className="flex-1 min-h-0">
             <div className="px-2 pb-2 space-y-1">
               {state.placedEquipments.map((pe) => (
                 <div

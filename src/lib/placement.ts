@@ -441,24 +441,21 @@ function generateCenterPlacementPositions(
 
   if (isWide) {
     // Room is wider (X axis is long): orient table's longest dimension along X
-    // rotation=0 if width >= depth (width along X), rotation=90 if depth > width (depth along X)
     const rotation = equipWidth >= equipDepth ? 0 : 90;
-    // With this rotation:
-    // - Along X: longestDim
-    // - Along Y: shortestDim
-    // Players at short ends (along X ends) → playerClearance on X
-    // Corridor clearance: need CORRIDOR_WIDTH from top/bottom walls
     const xMargin = longestDim / 2 + playerClearance;
-    const yMargin = shortestDim / 2 + CORRIDOR_WIDTH; // 140cm corridor clearance to walls
-    const centerY = (minY + maxY) / 2;
+    const yMinMargin = shortestDim / 2 + WALL_MARGIN; // just clear the wall
+    const yMaxMargin = shortestDim / 2 + CORRIDOR_WIDTH; // corridor side needs 140cm
+    const centerX = (minX + maxX) / 2;
 
-    for (let y = minY + yMargin; y <= maxY - yMargin; y += step) {
+    // Scan all valid Y positions — prefer closer to top wall (minY) to leave corridor below
+    for (let y = minY + yMinMargin; y <= maxY - yMinMargin; y += step) {
       for (let x = minX + xMargin; x <= maxX - xMargin; x += step) {
-        const distFromCenterY = Math.abs(y - centerY);
-        // Prefer center of room (Y), and middle of room (X)
-        const centerX = (minX + maxX) / 2;
+        const distFromTopWall = y - minY;
+        const distFromBottomWall = maxY - y;
+        // Prefer close to one wall (small dist = better score), center X
         const distFromCenterX = Math.abs(x - centerX);
-        const score = 50 + distFromCenterY / 5 + distFromCenterX / 20;
+        const wallProximityScore = Math.min(distFromTopWall, distFromBottomWall);
+        const score = 50 + wallProximityScore / 5 + distFromCenterX / 20;
         positions.push({ x, y, rotation, score });
       }
     }
@@ -466,15 +463,16 @@ function generateCenterPlacementPositions(
     // Room is taller (Y axis is long): orient table's longest dimension along Y
     const rotation = equipDepth >= equipWidth ? 0 : 90;
     const yMargin = longestDim / 2 + playerClearance;
-    const xMargin = shortestDim / 2 + CORRIDOR_WIDTH;
-    const centerX = (minX + maxX) / 2;
+    const xMinMargin = shortestDim / 2 + WALL_MARGIN;
+    const centerY = (minY + maxY) / 2;
 
-    for (let x = minX + xMargin; x <= maxX - xMargin; x += step) {
+    for (let x = minX + xMinMargin; x <= maxX - xMinMargin; x += step) {
       for (let y = minY + yMargin; y <= maxY - yMargin; y += step) {
-        const distFromCenterX = Math.abs(x - centerX);
-        const centerY = (minY + maxY) / 2;
+        const distFromLeftWall = x - minX;
+        const distFromRightWall = maxX - x;
         const distFromCenterY = Math.abs(y - centerY);
-        const score = 50 + distFromCenterX / 5 + distFromCenterY / 20;
+        const wallProximityScore = Math.min(distFromLeftWall, distFromRightWall);
+        const score = 50 + wallProximityScore / 5 + distFromCenterY / 20;
         positions.push({ x, y, rotation, score });
       }
     }

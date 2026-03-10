@@ -502,7 +502,7 @@ export function autoPlaceEquipmentWithReport(
       return areaB - areaA;
     });
 
-  const step = 20;
+  const step = 1; // 1cm precision — no grid snapping
 
   // Track which wall each category started on, so different refs in the same category
   // try to stay on the same wall

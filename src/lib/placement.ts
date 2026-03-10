@@ -590,9 +590,11 @@ export function autoPlaceEquipmentWithReport(
   const centerEquipments: GameEquipment[] = [];
   const wallEquipments: GameEquipment[] = [];
   for (const equip of selectedEquipments) {
+    console.log(`[placement] Equipment "${equip.name}" centerPlacement=${equip.centerPlacement}, category=${equip.category}`);
     if (equip.centerPlacement) centerEquipments.push(equip);
     else wallEquipments.push(equip);
   }
+  console.log(`[placement] Center: ${centerEquipments.length}, Wall: ${wallEquipments.length}`);
 
   const step = 5; // 5cm precision — no grid snapping
 

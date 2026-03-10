@@ -527,7 +527,7 @@ export function EditorSidebar() {
                     variant="ghost"
                     size="icon"
                     className="h-6 w-6 shrink-0 text-destructive/60 hover:text-destructive"
-                    onClick={() => dispatch({ type: "REMOVE_PLACED_EQUIPMENT", id: eq.id })}
+                    onClick={() => dispatch({ type: "DELETE_PLACED_EQUIPMENT", id: eq.id })}
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>

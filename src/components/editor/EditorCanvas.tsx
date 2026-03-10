@@ -2381,82 +2381,59 @@ function drawCirculationPath(
   if (currentChain.length > 0) chains.push(currentChain);
 
   for (let ci = 0; ci < chains.length; ci++) {
-    // Deduplicate → extra visual smoothing (more iterations) → deduplicate again
     let chain = deduplicateChain(chains[ci], 8);
-    chain = visualSmooth(chain, 4); // more smoothing for rounder curves
+    chain = visualSmooth(chain, 5); // many iterations for very smooth curves
     chain = deduplicateChain(chain, 3);
     if (chain.length < 2) continue;
 
-    // Use thick stroke with round joins for corridor fill — avoids self-intersecting offset polylines
     const corridorWidthPx = (segments[0]?.width || 140) * CM_TO_PX;
 
-    // Filled corridor — draw as thick line with round joins (no self-intersection)
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(chain[0].x * CM_TO_PX, chain[0].y * CM_TO_PX);
-    for (let i = 1; i < chain.length; i++) {
-      ctx.lineTo(chain[i].x * CM_TO_PX, chain[i].y * CM_TO_PX);
-    }
+    // Helper to trace the chain path
+    const tracePath = () => {
+      ctx.beginPath();
+      ctx.moveTo(chain[0].x * CM_TO_PX, chain[0].y * CM_TO_PX);
+      // Use quadratic curves between midpoints for extra smoothness
+      for (let i = 1; i < chain.length - 1; i++) {
+        const mx = (chain[i].x + chain[i + 1].x) / 2 * CM_TO_PX;
+        const my = (chain[i].y + chain[i + 1].y) / 2 * CM_TO_PX;
+        ctx.quadraticCurveTo(chain[i].x * CM_TO_PX, chain[i].y * CM_TO_PX, mx, my);
+      }
+      const last = chain[chain.length - 1];
+      ctx.lineTo(last.x * CM_TO_PX, last.y * CM_TO_PX);
+    };
+
+    // Filled corridor — thick rounded line
+    tracePath();
     ctx.strokeStyle = "hsla(142, 70%, 45%, 0.07)";
     ctx.lineWidth = corridorWidthPx;
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
     ctx.stroke();
-    ctx.restore();
 
-    // Corridor edges — use thick stroke then clip to get clean outlines
-    // Draw corridor outline as two thin strokes offset by lineWidth rendering
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(chain[0].x * CM_TO_PX, chain[0].y * CM_TO_PX);
-    for (let i = 1; i < chain.length; i++) {
-      ctx.lineTo(chain[i].x * CM_TO_PX, chain[i].y * CM_TO_PX);
-    }
-    ctx.strokeStyle = "hsla(142, 70%, 50%, 0.3)";
+    // Corridor edges — two strokes (outer thick, inner erase technique via layering)
+    // Outer edge line
+    tracePath();
+    ctx.strokeStyle = "hsla(142, 70%, 50%, 0.25)";
     ctx.lineWidth = corridorWidthPx;
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
-    // Stroke the outline only (not the fill) by using a wider line
     ctx.stroke();
-    // Now "erase" the interior by drawing over with the background-matching fill
-    ctx.globalCompositeOperation = "destination-out";
-    ctx.beginPath();
-    ctx.moveTo(chain[0].x * CM_TO_PX, chain[0].y * CM_TO_PX);
-    for (let i = 1; i < chain.length; i++) {
-      ctx.lineTo(chain[i].x * CM_TO_PX, chain[i].y * CM_TO_PX);
-    }
-    ctx.strokeStyle = "rgba(0,0,0,1)";
-    ctx.lineWidth = corridorWidthPx - 2 / zoom;
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
-    ctx.stroke();
-    ctx.restore();
 
-    // Re-draw the filled corridor on top (since we used destination-out)
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(chain[0].x * CM_TO_PX, chain[0].y * CM_TO_PX);
-    for (let i = 1; i < chain.length; i++) {
-      ctx.lineTo(chain[i].x * CM_TO_PX, chain[i].y * CM_TO_PX);
-    }
+    // Inner fill to cover center (same as corridor fill but slightly smaller)
+    tracePath();
     ctx.strokeStyle = "hsla(142, 70%, 45%, 0.07)";
-    ctx.lineWidth = corridorWidthPx - 2 / zoom;
+    ctx.lineWidth = corridorWidthPx - 1.5 / zoom;
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
     ctx.stroke();
-    ctx.restore();
 
-    // Centerline — smooth dashed with round caps
+    // Centerline — smooth dashed with quadratic curves
     ctx.strokeStyle = "hsla(142, 70%, 55%, 0.45)";
     ctx.lineWidth = 1.5 / zoom;
     ctx.setLineDash([14 / zoom, 10 / zoom]);
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(chain[0].x * CM_TO_PX, chain[0].y * CM_TO_PX);
-    for (let i = 1; i < chain.length; i++) {
-      ctx.lineTo(chain[i].x * CM_TO_PX, chain[i].y * CM_TO_PX);
-    }
+    tracePath();
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.lineCap = "butt";

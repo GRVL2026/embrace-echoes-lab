@@ -540,9 +540,9 @@ function isCenterPlacementValid(
   for (const pz of pillarZones) {
     if (rectsOverlap(cx, cy, w + 20, d + 20, rot, pz.cx, pz.cy, pz.w, pz.d, pz.rot)) return false;
   }
-  // Physical overlap check (no gap — just touching is OK)
+  // Physical overlap check — enforce minimum gap to prevent floating-point overlaps
   for (const pe of existingPlacements) {
-    if (rectsOverlap(cx, cy, w, d, rot, pe.position.x, pe.position.y, pe.width, pe.depth, pe.rotation)) {
+    if (rectsOverlap(cx, cy, w + MIN_OVERLAP_GAP, d + MIN_OVERLAP_GAP, rot, pe.position.x, pe.position.y, pe.width, pe.depth, pe.rotation)) {
       return false;
     }
   }

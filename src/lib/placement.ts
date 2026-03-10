@@ -499,6 +499,18 @@ function isCenterPlacementValid(
 ): boolean {
   // Must be inside room
   if (!rectInsidePolygon(cx, cy, w, d, rot, room.points)) return false;
+
+  // Must maintain CORRIDOR_WIDTH from every wall so the corridor can pass
+  const corners = getRectCorners(cx, cy, w, d, rot);
+  const pts = room.points;
+  const edgeCount = room.isClosed ? pts.length : pts.length - 1;
+  for (const corner of corners) {
+    for (let i = 0; i < edgeCount; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      const dist = ptSegDist(corner.x, corner.y, a.x, a.y, b.x, b.y);
+      if (dist < CORRIDOR_WIDTH) return false;
+    }
+  }
   // Must not overlap door exclusion zones
   for (const dz of doorZones) {
     if (rectsOverlap(cx, cy, w, d, rot, dz.cx, dz.cy, dz.w, dz.d, dz.rot)) return false;

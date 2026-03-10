@@ -800,6 +800,8 @@ export function autoPlaceEquipmentWithReport(
       const count = group.count;
       // Inherit from same category's last placement for grouping
       let lastPlacement = categoryLastPlacement;
+      // Track wall used by this specific reference (same equip.id) — much stronger grouping
+      let sameRefWallEdgeIndex: number | undefined = undefined;
 
       for (let i = 0; i < count; i++) {
         let placed = false;
@@ -833,6 +835,7 @@ export function autoPlaceEquipmentWithReport(
               placements.push(p);
               result.push(p);
               lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w: curW, d: curD, wallEdgeIndex: lastPlacement.wallEdgeIndex };
+              if (sameRefWallEdgeIndex === undefined && lastPlacement.wallEdgeIndex !== undefined) sameRefWallEdgeIndex = lastPlacement.wallEdgeIndex;
               placed = true;
               break;
             }
@@ -859,7 +862,45 @@ export function autoPlaceEquipmentWithReport(
                 placements.push(p);
                 result.push(p);
                 lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w, d, wallEdgeIndex: sameWall.edgeIndex };
+                if (sameRefWallEdgeIndex === undefined) sameRefWallEdgeIndex = sameWall.edgeIndex;
                 placed = true;
+                break;
+              }
+            }
+          }
+        }
+
+        if (placed) { if (lastPlacement) categoryLastPlacement = lastPlacement; continue; }
+
+        // ── STEP 2b: For same-reference (i>0), try the wall where previous same-ref items are ──
+        if (i > 0 && sameRefWallEdgeIndex !== undefined) {
+          const refWall = walls.find(w => w.edgeIndex === sameRefWallEdgeIndex);
+          if (refWall) {
+            const w = equip.width;
+            const d = equip.depth;
+            // Use finer step for desperate same-ref search
+            const positions = generateWallPositions(refWall, w, d, 2);
+            // Find the centroid of already-placed same-ref items for proximity
+            const sameRefPlacements = placements.filter(p => p.equipmentId === equip.id);
+            const refCentroid = sameRefPlacements.length > 0
+              ? { x: sameRefPlacements.reduce((s, p) => s + p.position.x, 0) / sameRefPlacements.length,
+                  y: sameRefPlacements.reduce((s, p) => s + p.position.y, 0) / sameRefPlacements.length }
+              : lastPlacement ? { x: lastPlacement.x, y: lastPlacement.y } : null;
+            if (refCentroid) {
+              positions.sort((a, b) => {
+                const distA = Math.hypot(a.x - refCentroid.x, a.y - refCentroid.y);
+                const distB = Math.hypot(b.x - refCentroid.x, b.y - refCentroid.y);
+                return distA - distB;
+              });
+            }
+            for (const pos of positions) {
+              if (isPlacementValid(pos.x, pos.y, w, d, pos.rotation, SAME_REF_GAP, bestRoom, doorZones, pillarZones, placements)) {
+                const p = makePlacement(equip, pos.x, pos.y, pos.rotation, w, d);
+                placements.push(p);
+                result.push(p);
+                lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w, d, wallEdgeIndex: refWall.edgeIndex };
+                placed = true;
+                console.log(`[placement] Same-ref forced ${equip.name} on wall ${refWall.edgeIndex} at (${pos.x.toFixed(0)},${pos.y.toFixed(0)})`);
                 break;
               }
             }
@@ -872,21 +913,22 @@ export function autoPlaceEquipmentWithReport(
         {
           const w = equip.width;
           const d = equip.depth;
-          const gap = SAME_REF_GAP; // same tight spacing on all walls
+          const gap = SAME_REF_GAP;
 
           const allWallPos: { x: number; y: number; rotation: number; score: number; wallEdgeIndex: number }[] = [];
           for (const wall of wallsByLength) {
-            // Door exclusion is already handled by isPlacementValid — don't skip entire walls
             const isVeryFirst = placements.length === 0;
             const positions = generateWallPositions(wall, w, d, step, isVeryFirst);
             for (const pos of positions) {
               let proximityBonus = 0;
               if (categoryLastPlacement) {
                 const dist = Math.hypot(pos.x - categoryLastPlacement.x, pos.y - categoryLastPlacement.y);
-                // Strong proximity bonus: heavily penalize distance from category group
-                // Also strongly penalize being on a different wall than the category
-                const wallMismatch = (wall.edgeIndex !== categoryLastPlacement.wallEdgeIndex) ? 2000 : 0;
-                proximityBonus = dist * 3 + wallMismatch;
+                // For same-reference items (i>0), use massive penalty to prevent wall change
+                const isSameRef = i > 0 && sameRefWallEdgeIndex !== undefined;
+                const wallMismatchPenalty = isSameRef
+                  ? (wall.edgeIndex !== sameRefWallEdgeIndex ? 50000 : 0)
+                  : (wall.edgeIndex !== categoryLastPlacement.wallEdgeIndex ? 2000 : 0);
+                proximityBonus = dist * 3 + wallMismatchPenalty;
               }
               allWallPos.push({
                 x: pos.x, y: pos.y, rotation: pos.rotation,
@@ -903,6 +945,7 @@ export function autoPlaceEquipmentWithReport(
               placements.push(p);
               result.push(p);
               lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w, d, wallEdgeIndex: pos.wallEdgeIndex };
+              if (sameRefWallEdgeIndex === undefined) sameRefWallEdgeIndex = pos.wallEdgeIndex;
               placed = true;
               console.log(`[placement] Placed ${equip.name} on wall ${pos.wallEdgeIndex} at (${pos.x.toFixed(0)},${pos.y.toFixed(0)})`);
               break;

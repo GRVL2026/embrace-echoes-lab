@@ -655,8 +655,8 @@ export function autoPlaceEquipmentWithReport(
             const positions = generateWallPositions(wall, w, d, step, isVeryFirst);
             for (const pos of positions) {
               let proximityBonus = 0;
-              if (globalLastPlacement) {
-                const dist = Math.hypot(pos.x - globalLastPlacement.x, pos.y - globalLastPlacement.y);
+              if (categoryLastPlacement) {
+                const dist = Math.hypot(pos.x - categoryLastPlacement.x, pos.y - categoryLastPlacement.y);
                 proximityBonus = dist / 10;
               }
               allWallPos.push({

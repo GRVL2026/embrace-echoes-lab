@@ -642,15 +642,17 @@ export function computeCirculation(
       }
     }
 
-    // Order waypoints nearest-neighbor starting from the main door
-    const orderedPoints = orderWaypoints(startPos, uniqueWaypoints.map(w => w.point));
-    const orderedWithIds = orderedPoints.map(p => {
-      const wp = uniqueWaypoints.find(w => w.point.x === p.x && w.point.y === p.y)!;
-      return wp;
-    });
+    // Compute room center for perimeter ordering
+    const roomPts = bestRoom!.points;
+    const roomCenter: Point = {
+      x: roomPts.reduce((s, p) => s + p.x, 0) / roomPts.length,
+      y: roomPts.reduce((s, p) => s + p.y, 0) / roomPts.length,
+    };
 
-    // Build path: door → wp1 → wp2 → ... → wpN (aller simple, pas de boucle retour)
-    // Le corridor est conçu comme un chemin aller-retour sur le même tracé
+    // Order waypoints along the perimeter (clockwise loop from door)
+    const orderedWithIds = orderWaypointsPerimeter(startPos, uniqueWaypoints, roomCenter);
+
+    // Build path: door → wp1 → wp2 → ... → wpN → door (loop)
     let currentPos = startPos;
     for (const wp of orderedWithIds) {
       const ok = buildPath(currentPos, wp.point);
@@ -661,6 +663,11 @@ export function computeCirculation(
       }
     }
 
+    // Close the loop: return to door for a clean circuit
+    if (mainDoor && orderedWithIds.length > 0) {
+      buildPath(currentPos, startPos);
+    }
+
     // Map back: any equipment whose waypoint was unreachable
     const coveredIds = new Set(waypoints.filter(w => !unreachableIds.includes(w.id)).map(w => w.id));
     for (const eq of equipments) {
@@ -668,8 +675,6 @@ export function computeCirculation(
         unreachableIds.push(eq.id);
       }
     }
-
-    // Pas de boucle retour — le visiteur emprunte le même corridor en sens inverse
   } else if (roomDoors.length === 0) {
     // No doors, no equipment — nothing to show
   }

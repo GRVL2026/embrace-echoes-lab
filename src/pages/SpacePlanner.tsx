@@ -3,7 +3,8 @@ import { EditorProvider, useEditor } from "@/contexts/EditorContext";
 import { EditorToolbar } from "@/components/editor/EditorToolbar";
 import { EditorCanvas } from "@/components/editor/EditorCanvas";
 import { EditorSidebar } from "@/components/editor/EditorSidebar";
-import { PanelRightClose, PanelRightOpen } from "lucide-react";
+import { Viewer3D } from "@/components/viewer3d/Viewer3D";
+import { PanelRightClose, PanelRightOpen, Box, LayoutGrid } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fitToView } from "@/lib/fitToView";
@@ -11,6 +12,7 @@ import logoImg from "@/assets/logo.png";
 
 function SpacePlannerInner() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
   const { state, dispatch } = useEditor();
 
   const toggleSidebar = useCallback(() => {
@@ -52,6 +54,39 @@ function SpacePlannerInner() {
             <span>Avranches Automatic</span>
             <span className="text-primary">•</span>
             <span>Simulateur de salle</span>
+
+            {/* 2D / 3D toggle */}
+            <div className="flex items-center ml-3 rounded-md border border-border bg-muted/50 p-0.5">
+              <Tooltip delayDuration={200}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={viewMode === "2d" ? "default" : "ghost"}
+                    size="sm"
+                    className="h-7 px-2 text-xs gap-1"
+                    onClick={() => setViewMode("2d")}
+                  >
+                    <LayoutGrid className="h-3.5 w-3.5" />
+                    2D
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Vue plan 2D</TooltipContent>
+              </Tooltip>
+              <Tooltip delayDuration={200}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={viewMode === "3d" ? "default" : "ghost"}
+                    size="sm"
+                    className="h-7 px-2 text-xs gap-1"
+                    onClick={() => setViewMode("3d")}
+                  >
+                    <Box className="h-3.5 w-3.5" />
+                    3D
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Vue 3D immersive</TooltipContent>
+              </Tooltip>
+            </div>
+
             <Tooltip delayDuration={200}>
               <TooltipTrigger asChild>
                 <Button
@@ -74,8 +109,8 @@ function SpacePlannerInner() {
           </div>
         </header>
 
-        {/* Main canvas */}
-        <EditorCanvas />
+        {/* Main view */}
+        {viewMode === "2d" ? <EditorCanvas /> : <Viewer3D />}
       </div>
 
       {/* Right sidebar */}

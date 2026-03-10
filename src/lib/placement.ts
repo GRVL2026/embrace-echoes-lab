@@ -553,25 +553,24 @@ export function autoPlaceEquipmentWithReport(
 
   const step = 5; // 5cm precision — no grid snapping
 
-  // Track which wall each category started on, so different refs in the same category
-  // try to stay on the same wall
+  // Global last placement tracker — persists across ALL categories
+  // so equipment continues sequentially along walls without resetting
+  let globalLastPlacement: {
+    x: number; y: number; rotation: number; w: number; d: number;
+    wallEdgeIndex?: number;
+  } | null = null;
+
   for (const [category, equipmentGroups] of sortedCategories) {
     // Sort equipment groups by area (largest first)
     const sortedGroups = [...equipmentGroups].sort((a, b) =>
       (b.equip.width * b.equip.depth * b.count) - (a.equip.width * a.equip.depth * a.count)
     );
 
-    // Track last placement and its wall for the whole category
-    let categoryLastPlacement: {
-      x: number; y: number; rotation: number; w: number; d: number;
-      wallEdgeIndex?: number;
-    } | null = null;
-
     for (const group of sortedGroups) {
       const equip = group.equip;
       const count = group.count;
-      // Inherit from previous group in the same category to stay adjacent
-      let lastPlacement: typeof categoryLastPlacement = categoryLastPlacement ?? null;
+      // Inherit global last placement to continue sequentially along walls
+      let lastPlacement = globalLastPlacement;
 
       for (let i = 0; i < count; i++) {
         let placed = false;
@@ -611,7 +610,7 @@ export function autoPlaceEquipmentWithReport(
           }
         }
 
-        if (placed) { if (lastPlacement) categoryLastPlacement = lastPlacement; continue; }
+        if (placed) { if (lastPlacement) globalLastPlacement = lastPlacement; continue; }
 
         // ── STEP 2: Try the SAME wall as last placement (stay grouped) ──
         if (lastPlacement?.wallEdgeIndex !== undefined) {
@@ -620,7 +619,6 @@ export function autoPlaceEquipmentWithReport(
             const w = equip.width;
             const d = equip.depth;
             const positions = generateWallPositions(sameWall, w, d, step);
-            // Sort by proximity to last placement
             positions.sort((a, b) => {
               const distA = Math.hypot(a.x - lastPlacement!.x, a.y - lastPlacement!.y);
               const distB = Math.hypot(b.x - lastPlacement!.x, b.y - lastPlacement!.y);
@@ -639,27 +637,24 @@ export function autoPlaceEquipmentWithReport(
           }
         }
 
-        if (placed) { if (lastPlacement) categoryLastPlacement = lastPlacement; continue; }
+        if (placed) { if (lastPlacement) globalLastPlacement = lastPlacement; continue; }
 
         // ── STEP 3: Try all walls sorted by length (RULE 3: prefer longest) ──
         {
           const w = equip.width;
           const d = equip.depth;
-          const gap = SAME_REF_GAP;
+          const gap = DIFFERENT_GAP; // proper gap when jumping to a new wall
 
-          // Build all wall positions, sorted: longest walls first, no-door preferred
           const allWallPos: { x: number; y: number; rotation: number; score: number; wallEdgeIndex: number }[] = [];
           for (const wall of wallsByLength) {
             if (wall.hasDoor && w > 100) continue;
-            // Prefer corner for the very first equipment placed (maximize wall usage from a corner)
             const isVeryFirst = placements.length === 0;
             const positions = generateWallPositions(wall, w, d, step, isVeryFirst);
             for (const pos of positions) {
-              // Bonus: if category already has a wall, prefer positions close to existing category placements
               let proximityBonus = 0;
-              if (categoryLastPlacement) {
-                const dist = Math.hypot(pos.x - categoryLastPlacement.x, pos.y - categoryLastPlacement.y);
-                proximityBonus = dist / 10; // closer = lower score = better
+              if (globalLastPlacement) {
+                const dist = Math.hypot(pos.x - globalLastPlacement.x, pos.y - globalLastPlacement.y);
+                proximityBonus = dist / 10;
               }
               allWallPos.push({
                 x: pos.x, y: pos.y, rotation: pos.rotation,
@@ -677,12 +672,13 @@ export function autoPlaceEquipmentWithReport(
               result.push(p);
               lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w, d, wallEdgeIndex: pos.wallEdgeIndex };
               placed = true;
+              console.log(`[placement] Placed ${equip.name} on wall ${pos.wallEdgeIndex} at (${pos.x.toFixed(0)},${pos.y.toFixed(0)})`);
               break;
             }
           }
         }
 
-        if (placed) { if (lastPlacement) categoryLastPlacement = lastPlacement; continue; }
+        if (placed) { if (lastPlacement) globalLastPlacement = lastPlacement; continue; }
 
         // ── STEP 4: Fallback — pillar-backed positions ──
         {
@@ -702,11 +698,11 @@ export function autoPlaceEquipmentWithReport(
         }
 
         if (!placed) {
-          console.warn(`Could not place: ${equip.name} (instance ${i + 1}/${count})`);
+          console.warn(`[placement] Could not place: ${equip.name} (instance ${i + 1}/${count}) — all ${wallsByLength.length} walls tried`);
           notPlaced.push(equip);
         }
 
-        if (lastPlacement) categoryLastPlacement = lastPlacement;
+        if (lastPlacement) globalLastPlacement = lastPlacement;
       }
     }
   }

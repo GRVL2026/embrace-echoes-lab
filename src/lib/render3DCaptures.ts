@@ -130,7 +130,7 @@ function buildScene(
 
     // Floor
     if (room.isClosed && pts.length >= 3) {
-      const floorPts = pts.map((p) => new THREE.Vector2(p.x / 100, -p.y / 100));
+      const floorPts = pts.map((p) => new THREE.Vector2(p.x / 100, p.y / 100));
       floorPts.reverse();
       const shape = new THREE.Shape(floorPts);
       const floorGeo = new THREE.ShapeGeometry(shape);

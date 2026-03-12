@@ -711,6 +711,11 @@ export function EditorCanvas() {
     };
 
     draw();
+
+    // Store snapshot for PDF export (available even when switching to 3D)
+    try {
+      setCanvas2DSnapshot(canvas.toDataURL("image/png"));
+    } catch { /* ignore tainted canvas */ }
   });
 
   // Find nearest edge index of a polygon (returns -1 if none within threshold)

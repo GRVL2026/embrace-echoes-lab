@@ -81,6 +81,10 @@ function computeRoomArea(room: Room): number {
 }
 
 function capture2DCanvas(): string | null {
+  // First try the stored snapshot (available even from 3D mode)
+  const snapshot = getCanvas2DSnapshot();
+  if (snapshot) return snapshot;
+  // Fallback: try to capture live canvas
   const canvas = document.querySelector("canvas:not([data-engine])") as HTMLCanvasElement | null;
   if (!canvas) return null;
   try {

@@ -139,6 +139,7 @@ export function Equipment3D({ equipment, showHeight = false }: Props) {
               width={equipment.width}
               depth={equipment.depth}
               height={equipment.height || 120}
+              tint={color}
             />
           </Suspense>
         </ErrorBoundary>

@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
   DialogContent,
@@ -64,11 +65,18 @@ export function ProductDialog({ equipment, open, onOpenChange, onUpdate3DModel }
 
     setUploading(true);
     try {
-      // Create a local object URL for the 3D model
-      const url = URL.createObjectURL(file);
-      onUpdate3DModel?.(equipment.id, url);
+      const filePath = `${equipment.id}/${Date.now()}-${file.name}`;
+      const { error } = await supabase.storage
+        .from("models-3d")
+        .upload(filePath, file, { upsert: true });
+      if (error) throw error;
+      const { data: urlData } = supabase.storage
+        .from("models-3d")
+        .getPublicUrl(filePath);
+      onUpdate3DModel?.(equipment.id, urlData.publicUrl);
       toast.success(`Modèle 3D "${file.name}" associé à ${equipment.name}`);
     } catch (err) {
+      console.error(err);
       toast.error("Erreur lors du chargement du modèle 3D");
     } finally {
       setUploading(false);

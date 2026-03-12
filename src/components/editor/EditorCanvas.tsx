@@ -1828,8 +1828,12 @@ function drawDoorArc(
     endAngle = wallAngle + Math.PI;
   }
 
-  // Always draw the short 90° arc (never the 270° complement)
-  const counterClockwise = false;
+  // Always draw the short 90° arc: go counterclockwise when the sweep angle is negative
+  let sweep = endAngle - startAngle;
+  // Normalize to [-2π, 2π]
+  while (sweep > Math.PI) sweep -= 2 * Math.PI;
+  while (sweep < -Math.PI) sweep += 2 * Math.PI;
+  const counterClockwise = sweep < 0;
 
   ctx.beginPath();
   ctx.arc(hingePx.x, hingePx.y, arcRadius, startAngle, endAngle, counterClockwise);

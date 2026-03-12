@@ -4,6 +4,7 @@
  */
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { Room, Door, Pillar, CirculationSegment, Point } from "@/types/editor";
 import type { PlacedEquipment } from "@/types/equipment";
 

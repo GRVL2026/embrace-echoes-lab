@@ -44,6 +44,7 @@ export type Viewer3DVisibility = {
   pillars: boolean;
   grid: boolean;
   circulation: boolean;
+  heights: boolean;
 };
 
 export type Viewer3DSettings = {

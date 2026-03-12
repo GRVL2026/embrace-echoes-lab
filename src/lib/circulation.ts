@@ -629,6 +629,17 @@ export function computeCirculation(
     return true;
   };
 
+  const applyTurningZones = (segments: CirculationSegment[]) => {
+    if (segments.length === 0) return;
+    const n = Math.min(TURNING_ZONE_SEGMENTS, Math.floor(segments.length / 2));
+    for (let i = 0; i < n; i++) {
+      segments[i].width = TURNING_ZONE_WIDTH;
+    }
+    for (let i = segments.length - n; i < segments.length; i++) {
+      segments[i].width = TURNING_ZONE_WIDTH;
+    }
+  };
+
   if (equipments.length > 0) {
     // Build wall-sweep waypoints (groups same-wall equipment, creates sweep at extremes)
     const waypoints = buildWallSweepWaypoints(equipments, bestRoom);

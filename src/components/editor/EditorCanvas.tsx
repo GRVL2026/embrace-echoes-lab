@@ -496,6 +496,10 @@ export function EditorCanvas() {
 
         // Draw wall dimensions
         if (state.showDimensions) {
+          // Compute centroid to determine "inside" direction
+          const cx = room.points.reduce((s, p) => s + p.x, 0) / room.points.length;
+          const cy = room.points.reduce((s, p) => s + p.y, 0) / room.points.length;
+
           const edgeCount = room.isClosed ? room.points.length : room.points.length - 1;
           for (let i = 0; i < edgeCount; i++) {
             const p = room.points[i];
@@ -509,9 +513,20 @@ export function EditorCanvas() {
             const label = dist >= 100 ? `${(dist / 100).toFixed(2)}m` : `${Math.round(dist)}cm`;
             const angle = Math.atan2(dy, dx);
             const offsetDist = 18 / state.zoom;
-            const offsetX = Math.sin(angle) * offsetDist;
-            const offsetY = -Math.cos(angle) * offsetDist;
-            ctx.translate(midX + offsetX, midY + offsetY);
+            // Perpendicular direction (default: +sin, -cos)
+            let perpX = Math.sin(angle);
+            let perpY = -Math.cos(angle);
+            // Check if this direction points toward the centroid (inside); if so, flip to outside
+            const midCmX = (p.x + next.x) / 2;
+            const midCmY = (p.y + next.y) / 2;
+            const toCenterX = cx - midCmX;
+            const toCenterY = cy - midCmY;
+            const dot = perpX * toCenterX + perpY * toCenterY;
+            if (dot > 0) {
+              perpX = -perpX;
+              perpY = -perpY;
+            }
+            ctx.translate(midX + perpX * offsetDist, midY + perpY * offsetDist);
             const textAngle = angle > Math.PI / 2 || angle < -Math.PI / 2 ? angle + Math.PI : angle;
             ctx.rotate(textAngle);
             ctx.font = `${11 / state.zoom}px Inter`;

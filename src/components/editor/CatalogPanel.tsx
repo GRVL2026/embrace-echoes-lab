@@ -853,7 +853,20 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
       <ProductDialog 
         equipment={viewingProduct} 
         open={!!viewingProduct} 
-        onOpenChange={(open) => !open && setViewingProduct(null)} 
+        onOpenChange={(open) => !open && setViewingProduct(null)}
+        onUpdate3DModel={(equipmentId, modelUrl) => {
+          setCatalog(prev => prev.map(eq => 
+            eq.id === equipmentId ? { ...eq, model3d: modelUrl } : eq
+          ));
+          // Also update the viewing product to reflect the change immediately
+          setViewingProduct(prev => prev && prev.id === equipmentId ? { ...prev, model3d: modelUrl } : prev);
+          // Update any already-placed equipment with this model
+          state.placedEquipments
+            .filter(pe => pe.equipmentId === equipmentId)
+            .forEach(pe => {
+              dispatch({ type: "UPDATE_PLACED_EQUIPMENT", id: pe.id, equipment: { model3d: modelUrl } });
+            });
+        }}
       />
 
       {/* Expanded catalog dialog */}

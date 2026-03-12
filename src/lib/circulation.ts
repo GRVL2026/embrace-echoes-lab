@@ -671,7 +671,7 @@ export function computeCirculation(
     // Order waypoints along the perimeter (clockwise loop from door)
     const orderedWithIds = orderWaypointsPerimeter(startPos, uniqueWaypoints, roomCenter);
 
-    // Build path: door → wp1 → wp2 → ... → wpN
+    // Build path: door → wp1 → wp2 → ... → wpN → door (loop)
     let currentPos = startPos;
     for (const wp of orderedWithIds) {
       const ok = buildPath(currentPos, wp.point);
@@ -682,34 +682,9 @@ export function computeCirculation(
       }
     }
 
-    // Decide: loop back or dead-end (back-and-forth)?
-    // If the return path would mostly overlap the outbound path, it's a dead-end corridor.
+    // Close the loop: return to door for a clean circuit
     if (mainDoor && orderedWithIds.length > 0) {
-      const outboundSegCount = allSegments.length;
-      const returnSegsBefore = allSegments.length;
       buildPath(currentPos, startPos);
-      const returnSegs = allSegments.slice(returnSegsBefore);
-      
-      // Check how much the return path overlaps with existing outbound path
-      let overlapCount = 0;
-      for (const rs of returnSegs) {
-        const mid = { x: (rs.start.x + rs.end.x) / 2, y: (rs.start.y + rs.end.y) / 2 };
-        for (let i = 0; i < outboundSegCount; i++) {
-          const os = allSegments[i];
-          const osMid = { x: (os.start.x + os.end.x) / 2, y: (os.start.y + os.end.y) / 2 };
-          const dist = Math.sqrt((mid.x - osMid.x) ** 2 + (mid.y - osMid.y) ** 2);
-          if (dist < CORRIDOR_WIDTH * 1.5) { overlapCount++; break; }
-        }
-      }
-      
-      const overlapRatio = returnSegs.length > 0 ? overlapCount / returnSegs.length : 0;
-      if (overlapRatio > 0.5) {
-        // Dead-end corridor: remove the return path, keep only outbound
-        allSegments.splice(returnSegsBefore);
-        console.log("[circulation] Dead-end corridor detected — no loop, turning zone at end");
-      } else {
-        console.log("[circulation] Perimeter loop — closing circuit back to door");
-      }
     }
 
     // Map back: any equipment whose waypoint was unreachable

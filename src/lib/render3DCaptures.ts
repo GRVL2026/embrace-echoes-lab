@@ -4,6 +4,7 @@
  */
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { Room, Door, Pillar, CirculationSegment, Point } from "@/types/editor";
 import type { PlacedEquipment } from "@/types/equipment";
 
@@ -156,13 +157,16 @@ function buildScene(
     scene.add(mesh);
   });
 
+  // Equipment placeholders (will be replaced by GLB models in async build)
   equipments.forEach((eq) => {
-    const w = eq.width / 100, d = eq.depth / 100, h = 1.2;
+    const w = eq.width / 100, d = eq.depth / 100, h = (eq.height || 120) / 100;
     const geo = new THREE.BoxGeometry(w, h, d);
     const mat = new THREE.MeshStandardMaterial({ color: eq.color || "#8b5cf6" });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(eq.position.x / 100, h / 2, -eq.position.y / 100);
     mesh.rotation.y = -(eq.rotation * Math.PI) / 180;
+    mesh.userData._equipmentPlaceholder = true;
+    mesh.userData._equipmentData = eq;
     scene.add(mesh);
   });
 
@@ -206,13 +210,116 @@ function getCameraForView(
   }
 }
 
-export function capture3DViews(
+/** Load a GLB model and fit it into the given dimensions */
+async function loadGLBModel(url: string, width: number, depth: number, height: number): Promise<THREE.Group | null> {
+  const loader = new GLTFLoader();
+  try {
+    const gltf = await loader.loadAsync(url);
+    const model = gltf.scene.clone(true);
+
+    // Fix texture color spaces
+    model.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const mesh = child as THREE.Mesh;
+        const fixMat = (m: THREE.Material) => {
+          const mat = m.clone();
+          const std = mat as THREE.MeshStandardMaterial;
+          if (std.map) std.map.colorSpace = THREE.SRGBColorSpace;
+          if (std.emissiveMap) std.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+          if (std.aoMap) std.aoMap.colorSpace = THREE.SRGBColorSpace;
+          return mat;
+        };
+        if (Array.isArray(mesh.material)) {
+          mesh.material = mesh.material.map(fixMat);
+        } else if (mesh.material) {
+          mesh.material = fixMat(mesh.material);
+        }
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
+    });
+
+    const box = new THREE.Box3().setFromObject(model);
+    const size = box.getSize(new THREE.Vector3());
+
+    const targetW = width / 100, targetD = depth / 100, targetH = height / 100;
+    const scaleX = size.x > 0 ? targetW / size.x : 1;
+    const scaleY = size.y > 0 ? targetH / size.y : 1;
+    const scaleZ = size.z > 0 ? targetD / size.z : 1;
+    const scale = Math.min(scaleX, scaleY, scaleZ);
+    model.scale.setScalar(scale);
+
+    const newBox = new THREE.Box3().setFromObject(model);
+    const center = newBox.getCenter(new THREE.Vector3());
+    model.position.sub(center);
+    model.position.y += newBox.getSize(new THREE.Vector3()).y / 2;
+
+    return model;
+  } catch (e) {
+    console.warn("GLB load failed for PDF capture:", url, e);
+    return null;
+  }
+}
+
+/** Replace placeholder boxes with loaded GLB models in all cached scenes */
+async function replaceWithGLBModels(
+  sceneCache: Map<string, { scene: THREE.Scene; center: THREE.Vector3 }>,
+  equipments: PlacedEquipment[]
+): Promise<void> {
+  // Collect unique model URLs
+  const urlSet = new Map<string, PlacedEquipment>();
+  equipments.forEach((eq) => {
+    if (eq.model3d && !urlSet.has(eq.model3d)) {
+      urlSet.set(eq.model3d, eq);
+    }
+  });
+
+  if (urlSet.size === 0) return;
+
+  // Pre-load all unique GLB models in parallel
+  const modelCache = new Map<string, THREE.Group | null>();
+  await Promise.all(
+    Array.from(urlSet.entries()).map(async ([url, eq]) => {
+      const model = await loadGLBModel(url, eq.width, eq.depth, eq.height || 120);
+      modelCache.set(url, model);
+    })
+  );
+
+  // Replace placeholders in every scene
+  sceneCache.forEach(({ scene }) => {
+    const toRemove: THREE.Object3D[] = [];
+    const toAdd: THREE.Object3D[] = [];
+
+    scene.traverse((obj) => {
+      if (obj.userData._equipmentPlaceholder) {
+        const eq = obj.userData._equipmentData as PlacedEquipment;
+        if (eq.model3d && modelCache.has(eq.model3d)) {
+          const template = modelCache.get(eq.model3d);
+          if (template) {
+            const clone = template.clone(true);
+            const group = new THREE.Group();
+            group.add(clone);
+            group.position.set(eq.position.x / 100, 0, -eq.position.y / 100);
+            group.rotation.y = -(eq.rotation * Math.PI) / 180;
+            toRemove.push(obj);
+            toAdd.push(group);
+          }
+        }
+      }
+    });
+
+    toRemove.forEach((obj) => scene.remove(obj));
+    toAdd.forEach((obj) => scene.add(obj));
+  });
+}
+
+export async function capture3DViews(
   rooms: Room[],
   doors: Door[],
   pillars: Pillar[],
   equipments: PlacedEquipment[],
   circulation: CirculationSegment[] = []
-): Record<CaptureView, string> {
+): Promise<Record<CaptureView, string>> {
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   renderer.setSize(CANVAS_SIZE, CANVAS_SIZE);
   renderer.setPixelRatio(1);
@@ -234,11 +341,18 @@ export function capture3DViews(
   // Group by scene config to reuse scenes
   const sceneCache = new Map<string, { scene: THREE.Scene; center: THREE.Vector3 }>();
 
-  viewConfigs.forEach(({ view, showWalls, showCirculation }) => {
+  viewConfigs.forEach(({ showWalls, showCirculation }) => {
     const key = `${showWalls}-${showCirculation}`;
     if (!sceneCache.has(key)) {
       sceneCache.set(key, buildScene(rooms, doors, pillars, equipments, circulation, { showWalls, showCirculation }));
     }
+  });
+
+  // Load GLB models and replace placeholder boxes
+  await replaceWithGLBModels(sceneCache, equipments);
+
+  viewConfigs.forEach(({ view, showWalls, showCirculation }) => {
+    const key = `${showWalls}-${showCirculation}`;
     const { scene, center } = sceneCache.get(key)!;
     const cam = getCameraForView(view, center.x, center.z);
     camera.position.copy(cam.position);

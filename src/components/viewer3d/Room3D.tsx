@@ -72,12 +72,13 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true }: Prop
     <group>
       {/* Floor */}
       {showFloor && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.002, 0]} receiveShadow>
           <shapeGeometry args={[floorShape]} />
           <meshStandardMaterial
             color="#e8e8e8"
             roughness={0.5}
             metalness={0.05}
+            side={THREE.DoubleSide}
             {...{} as any}
           />
         </mesh>

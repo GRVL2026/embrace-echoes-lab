@@ -97,6 +97,7 @@ const visibilityToggles: { key: VisKey; label: string; icon: React.ElementType }
   { key: "pillars", label: "Poteaux", icon: Columns },
   { key: "grid", label: "Grille", icon: Grid3X3 },
   { key: "circulation", label: "Circulation", icon: Route },
+  { key: "heights", label: "Hauteurs", icon: Ruler },
 ];
 
 export function Viewer3DToolbar({ settings, onChange }: Props) {

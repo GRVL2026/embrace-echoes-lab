@@ -2290,6 +2290,9 @@ function drawGapMeasurements(
     }
   });
 
+  // Track equipment pairs already measured to avoid duplicates
+  const drawnPairs = new Set<string>();
+
   // For each equipment, get its 4 edge midpoints (in world coords) and cast outward
   equipments.forEach((eq) => {
     const rad = (eq.rotation || 0) * Math.PI / 180;

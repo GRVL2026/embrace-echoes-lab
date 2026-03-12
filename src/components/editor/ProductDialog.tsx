@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,17 +8,21 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Play, Zap, Monitor, Users, Ticket, Package } from "lucide-react";
+import { ChevronLeft, ChevronRight, Play, Zap, Monitor, Users, Ticket, Package, Box, Upload, Check, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import type { GameEquipment } from "@/types/equipment";
 
 type ProductDialogProps = {
   equipment: GameEquipment | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onUpdate3DModel?: (equipmentId: string, modelUrl: string | undefined) => void;
 };
 
-export function ProductDialog({ equipment, open, onOpenChange }: ProductDialogProps) {
+export function ProductDialog({ equipment, open, onOpenChange, onUpdate3DModel }: ProductDialogProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!equipment) return null;
 
@@ -38,11 +42,43 @@ export function ProductDialog({ equipment, open, onOpenChange }: ProductDialogPr
     }
   };
 
-  // Strip HTML tags for plain text preview
   const stripHtml = (html: string) => {
     const tmp = document.createElement("div");
     tmp.innerHTML = html;
     return tmp.textContent || tmp.innerText || "";
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith(".glb") && !file.name.endsWith(".gltf")) {
+      toast.error("Format non supporté. Utilisez un fichier .glb ou .gltf");
+      return;
+    }
+
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error("Fichier trop volumineux (max 50 Mo)");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      // Create a local object URL for the 3D model
+      const url = URL.createObjectURL(file);
+      onUpdate3DModel?.(equipment.id, url);
+      toast.success(`Modèle 3D "${file.name}" associé à ${equipment.name}`);
+    } catch (err) {
+      toast.error("Erreur lors du chargement du modèle 3D");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleRemoveModel = () => {
+    onUpdate3DModel?.(equipment.id, undefined);
+    toast.success(`Modèle 3D retiré de ${equipment.name}`);
   };
 
   return (
@@ -197,6 +233,56 @@ export function ProductDialog({ equipment, open, onOpenChange }: ProductDialogPr
                   <p className="text-sm font-medium text-foreground">{equipment.stock}</p>
                 </div>
               )}
+            </div>
+
+            {/* 3D Model section */}
+            <div className="rounded-lg border border-border bg-surface p-3 mb-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Box className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-medium text-foreground">Modèle 3D</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {equipment.model3d ? (
+                    <>
+                      <Badge variant="secondary" className="text-xs gap-1">
+                        <Check className="h-3 w-3" />
+                        Associé
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive hover:text-destructive"
+                        onClick={handleRemoveModel}
+                        title="Retirer le modèle 3D"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">Aucun modèle</span>
+                  )}
+                </div>
+              </div>
+              <div className="mt-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".glb,.gltf"
+                  className="hidden"
+                  onChange={handleFileUpload}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-2"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                >
+                  <Upload className="h-4 w-4" />
+                  {uploading ? "Chargement..." : equipment.model3d ? "Remplacer le modèle (.glb)" : "Uploader un modèle 3D (.glb)"}
+                </Button>
+              </div>
             </div>
 
             {/* Video */}

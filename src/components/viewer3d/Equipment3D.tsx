@@ -6,6 +6,7 @@ import type { PlacedEquipment } from "@/types/equipment";
 
 type Props = {
   equipment: PlacedEquipment;
+  showHeight?: boolean;
 };
 
 /** Parse HSL string like "hsl(263, 85%, 68%)" to a THREE.Color */

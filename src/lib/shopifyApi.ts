@@ -27,6 +27,22 @@ function getCategoryColor(category: string): string {
   return CATEGORY_COLORS[key] || CATEGORY_COLORS.default;
 }
 
+// Default dimensions (cm) per productType when Shopify data is missing
+const DEFAULT_DIMENSIONS_BY_TYPE: Record<string, { width: number; depth: number; height: number }> = {
+  "flippers":            { width: 70, depth: 145, height: 198 },
+  "flipper":             { width: 70, depth: 145, height: 198 },
+  "arcade":              { width: 70, depth: 80, height: 180 },
+  "bornes d'arcade":     { width: 70, depth: 80, height: 180 },
+  "billard":             { width: 260, depth: 145, height: 85 },
+  "babyfoot":            { width: 155, depth: 76, height: 93 },
+  "air hockey":          { width: 215, depth: 125, height: 80 },
+  "simulateur":          { width: 180, depth: 200, height: 150 },
+  "flechettes":          { width: 60, depth: 10, height: 60 },
+  "jeux de conduite":    { width: 180, depth: 200, height: 150 },
+  "réalité virtuelle":   { width: 150, depth: 150, height: 200 },
+  "grues & distributeurs": { width: 90, depth: 90, height: 190 },
+};
+
 /** Parse dimensions like "L 1030 x P 2500 x H 2640 mm" or "35X22X12" */
 function parseDimensions(dimStr: string): { width: number; depth: number; height: number } | null {
   if (!dimStr?.trim()) return null;

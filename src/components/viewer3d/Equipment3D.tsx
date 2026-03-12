@@ -6,6 +6,7 @@ import type { PlacedEquipment } from "@/types/equipment";
 
 type Props = {
   equipment: PlacedEquipment;
+  showHeight?: boolean;
 };
 
 /** Parse HSL string like "hsl(263, 85%, 68%)" to a THREE.Color */
@@ -76,7 +77,7 @@ function BoxModel({ w, d, h, color }: { w: number; d: number; h: number; color: 
   );
 }
 
-export function Equipment3D({ equipment }: Props) {
+export function Equipment3D({ equipment, showHeight = false }: Props) {
   const { w, d, h, color } = useMemo(() => {
     const w = equipment.width / 100;
     const d = equipment.depth / 100;
@@ -87,6 +88,7 @@ export function Equipment3D({ equipment }: Props) {
 
   const rotY = -(equipment.rotation || 0) * (Math.PI / 180);
   const model3dUrl = equipment.model3d;
+  const heightCm = equipment.height || 120;
 
   return (
     <group
@@ -120,6 +122,38 @@ export function Equipment3D({ equipment }: Props) {
       >
         {equipment.name}
       </Text>
+
+      {/* Height indicator */}
+      {showHeight && (
+        <group position={[w / 2 + 0.15, 0, 0]}>
+          {/* Vertical line */}
+          <mesh position={[0, (model3dUrl ? h : 0) / 2 + h / 2, 0]}>
+            <boxGeometry args={[0.02, h, 0.02]} />
+            <meshBasicMaterial color="#ef4444" />
+          </mesh>
+          {/* Bottom tick */}
+          <mesh position={[0, model3dUrl ? 0 : 0, 0]}>
+            <boxGeometry args={[0.12, 0.02, 0.02]} />
+            <meshBasicMaterial color="#ef4444" />
+          </mesh>
+          {/* Top tick */}
+          <mesh position={[0, h, 0]}>
+            <boxGeometry args={[0.12, 0.02, 0.02]} />
+            <meshBasicMaterial color="#ef4444" />
+          </mesh>
+          {/* Height label */}
+          <Text
+            position={[0.15, h / 2, 0]}
+            fontSize={0.14}
+            color="#ef4444"
+            anchorX="left"
+            anchorY="middle"
+            fontWeight="bold"
+          >
+            {heightCm} cm
+          </Text>
+        </group>
+      )}
     </group>
   );
 }

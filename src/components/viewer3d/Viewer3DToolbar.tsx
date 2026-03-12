@@ -16,6 +16,7 @@ import {
   Grid3X3,
   Layers,
   Route,
+  Ruler,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -33,6 +34,7 @@ export type Viewer3DVisibility = {
   pillars: boolean;
   grid: boolean;
   circulation: boolean;
+  heights: boolean;
 };
 
 export type Viewer3DSettings = {
@@ -53,6 +55,7 @@ export const DEFAULT_3D_SETTINGS: Viewer3DSettings = {
     pillars: true,
     grid: true,
     circulation: true,
+    heights: false,
   },
   lighting: "daylight",
 };
@@ -84,6 +87,7 @@ const visibilityToggles: { key: VisKey; label: string; icon: React.ElementType }
   { key: "pillars", label: "Poteaux", icon: Columns },
   { key: "grid", label: "Grille", icon: Grid3X3 },
   { key: "circulation", label: "Circulation", icon: Route },
+  { key: "heights", label: "Hauteurs", icon: Ruler },
 ];
 
 export function Viewer3DToolbar({ settings, onChange }: Props) {

@@ -230,7 +230,7 @@ export function Viewer3D({ settings, onPresetApplied }: Props) {
         {/* Equipment */}
         {vis.equipment &&
           state.placedEquipments.map((eq) => (
-            <Equipment3D key={eq.id} equipment={eq} />
+            <Equipment3D key={eq.id} equipment={eq} showHeight={vis.heights} />
           ))}
 
         {/* Circulation path */}

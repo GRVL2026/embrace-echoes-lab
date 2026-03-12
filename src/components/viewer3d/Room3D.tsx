@@ -70,10 +70,10 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true }: Prop
 
   return (
     <group>
-      {/* Floor */}
+      {/* Floor — extruded slab for visibility from all angles */}
       {showFloor && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.002, 0]} receiveShadow>
-          <shapeGeometry args={[floorShape]} />
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.025, 0]} receiveShadow>
+          <extrudeGeometry args={[floorShape, { depth: 0.05, bevelEnabled: false }]} />
           <meshStandardMaterial
             color="#e8e8e8"
             roughness={0.5}

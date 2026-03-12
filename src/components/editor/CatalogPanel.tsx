@@ -20,7 +20,7 @@ import { computeCirculation } from "@/lib/circulation";
 import { ProductDialog } from "./ProductDialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fetchShopifyCatalog } from "@/lib/shopifyApi";
-import { loadModelMappings, saveModelMapping, deleteModelMapping } from "@/lib/equipmentModels";
+import { loadCatalogFromDB, syncShopifyToDB, updateCatalogProduct } from "@/lib/catalogDB";
 
 /** Parse Shopify CSV dimensions like "L 1030 x P 2500 x H 2640 mm" or "35X22X12" */
 function parseShopifyDimensions(dimStr: string): { width: number; depth: number; height: number } | null {
@@ -344,13 +344,12 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   const [loadingShopify, setLoadingShopify] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load persisted 3D model mappings and apply to catalog
+  // Auto-load catalog from database on mount
   useEffect(() => {
-    loadModelMappings().then(mappings => {
-      if (Object.keys(mappings).length === 0) return;
-      setCatalog(prev => prev.map(eq => 
-        mappings[eq.id] ? { ...eq, model3d: mappings[eq.id] } : eq
-      ));
+    loadCatalogFromDB().then(products => {
+      if (products.length > 0) {
+        setCatalog(products);
+      }
     });
   }, []);
 
@@ -362,19 +361,12 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
         toast.info("Aucun produit trouvé dans votre store Shopify");
         return;
       }
-      // Merge: replace existing items with same id, add new ones
-      setCatalog(prev => {
-        const existingIds = new Set(prev.map(e => e.id));
-        const newItems = products.filter(p => !existingIds.has(p.id));
-        const updatedExisting = prev.map(e => {
-          const updated = products.find(p => p.id === e.id);
-          return updated || e;
-        });
-        return [...updatedExisting, ...newItems];
-      });
-      toast.success(`${products.length} produit${products.length > 1 ? "s" : ""} chargé${products.length > 1 ? "s" : ""} depuis Shopify`);
+      // Sync to database and get updated catalog
+      const updatedCatalog = await syncShopifyToDB(products);
+      setCatalog(updatedCatalog);
+      toast.success(`${products.length} produit${products.length > 1 ? "s" : ""} synchronisé${products.length > 1 ? "s" : ""} depuis Shopify`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erreur de chargement Shopify");
+      toast.error(err instanceof Error ? err.message : "Erreur de synchronisation Shopify");
     } finally {
       setLoadingShopify(false);
     }
@@ -875,12 +867,8 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
             .forEach(pe => {
               dispatch({ type: "UPDATE_PLACED_EQUIPMENT", id: pe.id, equipment: { model3d: modelUrl } });
             });
-          // Persist to database
-          if (modelUrl) {
-            await saveModelMapping(equipmentId, modelUrl);
-          } else {
-            await deleteModelMapping(equipmentId);
-          }
+          // Persist to catalog_products table
+          await updateCatalogProduct(equipmentId, { model3d: modelUrl || null });
         }}
       />
 

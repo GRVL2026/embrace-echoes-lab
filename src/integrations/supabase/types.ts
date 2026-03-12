@@ -14,24 +14,90 @@ export type Database = {
   }
   public: {
     Tables: {
-      equipment_models: {
+      catalog_products: {
         Row: {
+          active: boolean
+          category: string
+          center_placement: boolean | null
+          color: string | null
           created_at: string
-          equipment_id: string
+          depth: number
+          description: string | null
+          height: number
+          icon: string | null
           id: string
-          model_url: string
+          images: string[] | null
+          model3d: string | null
+          name: string
+          player_clearance: number | null
+          pmr_accessible: boolean | null
+          price: number | null
+          safety_zone: number
+          shopify_id: string | null
+          specs: Json | null
+          stock: string | null
+          tags: string[] | null
+          updated_at: string
+          vendor: string | null
+          video_url: string | null
+          warranty: string | null
+          width: number
         }
         Insert: {
+          active?: boolean
+          category?: string
+          center_placement?: boolean | null
+          color?: string | null
           created_at?: string
-          equipment_id: string
+          depth?: number
+          description?: string | null
+          height?: number
+          icon?: string | null
           id?: string
-          model_url: string
+          images?: string[] | null
+          model3d?: string | null
+          name: string
+          player_clearance?: number | null
+          pmr_accessible?: boolean | null
+          price?: number | null
+          safety_zone?: number
+          shopify_id?: string | null
+          specs?: Json | null
+          stock?: string | null
+          tags?: string[] | null
+          updated_at?: string
+          vendor?: string | null
+          video_url?: string | null
+          warranty?: string | null
+          width?: number
         }
         Update: {
+          active?: boolean
+          category?: string
+          center_placement?: boolean | null
+          color?: string | null
           created_at?: string
-          equipment_id?: string
+          depth?: number
+          description?: string | null
+          height?: number
+          icon?: string | null
           id?: string
-          model_url?: string
+          images?: string[] | null
+          model3d?: string | null
+          name?: string
+          player_clearance?: number | null
+          pmr_accessible?: boolean | null
+          price?: number | null
+          safety_zone?: number
+          shopify_id?: string | null
+          specs?: Json | null
+          stock?: string | null
+          tags?: string[] | null
+          updated_at?: string
+          vendor?: string | null
+          video_url?: string | null
+          warranty?: string | null
+          width?: number
         }
         Relationships: []
       }

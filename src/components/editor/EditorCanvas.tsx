@@ -2429,10 +2429,36 @@ function drawCirculationPath(
     ctx.setLineDash([]);
     ctx.lineCap = "butt";
 
-    // Start/end markers
+    // Turning zone circles at start/end (PMR 1.40m)
+    const turningRadiusPx = (140 / 2) * CM_TO_PX; // 70cm radius
     for (const pt of [chain[0], chain[chain.length - 1]]) {
+      const px = pt.x * CM_TO_PX;
+      const py = pt.y * CM_TO_PX;
+
+      // Filled zone
       ctx.beginPath();
-      ctx.arc(pt.x * CM_TO_PX, pt.y * CM_TO_PX, 3.5 / zoom, 0, Math.PI * 2);
+      ctx.arc(px, py, turningRadiusPx, 0, Math.PI * 2);
+      ctx.fillStyle = "hsla(200, 70%, 50%, 0.08)";
+      ctx.fill();
+
+      // Dashed border
+      ctx.beginPath();
+      ctx.arc(px, py, turningRadiusPx, 0, Math.PI * 2);
+      ctx.strokeStyle = "hsla(200, 70%, 55%, 0.45)";
+      ctx.lineWidth = 1.5 / zoom;
+      ctx.setLineDash([6 / zoom, 4 / zoom]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Small label
+      ctx.font = `${8 / zoom}px Inter`;
+      ctx.fillStyle = "hsla(200, 70%, 60%, 0.7)";
+      ctx.textAlign = "center";
+      ctx.fillText("PMR 1.40m", px, py - turningRadiusPx - 3 / zoom);
+
+      // Center dot
+      ctx.beginPath();
+      ctx.arc(px, py, 3.5 / zoom, 0, Math.PI * 2);
       ctx.fillStyle = "hsla(142, 70%, 50%, 0.6)";
       ctx.fill();
     }

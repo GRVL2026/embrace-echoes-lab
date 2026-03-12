@@ -13,6 +13,13 @@ const MODEL_3D_MAP: Record<string, string> = {
   "bowling-champ": "/models/bowlingchamp.glb",
   "bowling champ": "/models/bowlingchamp.glb",
   "bowlingchamp": "/models/bowlingchamp.glb",
+  "dino-storm": "/models/dinostorm.glb",
+  "dino storm": "/models/dinostorm.glb",
+  "dinostorm": "/models/dinostorm.glb",
+  "big-foot-crush": "/models/bigfootcrush.glb",
+  "big foot crush": "/models/bigfootcrush.glb",
+  "bigfoot crush": "/models/bigfootcrush.glb",
+  "bigfootcrush": "/models/bigfootcrush.glb",
 };
 
 /** Find a 3D model path for a product by handle or title */

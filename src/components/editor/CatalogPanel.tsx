@@ -277,7 +277,7 @@ function parseSimpleCSV(text: string): GameEquipment[] {
       color: colorIdx >= 0 ? cols[colorIdx] || undefined : undefined,
       icon: iconIdx >= 0 ? cols[iconIdx] || undefined : undefined,
       pmrAccessible: ["true", "oui", "1", "yes"].includes(pmrRaw),
-      model3d: modelIdx >= 0 ? cols[modelIdx] || undefined : undefined,
+      model3d: (modelIdx >= 0 ? cols[modelIdx] : undefined) || find3DModel(name, name),
     });
   }
 

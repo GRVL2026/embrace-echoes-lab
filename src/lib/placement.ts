@@ -1005,8 +1005,8 @@ export function autoPlaceEquipmentWithReport(
   // POST-PROCESSING: Split flipper blocks back into individual items
   // ════════════════════════════════════════════════════════════════
 
-  if (flipperBlocks.length > 0) {
-    for (const block of flipperBlocks) {
+  if (mergeBlocks.length > 0) {
+    for (const block of mergeBlocks) {
       // Find the placed block in result
       const blockIdx = result.findIndex(p => p.equipmentId === block.mergedEquip.id);
       if (blockIdx === -1) continue;

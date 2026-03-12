@@ -130,30 +130,35 @@ export function Equipment3D({ equipment, showHeight = false }: Props) {
         {equipment.name}
       </Text>
 
-      {/* Height indicator */}
+      {/* Height indicator — wall-style dimension panel behind the equipment */}
       {showHeight && (
-        <group position={[w / 2 + 0.15, 0, 0]}>
-          {/* Vertical line */}
-          <mesh position={[0, (model3dUrl ? h : 0) / 2 + h / 2, 0]}>
-            <boxGeometry args={[0.02, h, 0.02]} />
-            <meshBasicMaterial color="#ef4444" />
+        <group position={[0, 0, -d / 2 - 0.02]}>
+          {/* Semi-transparent backdrop panel */}
+          <mesh position={[0, h / 2, 0]}>
+            <planeGeometry args={[w * 0.35, h]} />
+            <meshBasicMaterial color="#1e293b" transparent opacity={0.55} side={THREE.DoubleSide} />
           </mesh>
-          {/* Bottom tick */}
-          <mesh position={[0, model3dUrl ? 0 : 0, 0]}>
-            <boxGeometry args={[0.12, 0.02, 0.02]} />
-            <meshBasicMaterial color="#ef4444" />
-          </mesh>
-          {/* Top tick */}
+          {/* Top horizontal line */}
           <mesh position={[0, h, 0]}>
-            <boxGeometry args={[0.12, 0.02, 0.02]} />
-            <meshBasicMaterial color="#ef4444" />
+            <planeGeometry args={[w * 0.5, 0.015]} />
+            <meshBasicMaterial color="#ffffff" transparent opacity={0.9} side={THREE.DoubleSide} />
+          </mesh>
+          {/* Bottom horizontal line */}
+          <mesh position={[0, 0, 0]}>
+            <planeGeometry args={[w * 0.5, 0.015]} />
+            <meshBasicMaterial color="#ffffff" transparent opacity={0.9} side={THREE.DoubleSide} />
+          </mesh>
+          {/* Vertical line */}
+          <mesh position={[0, h / 2, 0]}>
+            <planeGeometry args={[0.01, h]} />
+            <meshBasicMaterial color="#ffffff" transparent opacity={0.7} side={THREE.DoubleSide} />
           </mesh>
           {/* Height label */}
           <Text
-            position={[0.15, h / 2, 0]}
-            fontSize={0.14}
-            color="#ef4444"
-            anchorX="left"
+            position={[0, h / 2, 0.01]}
+            fontSize={0.1}
+            color="#ffffff"
+            anchorX="center"
             anchorY="middle"
             fontWeight="bold"
           >

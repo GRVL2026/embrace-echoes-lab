@@ -22,50 +22,21 @@ function parseHSLColor(color: string): THREE.Color {
 }
 
 /** Renders a loaded .glb model scaled to fit equipment dimensions */
-function GLBModel({
-  url,
-  width,
-  depth,
-  height,
-  tint,
-}: {
-  url: string;
-  width: number;
-  depth: number;
-  height: number;
-  tint: THREE.Color;
-}) {
+function GLBModel({ url, width, depth, height }: { url: string; width: number; depth: number; height: number }) {
   const { scene } = useGLTF(url);
   
   const clonedScene = useMemo(() => {
     const clone = scene.clone(true);
     
-    // Deep-clone materials so each instance can be tuned independently
+    // Deep-clone materials so textures are preserved on each instance
     clone.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
-        const materials = Array.isArray(mesh.material)
-          ? mesh.material.map((m) => m.clone())
-          : mesh.material
-            ? [mesh.material.clone()]
-            : [];
-
-        materials.forEach((mat: any) => {
-          const hasMap = Boolean(mat?.map);
-
-          if (hasMap) {
-            mat.map.colorSpace = THREE.SRGBColorSpace;
-          } else if (mat?.color) {
-            // Fallback for GLB files without texture coordinates/material maps
-            mat.color.copy(tint);
-          }
-
-          if (typeof mat?.metalness === "number") mat.metalness = Math.min(mat.metalness, 0.2);
-          if (typeof mat?.roughness === "number") mat.roughness = Math.max(mat.roughness, 0.7);
-          mat.needsUpdate = true;
-        });
-
-        mesh.material = Array.isArray(mesh.material) ? materials : materials[0];
+        if (Array.isArray(mesh.material)) {
+          mesh.material = mesh.material.map(m => m.clone());
+        } else if (mesh.material) {
+          mesh.material = mesh.material.clone();
+        }
         mesh.castShadow = true;
         mesh.receiveShadow = true;
       }
@@ -91,7 +62,7 @@ function GLBModel({
     clone.position.y += newBox.getSize(new THREE.Vector3()).y / 2;
     
     return clone;
-  }, [scene, width, depth, height, tint]);
+  }, [scene, width, depth, height]);
 
   return <primitive object={clonedScene} />;
 }
@@ -139,7 +110,6 @@ export function Equipment3D({ equipment, showHeight = false }: Props) {
               width={equipment.width}
               depth={equipment.depth}
               height={equipment.height || 120}
-              tint={color}
             />
           </Suspense>
         </ErrorBoundary>

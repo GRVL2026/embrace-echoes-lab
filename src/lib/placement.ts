@@ -991,6 +991,44 @@ export function autoPlaceEquipmentWithReport(
     }
   }
 
+  // ════════════════════════════════════════════════════════════════
+  // POST-PROCESSING: Split flipper blocks back into individual items
+  // ════════════════════════════════════════════════════════════════
+
+  if (flipperBlocks.length > 0) {
+    for (const block of flipperBlocks) {
+      // Find the placed block in result
+      const blockIdx = result.findIndex(p => p.equipmentId === block.mergedEquip.id);
+      if (blockIdx === -1) continue;
+
+      const blockPlacement = result[blockIdx];
+      const n = block.originals.length;
+      const unitW = block.unitWidth;
+      const rot = blockPlacement.rotation;
+      const rad = rot * Math.PI / 180;
+      const wallDirX = Math.cos(rad);
+      const wallDirY = Math.sin(rad);
+
+      // Remove the merged block
+      result.splice(blockIdx, 1);
+      // Also remove from placements array
+      const pIdx = placements.findIndex(p => p.equipmentId === block.mergedEquip.id);
+      if (pIdx !== -1) placements.splice(pIdx, 1);
+
+      // Place individual flippers side by side (0cm gap) centered on the block position
+      for (let i = 0; i < n; i++) {
+        const orig = block.originals[i];
+        const offset = (i - (n - 1) / 2) * unitW;
+        const x = blockPlacement.position.x + wallDirX * offset;
+        const y = blockPlacement.position.y + wallDirY * offset;
+        const p = makePlacement(orig, x, y, rot, orig.width, orig.depth);
+        result.push(p);
+        placements.push(p);
+      }
+      console.log(`[placement] Split flipper block "${block.originals[0].name}" into ${n} individual units`);
+    }
+  }
+
   const circulation = generateCirculationPath(bestRoom!, result, CORRIDOR_WIDTH);
   return { placed: result, notPlaced, circulation };
 }

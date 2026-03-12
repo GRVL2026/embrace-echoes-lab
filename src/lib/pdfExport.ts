@@ -117,8 +117,11 @@ export async function generateDossierPDF(
   let views: Record<CaptureView, string> | null = null;
   try {
     if (isCanvasCaptureAvailable()) {
+      // Capture directly from the live R3F canvas — pixel-identical to editor
       views = await captureFromLiveCanvas();
     } else {
+      // Offscreen fallback (2D mode) — loads GLB models but rendering may differ
+      console.info("PDF: Using offscreen 3D renderer (switch to 3D view for best results)");
       views = await capture3DViews(state.rooms, state.doors, state.pillars, state.placedEquipments, state.circulationPath || []);
     }
   } catch (e) {

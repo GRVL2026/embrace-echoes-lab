@@ -4,7 +4,7 @@ import type { PlacedEquipment } from "@/types/equipment";
 const CORRIDOR_WIDTH = 120; // 1.20m standard corridor width in cm
 const HALF_CORRIDOR = CORRIDOR_WIDTH / 2; // 60cm
 const TURNING_ZONE_WIDTH = 140; // 1.40m turning zone at corridor extremities for wheelchairs
-const TURNING_ZONE_RADIUS_CM = TURNING_ZONE_WIDTH / 2; // 70cm around each corridor endpoint
+const TURNING_ZONE_SEGMENTS = 8; // number of segments at each end marked as turning zone
 
 export type CirculationSegment = {
   start: Point;
@@ -631,18 +631,12 @@ export function computeCirculation(
 
   const applyTurningZones = (segments: CirculationSegment[]) => {
     if (segments.length === 0) return;
-
-    const lengths = segments.map((s) => Math.sqrt((s.end.x - s.start.x) ** 2 + (s.end.y - s.start.y) ** 2));
-    const totalLen = lengths.reduce((sum, l) => sum + l, 0);
-
-    let acc = 0;
-    for (let i = 0; i < segments.length; i++) {
-      const segLen = lengths[i];
-      const midDistFromStart = acc + segLen / 2;
-      const midDistFromEnd = totalLen - midDistFromStart;
-      const inTurningZone = midDistFromStart <= TURNING_ZONE_RADIUS_CM || midDistFromEnd <= TURNING_ZONE_RADIUS_CM;
-      segments[i].width = inTurningZone ? TURNING_ZONE_WIDTH : CORRIDOR_WIDTH;
-      acc += segLen;
+    const n = Math.min(TURNING_ZONE_SEGMENTS, Math.floor(segments.length / 2));
+    for (let i = 0; i < n; i++) {
+      segments[i].width = TURNING_ZONE_WIDTH;
+    }
+    for (let i = segments.length - n; i < segments.length; i++) {
+      segments[i].width = TURNING_ZONE_WIDTH;
     }
   };
 

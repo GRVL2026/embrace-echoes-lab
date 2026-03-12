@@ -159,6 +159,7 @@ function shopifyProductToEquipment(product: ShopifyAdminProduct): GameEquipment 
     centerPlacement: isCenterPlacement || undefined,
     playerClearance: isCenterPlacement ? 100 : undefined,
     color: getCategoryColor(category),
+    model3d: find3DModel(product.handle, product.title),
     description: product.description || undefined,
     vendor: product.vendor || undefined,
     price: price > 0 ? price : undefined,

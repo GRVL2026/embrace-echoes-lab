@@ -27,6 +27,22 @@ function getCategoryColor(category: string): string {
   return CATEGORY_COLORS[key] || CATEGORY_COLORS.default;
 }
 
+// Default dimensions (cm) per productType when Shopify data is missing
+const DEFAULT_DIMENSIONS_BY_TYPE: Record<string, { width: number; depth: number; height: number }> = {
+  "flippers":            { width: 70, depth: 145, height: 198 },
+  "flipper":             { width: 70, depth: 145, height: 198 },
+  "arcade":              { width: 70, depth: 80, height: 180 },
+  "bornes d'arcade":     { width: 70, depth: 80, height: 180 },
+  "billard":             { width: 260, depth: 145, height: 85 },
+  "babyfoot":            { width: 155, depth: 76, height: 93 },
+  "air hockey":          { width: 215, depth: 125, height: 80 },
+  "simulateur":          { width: 180, depth: 200, height: 150 },
+  "flechettes":          { width: 60, depth: 10, height: 60 },
+  "jeux de conduite":    { width: 180, depth: 200, height: 150 },
+  "réalité virtuelle":   { width: 150, depth: 150, height: 200 },
+  "grues & distributeurs": { width: 90, depth: 90, height: 190 },
+};
+
 /** Parse dimensions like "L 1030 x P 2500 x H 2640 mm" or "35X22X12" */
 function parseDimensions(dimStr: string): { width: number; depth: number; height: number } | null {
   if (!dimStr?.trim()) return null;
@@ -62,32 +78,45 @@ interface ShopifyAdminProduct {
 }
 
 function shopifyProductToEquipment(product: ShopifyAdminProduct): GameEquipment {
-  // Try to find dimensions from metafields (various possible keys)
+  // 1) Try custom.specs_dimensions metafield first (most reliable)
   let dims: { width: number; depth: number; height: number } | null = null;
+  const specsDims = product.metafields["custom.specs_dimensions"];
+  if (specsDims) {
+    dims = parseDimensions(specsDims);
+  }
 
-  // Search all metafields for dimension data
-  for (const [key, value] of Object.entries(product.metafields)) {
-    if (key.toLowerCase().includes("dimension") || key.toLowerCase().includes("size") || key.toLowerCase().includes("taille")) {
-      dims = parseDimensions(value);
-      if (dims) break;
+  // 2) Search all metafields for dimension data
+  if (!dims) {
+    for (const [key, value] of Object.entries(product.metafields)) {
+      if (key.toLowerCase().includes("dimension") || key.toLowerCase().includes("size") || key.toLowerCase().includes("taille")) {
+        dims = parseDimensions(value);
+        if (dims) break;
+      }
     }
   }
 
-  // Fallback: try to extract from description HTML
+  // 3) Fallback: try to extract from description HTML
   if (!dims && product.description) {
-    // Strip HTML tags for parsing
     const textDesc = product.description.replace(/<[^>]*>/g, " ");
     dims = parseDimensions(textDesc);
   }
 
-  const price = parseFloat(product.price);
+  // 4) Fallback: use default dimensions by product type
   const category = product.productType || "autre";
+  const typeFallback = DEFAULT_DIMENSIONS_BY_TYPE[category.toLowerCase()];
+
+  const price = parseFloat(product.price);
 
   // Detect center-placement games (played from short sides, placed as island)
   const titleLower = product.title.toLowerCase();
   const isCenterPlacement = /\bpalet\b/.test(titleLower) || /\bpower\s*puck\b/.test(titleLower);
 
-  // Extract specs from metafields
+  // Read custom.specs_* metafields directly
+  const specsCapacity = product.metafields["custom.specs_capacity"];
+  const specsPower = product.metafields["custom.specs_power"];
+  const specsTickets = product.metafields["custom.specs_tickets"];
+
+  // Generic fallback search
   const findMeta = (keyword: string) => {
     for (const [key, value] of Object.entries(product.metafields)) {
       if (key.toLowerCase().includes(keyword)) return value;
@@ -99,9 +128,9 @@ function shopifyProductToEquipment(product: ShopifyAdminProduct): GameEquipment 
     id: product.handle,
     name: product.title,
     category,
-    width: dims?.width || 100,
-    depth: dims?.depth || 100,
-    height: dims?.height || 200,
+    width: dims?.width || typeFallback?.width || 100,
+    depth: dims?.depth || typeFallback?.depth || 100,
+    height: dims?.height || typeFallback?.height || 200,
     safetyZone: DEFAULT_SAFETY_ZONE,
     centerPlacement: isCenterPlacement || undefined,
     playerClearance: isCenterPlacement ? 100 : undefined,
@@ -113,11 +142,11 @@ function shopifyProductToEquipment(product: ShopifyAdminProduct): GameEquipment 
     tags: product.tags.length > 0 ? product.tags : undefined,
     warranty: findMeta("warranty") || findMeta("garantie"),
     specs: {
-      power: findMeta("power") || findMeta("puissance"),
+      power: specsPower || findMeta("power") || findMeta("puissance"),
       screen: findMeta("screen") || findMeta("ecran") || findMeta("écran"),
-      capacity: findMeta("capacity") || findMeta("capacit") || findMeta("joueur"),
+      capacity: specsCapacity || findMeta("capacity") || findMeta("capacit") || findMeta("joueur"),
       tickets: (() => {
-        const v = findMeta("ticket");
+        const v = specsTickets || findMeta("ticket");
         if (!v) return undefined;
         return v.toLowerCase() === "oui" ? true : v.toLowerCase() === "non" ? false : undefined;
       })(),

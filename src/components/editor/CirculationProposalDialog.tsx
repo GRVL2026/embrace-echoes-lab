@@ -179,7 +179,7 @@ function ProposalCard({
 
     // Draw circulation path
     if (proposal.resultingCirculation.length > 0) {
-      const hw = 140 * CM_TO_PX / 2; // corridor half-width
+      const hw = 120 * CM_TO_PX / 2; // corridor half-width
 
       // Build chain
       const chain: Point[] = [proposal.resultingCirculation[0].start];

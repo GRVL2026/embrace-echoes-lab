@@ -90,4 +90,5 @@ export const INITIAL_EDITOR_STATE: EditorState = {
 
 // Scale: 1cm = 0.5px at zoom 1 (allows ~20m horizontal view with sidebar)
 export const CM_TO_PX = 0.5;
-export const SAFETY_ZONE_CM = 140; // 1m40 zone de circulation
+export const SAFETY_ZONE_CM = 120; // 1m20 zone de circulation standard
+export const TURNING_ZONE_CM = 140; // 1m40 zone de retournement fauteuil roulant

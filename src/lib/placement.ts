@@ -6,7 +6,7 @@ import { DOOR_EXCLUSION_DEPTH } from "@/types/equipment";
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════
 
-const CORRIDOR_WIDTH = 140; // Rule 1: 1.4m minimum corridor
+const CORRIDOR_WIDTH = 120; // Rule 1: 1.2m standard corridor (turning zones 1.4m at extremities handled by circulation)
 const SAME_REF_GAP = 2;    // 2cm between identical references
 const DIFFERENT_GAP = 10;  // 10cm between different equipment
 const WALL_MARGIN = 5;     // 5cm from wall surface

@@ -692,6 +692,9 @@ export function computeCirculation(
     // No doors, no equipment — nothing to show
   }
 
+  // Apply turning zones (1.4m) at corridor extremities
+  applyTurningZones(allSegments);
+
   const success = unreachableIds.length === 0;
   let proposals: RemovalProposal[] = [];
   if (!success && equipments.length > 0) {

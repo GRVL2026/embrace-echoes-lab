@@ -45,7 +45,7 @@ export function Circulation3D({ segments }: Props) {
   const geometry = useMemo(() => {
     if (!segments || segments.length === 0) return null;
 
-    const corridorWidth = (segments[0]?.width || 140) / 100;
+    const corridorWidth = (segments[0]?.width || 120) / 100;
     const halfW = corridorWidth / 2;
 
     const chains: Point[][] = [];

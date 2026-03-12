@@ -28,6 +28,20 @@ function GLBModel({ url, width, depth, height }: { url: string; width: number; d
   const clonedScene = useMemo(() => {
     const clone = scene.clone(true);
     
+    // Deep-clone materials so textures are preserved on each instance
+    clone.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const mesh = child as THREE.Mesh;
+        if (Array.isArray(mesh.material)) {
+          mesh.material = mesh.material.map(m => m.clone());
+        } else if (mesh.material) {
+          mesh.material = mesh.material.clone();
+        }
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
+    });
+    
     const box = new THREE.Box3().setFromObject(clone);
     const size = box.getSize(new THREE.Vector3());
     
@@ -46,13 +60,6 @@ function GLBModel({ url, width, depth, height }: { url: string; width: number; d
     const center = newBox.getCenter(new THREE.Vector3());
     clone.position.sub(center);
     clone.position.y += newBox.getSize(new THREE.Vector3()).y / 2;
-    
-    clone.traverse((child) => {
-      if ((child as THREE.Mesh).isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-      }
-    });
     
     return clone;
   }, [scene, width, depth, height]);

@@ -8,6 +8,7 @@ import { ArcadeLighting } from "./ArcadeLighting";
 import { Pillar3D } from "./Pillar3D";
 import { Circulation3D } from "./Circulation3D";
 import { Door3D } from "./Door3D";
+import { SceneCapturer } from "./SceneCapturer";
 import * as THREE from "three";
 import type { Viewer3DSettings, PresetView, LightingPreset } from "./Viewer3DToolbar";
 
@@ -170,8 +171,18 @@ function FirstPersonMovement({ active }: { active: boolean }) {
   return null;
 }
 
+/** Sync a Three.js group's visibility with a React boolean */
+function useGroupVisibility(ref: React.RefObject<THREE.Group | null>, visible: boolean) {
+  useEffect(() => {
+    if (ref.current) ref.current.visible = visible;
+  }, [ref, visible]);
+}
+
 export function Viewer3D({ settings, onPresetApplied }: Props) {
   const { state } = useEditor();
+  const wallGroupRef = useRef<THREE.Group>(null);
+  const circulationGroupRef = useRef<THREE.Group>(null);
+  const gridGroupRef = useRef<THREE.Group>(null);
 
   const allPoints = state.rooms.flatMap((r) => r.points);
   const cx = allPoints.length
@@ -194,26 +205,29 @@ export function Viewer3D({ settings, onPresetApplied }: Props) {
           near: 0.1,
           far: 200,
         }}
-        gl={{ antialias: true, toneMapping: 3 }}
+        gl={{ antialias: true, toneMapping: 3, preserveDrawingBuffer: true }}
       >
+        {/* Scene capturer for PDF export */}
+        <SceneCapturer
+          cx={cx}
+          cz={cz}
+          wallObjects={wallGroupRef}
+          circulationObjects={circulationGroupRef}
+          gridObjects={gridGroupRef}
+        />
+
         {/* Lighting */}
         <SceneLighting preset={settings.lighting} />
 
         {/* Arcade-specific room lighting */}
         {settings.lighting !== "arcade" && <ArcadeLighting rooms={state.rooms} />}
 
-        {/* Rooms (walls + floor) */}
-        {vis.walls &&
-          state.rooms.map((room) => (
-            <Room3D key={room.id} room={room} doors={state.doors} showFloor={vis.floor} />
+        {/* Rooms (walls + floor) — always rendered, visibility controlled via group */}
+        <group ref={wallGroupRef}>
+          {state.rooms.map((room) => (
+            <Room3D key={room.id} room={room} doors={state.doors} showFloor={vis.floor} showWalls={vis.walls} />
           ))}
-
-        {/* Floor only (when walls hidden but floor visible) */}
-        {!vis.walls &&
-          vis.floor &&
-          state.rooms.map((room) => (
-            <Room3D key={`floor-${room.id}`} room={room} doors={[]} showFloor={true} showWalls={false} />
-          ))}
+        </group>
 
         {/* Pillars */}
         {vis.pillars &&
@@ -233,26 +247,30 @@ export function Viewer3D({ settings, onPresetApplied }: Props) {
             <Equipment3D key={eq.id} equipment={eq} showHeight={vis.heights} />
           ))}
 
-        {/* Circulation path */}
-        {vis.circulation && state.circulationPath && state.circulationPath.length > 0 && (
-          <Circulation3D segments={state.circulationPath} />
-        )}
+        {/* Circulation path — always rendered, visibility controlled via group */}
+        <group ref={circulationGroupRef}>
+          {state.circulationPath && state.circulationPath.length > 0 && (
+            <Circulation3D segments={state.circulationPath} />
+          )}
+        </group>
 
-        {/* Ground grid */}
-        {vis.grid && (
-          <Grid
-            position={[cx, -0.01, cz]}
-            args={[50, 50]}
-            cellSize={1}
-            cellThickness={0.5}
-            cellColor={settings.lighting === "arcade" ? "#2a2a4a" : "#c0c0c0"}
-            sectionSize={5}
-            sectionThickness={1}
-            sectionColor={settings.lighting === "arcade" ? "#4a4a6a" : "#999999"}
-            fadeDistance={30}
-            infiniteGrid
-          />
-        )}
+        {/* Ground grid — wrapped for capture control */}
+        <group ref={gridGroupRef}>
+          {vis.grid && (
+            <Grid
+              position={[cx, -0.01, cz]}
+              args={[50, 50]}
+              cellSize={1}
+              cellThickness={0.5}
+              cellColor={settings.lighting === "arcade" ? "#2a2a4a" : "#c0c0c0"}
+              sectionSize={5}
+              sectionThickness={1}
+              sectionColor={settings.lighting === "arcade" ? "#4a4a6a" : "#999999"}
+              fadeDistance={30}
+              infiniteGrid
+            />
+          )}
+        </group>
 
         {/* Camera controls */}
         <CameraController

@@ -6,6 +6,7 @@ import jsPDF from "jspdf";
 import type { EditorState, Room } from "@/types/editor";
 import type { GameEquipment, PlacedEquipment } from "@/types/equipment";
 import { capture3DViews, type CaptureView } from "./render3DCaptures";
+import { captureFromLiveCanvas, isCanvasCaptureAvailable } from "./canvasCapture";
 
 // Brand colors — dark arcade theme
 const PURPLE = [155, 92, 255] as const;   // #9B5CFF
@@ -112,10 +113,17 @@ export async function generateDossierPDF(
     return s + (cat?.price || 0);
   }, 0);
 
-  // 3D captures (async — loads GLB models)
-  let views: Awaited<ReturnType<typeof capture3DViews>> | null = null;
+  // 3D captures — prefer live canvas (identical to editor) over offscreen fallback
+  let views: Record<CaptureView, string> | null = null;
   try {
-    views = await capture3DViews(state.rooms, state.doors, state.pillars, state.placedEquipments, state.circulationPath || []);
+    if (isCanvasCaptureAvailable()) {
+      // Capture directly from the live R3F canvas — pixel-identical to editor
+      views = await captureFromLiveCanvas();
+    } else {
+      // Offscreen fallback (2D mode) — loads GLB models but rendering may differ
+      console.info("PDF: Using offscreen 3D renderer (switch to 3D view for best results)");
+      views = await capture3DViews(state.rooms, state.doors, state.pillars, state.placedEquipments, state.circulationPath || []);
+    }
   } catch (e) {
     console.warn("3D capture failed:", e);
   }

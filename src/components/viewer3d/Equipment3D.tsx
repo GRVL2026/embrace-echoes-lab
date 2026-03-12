@@ -28,14 +28,23 @@ function GLBModel({ url, width, depth, height }: { url: string; width: number; d
   const clonedScene = useMemo(() => {
     const clone = scene.clone(true);
     
-    // Deep-clone materials so textures are preserved on each instance
+    // Deep-clone materials and ensure textures have correct color space
     clone.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
+        const fixMaterial = (m: THREE.Material) => {
+          const mat = m.clone();
+          // Ensure sRGB encoding on all color-related texture maps
+          const std = mat as THREE.MeshStandardMaterial;
+          if (std.map) std.map.colorSpace = THREE.SRGBColorSpace;
+          if (std.emissiveMap) std.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+          if (std.aoMap) std.aoMap.colorSpace = THREE.SRGBColorSpace;
+          return mat;
+        };
         if (Array.isArray(mesh.material)) {
-          mesh.material = mesh.material.map(m => m.clone());
+          mesh.material = mesh.material.map(fixMaterial);
         } else if (mesh.material) {
-          mesh.material = mesh.material.clone();
+          mesh.material = fixMaterial(mesh.material);
         }
         mesh.castShadow = true;
         mesh.receiveShadow = true;

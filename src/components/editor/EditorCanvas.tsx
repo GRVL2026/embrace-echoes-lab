@@ -2386,7 +2386,9 @@ function drawCirculationPath(
     chain = deduplicateChain(chain, 3);
     if (chain.length < 2) continue;
 
-    const corridorWidthPx = (segments[0]?.width || 120) * CM_TO_PX;
+    // Use the minimum width (standard corridor), not turning zone width
+    const standardWidth = Math.min(...segments.map(s => s.width));
+    const corridorWidthPx = (standardWidth || 120) * CM_TO_PX;
 
     // Helper to trace the chain path
     const tracePath = () => {

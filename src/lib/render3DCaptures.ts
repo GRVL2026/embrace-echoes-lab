@@ -157,13 +157,16 @@ function buildScene(
     scene.add(mesh);
   });
 
+  // Equipment placeholders (will be replaced by GLB models in async build)
   equipments.forEach((eq) => {
-    const w = eq.width / 100, d = eq.depth / 100, h = 1.2;
+    const w = eq.width / 100, d = eq.depth / 100, h = (eq.height || 120) / 100;
     const geo = new THREE.BoxGeometry(w, h, d);
     const mat = new THREE.MeshStandardMaterial({ color: eq.color || "#8b5cf6" });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(eq.position.x / 100, h / 2, -eq.position.y / 100);
     mesh.rotation.y = -(eq.rotation * Math.PI) / 180;
+    mesh.userData._equipmentPlaceholder = true;
+    mesh.userData._equipmentData = eq;
     scene.add(mesh);
   });
 

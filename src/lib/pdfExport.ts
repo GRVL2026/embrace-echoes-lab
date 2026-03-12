@@ -7,6 +7,7 @@ import type { EditorState, Room } from "@/types/editor";
 import type { GameEquipment, PlacedEquipment } from "@/types/equipment";
 import { capture3DViews, type CaptureView } from "./render3DCaptures";
 import { captureFromLiveCanvas, isCanvasCaptureAvailable } from "./canvasCapture";
+import { getCanvas2DSnapshot } from "./canvas2DSnapshot";
 
 // Brand colors — dark arcade theme
 const PURPLE = [155, 92, 255] as const;   // #9B5CFF

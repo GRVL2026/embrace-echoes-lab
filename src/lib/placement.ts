@@ -576,40 +576,50 @@ export function autoPlaceEquipmentWithReport(
     else wallEquipments.push(equip);
   }
 
-  // ── FLIPPER MERGE: fuse all flippers of the same ref into a single block ──
-  // Track merged flipper blocks so we can split them back after placement
-  type FlipperBlock = { mergedEquip: GameEquipment; originals: GameEquipment[]; unitWidth: number };
-  const flipperBlocks: FlipperBlock[] = [];
+  // ── BLOCK MERGE: fuse flippers & basket games of the same ref into a single block ──
+  // Categories that should be merged as indivisible blocks (0cm gap between units)
+  const MERGE_BLOCK_CATEGORIES = new Set(["flipper", "basket"]);
+  function shouldMergeAsBlock(equip: GameEquipment): boolean {
+    const cat = (equip.category || "").toLowerCase().replace(/s$/, "");
+    if (MERGE_BLOCK_CATEGORIES.has(cat)) return true;
+    // Also match by name containing "basket" (e.g. category "sport" but name "BASKET EMOJI")
+    if (equip.name.toLowerCase().includes("basket")) return true;
+    return false;
+  }
+
+  // Track merged blocks so we can split them back after placement
+  type MergeBlock = { mergedEquip: GameEquipment; originals: GameEquipment[]; unitWidth: number };
+  const mergeBlocks: MergeBlock[] = [];
 
   const mergedWallEquipments: GameEquipment[] = [];
-  const flippersByRef = new Map<string, GameEquipment[]>();
+  const blocksByRef = new Map<string, GameEquipment[]>();
 
   for (const equip of wallEquipments) {
-    if ((equip.category || "").toLowerCase().replace(/s$/, "") === "flipper") {
-      if (!flippersByRef.has(equip.id)) flippersByRef.set(equip.id, []);
-      flippersByRef.get(equip.id)!.push(equip);
+    if (shouldMergeAsBlock(equip)) {
+      if (!blocksByRef.has(equip.id)) blocksByRef.set(equip.id, []);
+      blocksByRef.get(equip.id)!.push(equip);
     } else {
       mergedWallEquipments.push(equip);
     }
   }
 
-  for (const [refId, flippers] of flippersByRef) {
-    if (flippers.length <= 1) {
-      // Single flipper — no merge needed
-      mergedWallEquipments.push(flippers[0]);
+  for (const [refId, items] of blocksByRef) {
+    if (items.length <= 1) {
+      // Single item — no merge needed
+      mergedWallEquipments.push(items[0]);
     } else {
-      // Merge N flippers into one virtual block (0cm gap between units)
-      const unitW = flippers[0].width;
-      const totalWidth = unitW * flippers.length; // 0cm gap
+      // Merge N items into one virtual block (0cm gap between units)
+      const unitW = items[0].width;
+      const totalWidth = unitW * items.length; // 0cm gap
       const mergedEquip: GameEquipment = {
-        ...flippers[0],
-        id: `__flipper_block_${refId}`,
-        name: `${flippers[0].name} x${flippers.length}`,
+        ...items[0],
+        id: `__merge_block_${refId}`,
+        name: `${items[0].name} x${items.length}`,
         width: totalWidth,
       };
       mergedWallEquipments.push(mergedEquip);
-      flipperBlocks.push({ mergedEquip, originals: flippers, unitWidth: unitW });
-      console.log(`[placement] Merged ${flippers.length} flippers "${flippers[0].name}" into block ${totalWidth}cm wide`);
+      mergeBlocks.push({ mergedEquip, originals: items, unitWidth: unitW });
+      console.log(`[placement] Merged ${items.length} "${items[0].name}" into block ${totalWidth}cm wide`);
     }
   }
 

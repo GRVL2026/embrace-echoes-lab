@@ -17,16 +17,6 @@ import {
   Layers,
   Route,
   Ruler,
-  Sun,
-  Moon,
-  Lightbulb,
-  Footprints,
-  Box,
-  Columns,
-  DoorOpen,
-  Grid3X3,
-  Layers,
-  Route,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";

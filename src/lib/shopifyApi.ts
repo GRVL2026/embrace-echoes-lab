@@ -3,6 +3,30 @@ import type { GameEquipment } from "@/types/equipment";
 import { DEFAULT_SAFETY_ZONE } from "@/types/equipment";
 
 
+// 3D model mapping: product handle/title keyword → .glb file path
+const MODEL_3D_MAP: Record<string, string> = {
+  "monster-kart": "/models/Monster_Kart.glb",
+  "monster kart": "/models/Monster_Kart.glb",
+  "galaxy-ranger": "/models/galaxyranger.glb",
+  "galaxy ranger": "/models/galaxyranger.glb",
+  "galaxyranger": "/models/galaxyranger.glb",
+  "bowling-champ": "/models/bowlingchamp.glb",
+  "bowling champ": "/models/bowlingchamp.glb",
+  "bowlingchamp": "/models/bowlingchamp.glb",
+};
+
+/** Find a 3D model path for a product by handle or title */
+function find3DModel(handle: string, title: string): string | undefined {
+  const handleLower = handle.toLowerCase();
+  const titleLower = title.toLowerCase();
+  for (const [key, path] of Object.entries(MODEL_3D_MAP)) {
+    if (handleLower.includes(key) || titleLower.includes(key)) {
+      return path;
+    }
+  }
+  return undefined;
+}
+
 // Color palette for equipment categories
 const CATEGORY_COLORS: Record<string, string> = {
   "arcade": "hsl(263, 85%, 68%)",

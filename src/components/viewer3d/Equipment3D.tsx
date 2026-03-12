@@ -1,10 +1,11 @@
-import { useMemo } from "react";
+import { useMemo, Suspense } from "react";
 import * as THREE from "three";
-import { Text } from "@react-three/drei";
-import type { PlacedEquipment } from "@/types/equipment";
+import { Text, useGLTF } from "@react-three/drei";
+import type { PlacedEquipment, GameEquipment } from "@/types/equipment";
 
 type Props = {
   equipment: PlacedEquipment;
+  catalogEntry?: GameEquipment;
 };
 
 /** Parse HSL string like "hsl(263, 85%, 68%)" to a THREE.Color */
@@ -19,40 +20,99 @@ function parseHSLColor(color: string): THREE.Color {
   return new THREE.Color(color);
 }
 
-export function Equipment3D({ equipment }: Props) {
+/** Renders a loaded .glb model scaled to fit equipment dimensions */
+function GLBModel({ url, width, depth, height }: { url: string; width: number; depth: number; height: number }) {
+  const { scene } = useGLTF(url);
+  
+  const clonedScene = useMemo(() => {
+    const clone = scene.clone(true);
+    
+    // Compute bounding box to scale model to match equipment dimensions
+    const box = new THREE.Box3().setFromObject(clone);
+    const size = box.getSize(new THREE.Vector3());
+    
+    // Scale to fit within equipment dimensions (cm → meters)
+    const targetW = width / 100;
+    const targetD = depth / 100;
+    const targetH = height / 100;
+    
+    const scaleX = size.x > 0 ? targetW / size.x : 1;
+    const scaleY = size.y > 0 ? targetH / size.y : 1;
+    const scaleZ = size.z > 0 ? targetD / size.z : 1;
+    const scale = Math.min(scaleX, scaleY, scaleZ);
+    
+    clone.scale.setScalar(scale);
+    
+    // Re-center after scaling
+    const newBox = new THREE.Box3().setFromObject(clone);
+    const center = newBox.getCenter(new THREE.Vector3());
+    clone.position.sub(center);
+    clone.position.y += newBox.getSize(new THREE.Vector3()).y / 2;
+    
+    // Enable shadows on all meshes
+    clone.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+    
+    return clone;
+  }, [scene, width, depth, height]);
+
+  return <primitive object={clonedScene} />;
+}
+
+/** Fallback box geometry */
+function BoxModel({ w, d, h, color }: { w: number; d: number; h: number; color: THREE.Color }) {
+  return (
+    <mesh castShadow receiveShadow>
+      <boxGeometry args={[w, h, d]} />
+      <meshStandardMaterial
+        color={color}
+        roughness={0.5}
+        metalness={0.1}
+        emissive={color}
+        emissiveIntensity={0.05}
+        {...{} as any}
+      />
+    </mesh>
+  );
+}
+
+export function Equipment3D({ equipment, catalogEntry }: Props) {
   const { w, d, h, color } = useMemo(() => {
-    // cm → meters
     const w = equipment.width / 100;
     const d = equipment.depth / 100;
-    // Use a reasonable height (equipment type height, default 1.2m)
-    const h = 1.2;
+    const h = (catalogEntry?.height || 120) / 100;
     const color = parseHSLColor(equipment.color || "hsl(263, 85%, 68%)");
     return { w, d, h, color };
-  }, [equipment]);
+  }, [equipment, catalogEntry]);
 
   const rotY = -(equipment.rotation || 0) * (Math.PI / 180);
+  const model3dUrl = catalogEntry?.model3d;
 
   return (
     <group
-      position={[equipment.position.x / 100, h / 2, equipment.position.y / 100]}
+      position={[equipment.position.x / 100, model3dUrl ? 0 : h / 2, equipment.position.y / 100]}
       rotation={[0, rotY, 0]}
     >
-      {/* Main body */}
-      <mesh castShadow receiveShadow>
-        <boxGeometry args={[w, h, d]} />
-        <meshStandardMaterial
-          color={color}
-          roughness={0.5}
-          metalness={0.1}
-          emissive={color}
-          emissiveIntensity={0.05}
-          {...{} as any}
-        />
-      </mesh>
+      {model3dUrl ? (
+        <Suspense fallback={<BoxModel w={w} d={d} h={h} color={color} />}>
+          <GLBModel
+            url={model3dUrl}
+            width={equipment.width}
+            depth={equipment.depth}
+            height={catalogEntry?.height || 120}
+          />
+        </Suspense>
+      ) : (
+        <BoxModel w={w} d={d} h={h} color={color} />
+      )}
 
       {/* Top label */}
       <Text
-        position={[0, h / 2 + 0.05, 0]}
+        position={[0, h + 0.1, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
         fontSize={0.12}
         color="#222222"
@@ -62,7 +122,6 @@ export function Equipment3D({ equipment }: Props) {
       >
         {equipment.name}
       </Text>
-
     </group>
   );
 }

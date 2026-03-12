@@ -631,12 +631,18 @@ export function computeCirculation(
 
   const applyTurningZones = (segments: CirculationSegment[]) => {
     if (segments.length === 0) return;
-    const n = Math.min(TURNING_ZONE_SEGMENTS, Math.floor(segments.length / 2));
-    for (let i = 0; i < n; i++) {
-      segments[i].width = TURNING_ZONE_WIDTH;
-    }
-    for (let i = segments.length - n; i < segments.length; i++) {
-      segments[i].width = TURNING_ZONE_WIDTH;
+
+    const lengths = segments.map((s) => Math.sqrt((s.end.x - s.start.x) ** 2 + (s.end.y - s.start.y) ** 2));
+    const totalLen = lengths.reduce((sum, l) => sum + l, 0);
+
+    let acc = 0;
+    for (let i = 0; i < segments.length; i++) {
+      const segLen = lengths[i];
+      const midDistFromStart = acc + segLen / 2;
+      const midDistFromEnd = totalLen - midDistFromStart;
+      const inTurningZone = midDistFromStart <= TURNING_ZONE_RADIUS_CM || midDistFromEnd <= TURNING_ZONE_RADIUS_CM;
+      segments[i].width = inTurningZone ? TURNING_ZONE_WIDTH : CORRIDOR_WIDTH;
+      acc += segLen;
     }
   };
 

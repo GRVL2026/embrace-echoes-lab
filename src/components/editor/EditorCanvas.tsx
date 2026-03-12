@@ -2358,7 +2358,7 @@ function drawCirculationPath(
 ) {
   if (segments.length === 0) return;
 
-  const hw = (segments[0]?.width || 140) * CM_TO_PX / 2;
+  const hw = (segments[0]?.width || 120) * CM_TO_PX / 2;
 
   // Build continuous chains from segments
   const chains: Point[][] = [];
@@ -2386,7 +2386,7 @@ function drawCirculationPath(
     chain = deduplicateChain(chain, 3);
     if (chain.length < 2) continue;
 
-    const corridorWidthPx = (segments[0]?.width || 140) * CM_TO_PX;
+    const corridorWidthPx = (segments[0]?.width || 120) * CM_TO_PX;
 
     // Helper to trace the chain path
     const tracePath = () => {

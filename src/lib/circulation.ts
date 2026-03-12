@@ -1,8 +1,10 @@
 import type { Point, Room, Door, Pillar } from "@/types/editor";
 import type { PlacedEquipment } from "@/types/equipment";
 
-const CORRIDOR_WIDTH = 140; // 1.40m in cm
-const HALF_CORRIDOR = CORRIDOR_WIDTH / 2; // 70cm
+const CORRIDOR_WIDTH = 120; // 1.20m standard corridor width in cm
+const HALF_CORRIDOR = CORRIDOR_WIDTH / 2; // 60cm
+const TURNING_ZONE_WIDTH = 140; // 1.40m turning zone at corridor extremities for wheelchairs
+const TURNING_ZONE_SEGMENTS = 8; // number of segments at each end marked as turning zone
 
 export type CirculationSegment = {
   start: Point;
@@ -627,6 +629,17 @@ export function computeCirculation(
     return true;
   };
 
+  const applyTurningZones = (segments: CirculationSegment[]) => {
+    if (segments.length === 0) return;
+    const n = Math.min(TURNING_ZONE_SEGMENTS, Math.floor(segments.length / 2));
+    for (let i = 0; i < n; i++) {
+      segments[i].width = TURNING_ZONE_WIDTH;
+    }
+    for (let i = segments.length - n; i < segments.length; i++) {
+      segments[i].width = TURNING_ZONE_WIDTH;
+    }
+  };
+
   if (equipments.length > 0) {
     // Build wall-sweep waypoints (groups same-wall equipment, creates sweep at extremes)
     const waypoints = buildWallSweepWaypoints(equipments, bestRoom);
@@ -678,6 +691,9 @@ export function computeCirculation(
   } else if (roomDoors.length === 0) {
     // No doors, no equipment — nothing to show
   }
+
+  // Apply turning zones (1.4m) at corridor extremities
+  applyTurningZones(allSegments);
 
   const success = unreachableIds.length === 0;
   let proposals: RemovalProposal[] = [];

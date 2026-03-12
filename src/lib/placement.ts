@@ -576,9 +576,46 @@ export function autoPlaceEquipmentWithReport(
     else wallEquipments.push(equip);
   }
 
+  // ── FLIPPER MERGE: fuse all flippers of the same ref into a single block ──
+  // Track merged flipper blocks so we can split them back after placement
+  type FlipperBlock = { mergedEquip: GameEquipment; originals: GameEquipment[]; unitWidth: number };
+  const flipperBlocks: FlipperBlock[] = [];
+
+  const mergedWallEquipments: GameEquipment[] = [];
+  const flippersByRef = new Map<string, GameEquipment[]>();
+
+  for (const equip of wallEquipments) {
+    if ((equip.category || "").toLowerCase().replace(/s$/, "") === "flipper") {
+      if (!flippersByRef.has(equip.id)) flippersByRef.set(equip.id, []);
+      flippersByRef.get(equip.id)!.push(equip);
+    } else {
+      mergedWallEquipments.push(equip);
+    }
+  }
+
+  for (const [refId, flippers] of flippersByRef) {
+    if (flippers.length <= 1) {
+      // Single flipper — no merge needed
+      mergedWallEquipments.push(flippers[0]);
+    } else {
+      // Merge N flippers into one virtual block (0cm gap between units)
+      const unitW = flippers[0].width;
+      const totalWidth = unitW * flippers.length; // 0cm gap
+      const mergedEquip: GameEquipment = {
+        ...flippers[0],
+        id: `__flipper_block_${refId}`,
+        name: `${flippers[0].name} x${flippers.length}`,
+        width: totalWidth,
+      };
+      mergedWallEquipments.push(mergedEquip);
+      flipperBlocks.push({ mergedEquip, originals: flippers, unitWidth: unitW });
+      console.log(`[placement] Merged ${flippers.length} flippers "${flippers[0].name}" into block ${totalWidth}cm wide`);
+    }
+  }
+
   // ── Group by reference ID, then by category ──
   const byEquipmentId = new Map<string, { equip: GameEquipment; count: number }>();
-  for (const equip of wallEquipments) {
+  for (const equip of mergedWallEquipments) {
     const existing = byEquipmentId.get(equip.id);
     if (existing) existing.count++;
     else byEquipmentId.set(equip.id, { equip, count: 1 });

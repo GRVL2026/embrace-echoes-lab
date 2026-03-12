@@ -927,6 +927,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                           onClick={() => handleViewProduct(eq)}
                         >
                           {/* Image */}
+                          <div className="relative">
                           {eq.images && eq.images[0] ? (
                             <div className="aspect-square rounded-md overflow-hidden bg-muted/30 mb-2">
                               <img 
@@ -940,6 +941,12 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                               <Package className="h-8 w-8 text-muted-foreground/30" />
                             </div>
                           )}
+                          {eq.model3d && (
+                            <div className="absolute top-1 right-1 bg-primary text-primary-foreground rounded-sm p-0.5" title="Modèle 3D associé">
+                              <Box className="h-3 w-3" />
+                            </div>
+                          )}
+                          </div>
                           
                           {/* Info */}
                           <h4 className="font-medium text-sm text-foreground truncate">{eq.name}</h4>

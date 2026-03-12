@@ -171,10 +171,18 @@ function FirstPersonMovement({ active }: { active: boolean }) {
   return null;
 }
 
+/** Sync a Three.js group's visibility with a React boolean */
+function useGroupVisibility(ref: React.RefObject<THREE.Group | null>, visible: boolean) {
+  useEffect(() => {
+    if (ref.current) ref.current.visible = visible;
+  }, [ref, visible]);
+}
+
 export function Viewer3D({ settings, onPresetApplied }: Props) {
   const { state } = useEditor();
   const wallGroupRef = useRef<THREE.Group>(null);
   const circulationGroupRef = useRef<THREE.Group>(null);
+  const gridGroupRef = useRef<THREE.Group>(null);
 
   const allPoints = state.rooms.flatMap((r) => r.points);
   const cx = allPoints.length
@@ -205,6 +213,7 @@ export function Viewer3D({ settings, onPresetApplied }: Props) {
           cz={cz}
           wallObjects={wallGroupRef}
           circulationObjects={circulationGroupRef}
+          gridObjects={gridGroupRef}
         />
 
         {/* Lighting */}
@@ -213,19 +222,11 @@ export function Viewer3D({ settings, onPresetApplied }: Props) {
         {/* Arcade-specific room lighting */}
         {settings.lighting !== "arcade" && <ArcadeLighting rooms={state.rooms} />}
 
-        {/* Rooms (walls + floor) — wrapped in group for capture visibility control */}
+        {/* Rooms (walls + floor) — always rendered, visibility controlled via group */}
         <group ref={wallGroupRef}>
-          {vis.walls &&
-            state.rooms.map((room) => (
-              <Room3D key={room.id} room={room} doors={state.doors} showFloor={vis.floor} />
-            ))}
-
-          {/* Floor only (when walls hidden but floor visible) */}
-          {!vis.walls &&
-            vis.floor &&
-            state.rooms.map((room) => (
-              <Room3D key={`floor-${room.id}`} room={room} doors={[]} showFloor={true} showWalls={false} />
-            ))}
+          {state.rooms.map((room) => (
+            <Room3D key={room.id} room={room} doors={state.doors} showFloor={vis.floor} showWalls={vis.walls} />
+          ))}
         </group>
 
         {/* Pillars */}
@@ -246,28 +247,30 @@ export function Viewer3D({ settings, onPresetApplied }: Props) {
             <Equipment3D key={eq.id} equipment={eq} showHeight={vis.heights} />
           ))}
 
-        {/* Circulation path — wrapped in group for capture visibility control */}
+        {/* Circulation path — always rendered, visibility controlled via group */}
         <group ref={circulationGroupRef}>
-          {vis.circulation && state.circulationPath && state.circulationPath.length > 0 && (
+          {state.circulationPath && state.circulationPath.length > 0 && (
             <Circulation3D segments={state.circulationPath} />
           )}
         </group>
 
-        {/* Ground grid */}
-        {vis.grid && (
-          <Grid
-            position={[cx, -0.01, cz]}
-            args={[50, 50]}
-            cellSize={1}
-            cellThickness={0.5}
-            cellColor={settings.lighting === "arcade" ? "#2a2a4a" : "#c0c0c0"}
-            sectionSize={5}
-            sectionThickness={1}
-            sectionColor={settings.lighting === "arcade" ? "#4a4a6a" : "#999999"}
-            fadeDistance={30}
-            infiniteGrid
-          />
-        )}
+        {/* Ground grid — wrapped for capture control */}
+        <group ref={gridGroupRef}>
+          {vis.grid && (
+            <Grid
+              position={[cx, -0.01, cz]}
+              args={[50, 50]}
+              cellSize={1}
+              cellThickness={0.5}
+              cellColor={settings.lighting === "arcade" ? "#2a2a4a" : "#c0c0c0"}
+              sectionSize={5}
+              sectionThickness={1}
+              sectionColor={settings.lighting === "arcade" ? "#4a4a6a" : "#999999"}
+              fadeDistance={30}
+              infiniteGrid
+            />
+          )}
+        </group>
 
         {/* Camera controls */}
         <CameraController

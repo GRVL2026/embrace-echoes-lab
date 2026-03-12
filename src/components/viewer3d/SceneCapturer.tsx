@@ -1,6 +1,7 @@
 /**
  * R3F component that registers a capture function allowing
- * the PDF export to take screenshots from the live 3D scene.
+ * the PDF export to take screenshots directly from the live 3D scene.
+ * This ensures PDF captures are pixel-identical to the editor view.
  */
 import { useEffect } from "react";
 import { useThree } from "@react-three/fiber";
@@ -33,57 +34,49 @@ type Props = {
   cz: number;
   wallObjects: React.RefObject<THREE.Group | null>;
   circulationObjects: React.RefObject<THREE.Group | null>;
+  gridObjects: React.RefObject<THREE.Group | null>;
 };
 
-export function SceneCapturer({ cx, cz, wallObjects, circulationObjects }: Props) {
+export function SceneCapturer({ cx, cz, wallObjects, circulationObjects, gridObjects }: Props) {
   const { gl, scene, camera } = useThree();
 
   useEffect(() => {
     const captureFn = async (configs: ViewConfig[]): Promise<Record<string, string>> => {
       const result: Record<string, string> = {};
 
-      // Save original camera state
+      // Save original state
       const origPos = camera.position.clone();
-      const origTarget = new THREE.Vector3();
-      camera.getWorldDirection(origTarget);
-      origTarget.add(camera.position);
+      const origQuat = camera.quaternion.clone();
+      const wallsVis = wallObjects.current?.visible ?? true;
+      const circVis = circulationObjects.current?.visible ?? true;
+      const gridVis = gridObjects.current?.visible ?? true;
 
-      // Save original visibility
-      const wallsVisible = wallObjects.current?.visible ?? true;
-      const circVisible = circulationObjects.current?.visible ?? true;
+      // Hide grid during all captures
+      if (gridObjects.current) gridObjects.current.visible = false;
 
       for (const config of configs) {
         // Set visibility
-        if (wallObjects.current) {
-          wallObjects.current.visible = config.showWalls;
-        }
-        if (circulationObjects.current) {
-          circulationObjects.current.visible = config.showCirculation;
-        }
+        if (wallObjects.current) wallObjects.current.visible = config.showWalls;
+        if (circulationObjects.current) circulationObjects.current.visible = config.showCirculation;
 
         // Move camera
         const cam = getCameraPosition(config.view, cx, cz);
         camera.position.copy(cam.position);
-        (camera as THREE.PerspectiveCamera).lookAt(cam.lookAt);
+        camera.lookAt(cam.lookAt);
         (camera as THREE.PerspectiveCamera).updateProjectionMatrix();
 
-        // Render
+        // Render and capture
         gl.render(scene, camera);
-
-        // Capture
         result[config.view] = gl.domElement.toDataURL("image/png");
       }
 
-      // Restore visibility
-      if (wallObjects.current) wallObjects.current.visible = wallsVisible;
-      if (circulationObjects.current) circulationObjects.current.visible = circVisible;
-
-      // Restore camera
+      // Restore everything
+      if (wallObjects.current) wallObjects.current.visible = wallsVis;
+      if (circulationObjects.current) circulationObjects.current.visible = circVis;
+      if (gridObjects.current) gridObjects.current.visible = gridVis;
       camera.position.copy(origPos);
-      (camera as THREE.PerspectiveCamera).lookAt(origTarget);
+      camera.quaternion.copy(origQuat);
       (camera as THREE.PerspectiveCamera).updateProjectionMatrix();
-
-      // Re-render with original state
       gl.render(scene, camera);
 
       return result;
@@ -91,7 +84,7 @@ export function SceneCapturer({ cx, cz, wallObjects, circulationObjects }: Props
 
     registerCanvasCapture(captureFn);
     return () => unregisterCanvasCapture();
-  }, [gl, scene, camera, cx, cz, wallObjects, circulationObjects]);
+  }, [gl, scene, camera, cx, cz, wallObjects, circulationObjects, gridObjects]);
 
   return null;
 }

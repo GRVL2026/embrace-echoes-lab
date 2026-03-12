@@ -1030,17 +1030,24 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                           className="rounded-lg border border-border bg-background p-2.5 group"
                         >
                           <div className="flex gap-2">
+                            <div className="relative shrink-0">
                             {eq.images && eq.images[0] ? (
                               <img 
                                 src={eq.images[0]} 
                                 alt={eq.name}
-                                className="w-12 h-12 rounded object-contain bg-muted/50 shrink-0"
+                                className="w-12 h-12 rounded object-contain bg-muted/50"
                               />
                             ) : (
-                              <div className="w-12 h-12 rounded bg-muted/50 flex items-center justify-center shrink-0">
+                              <div className="w-12 h-12 rounded bg-muted/50 flex items-center justify-center">
                                 <Package className="h-5 w-5 text-muted-foreground/30" />
                               </div>
                             )}
+                            {eq.model3d && (
+                              <div className="absolute -top-1 -right-1 bg-primary text-primary-foreground rounded-sm p-0.5" title="Modèle 3D associé">
+                                <Box className="h-2.5 w-2.5" />
+                              </div>
+                            )}
+                            </div>
                             <div className="flex-1 min-w-0">
                               <h4 className="font-medium text-xs text-foreground truncate">{eq.name}</h4>
                               {eq.vendor && (

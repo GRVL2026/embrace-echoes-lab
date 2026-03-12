@@ -1018,7 +1018,6 @@ export function autoPlaceEquipmentWithReport(
 
       const blockPlacement = result[blockIdx];
       const n = block.originals.length;
-      const unitW = block.unitWidth;
       const rot = blockPlacement.rotation;
       const rad = rot * Math.PI / 180;
       const wallDirX = Math.cos(rad);
@@ -1026,21 +1025,25 @@ export function autoPlaceEquipmentWithReport(
 
       // Remove the merged block
       result.splice(blockIdx, 1);
-      // Also remove from placements array
       const pIdx = placements.findIndex(p => p.equipmentId === block.mergedEquip.id);
       if (pIdx !== -1) placements.splice(pIdx, 1);
 
-      // Place individual flippers side by side (0cm gap) centered on the block position
+      // Compute cumulative offsets based on individual widths
+      const totalWidth = block.unitWidths.reduce((s, w) => s + w, 0);
+      let cursor = -totalWidth / 2;
+
       for (let i = 0; i < n; i++) {
         const orig = block.originals[i];
-        const offset = (i - (n - 1) / 2) * unitW;
+        const w = block.unitWidths[i];
+        const offset = cursor + w / 2;
+        cursor += w;
         const x = blockPlacement.position.x + wallDirX * offset;
         const y = blockPlacement.position.y + wallDirY * offset;
         const p = makePlacement(orig, x, y, rot, orig.width, orig.depth);
         result.push(p);
         placements.push(p);
       }
-      console.log(`[placement] Split flipper block "${block.originals[0].name}" into ${n} individual units`);
+      console.log(`[placement] Split block into ${n} individual units`);
     }
   }
 

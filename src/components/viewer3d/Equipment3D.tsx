@@ -1,11 +1,10 @@
 import { useMemo, Suspense } from "react";
 import * as THREE from "three";
 import { Text, useGLTF } from "@react-three/drei";
-import type { PlacedEquipment, GameEquipment } from "@/types/equipment";
+import type { PlacedEquipment } from "@/types/equipment";
 
 type Props = {
   equipment: PlacedEquipment;
-  catalogEntry?: GameEquipment;
 };
 
 /** Parse HSL string like "hsl(263, 85%, 68%)" to a THREE.Color */
@@ -27,11 +26,9 @@ function GLBModel({ url, width, depth, height }: { url: string; width: number; d
   const clonedScene = useMemo(() => {
     const clone = scene.clone(true);
     
-    // Compute bounding box to scale model to match equipment dimensions
     const box = new THREE.Box3().setFromObject(clone);
     const size = box.getSize(new THREE.Vector3());
     
-    // Scale to fit within equipment dimensions (cm → meters)
     const targetW = width / 100;
     const targetD = depth / 100;
     const targetH = height / 100;
@@ -43,13 +40,11 @@ function GLBModel({ url, width, depth, height }: { url: string; width: number; d
     
     clone.scale.setScalar(scale);
     
-    // Re-center after scaling
     const newBox = new THREE.Box3().setFromObject(clone);
     const center = newBox.getCenter(new THREE.Vector3());
     clone.position.sub(center);
     clone.position.y += newBox.getSize(new THREE.Vector3()).y / 2;
     
-    // Enable shadows on all meshes
     clone.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         child.castShadow = true;
@@ -80,17 +75,17 @@ function BoxModel({ w, d, h, color }: { w: number; d: number; h: number; color: 
   );
 }
 
-export function Equipment3D({ equipment, catalogEntry }: Props) {
+export function Equipment3D({ equipment }: Props) {
   const { w, d, h, color } = useMemo(() => {
     const w = equipment.width / 100;
     const d = equipment.depth / 100;
-    const h = (catalogEntry?.height || 120) / 100;
+    const h = (equipment.height || 120) / 100;
     const color = parseHSLColor(equipment.color || "hsl(263, 85%, 68%)");
     return { w, d, h, color };
-  }, [equipment, catalogEntry]);
+  }, [equipment]);
 
   const rotY = -(equipment.rotation || 0) * (Math.PI / 180);
-  const model3dUrl = catalogEntry?.model3d;
+  const model3dUrl = equipment.model3d;
 
   return (
     <group
@@ -103,7 +98,7 @@ export function Equipment3D({ equipment, catalogEntry }: Props) {
             url={model3dUrl}
             width={equipment.width}
             depth={equipment.depth}
-            height={catalogEntry?.height || 120}
+            height={equipment.height || 120}
           />
         </Suspense>
       ) : (

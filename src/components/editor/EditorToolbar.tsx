@@ -128,7 +128,7 @@ export function EditorToolbar() {
             <Route className="h-5 w-5" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="right">Afficher circulation (1.40m)</TooltipContent>
+        <TooltipContent side="right">Afficher circulation (1.20m / 1.40m retournement)</TooltipContent>
       </Tooltip>
 
       {/* Scale toggle: m ↔ cm */}

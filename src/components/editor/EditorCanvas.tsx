@@ -2449,7 +2449,8 @@ function drawCirculationPath(
     const midY = midPt.y * CM_TO_PX;
 
     ctx.save();
-    const text = "↔ 1.40m";
+    const segWidth = segments[Math.floor(segments.length / 2)]?.width || 120;
+    const text = `↔ ${(segWidth / 100).toFixed(2).replace(/0$/, '')}m`;
     ctx.font = `bold ${10 / zoom}px Inter`;
     const tw = ctx.measureText(text).width;
     const pad = 4 / zoom;

@@ -70,18 +70,32 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true }: Prop
 
   return (
     <group>
-      {/* Floor — extruded slab for visibility from all angles */}
+      {/* Floor — thin slab flush with Y=0 on top, extruded downward */}
       {showFloor && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.025, 0]} receiveShadow>
-          <extrudeGeometry args={[floorShape, { depth: 0.05, bevelEnabled: false }]} />
-          <meshStandardMaterial
-            color="#e8e8e8"
-            roughness={0.5}
-            metalness={0.05}
-            side={THREE.DoubleSide}
-            {...{} as any}
-          />
-        </mesh>
+        <group>
+          {/* Top surface at Y=0 */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+            <shapeGeometry args={[floorShape]} />
+            <meshStandardMaterial
+              color="#e8e8e8"
+              roughness={0.5}
+              metalness={0.05}
+              side={THREE.DoubleSide}
+              {...{} as any}
+            />
+          </mesh>
+          {/* Slab sides (extruded downward) for visibility from low angles */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow>
+            <extrudeGeometry args={[floorShape, { depth: 0.05, bevelEnabled: false }]} />
+            <meshStandardMaterial
+              color="#d4d4d4"
+              roughness={0.6}
+              metalness={0.05}
+              side={THREE.DoubleSide}
+              {...{} as any}
+            />
+          </mesh>
+        </group>
       )}
 
       {/* Walls */}

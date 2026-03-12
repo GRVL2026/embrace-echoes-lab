@@ -1,8 +1,10 @@
 import type { Point, Room, Door, Pillar } from "@/types/editor";
 import type { PlacedEquipment } from "@/types/equipment";
 
-const CORRIDOR_WIDTH = 140; // 1.40m in cm
-const HALF_CORRIDOR = CORRIDOR_WIDTH / 2; // 70cm
+const CORRIDOR_WIDTH = 120; // 1.20m standard corridor width in cm
+const HALF_CORRIDOR = CORRIDOR_WIDTH / 2; // 60cm
+const TURNING_ZONE_WIDTH = 140; // 1.40m turning zone at corridor extremities for wheelchairs
+const TURNING_ZONE_SEGMENTS = 8; // number of segments at each end marked as turning zone
 
 export type CirculationSegment = {
   start: Point;

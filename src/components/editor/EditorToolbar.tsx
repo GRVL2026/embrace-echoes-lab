@@ -15,6 +15,7 @@ import {
   Route,
   RotateCw,
   RotateCcw,
+  Move,
 } from "lucide-react";
 import { useEditor } from "@/contexts/EditorContext";
 import { Button } from "@/components/ui/button";
@@ -129,6 +130,20 @@ export function EditorToolbar() {
           </Button>
         </TooltipTrigger>
         <TooltipContent side="right">Afficher circulation (1.20m / 1.40m retournement)</TooltipContent>
+      </Tooltip>
+
+      <Tooltip delayDuration={200}>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn("h-10 w-10", state.showGapMeasurements && "bg-accent/20 text-accent")}
+            onClick={() => dispatch({ type: "TOGGLE_GAP_MEASUREMENTS" })}
+          >
+            <Move className="h-5 w-5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">Cotes espaces libres</TooltipContent>
       </Tooltip>
 
       {/* Scale toggle: m ↔ cm */}

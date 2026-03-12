@@ -65,6 +65,7 @@ export type EditorState = {
   showAngles: boolean;
   showPillarDistances: boolean;
   showCirculation: boolean; // toggle circulation path visibility
+  showGapMeasurements: boolean; // toggle gap dimension lines between equipment and walls
   planRotation: number; // 0, 90, 180, 270
   placedEquipments: import("@/types/equipment").PlacedEquipment[];
   circulationPath: CirculationSegment[]; // safety circulation display
@@ -85,6 +86,7 @@ export const INITIAL_EDITOR_STATE: EditorState = {
   showAngles: false,
   showPillarDistances: false,
   showCirculation: true,
+  showGapMeasurements: false,
   planRotation: 0,
 };
 

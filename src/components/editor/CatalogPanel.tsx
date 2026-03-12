@@ -344,6 +344,16 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   const [loadingShopify, setLoadingShopify] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Load persisted 3D model mappings and apply to catalog
+  useEffect(() => {
+    loadModelMappings().then(mappings => {
+      if (Object.keys(mappings).length === 0) return;
+      setCatalog(prev => prev.map(eq => 
+        mappings[eq.id] ? { ...eq, model3d: mappings[eq.id] } : eq
+      ));
+    });
+  }, []);
+
   const handleLoadShopify = async () => {
     setLoadingShopify(true);
     try {

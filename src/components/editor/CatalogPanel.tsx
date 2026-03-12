@@ -20,6 +20,7 @@ import { computeCirculation } from "@/lib/circulation";
 import { ProductDialog } from "./ProductDialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fetchShopifyCatalog } from "@/lib/shopifyApi";
+import { loadModelMappings, saveModelMapping, deleteModelMapping } from "@/lib/equipmentModels";
 
 /** Parse Shopify CSV dimensions like "L 1030 x P 2500 x H 2640 mm" or "35X22X12" */
 function parseShopifyDimensions(dimStr: string): { width: number; depth: number; height: number } | null {

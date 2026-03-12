@@ -823,7 +823,13 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                   key={pe.id}
                   className="flex items-center justify-between rounded border border-border bg-surface p-1.5 text-xs"
                 >
-                  <span className="truncate text-foreground">{pe.name}</span>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span
+                      className="shrink-0 h-2.5 w-2.5 rounded-full border border-white/20"
+                      style={{ backgroundColor: pe.color }}
+                    />
+                    <span className="truncate text-foreground">{pe.name}</span>
+                  </div>
                   <Button
                     variant="ghost"
                     size="icon"

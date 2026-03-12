@@ -155,6 +155,8 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       return { ...state, showPillarDistances: !state.showPillarDistances };
     case "TOGGLE_CIRCULATION":
       return { ...state, showCirculation: !state.showCirculation };
+    case "TOGGLE_GAP_MEASUREMENTS":
+      return { ...state, showGapMeasurements: !state.showGapMeasurements };
     case "SET_GRID_SIZE":
       return { ...state, gridSize: action.size };
     case "ROTATE_PLAN": {

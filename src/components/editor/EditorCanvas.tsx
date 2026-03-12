@@ -602,6 +602,11 @@ export function EditorCanvas() {
         drawPlacedEquipments(ctx, state.placedEquipments, state.zoom, hoveredEquipment, collisionSet);
       }
 
+      // Draw gap measurements between equipment and walls
+      if (state.showGapMeasurements && state.placedEquipments.length > 0) {
+        drawGapMeasurements(ctx, state.placedEquipments, state.rooms, state.pillars, state.zoom);
+      }
+
       // Draw current drawing
       if (drawingPoints.length > 0) {
         ctx.beginPath();

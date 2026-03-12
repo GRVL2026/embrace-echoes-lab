@@ -341,11 +341,18 @@ export async function capture3DViews(
   // Group by scene config to reuse scenes
   const sceneCache = new Map<string, { scene: THREE.Scene; center: THREE.Vector3 }>();
 
-  viewConfigs.forEach(({ view, showWalls, showCirculation }) => {
+  viewConfigs.forEach(({ showWalls, showCirculation }) => {
     const key = `${showWalls}-${showCirculation}`;
     if (!sceneCache.has(key)) {
       sceneCache.set(key, buildScene(rooms, doors, pillars, equipments, circulation, { showWalls, showCirculation }));
     }
+  });
+
+  // Load GLB models and replace placeholder boxes
+  await replaceWithGLBModels(sceneCache, equipments);
+
+  viewConfigs.forEach(({ view, showWalls, showCirculation }) => {
+    const key = `${showWalls}-${showCirculation}`;
     const { scene, center } = sceneCache.get(key)!;
     const cam = getCameraForView(view, center.x, center.z);
     camera.position.copy(cam.position);

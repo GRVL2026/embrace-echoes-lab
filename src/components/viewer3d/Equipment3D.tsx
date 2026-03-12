@@ -94,14 +94,16 @@ export function Equipment3D({ equipment }: Props) {
       rotation={[0, rotY, 0]}
     >
       {model3dUrl ? (
-        <Suspense fallback={<BoxModel w={w} d={d} h={h} color={color} />}>
-          <GLBModel
-            url={model3dUrl}
-            width={equipment.width}
-            depth={equipment.depth}
-            height={equipment.height || 120}
-          />
-        </Suspense>
+        <ErrorBoundary fallback={<BoxModel w={w} d={d} h={h} color={color} />}>
+          <Suspense fallback={<BoxModel w={w} d={d} h={h} color={color} />}>
+            <GLBModel
+              url={model3dUrl}
+              width={equipment.width}
+              depth={equipment.depth}
+              height={equipment.height || 120}
+            />
+          </Suspense>
+        </ErrorBoundary>
       ) : (
         <BoxModel w={w} d={d} h={h} color={color} />
       )}

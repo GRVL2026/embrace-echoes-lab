@@ -216,6 +216,7 @@ function parseShopifyCSV(text: string): GameEquipment[] {
       height,
       safetyZone: DEFAULT_SAFETY_ZONE,
       color: getCategoryColor(product.type || "default"),
+      model3d: find3DModel(product.handle || product.title, product.title),
       description: product.body || undefined,
       vendor: product.vendor || undefined,
       price: price && price > 0 ? price : undefined,

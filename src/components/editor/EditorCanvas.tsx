@@ -1814,19 +1814,22 @@ function drawDoorArc(
   // Hinge is on the side specified by openDir
   const hingePx = openDir === "left" ? { x: sx, y: sy } : { x: ex, y: ey };
 
-  // Arc sweeps from wall direction into the perpendicular (interior or exterior)
+  // Arc sweeps 90° from wall direction into the perpendicular (interior or exterior)
   let startAngle: number, endAngle: number;
   const perpOffset = (Math.PI / 2) * sideMul;
 
   if (openDir === "left") {
+    // Hinge at start; leaf swings from wall direction into perpendicular
     startAngle = wallAngle;
-    endAngle = wallAngle - perpOffset;
+    endAngle = wallAngle + perpOffset;
   } else {
-    startAngle = wallAngle + perpOffset;
-    endAngle = wallAngle;
+    // Hinge at end; leaf swings from perpendicular back to wall direction
+    startAngle = wallAngle + Math.PI - perpOffset;
+    endAngle = wallAngle + Math.PI;
   }
 
-  const counterClockwise = (openDir === "left") === (sideMul === 1);
+  // Always draw the short 90° arc (never the 270° complement)
+  const counterClockwise = false;
 
   ctx.beginPath();
   ctx.arc(hingePx.x, hingePx.y, arcRadius, startAngle, endAngle, counterClockwise);

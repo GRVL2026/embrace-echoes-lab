@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 import { Upload, Package, Play, Trash2, Check, X, Info, Search, Maximize2, Minus, Plus, ChevronDown, ChevronRight, RefreshCw, ShoppingBag, Loader2 } from "lucide-react";
 import type { GameEquipment, CatalogJSON } from "@/types/equipment";
+import { find3DModel } from "@/lib/shopifyApi";
 import { DEFAULT_SAFETY_ZONE } from "@/types/equipment";
 import { autoPlaceEquipmentWithReport } from "@/lib/placement";
 import { computeCirculation } from "@/lib/circulation";
@@ -215,6 +216,7 @@ function parseShopifyCSV(text: string): GameEquipment[] {
       height,
       safetyZone: DEFAULT_SAFETY_ZONE,
       color: getCategoryColor(product.type || "default"),
+      model3d: find3DModel(product.handle || product.title, product.title),
       description: product.body || undefined,
       vendor: product.vendor || undefined,
       price: price && price > 0 ? price : undefined,
@@ -276,7 +278,7 @@ function parseSimpleCSV(text: string): GameEquipment[] {
       color: colorIdx >= 0 ? cols[colorIdx] || undefined : undefined,
       icon: iconIdx >= 0 ? cols[iconIdx] || undefined : undefined,
       pmrAccessible: ["true", "oui", "1", "yes"].includes(pmrRaw),
-      model3d: modelIdx >= 0 ? cols[modelIdx] || undefined : undefined,
+      model3d: (modelIdx >= 0 ? cols[modelIdx] : undefined) || find3DModel(name, name),
     });
   }
 
@@ -498,9 +500,10 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
         category: "autre",
         width: pe.width,
         depth: pe.depth,
-        height: 0,
+        height: pe.height || 0,
         safetyZone: pe.safetyZone,
         color: pe.color,
+        model3d: pe.model3d,
       };
     });
 
@@ -584,9 +587,10 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
         category: "autre",
         width: pe.width,
         depth: pe.depth,
-        height: 0,
+        height: pe.height || 0,
         safetyZone: pe.safetyZone,
         color: pe.color,
+        model3d: pe.model3d,
       };
     });
 

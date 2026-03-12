@@ -16,7 +16,7 @@ const MODEL_3D_MAP: Record<string, string> = {
 };
 
 /** Find a 3D model path for a product by handle or title */
-function find3DModel(handle: string, title: string): string | undefined {
+export function find3DModel(handle: string, title: string): string | undefined {
   const handleLower = handle.toLowerCase();
   const titleLower = title.toLowerCase();
   for (const [key, path] of Object.entries(MODEL_3D_MAP)) {

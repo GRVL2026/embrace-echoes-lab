@@ -2322,12 +2322,14 @@ function drawGapMeasurements(
 
       let minDist = Infinity;
       let hitPoint: Point | null = null;
+      let hitEquipId: string | null = null;
 
       // Raycast against wall segments
       wallSegs.forEach(({ a, b }) => {
         const hit = raySegmentIntersect(edgeWorld, dirWorld, a, b);
         if (hit !== null && hit < minDist) {
           minDist = hit;
+          hitEquipId = null;
           hitPoint = {
             x: edgeWorld.x + dirWorld.x * hit,
             y: edgeWorld.y + dirWorld.y * hit,
@@ -2343,7 +2345,6 @@ function drawGapMeasurements(
         const oSin = Math.sin(oRad);
         const oHW = other.width / 2;
         const oHD = other.depth / 2;
-        // 4 corners of other equipment
         const corners = [
           { x: -oHW, y: -oHD }, { x: oHW, y: -oHD },
           { x: oHW, y: oHD }, { x: -oHW, y: oHD },
@@ -2355,6 +2356,7 @@ function drawGapMeasurements(
           const hit = raySegmentIntersect(edgeWorld, dirWorld, corners[i], corners[(i + 1) % 4]);
           if (hit !== null && hit < minDist) {
             minDist = hit;
+            hitEquipId = other.id;
             hitPoint = {
               x: edgeWorld.x + dirWorld.x * hit,
               y: edgeWorld.y + dirWorld.y * hit,
@@ -2381,6 +2383,7 @@ function drawGapMeasurements(
           const hit = raySegmentIntersect(edgeWorld, dirWorld, corners[i], corners[(i + 1) % 4]);
           if (hit !== null && hit < minDist) {
             minDist = hit;
+            hitEquipId = null;
             hitPoint = {
               x: edgeWorld.x + dirWorld.x * hit,
               y: edgeWorld.y + dirWorld.y * hit,
@@ -2388,6 +2391,13 @@ function drawGapMeasurements(
           }
         }
       });
+
+      // Skip if this equipment pair was already measured from the other side
+      if (hitEquipId) {
+        const pairKey = [eq.id, hitEquipId].sort().join("|");
+        if (drawnPairs.has(pairKey)) return;
+        drawnPairs.add(pairKey);
+      }
 
       // Draw dimension line if we hit something within 10m
       if (hitPoint && minDist < 1000 && minDist > 1) {

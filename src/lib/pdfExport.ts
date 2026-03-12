@@ -7,6 +7,7 @@ import type { EditorState, Room } from "@/types/editor";
 import type { GameEquipment, PlacedEquipment } from "@/types/equipment";
 import { capture3DViews, type CaptureView } from "./render3DCaptures";
 import { captureFromLiveCanvas, isCanvasCaptureAvailable } from "./canvasCapture";
+import { getCanvas2DSnapshot } from "./canvas2DSnapshot";
 
 // Brand colors — dark arcade theme
 const PURPLE = [155, 92, 255] as const;   // #9B5CFF
@@ -80,6 +81,10 @@ function computeRoomArea(room: Room): number {
 }
 
 function capture2DCanvas(): string | null {
+  // First try the stored snapshot (available even from 3D mode)
+  const snapshot = getCanvas2DSnapshot();
+  if (snapshot) return snapshot;
+  // Fallback: try to capture live canvas
   const canvas = document.querySelector("canvas:not([data-engine])") as HTMLCanvasElement | null;
   if (!canvas) return null;
   try {

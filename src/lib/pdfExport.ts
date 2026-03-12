@@ -113,10 +113,14 @@ export async function generateDossierPDF(
     return s + (cat?.price || 0);
   }, 0);
 
-  // 3D captures (async — loads GLB models)
-  let views: Awaited<ReturnType<typeof capture3DViews>> | null = null;
+  // 3D captures — prefer live canvas (identical to editor) over offscreen fallback
+  let views: Record<CaptureView, string> | null = null;
   try {
-    views = await capture3DViews(state.rooms, state.doors, state.pillars, state.placedEquipments, state.circulationPath || []);
+    if (isCanvasCaptureAvailable()) {
+      views = await captureFromLiveCanvas();
+    } else {
+      views = await capture3DViews(state.rooms, state.doors, state.pillars, state.placedEquipments, state.circulationPath || []);
+    }
   } catch (e) {
     console.warn("3D capture failed:", e);
   }

@@ -576,9 +576,46 @@ export function autoPlaceEquipmentWithReport(
     else wallEquipments.push(equip);
   }
 
+  // ── FLIPPER MERGE: fuse all flippers of the same ref into a single block ──
+  // Track merged flipper blocks so we can split them back after placement
+  type FlipperBlock = { mergedEquip: GameEquipment; originals: GameEquipment[]; unitWidth: number };
+  const flipperBlocks: FlipperBlock[] = [];
+
+  const mergedWallEquipments: GameEquipment[] = [];
+  const flippersByRef = new Map<string, GameEquipment[]>();
+
+  for (const equip of wallEquipments) {
+    if ((equip.category || "").toLowerCase().replace(/s$/, "") === "flipper") {
+      if (!flippersByRef.has(equip.id)) flippersByRef.set(equip.id, []);
+      flippersByRef.get(equip.id)!.push(equip);
+    } else {
+      mergedWallEquipments.push(equip);
+    }
+  }
+
+  for (const [refId, flippers] of flippersByRef) {
+    if (flippers.length <= 1) {
+      // Single flipper — no merge needed
+      mergedWallEquipments.push(flippers[0]);
+    } else {
+      // Merge N flippers into one virtual block (0cm gap between units)
+      const unitW = flippers[0].width;
+      const totalWidth = unitW * flippers.length; // 0cm gap
+      const mergedEquip: GameEquipment = {
+        ...flippers[0],
+        id: `__flipper_block_${refId}`,
+        name: `${flippers[0].name} x${flippers.length}`,
+        width: totalWidth,
+      };
+      mergedWallEquipments.push(mergedEquip);
+      flipperBlocks.push({ mergedEquip, originals: flippers, unitWidth: unitW });
+      console.log(`[placement] Merged ${flippers.length} flippers "${flippers[0].name}" into block ${totalWidth}cm wide`);
+    }
+  }
+
   // ── Group by reference ID, then by category ──
   const byEquipmentId = new Map<string, { equip: GameEquipment; count: number }>();
-  for (const equip of wallEquipments) {
+  for (const equip of mergedWallEquipments) {
     const existing = byEquipmentId.get(equip.id);
     if (existing) existing.count++;
     else byEquipmentId.set(equip.id, { equip, count: 1 });
@@ -951,6 +988,44 @@ export function autoPlaceEquipmentWithReport(
           notPlaced.push(equip);
         }
       }
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // POST-PROCESSING: Split flipper blocks back into individual items
+  // ════════════════════════════════════════════════════════════════
+
+  if (flipperBlocks.length > 0) {
+    for (const block of flipperBlocks) {
+      // Find the placed block in result
+      const blockIdx = result.findIndex(p => p.equipmentId === block.mergedEquip.id);
+      if (blockIdx === -1) continue;
+
+      const blockPlacement = result[blockIdx];
+      const n = block.originals.length;
+      const unitW = block.unitWidth;
+      const rot = blockPlacement.rotation;
+      const rad = rot * Math.PI / 180;
+      const wallDirX = Math.cos(rad);
+      const wallDirY = Math.sin(rad);
+
+      // Remove the merged block
+      result.splice(blockIdx, 1);
+      // Also remove from placements array
+      const pIdx = placements.findIndex(p => p.equipmentId === block.mergedEquip.id);
+      if (pIdx !== -1) placements.splice(pIdx, 1);
+
+      // Place individual flippers side by side (0cm gap) centered on the block position
+      for (let i = 0; i < n; i++) {
+        const orig = block.originals[i];
+        const offset = (i - (n - 1) / 2) * unitW;
+        const x = blockPlacement.position.x + wallDirX * offset;
+        const y = blockPlacement.position.y + wallDirY * offset;
+        const p = makePlacement(orig, x, y, rot, orig.width, orig.depth);
+        result.push(p);
+        placements.push(p);
+      }
+      console.log(`[placement] Split flipper block "${block.originals[0].name}" into ${n} individual units`);
     }
   }
 

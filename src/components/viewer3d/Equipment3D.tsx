@@ -1,6 +1,7 @@
-import { useMemo, Suspense } from "react";
+import { useMemo, Suspense, useState, useEffect } from "react";
 import * as THREE from "three";
 import { Text, useGLTF } from "@react-three/drei";
+import { ErrorBoundary } from "./GLBErrorBoundary";
 import type { PlacedEquipment } from "@/types/equipment";
 
 type Props = {

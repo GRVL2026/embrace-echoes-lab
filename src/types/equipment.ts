@@ -42,6 +42,8 @@ export type PlacedEquipment = {
   depth: number;
   safetyZone: number;
   color: string;
+  height?: number; // cm
+  model3d?: string; // URL to .glb model
   centerPlacement?: boolean; // true for tables (palet, power puck) — no "front", players on short sides
 };
 

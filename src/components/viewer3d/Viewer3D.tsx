@@ -229,10 +229,9 @@ export function Viewer3D({ settings, onPresetApplied }: Props) {
 
         {/* Equipment */}
         {vis.equipment &&
-          state.placedEquipments.map((eq) => {
-            const catalogEntry = state.catalog?.find((c) => c.id === eq.equipmentId);
-            return <Equipment3D key={eq.id} equipment={eq} catalogEntry={catalogEntry} />;
-          })}
+          state.placedEquipments.map((eq) => (
+            <Equipment3D key={eq.id} equipment={eq} />
+          ))}
 
         {/* Circulation path */}
         {vis.circulation && state.circulationPath && state.circulationPath.length > 0 && (

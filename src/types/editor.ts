@@ -86,6 +86,7 @@ export const INITIAL_EDITOR_STATE: EditorState = {
   showAngles: false,
   showPillarDistances: false,
   showCirculation: true,
+  showGapMeasurements: false,
   planRotation: 0,
 };
 

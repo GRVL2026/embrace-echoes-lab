@@ -42,11 +42,12 @@ function smoothChain(chain: Point[], iterations: number): Point[] {
 }
 
 export function Circulation3D({ segments }: Props) {
-  const geometry = useMemo(() => {
-    if (!segments || segments.length === 0) return null;
+  const { corridorGeo, turningGeo } = useMemo(() => {
+    if (!segments || segments.length === 0) return { corridorGeo: null, turningGeo: null };
 
     const corridorWidth = (segments[0]?.width || 120) / 100;
     const halfW = corridorWidth / 2;
+    const turningRadius = 140 / 100 / 2; // 0.70m
 
     const chains: Point[][] = [];
     let currentChain: Point[] = [];
@@ -70,6 +71,7 @@ export function Circulation3D({ segments }: Props) {
     if (currentChain.length > 0) chains.push(currentChain);
 
     const geometries: THREE.BufferGeometry[] = [];
+    const turningGeometries: THREE.BufferGeometry[] = [];
 
     for (const rawChain of chains) {
       let chain = deduplicateChain(rawChain, 8);
@@ -111,29 +113,55 @@ export function Circulation3D({ segments }: Props) {
         disc.applyMatrix4(mat);
         geometries.push(disc);
       }
+
+      // Turning zone discs at start and end
+      for (const p of [pts3[0], pts3[pts3.length - 1]]) {
+        const disc = new THREE.RingGeometry(halfW, turningRadius, 32);
+        const mat = new THREE.Matrix4();
+        mat.makeRotationX(-Math.PI / 2);
+        mat.premultiply(new THREE.Matrix4().makeTranslation(p.x, 0.025, p.z));
+        disc.applyMatrix4(mat);
+        turningGeometries.push(disc);
+      }
     }
 
-    if (geometries.length === 0) return null;
-
-    const merged = mergeGeometries(geometries, false);
-    // Dispose source geometries
+    const corridorMerged = geometries.length > 0 ? mergeGeometries(geometries, false) : null;
+    const turningMerged = turningGeometries.length > 0 ? mergeGeometries(turningGeometries, false) : null;
     geometries.forEach((g) => g.dispose());
-    return merged;
+    turningGeometries.forEach((g) => g.dispose());
+    return { corridorGeo: corridorMerged, turningGeo: turningMerged };
   }, [segments]);
 
-  if (!geometry) return null;
+  if (!corridorGeo && !turningGeo) return null;
 
   return (
-    <mesh geometry={geometry} receiveShadow>
-      <meshStandardMaterial
-        color="hsl(142, 70%, 50%)"
-        emissive="hsl(142, 70%, 40%)"
-        emissiveIntensity={0.2}
-        transparent
-        opacity={0.35}
-        side={THREE.DoubleSide}
-        depthWrite={false}
-      />
-    </mesh>
+    <group>
+      {corridorGeo && (
+        <mesh geometry={corridorGeo} receiveShadow>
+          <meshStandardMaterial
+            color="hsl(142, 70%, 50%)"
+            emissive="hsl(142, 70%, 40%)"
+            emissiveIntensity={0.2}
+            transparent
+            opacity={0.35}
+            side={THREE.DoubleSide}
+            depthWrite={false}
+          />
+        </mesh>
+      )}
+      {turningGeo && (
+        <mesh geometry={turningGeo} receiveShadow>
+          <meshStandardMaterial
+            color="hsl(200, 70%, 55%)"
+            emissive="hsl(200, 70%, 45%)"
+            emissiveIntensity={0.3}
+            transparent
+            opacity={0.3}
+            side={THREE.DoubleSide}
+            depthWrite={false}
+          />
+        </mesh>
+      )}
+    </group>
   );
 }

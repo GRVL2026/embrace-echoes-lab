@@ -65,6 +65,7 @@ export const DEFAULT_3D_SETTINGS: Viewer3DSettings = {
     pillars: true,
     grid: true,
     circulation: true,
+    heights: false,
   },
   lighting: "daylight",
 };

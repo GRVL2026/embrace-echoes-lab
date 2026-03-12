@@ -865,18 +865,22 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
         equipment={viewingProduct} 
         open={!!viewingProduct} 
         onOpenChange={(open) => !open && setViewingProduct(null)}
-        onUpdate3DModel={(equipmentId, modelUrl) => {
+        onUpdate3DModel={async (equipmentId, modelUrl) => {
           setCatalog(prev => prev.map(eq => 
             eq.id === equipmentId ? { ...eq, model3d: modelUrl } : eq
           ));
-          // Also update the viewing product to reflect the change immediately
           setViewingProduct(prev => prev && prev.id === equipmentId ? { ...prev, model3d: modelUrl } : prev);
-          // Update any already-placed equipment with this model
           state.placedEquipments
             .filter(pe => pe.equipmentId === equipmentId)
             .forEach(pe => {
               dispatch({ type: "UPDATE_PLACED_EQUIPMENT", id: pe.id, equipment: { model3d: modelUrl } });
             });
+          // Persist to database
+          if (modelUrl) {
+            await saveModelMapping(equipmentId, modelUrl);
+          } else {
+            await deleteModelMapping(equipmentId);
+          }
         }}
       />
 

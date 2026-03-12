@@ -2272,7 +2272,195 @@ function drawPlacedEquipments(
   });
 }
 
-// Deduplicate and simplify a polyline (remove near-duplicate points)
+// ─── Gap measurement lines between equipment and walls/other equipment ───
+function drawGapMeasurements(
+  ctx: CanvasRenderingContext2D,
+  equipments: PlacedEquipment[],
+  rooms: { points: Point[]; isClosed: boolean }[],
+  pillars: Pillar[],
+  zoom: number,
+) {
+  // Collect all wall segments
+  const wallSegs: { a: Point; b: Point }[] = [];
+  rooms.forEach((room) => {
+    const pts = room.points;
+    const n = room.isClosed ? pts.length : pts.length - 1;
+    for (let i = 0; i < n; i++) {
+      wallSegs.push({ a: pts[i], b: pts[(i + 1) % pts.length] });
+    }
+  });
+
+  // For each equipment, get its 4 edge midpoints (in world coords) and cast outward
+  equipments.forEach((eq) => {
+    const rad = (eq.rotation || 0) * Math.PI / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const hw = eq.width / 2;
+    const hd = eq.depth / 2;
+
+    // 4 directions: top, bottom, left, right (in local space)
+    const directions = [
+      { localDir: { x: 0, y: -1 }, edgeOffset: { x: 0, y: -hd } }, // top
+      { localDir: { x: 0, y: 1 }, edgeOffset: { x: 0, y: hd } },   // bottom
+      { localDir: { x: -1, y: 0 }, edgeOffset: { x: -hw, y: 0 } }, // left
+      { localDir: { x: 1, y: 0 }, edgeOffset: { x: hw, y: 0 } },   // right
+    ];
+
+    directions.forEach(({ localDir, edgeOffset }) => {
+      // Transform edge midpoint and direction to world space
+      const edgeWorld = {
+        x: eq.position.x + edgeOffset.x * cos - edgeOffset.y * sin,
+        y: eq.position.y + edgeOffset.x * sin + edgeOffset.y * cos,
+      };
+      const dirWorld = {
+        x: localDir.x * cos - localDir.y * sin,
+        y: localDir.x * sin + localDir.y * cos,
+      };
+
+      let minDist = Infinity;
+      let hitPoint: Point | null = null;
+
+      // Raycast against wall segments
+      wallSegs.forEach(({ a, b }) => {
+        const hit = raySegmentIntersect(edgeWorld, dirWorld, a, b);
+        if (hit !== null && hit < minDist) {
+          minDist = hit;
+          hitPoint = {
+            x: edgeWorld.x + dirWorld.x * hit,
+            y: edgeWorld.y + dirWorld.y * hit,
+          };
+        }
+      });
+
+      // Raycast against other equipment edges
+      equipments.forEach((other) => {
+        if (other.id === eq.id) return;
+        const oRad = (other.rotation || 0) * Math.PI / 180;
+        const oCos = Math.cos(oRad);
+        const oSin = Math.sin(oRad);
+        const oHW = other.width / 2;
+        const oHD = other.depth / 2;
+        // 4 corners of other equipment
+        const corners = [
+          { x: -oHW, y: -oHD }, { x: oHW, y: -oHD },
+          { x: oHW, y: oHD }, { x: -oHW, y: oHD },
+        ].map(c => ({
+          x: other.position.x + c.x * oCos - c.y * oSin,
+          y: other.position.y + c.x * oSin + c.y * oCos,
+        }));
+        for (let i = 0; i < 4; i++) {
+          const hit = raySegmentIntersect(edgeWorld, dirWorld, corners[i], corners[(i + 1) % 4]);
+          if (hit !== null && hit < minDist) {
+            minDist = hit;
+            hitPoint = {
+              x: edgeWorld.x + dirWorld.x * hit,
+              y: edgeWorld.y + dirWorld.y * hit,
+            };
+          }
+        }
+      });
+
+      // Raycast against pillars (approximate as rectangles)
+      pillars.forEach((p) => {
+        const pRad = (p.rotation || 0) * Math.PI / 180;
+        const pCos = Math.cos(pRad);
+        const pSin = Math.sin(pRad);
+        const pHW = p.width / 2;
+        const pHD = p.depth / 2;
+        const corners = [
+          { x: -pHW, y: -pHD }, { x: pHW, y: -pHD },
+          { x: pHW, y: pHD }, { x: -pHW, y: pHD },
+        ].map(c => ({
+          x: p.position.x + c.x * pCos - c.y * pSin,
+          y: p.position.y + c.x * pSin + c.y * pCos,
+        }));
+        for (let i = 0; i < 4; i++) {
+          const hit = raySegmentIntersect(edgeWorld, dirWorld, corners[i], corners[(i + 1) % 4]);
+          if (hit !== null && hit < minDist) {
+            minDist = hit;
+            hitPoint = {
+              x: edgeWorld.x + dirWorld.x * hit,
+              y: edgeWorld.y + dirWorld.y * hit,
+            };
+          }
+        }
+      });
+
+      // Draw dimension line if we hit something within 10m
+      if (hitPoint && minDist < 1000 && minDist > 1) {
+        const distCm = Math.round(minDist);
+        const sx = edgeWorld.x * CM_TO_PX;
+        const sy = edgeWorld.y * CM_TO_PX;
+        const ex = hitPoint.x * CM_TO_PX;
+        const ey = hitPoint.y * CM_TO_PX;
+
+        // Dimension line
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(ex, ey);
+        ctx.strokeStyle = "hsla(48, 100%, 60%, 0.6)";
+        ctx.lineWidth = 1 / zoom;
+        ctx.setLineDash([4 / zoom, 3 / zoom]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Tick marks at each end
+        const perpX = -dirWorld.y;
+        const perpY = dirWorld.x;
+        const tickLen = 5 / zoom;
+        ctx.beginPath();
+        ctx.moveTo(sx + perpX * tickLen, sy + perpY * tickLen);
+        ctx.lineTo(sx - perpX * tickLen, sy - perpY * tickLen);
+        ctx.moveTo(ex + perpX * tickLen, ey + perpY * tickLen);
+        ctx.lineTo(ex - perpX * tickLen, ey - perpY * tickLen);
+        ctx.strokeStyle = "hsla(48, 100%, 60%, 0.8)";
+        ctx.lineWidth = 1.5 / zoom;
+        ctx.stroke();
+
+        // Label at midpoint
+        const mx = (sx + ex) / 2;
+        const my = (sy + ey) / 2;
+        const labelText = distCm >= 100 ? `${(distCm / 100).toFixed(2)}m` : `${distCm}cm`;
+
+        ctx.save();
+        ctx.translate(mx, my);
+        // Rotate label to follow the line
+        let angle = Math.atan2(ey - sy, ex - sx);
+        if (angle > Math.PI / 2) angle -= Math.PI;
+        if (angle < -Math.PI / 2) angle += Math.PI;
+        ctx.rotate(angle);
+
+        const fontSize = Math.max(9, 10 / zoom);
+        ctx.font = `bold ${fontSize}px Inter`;
+        const tw = ctx.measureText(labelText).width;
+        const pad = 3 / zoom;
+        ctx.fillStyle = "hsla(240, 60%, 5%, 0.85)";
+        ctx.fillRect(-tw / 2 - pad, -fontSize / 2 - pad, tw + pad * 2, fontSize + pad * 2);
+        ctx.fillStyle = "hsl(48, 100%, 60%)";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(labelText, 0, 0);
+        ctx.restore();
+      }
+    });
+  });
+}
+
+/** Ray–segment intersection. Returns distance along ray or null. */
+function raySegmentIntersect(
+  origin: Point, dir: Point, a: Point, b: Point
+): number | null {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const denom = dir.x * dy - dir.y * dx;
+  if (Math.abs(denom) < 1e-9) return null;
+  const t = ((a.x - origin.x) * dy - (a.y - origin.y) * dx) / denom;
+  const u = ((a.x - origin.x) * dir.y - (a.y - origin.y) * dir.x) / denom;
+  if (t > 0.5 && u >= 0 && u <= 1) return t; // t > 0.5cm to avoid self-hits
+  return null;
+}
+
+
 function deduplicateChain(chain: Point[], minDist: number): Point[] {
   if (chain.length < 2) return chain;
   const result: Point[] = [chain[0]];

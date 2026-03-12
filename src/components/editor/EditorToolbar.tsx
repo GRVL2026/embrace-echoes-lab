@@ -15,6 +15,7 @@ import {
   Route,
   RotateCw,
   RotateCcw,
+  Move,
 } from "lucide-react";
 import { useEditor } from "@/contexts/EditorContext";
 import { Button } from "@/components/ui/button";

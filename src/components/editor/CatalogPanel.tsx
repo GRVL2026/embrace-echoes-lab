@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { useEditor } from "@/contexts/EditorContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ import { computeCirculation } from "@/lib/circulation";
 import { ProductDialog } from "./ProductDialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fetchShopifyCatalog } from "@/lib/shopifyApi";
+import { loadModelMappings, saveModelMapping, deleteModelMapping } from "@/lib/equipmentModels";
 
 /** Parse Shopify CSV dimensions like "L 1030 x P 2500 x H 2640 mm" or "35X22X12" */
 function parseShopifyDimensions(dimStr: string): { width: number; depth: number; height: number } | null {
@@ -342,6 +343,16 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   const [expandedView, setExpandedView] = useState(false);
   const [loadingShopify, setLoadingShopify] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load persisted 3D model mappings and apply to catalog
+  useEffect(() => {
+    loadModelMappings().then(mappings => {
+      if (Object.keys(mappings).length === 0) return;
+      setCatalog(prev => prev.map(eq => 
+        mappings[eq.id] ? { ...eq, model3d: mappings[eq.id] } : eq
+      ));
+    });
+  }, []);
 
   const handleLoadShopify = async () => {
     setLoadingShopify(true);
@@ -854,18 +865,22 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
         equipment={viewingProduct} 
         open={!!viewingProduct} 
         onOpenChange={(open) => !open && setViewingProduct(null)}
-        onUpdate3DModel={(equipmentId, modelUrl) => {
+        onUpdate3DModel={async (equipmentId, modelUrl) => {
           setCatalog(prev => prev.map(eq => 
             eq.id === equipmentId ? { ...eq, model3d: modelUrl } : eq
           ));
-          // Also update the viewing product to reflect the change immediately
           setViewingProduct(prev => prev && prev.id === equipmentId ? { ...prev, model3d: modelUrl } : prev);
-          // Update any already-placed equipment with this model
           state.placedEquipments
             .filter(pe => pe.equipmentId === equipmentId)
             .forEach(pe => {
               dispatch({ type: "UPDATE_PLACED_EQUIPMENT", id: pe.id, equipment: { model3d: modelUrl } });
             });
+          // Persist to database
+          if (modelUrl) {
+            await saveModelMapping(equipmentId, modelUrl);
+          } else {
+            await deleteModelMapping(equipmentId);
+          }
         }}
       />
 

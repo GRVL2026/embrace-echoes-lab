@@ -867,12 +867,8 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
             .forEach(pe => {
               dispatch({ type: "UPDATE_PLACED_EQUIPMENT", id: pe.id, equipment: { model3d: modelUrl } });
             });
-          // Persist to database
-          if (modelUrl) {
-            await saveModelMapping(equipmentId, modelUrl);
-          } else {
-            await deleteModelMapping(equipmentId);
-          }
+          // Persist to catalog_products table
+          await updateCatalogProduct(equipmentId, { model3d: modelUrl || null });
         }}
       />
 

@@ -585,9 +585,10 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
         category: "autre",
         width: pe.width,
         depth: pe.depth,
-        height: 0,
+        height: pe.height || 0,
         safetyZone: pe.safetyZone,
         color: pe.color,
+        model3d: pe.model3d,
       };
     });
 

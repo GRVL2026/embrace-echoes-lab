@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Upload, Package, Play, Trash2, Check, X, Info, Search, Maximize2, Minus, Plus, ChevronDown, ChevronRight, RefreshCw, ShoppingBag, Loader2 } from "lucide-react";
+import { Upload, Package, Play, Trash2, Check, X, Info, Search, Maximize2, Minus, Plus, ChevronDown, ChevronRight, RefreshCw, ShoppingBag, Loader2, Box } from "lucide-react";
 import type { GameEquipment, CatalogJSON } from "@/types/equipment";
 import { find3DModel } from "@/lib/shopifyApi";
 import { DEFAULT_SAFETY_ZONE } from "@/types/equipment";
@@ -927,6 +927,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                           onClick={() => handleViewProduct(eq)}
                         >
                           {/* Image */}
+                          <div className="relative">
                           {eq.images && eq.images[0] ? (
                             <div className="aspect-square rounded-md overflow-hidden bg-muted/30 mb-2">
                               <img 
@@ -940,6 +941,12 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                               <Package className="h-8 w-8 text-muted-foreground/30" />
                             </div>
                           )}
+                          {eq.model3d && (
+                            <div className="absolute top-1 right-1 bg-primary text-primary-foreground rounded-sm p-0.5" title="Modèle 3D associé">
+                              <Box className="h-3 w-3" />
+                            </div>
+                          )}
+                          </div>
                           
                           {/* Info */}
                           <h4 className="font-medium text-sm text-foreground truncate">{eq.name}</h4>
@@ -1023,17 +1030,24 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                           className="rounded-lg border border-border bg-background p-2.5 group"
                         >
                           <div className="flex gap-2">
+                            <div className="relative shrink-0">
                             {eq.images && eq.images[0] ? (
                               <img 
                                 src={eq.images[0]} 
                                 alt={eq.name}
-                                className="w-12 h-12 rounded object-contain bg-muted/50 shrink-0"
+                                className="w-12 h-12 rounded object-contain bg-muted/50"
                               />
                             ) : (
-                              <div className="w-12 h-12 rounded bg-muted/50 flex items-center justify-center shrink-0">
+                              <div className="w-12 h-12 rounded bg-muted/50 flex items-center justify-center">
                                 <Package className="h-5 w-5 text-muted-foreground/30" />
                               </div>
                             )}
+                            {eq.model3d && (
+                              <div className="absolute -top-1 -right-1 bg-primary text-primary-foreground rounded-sm p-0.5" title="Modèle 3D associé">
+                                <Box className="h-2.5 w-2.5" />
+                              </div>
+                            )}
+                            </div>
                             <div className="flex-1 min-w-0">
                               <h4 className="font-medium text-xs text-foreground truncate">{eq.name}</h4>
                               {eq.vendor && (

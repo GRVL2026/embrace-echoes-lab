@@ -20,6 +20,14 @@ const MODEL_3D_MAP: Record<string, string> = {
   "big foot crush": "/models/bigfootcrush.glb",
   "bigfoot crush": "/models/bigfootcrush.glb",
   "bigfootcrush": "/models/bigfootcrush.glb",
+  "atv-slam-dlx": "/models/atv_slam_dlx.glb",
+  "atv slam dlx": "/models/atv_slam_dlx.glb",
+  "ice-ball-fx": "/models/ice_ball_fx.glb",
+  "ice ball fx": "/models/ice_ball_fx.glb",
+  "storm-rider": "/models/storm_rider.glb",
+  "storm rider": "/models/storm_rider.glb",
+  "hoop-it": "/models/hoop_it.glb",
+  "hoop it": "/models/hoop_it.glb",
 };
 
 /** Find a 3D model path for a product by handle or title */

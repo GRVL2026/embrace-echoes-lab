@@ -34,7 +34,7 @@ function SpacePlannerInner() {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background">
       {/* Left toolbar - switches based on view mode */}
-      <div className="flex flex-col items-center justify-center p-2">
+      <div className="relative z-20 flex flex-col items-center justify-center p-2">
         {viewMode === "2d" ? (
           <EditorToolbar />
         ) : (

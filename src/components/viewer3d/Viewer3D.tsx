@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, Suspense } from "react";
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { OrbitControls, Grid, PointerLockControls } from "@react-three/drei";
 import { useEditor } from "@/contexts/EditorContext";

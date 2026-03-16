@@ -238,6 +238,15 @@ export function Viewer3D({ settings, onPresetApplied }: Props) {
           </Suspense>
         </group>
 
+        {/* Ceilings */}
+        {ambiance.ceiling !== "none" && (
+          <Suspense fallback={null}>
+            {state.rooms.map((room) => (
+              <Ceiling3D key={`ceil-${room.id}`} room={room} ceilingType={ambiance.ceiling} />
+            ))}
+          </Suspense>
+        )}
+
         {/* Pillars */}
         {vis.pillars &&
           state.pillars.map((pillar) => (

@@ -91,6 +91,7 @@ const THEME_PRESETS: ThemePreset[] = [
       wallFinish: "brick",
       wallColor: "#f0f0f0",
       ceiling: "beams",
+      ceilingHeight: 3.2,
       fog: false,
       fogIntensity: 0,
     },

@@ -65,7 +65,7 @@ export function Ceiling3D({ room, ceilingType, height = 2.8 }: Props) {
           return (
             <mesh
               key={i}
-              position={[beam.x, CEILING_HEIGHT - 0.1, centerZ]}
+              position={[beam.x, height - 0.1, centerZ]}
               castShadow
             >
               <boxGeometry args={[0.15, 0.2, length]} />

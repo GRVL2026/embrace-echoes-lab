@@ -105,6 +105,7 @@ const defaults: AmbianceSettings = {
   floorTexture: "default",
   wallFinish: "default",
   wallColor: "#f0f0f0",
+  wallHeight: 2.8,
   ceiling: "none",
   ceilingHeight: 2.8,
   fog: false,

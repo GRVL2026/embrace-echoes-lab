@@ -30,11 +30,17 @@ export type LightingPreset = "daylight" | "arcade" | "showroom";
 
 export type FloorTexture = "default" | "carpet" | "epoxy" | "concrete" | "parquet" | "vinyl" | "tile";
 export type WallFinish = "default" | "paint" | "brick" | "concrete" | "wood";
+export type CeilingType = "none" | "tiles" | "beams" | "black";
+export type AmbianceTheme = "custom" | "retro80s" | "cyberpunk" | "sportsbar";
 
 export type AmbianceSettings = {
   floorTexture: FloorTexture;
   wallFinish: WallFinish;
-  wallColor: string; // hex color for paint finish
+  wallColor: string;
+  ceiling: CeilingType;
+  fog: boolean;
+  fogIntensity: number; // 0..1
+  theme: AmbianceTheme;
 };
 
 export type Viewer3DVisibility = {
@@ -74,6 +80,10 @@ export const DEFAULT_3D_SETTINGS: Viewer3DSettings = {
     floorTexture: "default",
     wallFinish: "default",
     wallColor: "#f0f0f0",
+    ceiling: "none",
+    fog: false,
+    fogIntensity: 0.3,
+    theme: "custom",
   },
 };
 
@@ -107,7 +117,7 @@ const visibilityToggles: { key: VisKey; label: string; icon: React.ElementType }
   { key: "heights", label: "Hauteurs", icon: Ruler },
 ];
 
-const DEFAULT_AMBIANCE: AmbianceSettings = { floorTexture: "default", wallFinish: "default", wallColor: "#f0f0f0" };
+const DEFAULT_AMBIANCE: AmbianceSettings = { floorTexture: "default", wallFinish: "default", wallColor: "#f0f0f0", ceiling: "none", fog: false, fogIntensity: 0.3, theme: "custom" };
 
 export function Viewer3DToolbar({ settings, onChange }: Props) {
   const [visExpanded, setVisExpanded] = useState(false);

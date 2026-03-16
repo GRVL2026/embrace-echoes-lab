@@ -95,6 +95,7 @@ function TexturedWallSegment({
 }
 
 export function Room3D({ room, doors, showFloor = true, showWalls = true, ambiance }: Props) {
+  const wallHeight = ambiance?.wallHeight ?? 2.8;
   // Epoxy is best rendered as a smooth procedural material, not a tiled texture
   const isEpoxy = ambiance?.floorTexture === "epoxy";
   const floorTexturePath = ambiance?.floorTexture && ambiance.floorTexture !== "default" && !isEpoxy

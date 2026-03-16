@@ -157,9 +157,23 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true, ambian
       {/* Floor */}
       {showFloor && (
         <group>
-          {/* Textured surface or default */}
+          {/* Textured surface, epoxy, or default */}
           {floorTexturePath ? (
             <TexturedFloor shape={floorShape} texturePath={floorTexturePath} />
+          ) : isEpoxy ? (
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, 0]} receiveShadow>
+              <shapeGeometry args={[floorShape]} />
+              <meshPhysicalMaterial
+                color="#7a7a7f"
+                roughness={0.12}
+                metalness={0.08}
+                clearcoat={0.9}
+                clearcoatRoughness={0.05}
+                reflectivity={0.6}
+                side={THREE.DoubleSide}
+                {...{} as any}
+              />
+            </mesh>
           ) : (
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
               <shapeGeometry args={[floorShape]} />

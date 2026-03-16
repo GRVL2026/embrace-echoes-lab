@@ -3,11 +3,10 @@ import * as THREE from "three";
 import type { Room } from "@/types/editor";
 import type { CeilingType } from "./Viewer3DToolbar";
 
-const CEILING_HEIGHT = 2.8;
-
 type Props = {
   room: Room;
   ceilingType: CeilingType;
+  height?: number; // meters, default 2.8
 };
 
 export function Ceiling3D({ room, ceilingType }: Props) {

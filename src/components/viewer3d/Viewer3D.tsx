@@ -220,6 +220,9 @@ export function Viewer3D({ settings, onPresetApplied }: Props) {
           gridObjects={gridGroupRef}
         />
 
+        {/* Fog */}
+        <SceneFog enabled={ambiance.fog} intensity={ambiance.fogIntensity} color={fogColor} />
+
         {/* Lighting */}
         <SceneLighting preset={settings.lighting} />
 

@@ -4,7 +4,6 @@ import { useLoader } from "@react-three/fiber";
 import type { Room, Door } from "@/types/editor";
 import type { AmbianceSettings, FloorTexture, WallFinish } from "./Viewer3DToolbar";
 
-const WALL_HEIGHT = 2.8; // meters
 const WALL_THICKNESS = 0.15; // meters
 
 const FLOOR_TEXTURE_MAP: Record<Exclude<FloorTexture, "default">, string> = {

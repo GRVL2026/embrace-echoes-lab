@@ -40,6 +40,7 @@ const CEILING_OPTIONS: { id: CeilingType; label: string }[] = [
   { id: "tiles", label: "Dalles" },
   { id: "beams", label: "Poutres" },
   { id: "black", label: "Noir" },
+  { id: "technical", label: "Technique" },
 ];
 
 type ThemePreset = {
@@ -290,7 +291,7 @@ export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose }: Prop
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
           Plafond
         </p>
-        <div className="grid grid-cols-4 gap-1.5">
+        <div className="grid grid-cols-5 gap-1.5">
           {CEILING_OPTIONS.map((opt) => (
             <button
               key={opt.id}

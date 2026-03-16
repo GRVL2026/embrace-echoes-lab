@@ -3,14 +3,13 @@ import * as THREE from "three";
 import type { Room } from "@/types/editor";
 import type { CeilingType } from "./Viewer3DToolbar";
 
-const CEILING_HEIGHT = 2.8;
-
 type Props = {
   room: Room;
   ceilingType: CeilingType;
+  height?: number; // meters, default 2.8
 };
 
-export function Ceiling3D({ room, ceilingType }: Props) {
+export function Ceiling3D({ room, ceilingType, height = 2.8 }: Props) {
   const { shape, beamLines } = useMemo(() => {
     const pts = room.points.map((p) => new THREE.Vector2(p.x / 100, -p.y / 100));
     pts.reverse();
@@ -40,7 +39,7 @@ export function Ceiling3D({ room, ceilingType }: Props) {
   return (
     <group>
       {/* Main ceiling plane */}
-      <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, CEILING_HEIGHT, 0]}>
+      <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, height, 0]}>
         <shapeGeometry args={[shape]} />
         <meshStandardMaterial
           color={color}
@@ -53,7 +52,7 @@ export function Ceiling3D({ room, ceilingType }: Props) {
 
       {/* Tiles grid lines */}
       {ceilingType === "tiles" && (
-        <group position={[0, CEILING_HEIGHT - 0.01, 0]}>
+        <group position={[0, height - 0.01, 0]}>
           {/* Simulated tile grid with thin lines - using the room bounds */}
         </group>
       )}
@@ -66,7 +65,7 @@ export function Ceiling3D({ room, ceilingType }: Props) {
           return (
             <mesh
               key={i}
-              position={[beam.x, CEILING_HEIGHT - 0.1, centerZ]}
+              position={[beam.x, height - 0.1, centerZ]}
               castShadow
             >
               <boxGeometry args={[0.15, 0.2, length]} />

@@ -17,14 +17,25 @@ import {
   Layers,
   Route,
   Ruler,
+  Paintbrush,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { AmbiancePanel } from "./AmbiancePanel";
 
 export type PresetView = "perspective" | "top" | "front" | "side" | null;
 export type LightingPreset = "daylight" | "arcade" | "showroom";
+
+export type FloorTexture = "default" | "carpet" | "epoxy" | "concrete" | "parquet" | "vinyl" | "tile";
+export type WallFinish = "default" | "paint" | "brick" | "concrete" | "wood";
+
+export type AmbianceSettings = {
+  floorTexture: FloorTexture;
+  wallFinish: WallFinish;
+  wallColor: string; // hex color for paint finish
+};
 
 export type Viewer3DVisibility = {
   walls: boolean;
@@ -42,6 +53,7 @@ export type Viewer3DSettings = {
   firstPerson: boolean;
   visibility: Viewer3DVisibility;
   lighting: LightingPreset;
+  ambiance: AmbianceSettings;
 };
 
 export const DEFAULT_3D_SETTINGS: Viewer3DSettings = {
@@ -58,6 +70,11 @@ export const DEFAULT_3D_SETTINGS: Viewer3DSettings = {
     heights: false,
   },
   lighting: "daylight",
+  ambiance: {
+    floorTexture: "default",
+    wallFinish: "default",
+    wallColor: "#f0f0f0",
+  },
 };
 
 type Props = {
@@ -92,6 +109,7 @@ const visibilityToggles: { key: VisKey; label: string; icon: React.ElementType }
 
 export function Viewer3DToolbar({ settings, onChange }: Props) {
   const [visExpanded, setVisExpanded] = useState(false);
+  const [ambianceOpen, setAmbianceOpen] = useState(false);
 
   const setPreset = (view: PresetView) => {
     onChange({ ...settings, presetView: view });
@@ -112,8 +130,12 @@ export function Viewer3DToolbar({ settings, onChange }: Props) {
     onChange({ ...settings, lighting: preset });
   };
 
+  const setAmbiance = (ambiance: AmbianceSettings) => {
+    onChange({ ...settings, ambiance });
+  };
+
   return (
-    <div className="flex flex-col items-center gap-1 rounded-lg border border-border bg-card/80 backdrop-blur-sm p-2 neon-border">
+    <div className="relative flex flex-col items-center gap-1 rounded-lg border border-border bg-card/80 backdrop-blur-sm p-2 neon-border">
       {/* Preset views */}
       {presetViews.map((view) => (
         <Tooltip key={view.id} delayDuration={200}>
@@ -227,6 +249,24 @@ export function Viewer3DToolbar({ settings, onChange }: Props) {
 
       <Separator className="my-1 w-6" />
 
+      {/* Ambiance */}
+      <Tooltip delayDuration={200}>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "h-10 w-10 transition-all",
+              ambianceOpen && "bg-primary/20 text-primary glow-purple"
+            )}
+            onClick={() => setAmbianceOpen(!ambianceOpen)}
+          >
+            <Paintbrush className="h-5 w-5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">Ambiance & Matériaux</TooltipContent>
+      </Tooltip>
+
       {/* Screenshot */}
       <Tooltip delayDuration={200}>
         <TooltipTrigger asChild>
@@ -236,6 +276,15 @@ export function Viewer3DToolbar({ settings, onChange }: Props) {
         </TooltipTrigger>
         <TooltipContent side="right">Capturer la vue</TooltipContent>
       </Tooltip>
+
+      {/* Ambiance floating panel */}
+      {ambianceOpen && (
+        <AmbiancePanel
+          ambiance={settings.ambiance}
+          onChange={setAmbiance}
+          onClose={() => setAmbianceOpen(false)}
+        />
+      )}
     </div>
   );
 }

@@ -39,7 +39,7 @@ export function Ceiling3D({ room, ceilingType, height = 2.8 }: Props) {
   return (
     <group>
       {/* Main ceiling plane */}
-      <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, height, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, height, 0]}>
         <shapeGeometry args={[shape]} />
         <meshStandardMaterial
           color={color}

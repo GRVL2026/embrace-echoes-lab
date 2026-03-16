@@ -60,6 +60,7 @@ const THEME_PRESETS: ThemePreset[] = [
       floorTexture: "carpet",
       wallFinish: "paint",
       wallColor: "#1a1a2e",
+      wallHeight: 2.8,
       ceiling: "black",
       ceilingHeight: 2.8,
       fog: true,
@@ -75,6 +76,7 @@ const THEME_PRESETS: ThemePreset[] = [
       floorTexture: "epoxy",
       wallFinish: "concrete",
       wallColor: "#0f172a",
+      wallHeight: 3.0,
       ceiling: "black",
       ceilingHeight: 3.0,
       fog: true,
@@ -90,6 +92,7 @@ const THEME_PRESETS: ThemePreset[] = [
       floorTexture: "parquet",
       wallFinish: "brick",
       wallColor: "#f0f0f0",
+      wallHeight: 3.2,
       ceiling: "beams",
       ceilingHeight: 3.2,
       fog: false,
@@ -102,6 +105,7 @@ const defaults: AmbianceSettings = {
   floorTexture: "default",
   wallFinish: "default",
   wallColor: "#f0f0f0",
+  wallHeight: 2.8,
   ceiling: "none",
   ceilingHeight: 2.8,
   fog: false,
@@ -226,6 +230,25 @@ export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose }: Prop
               )}
             </button>
           ))}
+        </div>
+        {/* Wall height slider */}
+        <div className="mt-2">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] text-muted-foreground">Hauteur des murs</span>
+            <span className="text-[10px] font-mono text-foreground">{ambiance.wallHeight.toFixed(1)} m</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-muted-foreground">2.2</span>
+            <Slider
+              min={2.2}
+              max={5}
+              step={0.1}
+              value={[ambiance.wallHeight]}
+              onValueChange={([v]) => update({ wallHeight: v })}
+              className="flex-1"
+            />
+            <span className="text-[10px] text-muted-foreground">5.0</span>
+          </div>
         </div>
       </div>
 

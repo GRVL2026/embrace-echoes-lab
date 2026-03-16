@@ -4,7 +4,6 @@ import { useLoader } from "@react-three/fiber";
 import type { Room, Door } from "@/types/editor";
 import type { AmbianceSettings, FloorTexture, WallFinish } from "./Viewer3DToolbar";
 
-const WALL_HEIGHT = 2.8; // meters
 const WALL_THICKNESS = 0.15; // meters
 
 const FLOOR_TEXTURE_MAP: Record<Exclude<FloorTexture, "default">, string> = {
@@ -96,6 +95,7 @@ function TexturedWallSegment({
 }
 
 export function Room3D({ room, doors, showFloor = true, showWalls = true, ambiance }: Props) {
+  const wallHeight = ambiance?.wallHeight ?? 2.8;
   // Epoxy is best rendered as a smooth procedural material, not a tiled texture
   const isEpoxy = ambiance?.floorTexture === "epoxy";
   const floorTexturePath = ambiance?.floorTexture && ambiance.floorTexture !== "default" && !isEpoxy
@@ -207,9 +207,9 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true, ambian
           const segCenter = (seg.start + seg.end) / 2;
           const cx = wall.origin.x + Math.cos(wall.angle) * segCenter;
           const cz = wall.origin.y + Math.sin(wall.angle) * segCenter;
-          const pos: [number, number, number] = [cx, WALL_HEIGHT / 2, cz];
+          const pos: [number, number, number] = [cx, wallHeight / 2, cz];
           const rot: [number, number, number] = [0, -wall.angle, 0];
-          const size: [number, number, number] = [segLength, WALL_HEIGHT, WALL_THICKNESS];
+          const size: [number, number, number] = [segLength, wallHeight, WALL_THICKNESS];
 
           if (wallTexturePath) {
             return (

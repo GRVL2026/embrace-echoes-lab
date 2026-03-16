@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, Suspense } from "react";
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { OrbitControls, Grid, PointerLockControls } from "@react-three/drei";
 import { useEditor } from "@/contexts/EditorContext";
@@ -224,9 +224,11 @@ export function Viewer3D({ settings, onPresetApplied }: Props) {
 
         {/* Rooms (walls + floor) — always rendered, visibility controlled via group */}
         <group ref={wallGroupRef}>
-          {state.rooms.map((room) => (
-            <Room3D key={room.id} room={room} doors={state.doors} showFloor={vis.floor} showWalls={vis.walls} ambiance={settings.ambiance} />
-          ))}
+          <Suspense fallback={null}>
+            {state.rooms.map((room) => (
+              <Room3D key={room.id} room={room} doors={state.doors} showFloor={vis.floor} showWalls={vis.walls} ambiance={settings.ambiance} />
+            ))}
+          </Suspense>
         </group>
 
         {/* Pillars */}

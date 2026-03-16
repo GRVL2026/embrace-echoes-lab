@@ -283,7 +283,7 @@ export function Viewer3DToolbar({ settings, onChange }: Props) {
       {/* Ambiance floating panel */}
       {ambianceOpen && (
         <AmbiancePanel
-          ambiance={settings.ambiance}
+          ambiance={ambiance}
           onChange={setAmbiance}
           onClose={() => setAmbianceOpen(false)}
         />

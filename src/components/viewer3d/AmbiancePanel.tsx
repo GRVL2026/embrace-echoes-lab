@@ -76,6 +76,7 @@ const THEME_PRESETS: ThemePreset[] = [
       floorTexture: "epoxy",
       wallFinish: "concrete",
       wallColor: "#0f172a",
+      wallHeight: 3.0,
       ceiling: "black",
       ceilingHeight: 3.0,
       fog: true,

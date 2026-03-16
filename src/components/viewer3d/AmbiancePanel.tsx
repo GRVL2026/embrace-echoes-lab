@@ -33,7 +33,8 @@ const PAINT_COLORS = [
   "#7c3aed", "#dc2626", "#f59e0b", "#10b981",
 ];
 
-export function AmbiancePanel({ ambiance, onChange, onClose }: Props) {
+export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose }: Props) {
+  const ambiance = rawAmbiance ?? { floorTexture: "default" as const, wallFinish: "default" as const, wallColor: "#f0f0f0" };
   return (
     <div className="absolute left-full top-0 ml-3 z-50 w-72 rounded-lg border border-border bg-card/95 backdrop-blur-md p-4 shadow-xl neon-border">
       {/* Header */}

@@ -9,7 +9,7 @@ type Props = {
   height?: number; // meters, default 2.8
 };
 
-export function Ceiling3D({ room, ceilingType }: Props) {
+export function Ceiling3D({ room, ceilingType, height = 2.8 }: Props) {
   const { shape, beamLines } = useMemo(() => {
     const pts = room.points.map((p) => new THREE.Vector2(p.x / 100, -p.y / 100));
     pts.reverse();

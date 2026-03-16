@@ -82,6 +82,7 @@ export const DEFAULT_3D_SETTINGS: Viewer3DSettings = {
     wallFinish: "default",
     wallColor: "#f0f0f0",
     ceiling: "none",
+    ceilingHeight: 2.8,
     fog: false,
     fogIntensity: 0.3,
     theme: "custom",

@@ -92,6 +92,7 @@ const THEME_PRESETS: ThemePreset[] = [
       floorTexture: "parquet",
       wallFinish: "brick",
       wallColor: "#f0f0f0",
+      wallHeight: 3.2,
       ceiling: "beams",
       ceilingHeight: 3.2,
       fog: false,

@@ -30,11 +30,17 @@ export type LightingPreset = "daylight" | "arcade" | "showroom";
 
 export type FloorTexture = "default" | "carpet" | "epoxy" | "concrete" | "parquet" | "vinyl" | "tile";
 export type WallFinish = "default" | "paint" | "brick" | "concrete" | "wood";
+export type CeilingType = "none" | "tiles" | "beams" | "black";
+export type AmbianceTheme = "custom" | "retro80s" | "cyberpunk" | "sportsbar";
 
 export type AmbianceSettings = {
   floorTexture: FloorTexture;
   wallFinish: WallFinish;
-  wallColor: string; // hex color for paint finish
+  wallColor: string;
+  ceiling: CeilingType;
+  fog: boolean;
+  fogIntensity: number; // 0..1
+  theme: AmbianceTheme;
 };
 
 export type Viewer3DVisibility = {

@@ -80,6 +80,10 @@ export const DEFAULT_3D_SETTINGS: Viewer3DSettings = {
     floorTexture: "default",
     wallFinish: "default",
     wallColor: "#f0f0f0",
+    ceiling: "none",
+    fog: false,
+    fogIntensity: 0.3,
+    theme: "custom",
   },
 };
 

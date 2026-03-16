@@ -207,9 +207,9 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true, ambian
           const segCenter = (seg.start + seg.end) / 2;
           const cx = wall.origin.x + Math.cos(wall.angle) * segCenter;
           const cz = wall.origin.y + Math.sin(wall.angle) * segCenter;
-          const pos: [number, number, number] = [cx, WALL_HEIGHT / 2, cz];
+          const pos: [number, number, number] = [cx, wallHeight / 2, cz];
           const rot: [number, number, number] = [0, -wall.angle, 0];
-          const size: [number, number, number] = [segLength, WALL_HEIGHT, WALL_THICKNESS];
+          const size: [number, number, number] = [segLength, wallHeight, WALL_THICKNESS];
 
           if (wallTexturePath) {
             return (

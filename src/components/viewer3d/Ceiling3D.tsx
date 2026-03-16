@@ -52,7 +52,7 @@ export function Ceiling3D({ room, ceilingType, height = 2.8 }: Props) {
 
       {/* Tiles grid lines */}
       {ceilingType === "tiles" && (
-        <group position={[0, CEILING_HEIGHT - 0.01, 0]}>
+        <group position={[0, height - 0.01, 0]}>
           {/* Simulated tile grid with thin lines - using the room bounds */}
         </group>
       )}

@@ -30,7 +30,7 @@ export type LightingPreset = "daylight" | "arcade" | "showroom";
 
 export type FloorTexture = "default" | "carpet" | "epoxy" | "concrete" | "parquet" | "vinyl" | "tile";
 export type WallFinish = "default" | "paint" | "brick" | "concrete" | "wood";
-export type CeilingType = "none" | "tiles" | "beams" | "black";
+export type CeilingType = "none" | "tiles" | "beams" | "black" | "technical";
 export type AmbianceTheme = "custom" | "retro80s" | "cyberpunk" | "sportsbar";
 
 export type AmbianceSettings = {

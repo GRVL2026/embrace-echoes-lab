@@ -40,6 +40,7 @@ const CEILING_OPTIONS: { id: CeilingType; label: string }[] = [
   { id: "tiles", label: "Dalles" },
   { id: "beams", label: "Poutres" },
   { id: "black", label: "Noir" },
+  { id: "technical", label: "Technique" },
 ];
 
 type ThemePreset = {

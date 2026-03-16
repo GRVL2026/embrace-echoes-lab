@@ -60,6 +60,7 @@ const THEME_PRESETS: ThemePreset[] = [
       floorTexture: "carpet",
       wallFinish: "paint",
       wallColor: "#1a1a2e",
+      wallHeight: 2.8,
       ceiling: "black",
       ceilingHeight: 2.8,
       fog: true,

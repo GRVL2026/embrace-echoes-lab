@@ -226,6 +226,7 @@ export function Viewer3D({ settings, onPresetApplied }: Props) {
         <group ref={wallGroupRef}>
           {state.rooms.map((room) => (
             <Room3D key={room.id} room={room} doors={state.doors} showFloor={vis.floor} showWalls={vis.walls} ambiance={settings.ambiance} />
+          ))}
         </group>
 
         {/* Pillars */}

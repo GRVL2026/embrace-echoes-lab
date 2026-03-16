@@ -1,7 +1,9 @@
-import { X } from "lucide-react";
+import { X, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
-import type { AmbianceSettings, FloorTexture, WallFinish } from "./Viewer3DToolbar";
+import type { AmbianceSettings, FloorTexture, WallFinish, CeilingType, AmbianceTheme } from "./Viewer3DToolbar";
 
 type Props = {
   ambiance: AmbianceSettings;
@@ -33,10 +35,93 @@ const PAINT_COLORS = [
   "#7c3aed", "#dc2626", "#f59e0b", "#10b981",
 ];
 
+const CEILING_OPTIONS: { id: CeilingType; label: string }[] = [
+  { id: "none", label: "Aucun" },
+  { id: "tiles", label: "Dalles" },
+  { id: "beams", label: "Poutres" },
+  { id: "black", label: "Noir" },
+];
+
+type ThemePreset = {
+  id: AmbianceTheme;
+  label: string;
+  description: string;
+  colors: string[];
+  settings: Omit<AmbianceSettings, "theme">;
+};
+
+const THEME_PRESETS: ThemePreset[] = [
+  {
+    id: "retro80s",
+    label: "Retro 80s",
+    description: "Moquette, néon violet, plafond noir",
+    colors: ["#7c3aed", "#ec4899", "#1a1a2e"],
+    settings: {
+      floorTexture: "carpet",
+      wallFinish: "paint",
+      wallColor: "#1a1a2e",
+      ceiling: "black",
+      fog: true,
+      fogIntensity: 0.25,
+    },
+  },
+  {
+    id: "cyberpunk",
+    label: "Cyberpunk",
+    description: "Béton, néon bleu, brouillard intense",
+    colors: ["#3b82f6", "#06b6d4", "#0f172a"],
+    settings: {
+      floorTexture: "epoxy",
+      wallFinish: "concrete",
+      wallColor: "#0f172a",
+      ceiling: "black",
+      fog: true,
+      fogIntensity: 0.5,
+    },
+  },
+  {
+    id: "sportsbar",
+    label: "Sports Bar",
+    description: "Parquet, briques, poutres apparentes",
+    colors: ["#dc2626", "#f59e0b", "#7c2d12"],
+    settings: {
+      floorTexture: "parquet",
+      wallFinish: "brick",
+      wallColor: "#f0f0f0",
+      ceiling: "beams",
+      fog: false,
+      fogIntensity: 0,
+    },
+  },
+];
+
+const defaults: AmbianceSettings = {
+  floorTexture: "default",
+  wallFinish: "default",
+  wallColor: "#f0f0f0",
+  ceiling: "none",
+  fog: false,
+  fogIntensity: 0.3,
+  theme: "custom",
+};
+
+function ensureDefaults(a: Partial<AmbianceSettings> | undefined): AmbianceSettings {
+  return { ...defaults, ...a };
+}
+
 export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose }: Props) {
-  const ambiance = rawAmbiance ?? { floorTexture: "default" as const, wallFinish: "default" as const, wallColor: "#f0f0f0" };
+  const ambiance = ensureDefaults(rawAmbiance);
+
+  const applyTheme = (preset: ThemePreset) => {
+    onChange({ ...preset.settings, theme: preset.id });
+  };
+
+  const update = (partial: Partial<AmbianceSettings>) => {
+    onChange({ ...ambiance, ...partial, theme: "custom" });
+  };
+
   return (
-    <div className="absolute left-full top-0 ml-3 z-50 w-72 rounded-lg border border-border bg-card/95 backdrop-blur-md p-4 shadow-xl neon-border">
+    <div className="absolute left-full top-0 ml-3 z-50 w-72 max-h-[80vh] overflow-y-auto rounded-lg border border-border bg-card/95 backdrop-blur-md p-4 shadow-xl neon-border">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-display text-sm font-bold text-foreground tracking-wide">
@@ -45,6 +130,37 @@ export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose }: Prop
         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onClose}>
           <X className="h-4 w-4" />
         </Button>
+      </div>
+
+      {/* Theme presets */}
+      <div className="mb-4">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1">
+          <Sparkles className="h-3 w-3" /> Thèmes
+        </p>
+        <div className="flex flex-col gap-1.5">
+          {THEME_PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              className={cn(
+                "flex items-center gap-2 rounded-md border-2 p-2 text-left transition-all",
+                ambiance.theme === preset.id
+                  ? "border-primary ring-1 ring-primary/50 bg-primary/10"
+                  : "border-border/50 hover:border-border"
+              )}
+              onClick={() => applyTheme(preset)}
+            >
+              <div className="flex gap-0.5">
+                {preset.colors.map((c, i) => (
+                  <div key={i} className="h-6 w-3 rounded-sm" style={{ backgroundColor: c }} />
+                ))}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-foreground">{preset.label}</p>
+                <p className="text-[10px] text-muted-foreground truncate">{preset.description}</p>
+              </div>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Floor textures */}
@@ -62,15 +178,11 @@ export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose }: Prop
                   ? "border-primary ring-1 ring-primary/50"
                   : "border-border/50 hover:border-border"
               )}
-              onClick={() => onChange({ ...ambiance, floorTexture: opt.id })}
+              onClick={() => update({ floorTexture: opt.id })}
               title={opt.label}
             >
               {opt.preview ? (
-                <img
-                  src={opt.preview}
-                  alt={opt.label}
-                  className="w-full h-full object-cover"
-                />
+                <img src={opt.preview} alt={opt.label} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full bg-muted flex items-center justify-center">
                   <span className="text-[9px] text-muted-foreground">{opt.label}</span>
@@ -96,20 +208,13 @@ export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose }: Prop
                   ? "border-primary ring-1 ring-primary/50"
                   : "border-border/50 hover:border-border"
               )}
-              onClick={() => onChange({ ...ambiance, wallFinish: opt.id })}
+              onClick={() => update({ wallFinish: opt.id })}
               title={opt.label}
             >
               {opt.preview ? (
-                <img
-                  src={opt.preview}
-                  alt={opt.label}
-                  className="w-full h-full object-cover"
-                />
+                <img src={opt.preview} alt={opt.label} className="w-full h-full object-cover" />
               ) : opt.id === "paint" ? (
-                <div
-                  className="w-full h-full"
-                  style={{ backgroundColor: ambiance.wallColor }}
-                />
+                <div className="w-full h-full" style={{ backgroundColor: ambiance.wallColor }} />
               ) : (
                 <div className="w-full h-full bg-muted flex items-center justify-center">
                   <span className="text-[9px] text-muted-foreground">{opt.label}</span>
@@ -122,7 +227,7 @@ export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose }: Prop
 
       {/* Color picker for paint */}
       {ambiance.wallFinish === "paint" && (
-        <div>
+        <div className="mb-4">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
             Couleur de peinture
           </p>
@@ -137,7 +242,7 @@ export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose }: Prop
                     : "border-border/30 hover:border-border"
                 )}
                 style={{ backgroundColor: color }}
-                onClick={() => onChange({ ...ambiance, wallColor: color })}
+                onClick={() => update({ wallColor: color })}
               />
             ))}
           </div>
@@ -145,15 +250,63 @@ export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose }: Prop
             <input
               type="color"
               value={ambiance.wallColor}
-              onChange={(e) => onChange({ ...ambiance, wallColor: e.target.value })}
+              onChange={(e) => update({ wallColor: e.target.value })}
               className="h-8 w-8 rounded cursor-pointer border-0 p-0"
             />
-            <span className="text-xs text-muted-foreground font-mono">
-              {ambiance.wallColor}
-            </span>
+            <span className="text-xs text-muted-foreground font-mono">{ambiance.wallColor}</span>
           </div>
         </div>
       )}
+
+      {/* Ceiling */}
+      <div className="mb-4">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+          Plafond
+        </p>
+        <div className="grid grid-cols-4 gap-1.5">
+          {CEILING_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              className={cn(
+                "h-10 rounded-md border-2 text-[10px] font-medium transition-all",
+                ambiance.ceiling === opt.id
+                  ? "border-primary ring-1 ring-primary/50 bg-primary/10 text-foreground"
+                  : "border-border/50 hover:border-border text-muted-foreground"
+              )}
+              onClick={() => update({ ceiling: opt.id })}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Fog */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Brouillard / Haze
+          </p>
+          <Switch
+            checked={ambiance.fog}
+            onCheckedChange={(checked) => update({ fog: checked })}
+          />
+        </div>
+        {ambiance.fog && (
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-muted-foreground">Léger</span>
+            <Slider
+              min={0.05}
+              max={0.8}
+              step={0.05}
+              value={[ambiance.fogIntensity]}
+              onValueChange={([v]) => update({ fogIntensity: v })}
+              className="flex-1"
+            />
+            <span className="text-[10px] text-muted-foreground">Dense</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

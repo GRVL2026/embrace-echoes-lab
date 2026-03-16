@@ -249,8 +249,8 @@ export function Viewer3D({ settings, onPresetApplied }: Props) {
             <Equipment3D key={eq.id} equipment={eq} showHeight={vis.heights} />
           ))}
 
-        {/* Circulation path — always rendered, visibility controlled via group */}
-        <group ref={circulationGroupRef}>
+        {/* Circulation path */}
+        <group ref={circulationGroupRef} visible={vis.circulation}>
           {state.circulationPath && state.circulationPath.length > 0 && (
             <Circulation3D segments={state.circulationPath} />
           )}

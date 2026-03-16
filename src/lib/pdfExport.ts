@@ -1,6 +1,6 @@
 /**
  * Premium PDF dossier generator for bank financing.
- * Full dark mode matching Arcade Planner brand identity.
+ * Design inspired by avranchesautomatic.com — dark, bold, fun & tech.
  */
 import jsPDF from "jspdf";
 import type { EditorState, Room } from "@/types/editor";
@@ -9,66 +9,142 @@ import { capture3DViews, type CaptureView } from "./render3DCaptures";
 import { captureFromLiveCanvas, isCanvasCaptureAvailable } from "./canvasCapture";
 import { getCanvas2DSnapshot } from "./canvas2DSnapshot";
 
-// Brand colors — dark arcade theme
-const PURPLE = [155, 92, 255] as const;   // #9B5CFF
-const GREEN = [173, 255, 0] as const;     // #ADFF00
-const GOLD = [255, 215, 0] as const;      // #FFD700
-const DARK = [6, 6, 25] as const;         // #060619
-const DARK_SURFACE = [16, 16, 45] as const; // elevated surface
-const DARK_MUTED = [30, 30, 60] as const;   // table stripes
-const WHITE = [240, 240, 250] as const;
-const GRAY = [130, 130, 170] as const;     // muted text on dark
-const LIGHT = [200, 200, 220] as const;    // secondary text
+// ─── Brand Palette ───────────────────────────────────────────
+const PURPLE = [155, 92, 255] as const;     // #9B5CFF
+const GREEN = [173, 255, 0] as const;       // #ADFF00
+const GOLD = [255, 215, 0] as const;        // #FFD700
+const DARK = [6, 6, 25] as const;           // #060619
+const DARK_CARD = [14, 14, 40] as const;    // elevated card
+const DARK_SURFACE = [20, 20, 52] as const; // surface
+const DARK_MUTED = [30, 30, 65] as const;   // table alt
+const WHITE = [245, 245, 255] as const;
+const GRAY = [120, 120, 160] as const;
+const LIGHT = [190, 190, 220] as const;
+const CYAN = [0, 200, 255] as const;        // secondary accent
 
 const PAGE_W = 210;
 const PAGE_H = 297;
-const MARGIN = 20;
+const MARGIN = 18;
 const CONTENT_W = PAGE_W - 2 * MARGIN;
 
 type RGB = readonly [number, number, number];
 
-function setColor(doc: jsPDF, color: RGB) {
-  doc.setTextColor(color[0], color[1], color[2]);
+function setC(doc: jsPDF, c: RGB) { doc.setTextColor(c[0], c[1], c[2]); }
+function setF(doc: jsPDF, c: RGB) { doc.setFillColor(c[0], c[1], c[2]); }
+function setD(doc: jsPDF, c: RGB) { doc.setDrawColor(c[0], c[1], c[2]); }
+
+// ─── Decorative helpers ──────────────────────────────────────
+
+/** Draw a subtle grid pattern (like the site background) */
+function drawGridPattern(doc: jsPDF, y: number, h: number, opacity = 0.06) {
+  doc.setGState(new (doc as any).GState({ opacity }));
+  setD(doc, PURPLE);
+  doc.setLineWidth(0.15);
+  const step = 12;
+  for (let gx = 0; gx <= PAGE_W; gx += step) {
+    doc.line(gx, y, gx, y + h);
+  }
+  for (let gy = y; gy <= y + h; gy += step) {
+    doc.line(0, gy, PAGE_W, gy);
+  }
+  doc.setGState(new (doc as any).GState({ opacity: 1 }));
 }
 
-function setFill(doc: jsPDF, color: RGB) {
-  doc.setFillColor(color[0], color[1], color[2]);
+/** Diagonal decorative lines in a corner */
+function drawCornerAccent(doc: jsPDF, x: number, y: number, size: number, flip = false) {
+  doc.setGState(new (doc as any).GState({ opacity: 0.15 }));
+  setD(doc, GREEN);
+  doc.setLineWidth(0.4);
+  for (let i = 0; i < 5; i++) {
+    const offset = i * (size / 5);
+    if (flip) {
+      doc.line(x - offset, y, x, y + offset);
+    } else {
+      doc.line(x + offset, y, x + size, y + offset);
+    }
+  }
+  doc.setGState(new (doc as any).GState({ opacity: 1 }));
 }
 
-/** Dark page background + purple accent header */
+/** Glowing rounded card background */
+function drawCard(doc: jsPDF, x: number, y: number, w: number, h: number, opts?: { glow?: RGB; borderColor?: RGB }) {
+  // Card fill
+  setF(doc, DARK_CARD);
+  doc.roundedRect(x, y, w, h, 4, 4, "F");
+  // Border
+  const bc = opts?.borderColor || PURPLE;
+  doc.setGState(new (doc as any).GState({ opacity: 0.3 }));
+  setD(doc, bc);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(x, y, w, h, 4, 4, "S");
+  doc.setGState(new (doc as any).GState({ opacity: 1 }));
+}
+
+/** Gradient-like bar (simulated with multiple thin rects) */
+function drawGradientBar(doc: jsPDF, x: number, y: number, w: number, h: number, from: RGB, to: RGB) {
+  const steps = 40;
+  const stepW = w / steps;
+  for (let i = 0; i < steps; i++) {
+    const t = i / steps;
+    const r = Math.round(from[0] + (to[0] - from[0]) * t);
+    const g = Math.round(from[1] + (to[1] - from[1]) * t);
+    const b = Math.round(from[2] + (to[2] - from[2]) * t);
+    doc.setFillColor(r, g, b);
+    doc.rect(x + i * stepW, y, stepW + 0.5, h, "F");
+  }
+}
+
+/** Neon dot accent */
+function drawDot(doc: jsPDF, x: number, y: number, r: number, color: RGB, opacity = 0.5) {
+  doc.setGState(new (doc as any).GState({ opacity }));
+  setF(doc, color);
+  doc.circle(x, y, r, "F");
+  doc.setGState(new (doc as any).GState({ opacity: 1 }));
+}
+
+/** Section title with decorative accent */
+function drawSectionTitle(doc: jsPDF, title: string, y: number): number {
+  // Green accent dot
+  drawDot(doc, MARGIN + 3, y - 1.5, 2, GREEN, 0.6);
+  // Title
+  doc.setFontSize(18);
+  setC(doc, WHITE);
+  doc.text(title, MARGIN + 10, y);
+  // Underline gradient
+  drawGradientBar(doc, MARGIN + 10, y + 2, 60, 1, PURPLE, [PURPLE[0], PURPLE[1], PURPLE[2]]);
+  doc.setGState(new (doc as any).GState({ opacity: 0.3 }));
+  drawGradientBar(doc, MARGIN + 70, y + 2, 40, 1, PURPLE, DARK);
+  doc.setGState(new (doc as any).GState({ opacity: 1 }));
+  return y + 12;
+}
+
+// ─── Dark page background ────────────────────────────────────
 function drawDarkPage(doc: jsPDF) {
-  setFill(doc, DARK);
+  setF(doc, DARK);
   doc.rect(0, 0, PAGE_W, PAGE_H, "F");
 }
 
-function drawHeader(doc: jsPDF, title: string, subtitle: string) {
-  // Header bar
-  setFill(doc, DARK_SURFACE);
-  doc.rect(0, 0, PAGE_W, 38, "F");
-  // Purple accent line
-  setFill(doc, PURPLE);
-  doc.rect(0, 36, PAGE_W, 2, "F");
-  // Title
-  doc.setFontSize(20);
-  setColor(doc, WHITE);
-  doc.text(title, MARGIN, 18);
-  // Subtitle
-  doc.setFontSize(10);
-  setColor(doc, GRAY);
-  doc.text(subtitle, MARGIN, 28);
-}
-
-function addPageNumber(doc: jsPDF, page: number, total: number) {
+function addFooter(doc: jsPDF, page: number, total: number) {
+  // Footer bar
+  setF(doc, DARK_CARD);
+  doc.rect(0, PAGE_H - 16, PAGE_W, 16, "F");
+  drawGradientBar(doc, 0, PAGE_H - 16, PAGE_W, 0.8, PURPLE, GREEN);
+  
   doc.setFontSize(7);
-  setColor(doc, GRAY);
-  doc.text(`${page} / ${total}`, PAGE_W - MARGIN, PAGE_H - 10, { align: "right" });
-  setColor(doc, [80, 80, 120]);
-  doc.text("Arcade Planner — Dossier de Financement", MARGIN, PAGE_H - 10);
-  // Bottom accent line
-  setFill(doc, PURPLE);
-  doc.rect(0, PAGE_H - 3, PAGE_W, 3, "F");
+  setC(doc, GRAY);
+  doc.text("Arcade Planner — Dossier de Financement", MARGIN, PAGE_H - 6);
+  
+  // Page number badge
+  setF(doc, DARK_MUTED);
+  const badge = `${page}/${total}`;
+  const badgeW = 16;
+  doc.roundedRect(PAGE_W - MARGIN - badgeW, PAGE_H - 13, badgeW, 8, 2, 2, "F");
+  doc.setFontSize(8);
+  setC(doc, GREEN);
+  doc.text(badge, PAGE_W - MARGIN - badgeW / 2, PAGE_H - 7.5, { align: "center" });
 }
 
+// ─── Utils ───────────────────────────────────────────────────
 function computeRoomArea(room: Room): number {
   if (!room.isClosed) return 0;
   const pts = room.points;
@@ -81,19 +157,16 @@ function computeRoomArea(room: Room): number {
 }
 
 function capture2DCanvas(): string | null {
-  // First try the stored snapshot (available even from 3D mode)
   const snapshot = getCanvas2DSnapshot();
   if (snapshot) return snapshot;
-  // Fallback: try to capture live canvas
   const canvas = document.querySelector("canvas:not([data-engine])") as HTMLCanvasElement | null;
   if (!canvas) return null;
-  try {
-    return canvas.toDataURL("image/png");
-  } catch {
-    return null;
-  }
+  try { return canvas.toDataURL("image/png"); } catch { return null; }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// MAIN EXPORT
+// ═══════════════════════════════════════════════════════════════
 export async function generateDossierPDF(
   state: EditorState,
   catalog: GameEquipment[],
@@ -106,11 +179,7 @@ export async function generateDossierPDF(
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(v);
 
   const now = new Date();
-  const dateStr = now.toLocaleDateString("fr-FR", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  const dateStr = now.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
 
   const totalArea = state.rooms.reduce((s, r) => s + computeRoomArea(r), 0);
   const budget = state.placedEquipments.reduce((s, eq) => {
@@ -118,215 +187,264 @@ export async function generateDossierPDF(
     return s + (cat?.price || 0);
   }, 0);
 
-  // 3D captures — prefer live canvas (identical to editor) over offscreen fallback
+  // 3D captures
   let views: Record<CaptureView, string> | null = null;
   try {
     if (isCanvasCaptureAvailable()) {
-      // Capture directly from the live R3F canvas — pixel-identical to editor
       views = await captureFromLiveCanvas();
     } else {
-      // Offscreen fallback (2D mode) — loads GLB models but rendering may differ
-      console.info("PDF: Using offscreen 3D renderer (switch to 3D view for best results)");
       views = await capture3DViews(state.rooms, state.doors, state.pillars, state.placedEquipments, state.circulationPath || []);
     }
-  } catch (e) {
-    console.warn("3D capture failed:", e);
-  }
+  } catch (e) { console.warn("3D capture failed:", e); }
 
   // ═══════════════════════════════════════════════════
   // PAGE 1 — COUVERTURE
   // ═══════════════════════════════════════════════════
   drawDarkPage(doc);
+  drawGridPattern(doc, 0, PAGE_H, 0.04);
+  
+  // Top gradient bar
+  drawGradientBar(doc, 0, 0, PAGE_W, 3, GREEN, PURPLE);
+  
+  // Corner decorations
+  drawCornerAccent(doc, PAGE_W - 50, 8, 40);
+  drawCornerAccent(doc, 0, PAGE_H - 50, 40, true);
+  
+  // Decorative dots
+  drawDot(doc, PAGE_W - 25, 20, 3, PURPLE, 0.2);
+  drawDot(doc, PAGE_W - 15, 28, 1.5, GREEN, 0.3);
+  drawDot(doc, 30, PAGE_H - 40, 2, GREEN, 0.15);
 
-  // Top neon accent
-  setFill(doc, PURPLE);
-  doc.rect(0, 0, PAGE_W, 4, "F");
-  // Thin green line below
-  setFill(doc, GREEN);
-  doc.rect(0, 4, PAGE_W * 0.4, 1.5, "F");
-
-  // Title block
-  doc.setFontSize(12);
-  setColor(doc, GRAY);
-  doc.text("DOSSIER DE FINANCEMENT", MARGIN, 26);
-
-  doc.setFontSize(34);
-  setColor(doc, WHITE);
-  doc.text(projectName.toUpperCase(), MARGIN, 46);
-
-  // Green accent under title
-  setFill(doc, GREEN);
-  doc.rect(MARGIN, 50, 60, 2.5, "F");
-
-  // Hero 3D image
-  if (views?.perspective) {
-    doc.addImage(views.perspective, "PNG", MARGIN, 62, CONTENT_W, 130, undefined, "FAST");
-    // Dark overlay for depth
-    setFill(doc, DARK);
-    doc.setGState(new (doc as any).GState({ opacity: 0.2 }));
-    doc.rect(MARGIN, 62, CONTENT_W, 130, "F");
-    doc.setGState(new (doc as any).GState({ opacity: 1 }));
-    // Purple border glow
-    doc.setDrawColor(PURPLE[0], PURPLE[1], PURPLE[2]);
-    doc.setLineWidth(0.8);
-    doc.rect(MARGIN, 62, CONTENT_W, 130, "S");
-  }
-
-  // Bottom info panel
-  const bottomY = 210;
-  setFill(doc, DARK_SURFACE);
-  doc.rect(0, bottomY, PAGE_W, PAGE_H - bottomY, "F");
-  // Purple separator
-  setFill(doc, PURPLE);
-  doc.rect(0, bottomY, PAGE_W, 1.5, "F");
-
-  doc.setFontSize(13);
-  setColor(doc, PURPLE);
-  doc.text("Arcade Planner", MARGIN, bottomY + 16);
-  doc.setFontSize(10);
-  setColor(doc, LIGHT);
-  doc.text("Avranches Automatic", MARGIN, bottomY + 24);
-
+  // Brand label
   doc.setFontSize(9);
-  setColor(doc, GRAY);
-  doc.text(`Date : ${dateStr}`, MARGIN, bottomY + 38);
-  doc.text(`${state.rooms.length} salle${state.rooms.length > 1 ? "s" : ""}  ·  ${state.placedEquipments.length} équipement${state.placedEquipments.length > 1 ? "s" : ""}`, MARGIN, bottomY + 46);
-  if (totalArea > 0) {
-    doc.text(`Surface totale : ${totalArea.toFixed(1)} m²`, MARGIN, bottomY + 54);
+  setC(doc, GREEN);
+  doc.text("AVRANCHES AUTOMATIC", MARGIN, 22);
+
+  // Tag line
+  doc.setFontSize(10);
+  setC(doc, GRAY);
+  doc.text("DOSSIER DE FINANCEMENT", MARGIN, 32);
+
+  // Project name — big bold
+  doc.setFontSize(38);
+  setC(doc, WHITE);
+  const nameLines = doc.splitTextToSize(projectName.toUpperCase(), CONTENT_W);
+  doc.text(nameLines, MARGIN, 54);
+  const nameEndY = 54 + nameLines.length * 14;
+
+  // Green accent bar under title
+  drawGradientBar(doc, MARGIN, nameEndY + 2, 80, 2.5, GREEN, [GREEN[0], GREEN[1], GREEN[2]]);
+  doc.setGState(new (doc as any).GState({ opacity: 0.2 }));
+  drawGradientBar(doc, MARGIN + 80, nameEndY + 2, 40, 2.5, GREEN, DARK);
+  doc.setGState(new (doc as any).GState({ opacity: 1 }));
+
+  // Hero 3D image in rounded card
+  const heroY = nameEndY + 14;
+  const heroH = 125;
+  if (views?.perspective) {
+    drawCard(doc, MARGIN, heroY, CONTENT_W, heroH, { borderColor: PURPLE });
+    doc.addImage(views.perspective, "PNG", MARGIN + 1, heroY + 1, CONTENT_W - 2, heroH - 2, undefined, "FAST");
+    // Slight overlay for depth
+    doc.setGState(new (doc as any).GState({ opacity: 0.15 }));
+    setF(doc, DARK);
+    doc.roundedRect(MARGIN, heroY, CONTENT_W, heroH, 4, 4, "F");
+    doc.setGState(new (doc as any).GState({ opacity: 1 }));
+    // Label
+    doc.setFontSize(7);
+    setC(doc, GRAY);
+    doc.text("VUE 3D — PERSPECTIVE", MARGIN + 5, heroY + heroH - 4);
   }
 
+  // Bottom stats panel
+  const statsY = PAGE_H - 75;
+  drawCard(doc, MARGIN, statsY, CONTENT_W, 52);
+
+  // Stats grid inside card
+  const statCols = 3;
+  const statW = CONTENT_W / statCols;
+  const statsData = [
+    { label: "Salles", value: String(state.rooms.length), accent: PURPLE },
+    { label: "Équipements", value: String(state.placedEquipments.length), accent: CYAN },
+    { label: "Surface", value: totalArea > 0 ? `${totalArea.toFixed(1)} m²` : "N/A", accent: GREEN },
+  ];
+  statsData.forEach((stat, i) => {
+    const sx = MARGIN + i * statW + statW / 2;
+    const sy = statsY + 16;
+    // Value
+    doc.setFontSize(22);
+    setC(doc, stat.accent as unknown as RGB);
+    doc.text(stat.value, sx, sy, { align: "center" });
+    // Label
+    doc.setFontSize(8);
+    setC(doc, GRAY);
+    doc.text(stat.label, sx, sy + 8, { align: "center" });
+    // Separator line (except last)
+    if (i < statCols - 1) {
+      doc.setGState(new (doc as any).GState({ opacity: 0.15 }));
+      setD(doc, PURPLE);
+      doc.setLineWidth(0.3);
+      doc.line(MARGIN + (i + 1) * statW, statsY + 8, MARGIN + (i + 1) * statW, statsY + 44);
+      doc.setGState(new (doc as any).GState({ opacity: 1 }));
+    }
+  });
+
+  // Budget callout
   if (budget > 0) {
-    doc.setFontSize(16);
-    setColor(doc, GREEN);
-    doc.text(formatEUR(budget), PAGE_W - MARGIN, bottomY + 20, { align: "right" });
     doc.setFontSize(9);
-    setColor(doc, GRAY);
-    doc.text("Budget estimé HT", PAGE_W - MARGIN, bottomY + 28, { align: "right" });
+    setC(doc, GRAY);
+    doc.text("Budget estimé HT", MARGIN + CONTENT_W / 2, statsY + 38, { align: "center" });
+    doc.setFontSize(18);
+    setC(doc, GREEN);
+    doc.text(formatEUR(budget), MARGIN + CONTENT_W / 2, statsY + 48, { align: "center" });
   }
 
+  // Date at bottom
   doc.setFontSize(7);
-  setColor(doc, [60, 60, 100]);
-  doc.text("1 / 5", PAGE_W - MARGIN, PAGE_H - 8, { align: "right" });
+  setC(doc, [50, 50, 90]);
+  doc.text(dateStr, PAGE_W - MARGIN, PAGE_H - 6, { align: "right" });
+  doc.text("1/5", MARGIN, PAGE_H - 6);
 
   // ═══════════════════════════════════════════════════
   // PAGE 2 — PLAN 2D
   // ═══════════════════════════════════════════════════
   doc.addPage();
   drawDarkPage(doc);
-  drawHeader(doc, "Plan 2D", "Vue d'ensemble du plan d'aménagement");
+  drawGridPattern(doc, 0, PAGE_H, 0.03);
+  let y2 = drawSectionTitle(doc, "Plan 2D", 28);
+
+  doc.setFontSize(9);
+  setC(doc, GRAY);
+  doc.text("Vue d'ensemble du plan d'aménagement", MARGIN + 10, y2 - 3);
+  y2 += 6;
 
   const plan2D = capture2DCanvas();
   if (plan2D) {
-    const imgY = 45;
-    const imgH = 175;
-    // Dark frame for plan
-    setFill(doc, DARK_SURFACE);
-    doc.rect(MARGIN - 2, imgY - 2, CONTENT_W + 4, imgH + 4, "F");
-    doc.addImage(plan2D, "PNG", MARGIN, imgY, CONTENT_W, imgH, undefined, "FAST");
-    doc.setDrawColor(PURPLE[0], PURPLE[1], PURPLE[2]);
-    doc.setLineWidth(0.5);
-    doc.rect(MARGIN - 2, imgY - 2, CONTENT_W + 4, imgH + 4, "S");
+    const imgH = 165;
+    drawCard(doc, MARGIN, y2, CONTENT_W, imgH, { borderColor: PURPLE });
+    doc.addImage(plan2D, "PNG", MARGIN + 2, y2 + 2, CONTENT_W - 4, imgH - 4, undefined, "FAST");
   } else {
-    doc.setFontSize(12);
-    setColor(doc, GRAY);
-    doc.text("(Plan 2D non disponible — activez la vue 2D)", PAGE_W / 2, 130, { align: "center" });
+    drawCard(doc, MARGIN, y2, CONTENT_W, 80);
+    doc.setFontSize(11);
+    setC(doc, GRAY);
+    doc.text("Plan 2D non disponible", PAGE_W / 2, y2 + 40, { align: "center" });
+    doc.setFontSize(8);
+    doc.text("Activez la vue 2D pour capturer le plan", PAGE_W / 2, y2 + 48, { align: "center" });
   }
 
-  // Legend
-  const legY = 228;
-  doc.setFontSize(9);
-  setColor(doc, PURPLE);
-  doc.text("Légende", MARGIN, legY);
-  doc.setFontSize(8);
-  setColor(doc, GRAY);
+  // Legend cards
+  const legY = plan2D ? y2 + 174 : y2 + 88;
   const legendItems = [
-    "■ Murs et cloisons",
-    "◻ Équipements et jeux",
-    "↺ Portes (arc d'ouverture)",
-    "▣ Poteaux / obstacles",
+    { icon: "■", label: "Murs", color: WHITE },
+    { icon: "◻", label: "Équipements", color: GREEN },
+    { icon: "↺", label: "Portes", color: PURPLE },
+    { icon: "▣", label: "Poteaux", color: GOLD },
   ];
+  const legW = CONTENT_W / legendItems.length;
   legendItems.forEach((item, i) => {
-    doc.text(item, MARGIN + (i % 2) * 85, legY + 8 + Math.floor(i / 2) * 6);
+    const lx = MARGIN + i * legW + legW / 2;
+    doc.setFontSize(14);
+    setC(doc, item.color as unknown as RGB);
+    doc.text(item.icon, lx, legY, { align: "center" });
+    doc.setFontSize(7);
+    setC(doc, GRAY);
+    doc.text(item.label, lx, legY + 5, { align: "center" });
   });
 
-  // Room summary
+  // Room list
   if (state.rooms.length > 0) {
-    let ry = legY + 24;
-    doc.setFontSize(9);
-    setColor(doc, PURPLE);
+    let ry = legY + 14;
+    doc.setFontSize(10);
+    setC(doc, PURPLE);
     doc.text("Salles", MARGIN, ry);
-    ry += 6;
+    ry += 7;
     state.rooms.forEach((room) => {
       const area = computeRoomArea(room);
+      // Row card
+      drawCard(doc, MARGIN, ry - 3.5, CONTENT_W, 8, { borderColor: DARK_MUTED });
       doc.setFontSize(8);
-      setColor(doc, LIGHT);
-      doc.text(`• ${room.name}`, MARGIN + 4, ry);
+      setC(doc, WHITE);
+      doc.text(room.name, MARGIN + 6, ry);
       if (area > 0) {
-        setColor(doc, GREEN);
-        doc.text(`${area.toFixed(1)} m²`, MARGIN + 80, ry);
+        setC(doc, GREEN);
+        doc.text(`${area.toFixed(1)} m²`, PAGE_W - MARGIN - 6, ry, { align: "right" });
       }
-      ry += 5;
+      ry += 10;
     });
   }
 
-  addPageNumber(doc, 2, totalPages);
+  addFooter(doc, 2, totalPages);
 
   // ═══════════════════════════════════════════════════
   // PAGE 3 — VUES 3D
   // ═══════════════════════════════════════════════════
   doc.addPage();
   drawDarkPage(doc);
-  drawHeader(doc, "Vues 3D", "Perspectives et projections du projet");
+  drawGridPattern(doc, 0, PAGE_H, 0.03);
+  let y3 = drawSectionTitle(doc, "Vues 3D", 28);
+
+  doc.setFontSize(9);
+  setC(doc, GRAY);
+  doc.text("Perspectives et projections du projet", MARGIN + 10, y3 - 3);
+  y3 += 4;
 
   if (views) {
-    const cellW = CONTENT_W / 2 - 3;
-    const cellH = 76;
+    const cellW = (CONTENT_W - 6) / 2;
+    const cellH = 72;
     const gapX = 6;
-    const gapY = 10;
-    const startY = 45;
+    const gapY = 14;
 
     const grid = [
-      { key: "top" as const, label: "Vue de dessus", col: 0, row: 0 },
-      { key: "front" as const, label: "Vue de face", col: 1, row: 0 },
-      { key: "side" as const, label: "Vue de côté", col: 0, row: 1 },
-      { key: "perspective" as const, label: "Perspective", col: 1, row: 1 },
-      { key: "perspectiveOpen" as const, label: "Sans murs", col: 0, row: 2 },
-      { key: "perspectiveCorridor" as const, label: "Corridor de circulation", col: 1, row: 2 },
+      { key: "top" as const, label: "VUE DE DESSUS", col: 0, row: 0 },
+      { key: "front" as const, label: "VUE DE FACE", col: 1, row: 0 },
+      { key: "side" as const, label: "VUE DE CÔTÉ", col: 0, row: 1 },
+      { key: "perspective" as const, label: "PERSPECTIVE", col: 1, row: 1 },
+      { key: "perspectiveOpen" as const, label: "SANS MURS", col: 0, row: 2 },
+      { key: "perspectiveCorridor" as const, label: "CIRCULATION", col: 1, row: 2 },
     ];
 
     grid.forEach(({ key, label, col, row }) => {
       const x = MARGIN + col * (cellW + gapX);
-      const y = startY + row * (cellH + gapY);
+      const y = y3 + row * (cellH + gapY);
 
-      setFill(doc, DARK_SURFACE);
-      doc.rect(x, y, cellW, cellH, "F");
+      drawCard(doc, x, y, cellW, cellH, { 
+        borderColor: key === "perspective" ? GREEN : PURPLE 
+      });
 
       if (views![key]) {
-        doc.addImage(views![key], "PNG", x, y, cellW, cellH, undefined, "FAST");
+        doc.addImage(views![key], "PNG", x + 1, y + 1, cellW - 2, cellH - 2, undefined, "FAST");
       }
 
-      doc.setDrawColor(PURPLE[0], PURPLE[1], PURPLE[2]);
-      doc.setLineWidth(0.4);
-      doc.rect(x, y, cellW, cellH, "S");
-
-      doc.setFontSize(7);
-      setColor(doc, LIGHT);
-      doc.text(label, x + cellW / 2, y + cellH + 5, { align: "center" });
+      // Label badge
+      const labelW = doc.getTextWidth(label) * 0.35 + 6;
+      setF(doc, DARK_CARD);
+      doc.setGState(new (doc as any).GState({ opacity: 0.85 }));
+      doc.roundedRect(x + cellW / 2 - labelW / 2, y + cellH - 6, labelW, 5, 1.5, 1.5, "F");
+      doc.setGState(new (doc as any).GState({ opacity: 1 }));
+      doc.setFontSize(6);
+      setC(doc, key === "perspective" ? GREEN : LIGHT);
+      doc.text(label, x + cellW / 2, y + cellH - 2.5, { align: "center" });
     });
   } else {
-    doc.setFontSize(12);
-    setColor(doc, GRAY);
-    doc.text("(Vues 3D non disponibles)", PAGE_W / 2, 130, { align: "center" });
+    drawCard(doc, MARGIN, y3, CONTENT_W, 80);
+    doc.setFontSize(11);
+    setC(doc, GRAY);
+    doc.text("Vues 3D non disponibles", PAGE_W / 2, y3 + 40, { align: "center" });
   }
 
-  addPageNumber(doc, 3, totalPages);
+  addFooter(doc, 3, totalPages);
 
   // ═══════════════════════════════════════════════════
   // PAGE 4 — LISTE DES ÉQUIPEMENTS
   // ═══════════════════════════════════════════════════
   doc.addPage();
   drawDarkPage(doc);
-  drawHeader(doc, "Équipements", `${state.placedEquipments.length} jeux et équipements`);
+  drawGridPattern(doc, 0, PAGE_H, 0.02);
+  let y4 = drawSectionTitle(doc, "Équipements", 28);
+
+  doc.setFontSize(9);
+  setC(doc, GRAY);
+  doc.text(`${state.placedEquipments.length} jeux et équipements`, MARGIN + 10, y4 - 3);
+  y4 += 6;
 
   // Build equipment summary
   const eqMap = new Map<string, { name: string; category: string; count: number; w: number; d: number; price: number }>();
@@ -334,9 +452,8 @@ export async function generateDossierPDF(
     const cat = catalog.find((c) => c.id === eq.equipmentId);
     const key = eq.equipmentId || eq.name;
     const existing = eqMap.get(key);
-    if (existing) {
-      existing.count++;
-    } else {
+    if (existing) { existing.count++; }
+    else {
       eqMap.set(key, {
         name: cat?.name || eq.name,
         category: cat?.category || "—",
@@ -350,67 +467,70 @@ export async function generateDossierPDF(
   const eqList = Array.from(eqMap.values()).sort((a, b) => a.category.localeCompare(b.category));
 
   // Table header
-  let ty = 48;
-  const cols = [MARGIN, MARGIN + 70, MARGIN + 110, MARGIN + 140, MARGIN + 158];
-  setFill(doc, DARK_MUTED);
-  doc.rect(MARGIN, ty - 4, CONTENT_W, 8, "F");
+  const cols = [MARGIN + 4, MARGIN + 74, MARGIN + 112, MARGIN + 142, MARGIN + 156];
+  setF(doc, DARK_SURFACE);
+  doc.roundedRect(MARGIN, y4 - 4, CONTENT_W, 9, 2, 2, "F");
   doc.setFontSize(7);
-  setColor(doc, PURPLE);
-  doc.text("NOM", cols[0] + 2, ty);
-  doc.text("CATÉGORIE", cols[1], ty);
-  doc.text("DIMENSIONS", cols[2], ty);
-  doc.text("QTÉ", cols[3], ty);
-  doc.text("PRIX UNIT.", cols[4], ty);
-  ty += 9;
+  setC(doc, GREEN);
+  doc.text("NOM", cols[0], y4);
+  doc.text("CATÉGORIE", cols[1], y4);
+  doc.text("DIMENSIONS", cols[2], y4);
+  doc.text("QTÉ", cols[3], y4);
+  doc.text("PRIX", cols[4], y4);
+  y4 += 10;
 
-  // Rows
   let prevCategory = "";
   eqList.forEach((eq, i) => {
-    if (ty > PAGE_H - 25) return;
+    if (y4 > PAGE_H - 30) return;
 
     // Category separator
     if (eq.category !== prevCategory) {
       prevCategory = eq.category;
-      setFill(doc, PURPLE);
-      doc.rect(MARGIN, ty - 3, 1.5, 5, "F");
+      drawDot(doc, MARGIN + 2, y4 - 1, 1.2, PURPLE, 0.7);
       doc.setFontSize(7);
-      setColor(doc, PURPLE);
-      doc.text(eq.category.toUpperCase(), MARGIN + 4, ty);
-      ty += 7;
+      setC(doc, PURPLE);
+      doc.text(eq.category.toUpperCase(), MARGIN + 6, y4);
+      y4 += 7;
     }
 
-    // Zebra stripe (dark)
+    // Row background
     if (i % 2 === 0) {
-      setFill(doc, DARK_SURFACE);
-      doc.rect(MARGIN, ty - 3.5, CONTENT_W, 6.5, "F");
+      setF(doc, DARK_CARD);
+      doc.roundedRect(MARGIN, y4 - 3.5, CONTENT_W, 7, 1, 1, "F");
     }
 
     doc.setFontSize(8);
-    setColor(doc, WHITE);
-    doc.text(eq.name.substring(0, 35), cols[0] + 2, ty);
-    setColor(doc, GRAY);
-    doc.text(eq.category.substring(0, 20), cols[1], ty);
-    doc.text(`${eq.w}×${eq.d} cm`, cols[2], ty);
-    setColor(doc, LIGHT);
-    doc.text(String(eq.count), cols[3] + 5, ty, { align: "center" });
+    setC(doc, WHITE);
+    doc.text(eq.name.substring(0, 32), cols[0], y4);
+    setC(doc, GRAY);
+    doc.text(eq.category.substring(0, 18), cols[1], y4);
+    doc.text(`${eq.w}×${eq.d}`, cols[2], y4);
+    setC(doc, LIGHT);
+    doc.text(String(eq.count), cols[3] + 4, y4, { align: "center" });
     if (eq.price > 0) {
-      setColor(doc, GREEN);
-      doc.text(formatEUR(eq.price), cols[4], ty);
+      setC(doc, GREEN);
+      doc.text(formatEUR(eq.price), cols[4], y4);
     } else {
-      setColor(doc, [60, 60, 100]);
-      doc.text("—", cols[4], ty);
+      setC(doc, [50, 50, 90]);
+      doc.text("—", cols[4], y4);
     }
-    ty += 7;
+    y4 += 7.5;
   });
 
-  addPageNumber(doc, 4, totalPages);
+  addFooter(doc, 4, totalPages);
 
   // ═══════════════════════════════════════════════════
   // PAGE 5 — BUDGET
   // ═══════════════════════════════════════════════════
   doc.addPage();
   drawDarkPage(doc);
-  drawHeader(doc, "Budget Estimatif", "Estimation basée sur les prix catalogue");
+  drawGridPattern(doc, 0, PAGE_H, 0.02);
+  let y5 = drawSectionTitle(doc, "Budget Estimatif", 28);
+
+  doc.setFontSize(9);
+  setC(doc, GRAY);
+  doc.text("Estimation basée sur les prix catalogue", MARGIN + 10, y5 - 3);
+  y5 += 6;
 
   // Budget by category
   const catBudget = new Map<string, { count: number; total: number }>();
@@ -423,91 +543,87 @@ export async function generateDossierPDF(
     catBudget.set(category, existing);
   });
 
-  let by = 52;
-
-  // Table header
-  setFill(doc, DARK_MUTED);
-  doc.rect(MARGIN, by - 4, CONTENT_W, 8, "F");
+  // Category table header
+  setF(doc, DARK_SURFACE);
+  doc.roundedRect(MARGIN, y5 - 4, CONTENT_W, 9, 2, 2, "F");
   doc.setFontSize(7);
-  setColor(doc, PURPLE);
-  doc.text("CATÉGORIE", MARGIN + 2, by);
-  doc.text("QUANTITÉ", MARGIN + 80, by);
-  doc.text("SOUS-TOTAL", MARGIN + 130, by);
-  by += 10;
+  setC(doc, GREEN);
+  doc.text("CATÉGORIE", MARGIN + 4, y5);
+  doc.text("QUANTITÉ", MARGIN + 90, y5);
+  doc.text("SOUS-TOTAL", MARGIN + 135, y5);
+  y5 += 11;
 
   doc.setFontSize(9);
   Array.from(catBudget.entries())
     .sort(([, a], [, b]) => b.total - a.total)
     .forEach(([cat, data], i) => {
       if (i % 2 === 0) {
-        setFill(doc, DARK_SURFACE);
-        doc.rect(MARGIN, by - 4, CONTENT_W, 9, "F");
+        setF(doc, DARK_CARD);
+        doc.roundedRect(MARGIN, y5 - 4, CONTENT_W, 9, 1, 1, "F");
       }
-      setColor(doc, WHITE);
-      doc.text(cat, MARGIN + 2, by);
-      setColor(doc, GRAY);
-      doc.text(`${data.count} jeu${data.count > 1 ? "x" : ""}`, MARGIN + 80, by);
+      setC(doc, WHITE);
+      doc.text(cat, MARGIN + 4, y5);
+      setC(doc, GRAY);
+      doc.text(`${data.count} jeu${data.count > 1 ? "x" : ""}`, MARGIN + 90, y5);
       if (data.total > 0) {
-        setColor(doc, GREEN);
-        doc.text(formatEUR(data.total), MARGIN + 130, by);
+        setC(doc, GREEN);
+        doc.text(formatEUR(data.total), MARGIN + 135, y5);
       } else {
-        setColor(doc, [60, 60, 100]);
-        doc.text("—", MARGIN + 130, by);
+        setC(doc, [50, 50, 90]);
+        doc.text("—", MARGIN + 135, y5);
       }
-      by += 9;
+      y5 += 10;
     });
 
-  // Total separator
-  by += 8;
-  doc.setDrawColor(PURPLE[0], PURPLE[1], PURPLE[2]);
-  doc.setLineWidth(0.8);
-  doc.line(MARGIN, by, PAGE_W - MARGIN, by);
+  // Total card
+  y5 += 6;
+  drawCard(doc, MARGIN, y5, CONTENT_W, budget > 0 ? 65 : 25, { borderColor: GREEN });
 
-  by += 10;
-  doc.setFontSize(12);
-  setColor(doc, LIGHT);
-  doc.text("TOTAL HT", MARGIN, by);
-  if (budget > 0) {
-    doc.setFontSize(16);
-    setColor(doc, PURPLE);
-    doc.text(formatEUR(budget), PAGE_W - MARGIN, by, { align: "right" });
-  } else {
-    doc.setFontSize(11);
-    setColor(doc, GRAY);
-    doc.text("Prix non renseignés", PAGE_W - MARGIN, by, { align: "right" });
-  }
+  // Purple accent bar inside
+  setF(doc, GREEN);
+  doc.rect(MARGIN + 1, y5 + 1, 2, budget > 0 ? 63 : 23, "F");
 
   if (budget > 0) {
-    by += 14;
+    y5 += 14;
     doc.setFontSize(10);
-    setColor(doc, GRAY);
-    doc.text("TVA (20%)", MARGIN, by);
-    setColor(doc, LIGHT);
-    doc.text(formatEUR(budget * 0.2), PAGE_W - MARGIN, by, { align: "right" });
+    setC(doc, GRAY);
+    doc.text("TOTAL HT", MARGIN + 12, y5);
+    doc.setFontSize(16);
+    setC(doc, PURPLE);
+    doc.text(formatEUR(budget), PAGE_W - MARGIN - 8, y5, { align: "right" });
 
-    by += 14;
-    doc.setFontSize(13);
-    setColor(doc, WHITE);
-    doc.text("TOTAL TTC", MARGIN, by);
-    doc.setFontSize(18);
-    setColor(doc, GREEN);
-    doc.text(formatEUR(budget * 1.2), PAGE_W - MARGIN, by, { align: "right" });
+    y5 += 16;
+    doc.setFontSize(9);
+    setC(doc, GRAY);
+    doc.text("TVA (20%)", MARGIN + 12, y5);
+    setC(doc, LIGHT);
+    doc.text(formatEUR(budget * 0.2), PAGE_W - MARGIN - 8, y5, { align: "right" });
+
+    y5 += 18;
+    drawGradientBar(doc, MARGIN + 10, y5 - 10, CONTENT_W - 20, 0.5, PURPLE, GREEN);
+    doc.setFontSize(12);
+    setC(doc, WHITE);
+    doc.text("TOTAL TTC", MARGIN + 12, y5);
+    doc.setFontSize(22);
+    setC(doc, GREEN);
+    doc.text(formatEUR(budget * 1.2), PAGE_W - MARGIN - 8, y5, { align: "right" });
+  } else {
+    y5 += 14;
+    doc.setFontSize(11);
+    setC(doc, GRAY);
+    doc.text("Prix non renseignés", PAGE_W / 2, y5, { align: "center" });
   }
 
-  // Technical summary box
-  by += 30;
-  setFill(doc, DARK_SURFACE);
-  doc.roundedRect(MARGIN, by, CONTENT_W, 55, 3, 3, "F");
-  // Purple left accent
-  setFill(doc, PURPLE);
-  doc.rect(MARGIN, by, 2, 55, "F");
+  // Technical summary card
+  y5 = budget > 0 ? y5 + 30 : y5 + 20;
+  drawCard(doc, MARGIN, y5, CONTENT_W, 50, { borderColor: PURPLE });
+  setF(doc, PURPLE);
+  doc.rect(MARGIN + 1, y5 + 1, 2, 48, "F");
 
   doc.setFontSize(10);
-  setColor(doc, PURPLE);
-  doc.text("Informations techniques", MARGIN + 10, by + 12);
+  setC(doc, PURPLE);
+  doc.text("Informations techniques", MARGIN + 12, y5 + 12);
 
-  doc.setFontSize(8);
-  setColor(doc, LIGHT);
   const techInfo = [
     `Surface totale : ${totalArea > 0 ? `${totalArea.toFixed(1)} m²` : "N/A"}`,
     `Nombre de salles : ${state.rooms.length}`,
@@ -516,19 +632,21 @@ export async function generateDossierPDF(
     `Équipements placés : ${state.placedEquipments.length}`,
     `Catégories : ${catBudget.size}`,
   ];
+  doc.setFontSize(8);
+  setC(doc, LIGHT);
   techInfo.forEach((line, i) => {
-    doc.text(line, MARGIN + 10 + (i % 2) * 80, by + 24 + Math.floor(i / 2) * 8);
+    doc.text(line, MARGIN + 12 + (i % 2) * 82, y5 + 22 + Math.floor(i / 2) * 8);
   });
 
-  // Footer
-  const footY = PAGE_H - 28;
+  // Disclaimer
+  const footY = PAGE_H - 32;
   doc.setFontSize(7);
-  setColor(doc, [60, 60, 100]);
+  setC(doc, [45, 45, 80]);
   doc.text("Ce document est une estimation indicative générée par Arcade Planner.", MARGIN, footY);
-  doc.text("Les prix indiqués sont ceux du catalogue et peuvent varier.", MARGIN, footY + 5);
-  doc.text(`Généré le ${dateStr}`, MARGIN, footY + 10);
+  doc.text("Les prix indiqués sont ceux du catalogue et peuvent varier.", MARGIN, footY + 4);
+  doc.text(`Généré le ${dateStr}`, MARGIN, footY + 8);
 
-  addPageNumber(doc, 5, totalPages);
+  addFooter(doc, 5, totalPages);
 
   // Save
   const safeName = projectName.replace(/[^a-zA-Z0-9À-ÿ\s-]/g, "").replace(/\s+/g, "_");

@@ -8,6 +8,8 @@ import { ArcadeLighting } from "./ArcadeLighting";
 import { Pillar3D } from "./Pillar3D";
 import { Circulation3D } from "./Circulation3D";
 import { Door3D } from "./Door3D";
+import { Ceiling3D } from "./Ceiling3D";
+import { SceneFog } from "./SceneFog";
 import { SceneCapturer } from "./SceneCapturer";
 import * as THREE from "three";
 import type { Viewer3DSettings, PresetView, LightingPreset } from "./Viewer3DToolbar";

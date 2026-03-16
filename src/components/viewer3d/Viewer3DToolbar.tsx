@@ -37,6 +37,7 @@ export type AmbianceSettings = {
   floorTexture: FloorTexture;
   wallFinish: WallFinish;
   wallColor: string;
+  wallHeight: number; // meters, 2.2..5
   ceiling: CeilingType;
   ceilingHeight: number; // meters, 2.2..5
   fog: boolean;

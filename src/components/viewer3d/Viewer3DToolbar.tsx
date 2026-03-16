@@ -113,7 +113,7 @@ const visibilityToggles: { key: VisKey; label: string; icon: React.ElementType }
   { key: "heights", label: "Hauteurs", icon: Ruler },
 ];
 
-const DEFAULT_AMBIANCE: AmbianceSettings = { floorTexture: "default", wallFinish: "default", wallColor: "#f0f0f0" };
+const DEFAULT_AMBIANCE: AmbianceSettings = { floorTexture: "default", wallFinish: "default", wallColor: "#f0f0f0", ceiling: "none", fog: false, fogIntensity: 0.3, theme: "custom" };
 
 export function Viewer3DToolbar({ settings, onChange }: Props) {
   const [visExpanded, setVisExpanded] = useState(false);

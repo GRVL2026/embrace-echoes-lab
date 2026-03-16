@@ -61,6 +61,7 @@ const THEME_PRESETS: ThemePreset[] = [
       wallFinish: "paint",
       wallColor: "#1a1a2e",
       ceiling: "black",
+      ceilingHeight: 2.8,
       fog: true,
       fogIntensity: 0.25,
     },

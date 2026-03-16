@@ -100,6 +100,7 @@ const defaults: AmbianceSettings = {
   wallFinish: "default",
   wallColor: "#f0f0f0",
   ceiling: "none",
+  ceilingHeight: 2.8,
   fog: false,
   fogIntensity: 0.3,
   theme: "custom",

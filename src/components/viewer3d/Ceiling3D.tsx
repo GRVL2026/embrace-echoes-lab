@@ -32,6 +32,8 @@ export function Ceiling3D({ room, ceilingType }: Props) {
     return { shape, beamLines };
   }, [room]);
 
+  if (ceilingType === "none") return null;
+
   const color = ceilingType === "black" ? "#111111" : ceilingType === "tiles" ? "#e8e8e8" : "#d4a574";
   const roughness = ceilingType === "tiles" ? 0.4 : ceilingType === "black" ? 0.9 : 0.6;
 

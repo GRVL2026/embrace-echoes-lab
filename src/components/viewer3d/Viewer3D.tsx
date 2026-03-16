@@ -195,7 +195,9 @@ export function Viewer3D({ settings, onPresetApplied }: Props) {
     : 0;
 
   const vis = settings.visibility;
+  const ambiance = settings.ambiance ?? { floorTexture: "default" as const, wallFinish: "default" as const, wallColor: "#f0f0f0", ceiling: "none" as const, fog: false, fogIntensity: 0.3, theme: "custom" as const };
   const bgColor = settings.lighting === "arcade" ? "#0f0f23" : "#dce4ec";
+  const fogColor = settings.lighting === "arcade" ? "#0f0f23" : settings.lighting === "showroom" ? "#1a1a2e" : "#c8d0d8";
 
   return (
     <div className="flex-1 w-full h-full" style={{ background: bgColor }}>

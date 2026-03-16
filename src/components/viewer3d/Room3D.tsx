@@ -1,18 +1,68 @@
 import { useMemo } from "react";
 import * as THREE from "three";
+import { useLoader } from "@react-three/fiber";
 import type { Room, Door } from "@/types/editor";
+import type { AmbianceSettings, FloorTexture, WallFinish } from "./Viewer3DToolbar";
 
 const WALL_HEIGHT = 2.8; // meters
 const WALL_THICKNESS = 0.15; // meters
+
+const FLOOR_TEXTURE_MAP: Record<Exclude<FloorTexture, "default">, string> = {
+  carpet: "/textures/floor_carpet_arcade.jpg",
+  epoxy: "/textures/floor_epoxy.jpg",
+  concrete: "/textures/floor_concrete.jpg",
+  parquet: "/textures/floor_parquet.jpg",
+  vinyl: "/textures/floor_vinyl.jpg",
+  tile: "/textures/floor_tile.jpg",
+};
+
+const WALL_TEXTURE_MAP: Record<Exclude<WallFinish, "default" | "paint">, string> = {
+  brick: "/textures/wall_brick.jpg",
+  concrete: "/textures/wall_concrete.jpg",
+  wood: "/textures/wall_wood.jpg",
+};
+
+/** Load and configure a tileable texture */
+function useTileableTexture(path: string | null, repeatX = 4, repeatY = 4): THREE.Texture | null {
+  // Always call useLoader but with a fallback — we handle null below
+  const texture = useLoader(
+    THREE.TextureLoader,
+    path || "/placeholder.svg"
+  );
+
+  return useMemo(() => {
+    if (!path || !texture) return null;
+    const t = texture.clone();
+    t.wrapS = THREE.RepeatWrapping;
+    t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(repeatX, repeatY);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.needsUpdate = true;
+    return t;
+  }, [texture, path, repeatX, repeatY]);
+}
 
 type Props = {
   room: Room;
   doors: Door[];
   showFloor?: boolean;
   showWalls?: boolean;
+  ambiance?: AmbianceSettings;
 };
 
-export function Room3D({ room, doors, showFloor = true, showWalls = true }: Props) {
+export function Room3D({ room, doors, showFloor = true, showWalls = true, ambiance }: Props) {
+  const floorTextureKey = ambiance?.floorTexture && ambiance.floorTexture !== "default"
+    ? FLOOR_TEXTURE_MAP[ambiance.floorTexture]
+    : null;
+  const wallTextureKey = ambiance?.wallFinish && ambiance.wallFinish !== "default" && ambiance.wallFinish !== "paint"
+    ? WALL_TEXTURE_MAP[ambiance.wallFinish]
+    : null;
+
+  const floorTex = useTileableTexture(floorTextureKey, 4, 4);
+  const wallTex = useTileableTexture(wallTextureKey, 3, 1);
+
+  const wallColor = ambiance?.wallFinish === "paint" ? ambiance.wallColor : "#f0f0f0";
+
   const { floorShape, wallMeshes } = useMemo(() => {
     // Convert cm → meters, 2D y → 3D z
     const pts = room.points.map((p) => new THREE.Vector2(p.x / 100, p.y / 100));
@@ -77,7 +127,8 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true }: Prop
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
             <shapeGeometry args={[floorShape]} />
             <meshStandardMaterial
-              color="#e8e8e8"
+              color={floorTex ? "#ffffff" : "#e8e8e8"}
+              map={floorTex}
               roughness={0.5}
               metalness={0.05}
               side={THREE.DoubleSide}
@@ -116,8 +167,9 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true }: Prop
             >
               <boxGeometry args={[segLength, WALL_HEIGHT, WALL_THICKNESS]} />
               <meshStandardMaterial
-                color="#f0f0f0"
-                roughness={0.8}
+                color={wallTex ? "#ffffff" : wallColor}
+                map={wallTex}
+                roughness={wallTex ? 0.7 : 0.8}
                 metalness={0.02}
                 {...{} as any}
               />

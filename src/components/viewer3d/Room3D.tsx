@@ -22,26 +22,6 @@ const WALL_TEXTURE_MAP: Record<Exclude<WallFinish, "default" | "paint">, string>
   wood: "/textures/wall_wood.jpg",
 };
 
-/** Load and configure a tileable texture */
-function useTileableTexture(path: string | null, repeatX = 4, repeatY = 4): THREE.Texture | null {
-  // Always call useLoader but with a fallback — we handle null below
-  const texture = useLoader(
-    THREE.TextureLoader,
-    path || "/placeholder.svg"
-  );
-
-  return useMemo(() => {
-    if (!path || !texture) return null;
-    const t = texture.clone();
-    t.wrapS = THREE.RepeatWrapping;
-    t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(repeatX, repeatY);
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.needsUpdate = true;
-    return t;
-  }, [texture, path, repeatX, repeatY]);
-}
-
 type Props = {
   room: Room;
   doors: Door[];
@@ -50,29 +30,86 @@ type Props = {
   ambiance?: AmbianceSettings;
 };
 
+/** Inner component that loads and applies a floor texture */
+function TexturedFloor({ shape, texturePath }: { shape: THREE.Shape; texturePath: string }) {
+  const texture = useLoader(THREE.TextureLoader, texturePath);
+  const tex = useMemo(() => {
+    const t = texture.clone();
+    t.wrapS = THREE.RepeatWrapping;
+    t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(0.5, 0.5); // 1 repeat per 2 meters
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.needsUpdate = true;
+    return t;
+  }, [texture]);
+
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, 0]} receiveShadow>
+      <shapeGeometry args={[shape]} />
+      <meshStandardMaterial
+        map={tex}
+        color="#ffffff"
+        roughness={0.5}
+        metalness={0.05}
+        side={THREE.DoubleSide}
+        {...{} as any}
+      />
+    </mesh>
+  );
+}
+
+/** Inner component that loads and applies a wall texture */
+function TexturedWallSegment({
+  position,
+  rotation,
+  size,
+  texturePath,
+}: {
+  position: [number, number, number];
+  rotation: [number, number, number];
+  size: [number, number, number];
+  texturePath: string;
+}) {
+  const texture = useLoader(THREE.TextureLoader, texturePath);
+  const tex = useMemo(() => {
+    const t = texture.clone();
+    t.wrapS = THREE.RepeatWrapping;
+    t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(size[0] * 1.5, size[1] * 0.5);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.needsUpdate = true;
+    return t;
+  }, [texture, size[0], size[1]]);
+
+  return (
+    <mesh position={position} rotation={rotation} castShadow receiveShadow>
+      <boxGeometry args={size} />
+      <meshStandardMaterial
+        map={tex}
+        color="#ffffff"
+        roughness={0.7}
+        metalness={0.02}
+        {...{} as any}
+      />
+    </mesh>
+  );
+}
+
 export function Room3D({ room, doors, showFloor = true, showWalls = true, ambiance }: Props) {
-  const floorTextureKey = ambiance?.floorTexture && ambiance.floorTexture !== "default"
+  const floorTexturePath = ambiance?.floorTexture && ambiance.floorTexture !== "default"
     ? FLOOR_TEXTURE_MAP[ambiance.floorTexture]
     : null;
-  const wallTextureKey = ambiance?.wallFinish && ambiance.wallFinish !== "default" && ambiance.wallFinish !== "paint"
+  const wallTexturePath = ambiance?.wallFinish && ambiance.wallFinish !== "default" && ambiance.wallFinish !== "paint"
     ? WALL_TEXTURE_MAP[ambiance.wallFinish]
     : null;
-
-  const floorTex = useTileableTexture(floorTextureKey, 4, 4);
-  const wallTex = useTileableTexture(wallTextureKey, 3, 1);
-
   const wallColor = ambiance?.wallFinish === "paint" ? ambiance.wallColor : "#f0f0f0";
 
   const { floorShape, wallMeshes } = useMemo(() => {
-    // Convert cm → meters, 2D y → 3D z
     const pts = room.points.map((p) => new THREE.Vector2(p.x / 100, p.y / 100));
-
-    // Floor shape — negate Y to compensate for -PI/2 X rotation (which maps shape Y → -Z)
     const floorPts = room.points.map((p) => new THREE.Vector2(p.x / 100, -p.y / 100));
-    floorPts.reverse(); // preserve correct winding after negation
+    floorPts.reverse();
     const floorShape = new THREE.Shape(floorPts);
 
-    // Build wall segments
     const walls: { start: THREE.Vector2; end: THREE.Vector2 }[] = [];
     for (let i = 0; i < pts.length; i++) {
       const next = (i + 1) % pts.length;
@@ -80,22 +117,17 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true, ambian
       walls.push({ start: pts[i], end: pts[next] });
     }
 
-    // Build wall geometries, cutting door openings
     const wallMeshes = walls.map((wall, edgeIndex) => {
       const dx = wall.end.x - wall.start.x;
       const dz = wall.end.y - wall.start.y;
       const wallLength = Math.sqrt(dx * dx + dz * dz);
       const angle = Math.atan2(dz, dx);
 
-      // Find doors on this edge
       const edgeDoors = doors.filter(
         (d) => d.roomId === room.id && d.edgeIndex === edgeIndex
       );
-
-      // Sort doors by position ratio
       const sorted = [...edgeDoors].sort((a, b) => a.positionRatio - b.positionRatio);
 
-      // Create wall segments between doors
       const segments: { start: number; end: number }[] = [];
       let cursor = 0;
       for (const door of sorted) {
@@ -120,22 +152,25 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true, ambian
 
   return (
     <group>
-      {/* Floor — thin slab flush with Y=0 on top, extruded downward */}
+      {/* Floor */}
       {showFloor && (
         <group>
-          {/* Top surface at Y=0 */}
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-            <shapeGeometry args={[floorShape]} />
-            <meshStandardMaterial
-              color={floorTex ? "#ffffff" : "#e8e8e8"}
-              map={floorTex}
-              roughness={0.5}
-              metalness={0.05}
-              side={THREE.DoubleSide}
-              {...{} as any}
-            />
-          </mesh>
-          {/* Slab sides (extruded downward) for visibility from low angles */}
+          {/* Textured surface or default */}
+          {floorTexturePath ? (
+            <TexturedFloor shape={floorShape} texturePath={floorTexturePath} />
+          ) : (
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+              <shapeGeometry args={[floorShape]} />
+              <meshStandardMaterial
+                color="#e8e8e8"
+                roughness={0.5}
+                metalness={0.05}
+                side={THREE.DoubleSide}
+                {...{} as any}
+              />
+            </mesh>
+          )}
+          {/* Slab sides */}
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow>
             <extrudeGeometry args={[floorShape, { depth: 0.05, bevelEnabled: false }]} />
             <meshStandardMaterial
@@ -156,20 +191,34 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true, ambian
           const segCenter = (seg.start + seg.end) / 2;
           const cx = wall.origin.x + Math.cos(wall.angle) * segCenter;
           const cz = wall.origin.y + Math.sin(wall.angle) * segCenter;
+          const pos: [number, number, number] = [cx, WALL_HEIGHT / 2, cz];
+          const rot: [number, number, number] = [0, -wall.angle, 0];
+          const size: [number, number, number] = [segLength, WALL_HEIGHT, WALL_THICKNESS];
+
+          if (wallTexturePath) {
+            return (
+              <TexturedWallSegment
+                key={`wall-${wi}-${si}`}
+                position={pos}
+                rotation={rot}
+                size={size}
+                texturePath={wallTexturePath}
+              />
+            );
+          }
 
           return (
             <mesh
               key={`wall-${wi}-${si}`}
-              position={[cx, WALL_HEIGHT / 2, cz]}
-              rotation={[0, -wall.angle, 0]}
+              position={pos}
+              rotation={rot}
               castShadow
               receiveShadow
             >
-              <boxGeometry args={[segLength, WALL_HEIGHT, WALL_THICKNESS]} />
+              <boxGeometry args={size} />
               <meshStandardMaterial
-                color={wallTex ? "#ffffff" : wallColor}
-                map={wallTex}
-                roughness={wallTex ? 0.7 : 0.8}
+                color={wallColor}
+                roughness={0.8}
                 metalness={0.02}
                 {...{} as any}
               />

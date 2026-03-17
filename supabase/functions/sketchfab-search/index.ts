@@ -443,7 +443,7 @@ function scoreResults(
     context.style_profile.primary.toLowerCase(),
     ...context.style_profile.secondary.map((s) => s.toLowerCase()),
   ];
-  const moodTags = (context.style_profile.mood || []).map((m) => m.toLowerCase());
+  const moodTags = (Array.isArray(context.style_profile.mood) ? context.style_profile.mood : typeof context.style_profile.mood === "string" ? [context.style_profile.mood] : []).map((m) => m.toLowerCase());
   const paletteTags = context.style_profile.palette.map((p) => p.toLowerCase());
   const materialTags = (context.style_profile.materials || []).map((m) => m.toLowerCase());
   const arcadeTerms = ["arcade", "gaming", "entertainment", "commercial", "retail", "amusement", "game room", "fun", "neon"];

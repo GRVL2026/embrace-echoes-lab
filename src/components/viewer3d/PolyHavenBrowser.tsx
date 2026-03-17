@@ -104,7 +104,7 @@ export function PolyHavenBrowser({ target, currentTexture, onSelect, onClose }: 
     } finally {
       setLoadingTexture(null);
     }
-  }, [currentTexture, onSelect]);
+  }, [currentTexture, onSelect, resolution]);
 
   return (
     <div className="flex flex-col overflow-hidden max-h-[80vh]">

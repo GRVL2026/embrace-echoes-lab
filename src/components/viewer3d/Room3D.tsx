@@ -267,6 +267,7 @@ function PolyHavenWallSegment({
         roughnessMap={mats.roughness}
         roughness={mats.roughness ? 1 : 0.7}
         metalness={0.02}
+        side={THREE.DoubleSide}
       />
     </mesh>
   );
@@ -451,6 +452,7 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true, ambian
                 color={wallColor}
                 roughness={0.8}
                 metalness={0.02}
+                side={THREE.DoubleSide}
                 {...{} as any}
               />
             </mesh>

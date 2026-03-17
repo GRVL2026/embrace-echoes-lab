@@ -39,6 +39,9 @@ const defaults: AmbianceSettings = {
   polyhavenFloor: null,
   polyhavenWall: null,
   polyhavenCeiling: null,
+  polyhavenHDRI: null,
+  hdriIntensity: 1,
+  hdriBackground: false,
 };
 
 function ensureDefaults(a: Partial<AmbianceSettings> | undefined): AmbianceSettings {

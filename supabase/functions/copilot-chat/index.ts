@@ -232,10 +232,10 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "openai/gpt-5-mini",
         messages: aiMessages,
         tools: TOOLS,
-        tool_choice: "auto",
+        tool_choice: "required",
         stream: false,
       }),
     });

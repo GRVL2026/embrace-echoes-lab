@@ -54,6 +54,7 @@ function SpacePlannerInner() {
           <Viewer3DToolbar
             settings={viewer3DSettings}
             onChange={setViewer3DSettings}
+            onAddEquipment={(eq) => dispatch({ type: "ADD_PLACED_EQUIPMENT", equipment: eq })}
           />
         )}
       </div>

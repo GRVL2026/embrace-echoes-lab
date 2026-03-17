@@ -113,6 +113,7 @@ export const DEFAULT_3D_SETTINGS: Viewer3DSettings = {
 type Props = {
   settings: Viewer3DSettings;
   onChange: (settings: Viewer3DSettings) => void;
+  onAddEquipment?: (equipment: import("@/types/equipment").PlacedEquipment) => void;
 };
 
 const presetViews: { id: PresetView; label: string; icon: React.ElementType; shortcut: string }[] = [
@@ -142,7 +143,7 @@ const visibilityToggles: { key: VisKey; label: string; icon: React.ElementType }
 
 const DEFAULT_AMBIANCE: AmbianceSettings = { floorTexture: "default", wallFinish: "default", wallColor: "#f0f0f0", wallHeight: 2.8, ceiling: "none", ceilingHeight: 2.8, fog: false, fogIntensity: 0.3, theme: "custom", polyhavenFloor: null, polyhavenWall: null, polyhavenCeiling: null };
 
-export function Viewer3DToolbar({ settings, onChange }: Props) {
+export function Viewer3DToolbar({ settings, onChange, onAddEquipment }: Props) {
   const [visExpanded, setVisExpanded] = useState(false);
   const [ambianceOpen, setAmbianceOpen] = useState(false);
   const ambiance = settings.ambiance ?? DEFAULT_AMBIANCE;
@@ -319,6 +320,7 @@ export function Viewer3DToolbar({ settings, onChange }: Props) {
           ambiance={ambiance}
           onChange={setAmbiance}
           onClose={() => setAmbianceOpen(false)}
+          onAddEquipment={onAddEquipment}
         />
       )}
     </div>

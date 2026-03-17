@@ -160,7 +160,15 @@ function SpacePlannerInner() {
       </div>
 
       {/* Right sidebar */}
-      {sidebarOpen && <EditorSidebar />}
+      {sidebarOpen && !copilotOpen && <EditorSidebar />}
+
+      {/* Copilot panel */}
+      {copilotOpen && (
+        <CopilotPanel
+          onActionsReady={executeActions}
+          onClose={() => setCopilotOpen(false)}
+        />
+      )}
     </div>
   );
 }

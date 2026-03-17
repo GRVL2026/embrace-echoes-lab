@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { useLoader } from "@react-three/fiber";
 import type { Room, Door } from "@/types/editor";
 import type { AmbianceSettings, FloorTexture, WallFinish, PolyHavenTexture } from "./Viewer3DToolbar";
+import { AntiTileMaterial } from "./AntiTileMaterial";
 
 const WALL_THICKNESS = 0.15; // meters
 

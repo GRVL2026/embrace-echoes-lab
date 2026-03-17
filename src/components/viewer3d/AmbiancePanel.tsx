@@ -99,6 +99,19 @@ export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose, onAddE
     );
   }
 
+  // When HDRI browser is open, show it instead of the main panel
+  if (hdriOpen) {
+    return (
+      <div className="absolute left-full top-0 ml-3 z-50 w-80 max-h-[80vh] flex flex-col rounded-lg border border-border bg-card/95 backdrop-blur-md shadow-xl neon-border">
+        <PolyHavenHDRIBrowser
+          currentHDRI={ambiance.polyhavenHDRI}
+          onSelect={(hdri) => update({ polyhavenHDRI: hdri })}
+          onClose={() => setHdriOpen(false)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="absolute left-full top-0 ml-3 z-50 w-72 max-h-[80vh] overflow-y-auto rounded-lg border border-border bg-card/95 backdrop-blur-md p-4 shadow-xl neon-border">
       {/* Header */}

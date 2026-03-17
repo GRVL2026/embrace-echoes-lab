@@ -127,13 +127,24 @@ function ensureDefaults(a: Partial<AmbianceSettings> | undefined): AmbianceSetti
 
 export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose }: Props) {
   const ambiance = ensureDefaults(rawAmbiance);
+  const [polyhavenTarget, setPolyhavenTarget] = useState<SurfaceTarget | null>(null);
 
   const applyTheme = (preset: ThemePreset) => {
-    onChange({ ...preset.settings, theme: preset.id });
+    onChange({ ...preset.settings, theme: preset.id, polyhavenFloor: null, polyhavenWall: null, polyhavenCeiling: null });
   };
 
   const update = (partial: Partial<AmbianceSettings>) => {
     onChange({ ...ambiance, ...partial, theme: "custom" });
+  };
+
+  const handlePolyHavenSelect = (target: SurfaceTarget, texture: PolyHavenTexture | null) => {
+    if (target === "floor") {
+      update({ polyhavenFloor: texture, floorTexture: texture ? "default" : ambiance.floorTexture });
+    } else if (target === "wall") {
+      update({ polyhavenWall: texture, wallFinish: texture ? "default" : ambiance.wallFinish });
+    } else {
+      update({ polyhavenCeiling: texture });
+    }
   };
 
   return (

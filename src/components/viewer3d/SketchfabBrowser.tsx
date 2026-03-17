@@ -276,6 +276,7 @@ export function SketchfabBrowser({ onAddToScene, onClose }: Props) {
         safetyZone: 10,
         color: "hsl(260, 60%, 50%)",
         model3d: dl.download_url,
+        autoScale: true,
       };
 
       onAddToScene(equipment);

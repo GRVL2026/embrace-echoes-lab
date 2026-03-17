@@ -338,6 +338,71 @@ export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose, onAddE
         )}
       </div>
 
+      {/* HDRI Environment */}
+      <div className="mb-4">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+          Éclairage HDRI
+        </p>
+        <button
+          className={cn(
+            "w-full flex items-center gap-1.5 rounded-md border-2 p-2 text-left transition-all",
+            ambiance.polyhavenHDRI
+              ? "border-primary ring-1 ring-primary/50 bg-primary/5"
+              : "border-dashed border-border/50 hover:border-border"
+          )}
+          onClick={() => setHdriOpen(true)}
+        >
+          <Sun className="h-4 w-4 text-muted-foreground shrink-0" />
+          {ambiance.polyhavenHDRI ? (
+            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+              <img src={ambiance.polyhavenHDRI.thumbnail} alt="" className="h-8 w-12 rounded object-cover" />
+              <span className="text-xs font-medium text-foreground truncate">{ambiance.polyhavenHDRI.name}</span>
+            </div>
+          ) : (
+            <span className="text-xs text-muted-foreground">Parcourir Poly Haven…</span>
+          )}
+        </button>
+        {ambiance.polyhavenHDRI && (
+          <>
+            <button
+              className="mt-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => update({ polyhavenHDRI: null })}
+            >
+              ✕ Retirer le HDRI
+            </button>
+
+            {/* Intensity */}
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] text-muted-foreground">Intensité</span>
+                <span className="text-[10px] font-mono text-foreground">{(ambiance.hdriIntensity ?? 1).toFixed(1)}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-muted-foreground">0</span>
+                <Slider
+                  min={0}
+                  max={3}
+                  step={0.1}
+                  value={[ambiance.hdriIntensity ?? 1]}
+                  onValueChange={([v]) => update({ hdriIntensity: v })}
+                  className="flex-1"
+                />
+                <span className="text-[10px] text-muted-foreground">3</span>
+              </div>
+            </div>
+
+            {/* Background toggle */}
+            <div className="mt-2 flex items-center justify-between">
+              <span className="text-[10px] text-muted-foreground">Afficher en arrière-plan</span>
+              <Switch
+                checked={ambiance.hdriBackground ?? false}
+                onCheckedChange={(checked) => update({ hdriBackground: checked })}
+              />
+            </div>
+          </>
+        )}
+      </div>
+
       {/* Fog */}
       <div>
         <div className="flex items-center justify-between mb-2">

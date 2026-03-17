@@ -1,8 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, Suspense } from "react";
 import * as THREE from "three";
 import { useLoader } from "@react-three/fiber";
 import type { Room, Door } from "@/types/editor";
-import type { AmbianceSettings, FloorTexture, WallFinish } from "./Viewer3DToolbar";
+import type { AmbianceSettings, FloorTexture, WallFinish, PolyHavenTexture } from "./Viewer3DToolbar";
 
 const WALL_THICKNESS = 0.15; // meters
 

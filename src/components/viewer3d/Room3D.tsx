@@ -78,13 +78,12 @@ function TexturedFloor({ shape, texturePath, surfaceSize }: { shape: THREE.Shape
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, 0]} receiveShadow>
       <shapeGeometry args={[shape]} />
-      <meshStandardMaterial
+      <AntiTileMaterial
         map={tex}
         color="#ffffff"
         roughness={0.5}
         metalness={0.05}
         side={THREE.DoubleSide}
-        {...{} as any}
       />
     </mesh>
   );

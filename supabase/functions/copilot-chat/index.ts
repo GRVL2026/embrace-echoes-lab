@@ -329,7 +329,7 @@ Deno.serve(async (req) => {
         model: "openai/gpt-5-mini",
         messages: aiMessages,
         tools: TOOLS,
-        tool_choice: "required",
+        tool_choice: "auto",
         stream: false,
       }),
     });

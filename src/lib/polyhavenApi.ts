@@ -86,7 +86,7 @@ export async function getTextureUrls(
     const res = map[resolution] || map["1k"] || map["2k"];
     if (!res) return null;
     // Prefer jpg, then png, then exr
-    return res.jpg?.url || res.png?.url || Object.values(res)[0]?.url || null;
+    return res.jpg?.url || res.png?.url || (Object.values(res)[0] as any)?.url || null;
   };
 
   return {

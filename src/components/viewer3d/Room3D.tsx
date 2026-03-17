@@ -121,14 +121,13 @@ function PolyHavenSurface({
     return (
       <mesh rotation={rotation} position={position} receiveShadow>
         <shapeGeometry args={[shape]} />
-        <meshStandardMaterial
+        <AntiTileMaterial
           map={mats.diffuse}
-          normalMap={mats.normal ?? undefined}
-          roughnessMap={mats.roughness ?? undefined}
+          normalMap={mats.normal}
+          roughnessMap={mats.roughness}
           roughness={mats.roughness ? 1 : 0.5}
           metalness={0.02}
           side={THREE.DoubleSide}
-          {...{} as any}
         />
       </mesh>
     );

@@ -169,7 +169,9 @@ export function Ceiling3D({ room, ceilingType, height = 2.8, polyhavenTexture }:
       });
     }
 
-    return { shape, beamLines, ducts };
+    const surfaceSize: [number, number] = [spanX, spanZ];
+
+    return { shape, beamLines, ducts, surfaceSize };
   }, [room]);
 
   if (ceilingType === "none" && !polyhavenTexture) return null;

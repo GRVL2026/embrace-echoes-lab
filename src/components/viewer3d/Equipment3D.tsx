@@ -126,6 +126,7 @@ export function Equipment3D({ equipment, showHeight = false }: Props) {
               width={equipment.width}
               depth={equipment.depth}
               height={equipment.height || 120}
+              autoScale={equipment.autoScale}
             />
           </Suspense>
         </ErrorBoundary>

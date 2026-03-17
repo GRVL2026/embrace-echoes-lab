@@ -110,19 +110,25 @@ export type Database = {
           created_at: string
           description: string | null
           dimensions: number[] | null
+          file_size_mb: number | null
           file_url: string | null
           format: string
           id: string
           is_active: boolean
+          is_curated: boolean | null
           license: string | null
+          license_ok: boolean | null
           material_tags: string[] | null
           name: string
           performance_tier: string | null
+          polycount: number | null
           preview_url: string | null
+          provider_asset_id: string | null
           room_tags: string[] | null
           rotation_default: number[] | null
           scale_default: number[] | null
           source: string | null
+          source_provider: string | null
           style_tags: string[] | null
           subcategory: string | null
           thumbnail_url: string | null
@@ -136,19 +142,25 @@ export type Database = {
           created_at?: string
           description?: string | null
           dimensions?: number[] | null
+          file_size_mb?: number | null
           file_url?: string | null
           format?: string
           id?: string
           is_active?: boolean
+          is_curated?: boolean | null
           license?: string | null
+          license_ok?: boolean | null
           material_tags?: string[] | null
           name: string
           performance_tier?: string | null
+          polycount?: number | null
           preview_url?: string | null
+          provider_asset_id?: string | null
           room_tags?: string[] | null
           rotation_default?: number[] | null
           scale_default?: number[] | null
           source?: string | null
+          source_provider?: string | null
           style_tags?: string[] | null
           subcategory?: string | null
           thumbnail_url?: string | null
@@ -162,19 +174,25 @@ export type Database = {
           created_at?: string
           description?: string | null
           dimensions?: number[] | null
+          file_size_mb?: number | null
           file_url?: string | null
           format?: string
           id?: string
           is_active?: boolean
+          is_curated?: boolean | null
           license?: string | null
+          license_ok?: boolean | null
           material_tags?: string[] | null
           name?: string
           performance_tier?: string | null
+          polycount?: number | null
           preview_url?: string | null
+          provider_asset_id?: string | null
           room_tags?: string[] | null
           rotation_default?: number[] | null
           scale_default?: number[] | null
           source?: string | null
+          source_provider?: string | null
           style_tags?: string[] | null
           subcategory?: string | null
           thumbnail_url?: string | null
@@ -236,6 +254,45 @@ export type Database = {
           style_tags?: string[] | null
           texture_type?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      external_asset_sources: {
+        Row: {
+          created_at: string
+          download_format: string | null
+          downloaded_at: string | null
+          id: string
+          license_type: string | null
+          original_metadata: Json | null
+          provider: string
+          provider_asset_id: string
+          provider_url: string | null
+          source_user: string | null
+        }
+        Insert: {
+          created_at?: string
+          download_format?: string | null
+          downloaded_at?: string | null
+          id?: string
+          license_type?: string | null
+          original_metadata?: Json | null
+          provider?: string
+          provider_asset_id: string
+          provider_url?: string | null
+          source_user?: string | null
+        }
+        Update: {
+          created_at?: string
+          download_format?: string | null
+          downloaded_at?: string | null
+          id?: string
+          license_type?: string | null
+          original_metadata?: Json | null
+          provider?: string
+          provider_asset_id?: string
+          provider_url?: string | null
+          source_user?: string | null
         }
         Relationships: []
       }

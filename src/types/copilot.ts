@@ -105,9 +105,13 @@ export interface AddAssetAction extends CopilotActionBase {
   type: "add_asset";
   asset_id: string;
   asset_name: string;
-  position: [number, number, number];
-  rotation: [number, number, number];
-  scale: [number, number, number];
+  glb_url?: string;
+  category?: string;
+  thumbnail?: string;
+  placement_rule?: string;
+  position?: [number, number, number];
+  rotation?: [number, number, number];
+  scale?: [number, number, number];
 }
 
 export interface RemoveAssetAction extends CopilotActionBase {

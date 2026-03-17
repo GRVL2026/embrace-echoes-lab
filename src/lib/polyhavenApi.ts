@@ -64,7 +64,7 @@ export async function getTextureFiles(
  */
 export async function getTextureUrls(
   id: string,
-  resolution: string = "1k"
+  resolution: string = "2k"
 ): Promise<{
   diffuse: string | null;
   normal: string | null;

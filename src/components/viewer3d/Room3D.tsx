@@ -6,6 +6,9 @@ import type { AmbianceSettings, FloorTexture, WallFinish, PolyHavenTexture } fro
 
 const WALL_THICKNESS = 0.15; // meters
 
+/** Physical size of one texture tile in meters – adjusting this changes how "zoomed" textures appear */
+const TEXTURE_PHYSICAL_SIZE = 2.0; // 1 tile covers 2m
+
 const FLOOR_TEXTURE_MAP: Record<Exclude<FloorTexture, "default">, string> = {
   carpet: "/textures/floor_carpet_arcade.jpg",
   epoxy: "/textures/floor_epoxy.jpg",
@@ -21,6 +24,37 @@ const WALL_TEXTURE_MAP: Record<Exclude<WallFinish, "default" | "paint">, string>
   wood: "/textures/wall_wood.jpg",
 };
 
+/**
+ * Configure a texture for physically-correct tiling.
+ * repeatX/Y = surface dimension / physical tile size.
+ * An optional UV offset breaks visible repetition.
+ */
+function configureTexture(
+  t: THREE.Texture,
+  surfaceWidth: number,
+  surfaceHeight: number,
+  offsetX = 0,
+  offsetY = 0,
+): THREE.Texture {
+  const c = t.clone();
+  c.wrapS = THREE.RepeatWrapping;
+  c.wrapT = THREE.RepeatWrapping;
+  c.repeat.set(
+    surfaceWidth / TEXTURE_PHYSICAL_SIZE,
+    surfaceHeight / TEXTURE_PHYSICAL_SIZE,
+  );
+  c.offset.set(offsetX, offsetY);
+  c.colorSpace = THREE.SRGBColorSpace;
+  c.needsUpdate = true;
+  return c;
+}
+
+/** Hash a number pair into a deterministic 0-1 value for anti-tiling offset */
+function pseudoRandom(a: number, b: number): number {
+  const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
+  return s - Math.floor(s);
+}
+
 type Props = {
   room: Room;
   doors: Door[];
@@ -30,17 +64,11 @@ type Props = {
 };
 
 /** Inner component that loads and applies a floor texture */
-function TexturedFloor({ shape, texturePath }: { shape: THREE.Shape; texturePath: string }) {
+function TexturedFloor({ shape, texturePath, surfaceSize }: { shape: THREE.Shape; texturePath: string; surfaceSize: [number, number] }) {
   const texture = useLoader(THREE.TextureLoader, texturePath);
   const tex = useMemo(() => {
-    const t = texture.clone();
-    t.wrapS = THREE.RepeatWrapping;
-    t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(0.5, 0.5); // 1 repeat per 2 meters
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.needsUpdate = true;
-    return t;
-  }, [texture]);
+    return configureTexture(texture, surfaceSize[0], surfaceSize[1]);
+  }, [texture, surfaceSize[0], surfaceSize[1]]);
 
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, 0]} receiveShadow>
@@ -63,13 +91,13 @@ function PolyHavenSurface({
   position,
   rotation,
   textureData,
-  repeatScale = 0.5,
+  surfaceSize,
 }: {
   shape?: THREE.Shape;
   position: [number, number, number];
   rotation: [number, number, number];
   textureData: PolyHavenTexture;
-  repeatScale?: number;
+  surfaceSize: [number, number];
 }) {
   const urls = textureData.urls;
   const diffuseTex = useLoader(THREE.TextureLoader, urls.diffuse || "");
@@ -77,21 +105,12 @@ function PolyHavenSurface({
   const roughTex = urls.roughness ? useLoader(THREE.TextureLoader, urls.roughness) : null;
 
   const mats = useMemo(() => {
-    const configure = (t: THREE.Texture) => {
-      const c = t.clone();
-      c.wrapS = THREE.RepeatWrapping;
-      c.wrapT = THREE.RepeatWrapping;
-      c.repeat.set(repeatScale, repeatScale);
-      c.colorSpace = THREE.SRGBColorSpace;
-      c.needsUpdate = true;
-      return c;
-    };
     return {
-      diffuse: configure(diffuseTex),
-      normal: normalTex ? configure(normalTex) : null,
-      roughness: roughTex ? configure(roughTex) : null,
+      diffuse: configureTexture(diffuseTex, surfaceSize[0], surfaceSize[1]),
+      normal: normalTex ? configureTexture(normalTex, surfaceSize[0], surfaceSize[1]) : null,
+      roughness: roughTex ? configureTexture(roughTex, surfaceSize[0], surfaceSize[1]) : null,
     };
-  }, [diffuseTex, normalTex, roughTex, repeatScale]);
+  }, [diffuseTex, normalTex, roughTex, surfaceSize[0], surfaceSize[1]]);
 
   if (shape) {
     return (
@@ -112,17 +131,19 @@ function PolyHavenSurface({
   return null;
 }
 
-/** Box surface with Poly Haven PBR textures */
+/** Box surface with Poly Haven PBR textures – anti-tiling via per-segment UV offset */
 function PolyHavenWallSegment({
   position,
   rotation,
   size,
   textureData,
+  segmentIndex,
 }: {
   position: [number, number, number];
   rotation: [number, number, number];
   size: [number, number, number];
   textureData: PolyHavenTexture;
+  segmentIndex: number;
 }) {
   const urls = textureData.urls;
   const diffuseTex = useLoader(THREE.TextureLoader, urls.diffuse || "");
@@ -130,21 +151,15 @@ function PolyHavenWallSegment({
   const roughTex = urls.roughness ? useLoader(THREE.TextureLoader, urls.roughness) : null;
 
   const mats = useMemo(() => {
-    const configure = (t: THREE.Texture) => {
-      const c = t.clone();
-      c.wrapS = THREE.RepeatWrapping;
-      c.wrapT = THREE.RepeatWrapping;
-      c.repeat.set(size[0] * 1.5, size[1] * 0.5);
-      c.colorSpace = THREE.SRGBColorSpace;
-      c.needsUpdate = true;
-      return c;
-    };
+    // Per-segment UV offset to break repetition between adjacent walls
+    const ox = pseudoRandom(segmentIndex, 0);
+    const oy = pseudoRandom(segmentIndex, 1);
     return {
-      diffuse: configure(diffuseTex),
-      normal: normalTex ? configure(normalTex) : null,
-      roughness: roughTex ? configure(roughTex) : null,
+      diffuse: configureTexture(diffuseTex, size[0], size[1], ox, oy),
+      normal: normalTex ? configureTexture(normalTex, size[0], size[1], ox, oy) : null,
+      roughness: roughTex ? configureTexture(roughTex, size[0], size[1], ox, oy) : null,
     };
-  }, [diffuseTex, normalTex, roughTex, size[0], size[1]]);
+  }, [diffuseTex, normalTex, roughTex, size[0], size[1], segmentIndex]);
 
   return (
     <mesh position={position} rotation={rotation} castShadow receiveShadow>
@@ -161,28 +176,26 @@ function PolyHavenWallSegment({
   );
 }
 
-/** Inner component that loads and applies a wall texture */
+/** Inner component that loads and applies a wall texture with anti-tiling */
 function TexturedWallSegment({
   position,
   rotation,
   size,
   texturePath,
+  segmentIndex,
 }: {
   position: [number, number, number];
   rotation: [number, number, number];
   size: [number, number, number];
   texturePath: string;
+  segmentIndex: number;
 }) {
   const texture = useLoader(THREE.TextureLoader, texturePath);
   const tex = useMemo(() => {
-    const t = texture.clone();
-    t.wrapS = THREE.RepeatWrapping;
-    t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(size[0] * 1.5, size[1] * 0.5);
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.needsUpdate = true;
-    return t;
-  }, [texture, size[0], size[1]]);
+    const ox = pseudoRandom(segmentIndex, 2);
+    const oy = pseudoRandom(segmentIndex, 3);
+    return configureTexture(texture, size[0], size[1], ox, oy);
+  }, [texture, size[0], size[1], segmentIndex]);
 
   return (
     <mesh position={position} rotation={rotation} castShadow receiveShadow>
@@ -202,7 +215,6 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true, ambian
   const wallHeight = ambiance?.wallHeight ?? 2.8;
   const polyFloor = ambiance?.polyhavenFloor;
   const polyWall = ambiance?.polyhavenWall;
-  // Epoxy is best rendered as a smooth procedural material, not a tiled texture
   const isEpoxy = !polyFloor && ambiance?.floorTexture === "epoxy";
   const floorTexturePath = !polyFloor && ambiance?.floorTexture && ambiance.floorTexture !== "default" && !isEpoxy
     ? FLOOR_TEXTURE_MAP[ambiance.floorTexture]
@@ -212,11 +224,19 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true, ambian
     : null;
   const wallColor = ambiance?.wallFinish === "paint" ? ambiance.wallColor : "#f0f0f0";
 
-  const { floorShape, wallMeshes } = useMemo(() => {
+  const { floorShape, floorSize, wallMeshes } = useMemo(() => {
     const pts = room.points.map((p) => new THREE.Vector2(p.x / 100, p.y / 100));
     const floorPts = room.points.map((p) => new THREE.Vector2(p.x / 100, -p.y / 100));
     floorPts.reverse();
     const floorShape = new THREE.Shape(floorPts);
+
+    // Compute floor bounding size for texture scaling
+    const rawPts = room.points.map((p) => ({ x: p.x / 100, y: p.y / 100 }));
+    const minX = Math.min(...rawPts.map((p) => p.x));
+    const maxX = Math.max(...rawPts.map((p) => p.x));
+    const minY = Math.min(...rawPts.map((p) => p.y));
+    const maxY = Math.max(...rawPts.map((p) => p.y));
+    const floorSize: [number, number] = [maxX - minX, maxY - minY];
 
     const walls: { start: THREE.Vector2; end: THREE.Vector2 }[] = [];
     for (let i = 0; i < pts.length; i++) {
@@ -255,15 +275,17 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true, ambian
       return { segments, wallLength, angle, origin: wall.start, edgeIndex };
     });
 
-    return { floorShape, wallMeshes };
+    return { floorShape, floorSize, wallMeshes };
   }, [room, doors]);
+
+  // Global segment counter for anti-tiling
+  let segCounter = 0;
 
   return (
     <group>
       {/* Floor */}
       {showFloor && (
         <group>
-          {/* Poly Haven PBR floor, textured surface, epoxy, or default */}
           {polyFloor?.urls?.diffuse ? (
             <Suspense fallback={null}>
               <PolyHavenSurface
@@ -271,11 +293,11 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true, ambian
                 position={[0, 0.001, 0]}
                 rotation={[-Math.PI / 2, 0, 0]}
                 textureData={polyFloor}
-                repeatScale={0.5}
+                surfaceSize={floorSize}
               />
             </Suspense>
           ) : floorTexturePath ? (
-            <TexturedFloor shape={floorShape} texturePath={floorTexturePath} />
+            <TexturedFloor shape={floorShape} texturePath={floorTexturePath} surfaceSize={floorSize} />
           ) : isEpoxy ? (
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, 0]} receiveShadow>
               <shapeGeometry args={[floorShape]} />
@@ -326,6 +348,7 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true, ambian
           const pos: [number, number, number] = [cx, wallHeight / 2, cz];
           const rot: [number, number, number] = [0, -wall.angle, 0];
           const size: [number, number, number] = [segLength, wallHeight, WALL_THICKNESS];
+          const idx = segCounter++;
 
           if (polyWall?.urls?.diffuse) {
             return (
@@ -335,6 +358,7 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true, ambian
                   rotation={rot}
                   size={size}
                   textureData={polyWall}
+                  segmentIndex={idx}
                 />
               </Suspense>
             );
@@ -348,6 +372,7 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true, ambian
                 rotation={rot}
                 size={size}
                 texturePath={wallTexturePath}
+                segmentIndex={idx}
               />
             );
           }

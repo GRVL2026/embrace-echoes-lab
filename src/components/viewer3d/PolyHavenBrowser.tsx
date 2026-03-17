@@ -90,7 +90,7 @@ export function PolyHavenBrowser({ target, currentTexture, onSelect, onClose }: 
     }
     setLoadingTexture(id);
     try {
-      const urls = await getTextureUrls(id, "1k");
+      const urls = await getTextureUrls(id, "2k");
       onSelect({
         id,
         name: asset.name,

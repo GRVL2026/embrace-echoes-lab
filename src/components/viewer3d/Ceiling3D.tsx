@@ -46,28 +46,19 @@ function TechnicalCeilingPanel({ shape, height, surfaceSize }: { shape: THREE.Sh
 }
 
 /** Poly Haven PBR ceiling panel */
-function PolyHavenCeilingPanel({ shape, height, textureData }: { shape: THREE.Shape; height: number; textureData: PolyHavenTexture }) {
+function PolyHavenCeilingPanel({ shape, height, textureData, surfaceSize }: { shape: THREE.Shape; height: number; textureData: PolyHavenTexture; surfaceSize: [number, number] }) {
   const urls = textureData.urls;
   const diffuseTex = useLoader(THREE.TextureLoader, urls.diffuse || "");
   const normalTex = urls.normal ? useLoader(THREE.TextureLoader, urls.normal) : null;
   const roughTex = urls.roughness ? useLoader(THREE.TextureLoader, urls.roughness) : null;
 
   const mats = useMemo(() => {
-    const configure = (t: THREE.Texture) => {
-      const c = t.clone();
-      c.wrapS = THREE.RepeatWrapping;
-      c.wrapT = THREE.RepeatWrapping;
-      c.repeat.set(0.3, 0.3);
-      c.colorSpace = THREE.SRGBColorSpace;
-      c.needsUpdate = true;
-      return c;
-    };
     return {
-      diffuse: configure(diffuseTex),
-      normal: normalTex ? configure(normalTex) : null,
-      roughness: roughTex ? configure(roughTex) : null,
+      diffuse: configCeilingTex(diffuseTex, surfaceSize[0], surfaceSize[1]),
+      normal: normalTex ? configCeilingTex(normalTex, surfaceSize[0], surfaceSize[1]) : null,
+      roughness: roughTex ? configCeilingTex(roughTex, surfaceSize[0], surfaceSize[1]) : null,
     };
-  }, [diffuseTex, normalTex, roughTex]);
+  }, [diffuseTex, normalTex, roughTex, surfaceSize[0], surfaceSize[1]]);
 
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, height, 0]}>

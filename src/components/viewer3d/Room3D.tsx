@@ -1,8 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, Suspense } from "react";
 import * as THREE from "three";
 import { useLoader } from "@react-three/fiber";
 import type { Room, Door } from "@/types/editor";
-import type { AmbianceSettings, FloorTexture, WallFinish } from "./Viewer3DToolbar";
+import type { AmbianceSettings, FloorTexture, WallFinish, PolyHavenTexture } from "./Viewer3DToolbar";
 
 const WALL_THICKNESS = 0.15; // meters
 
@@ -57,6 +57,110 @@ function TexturedFloor({ shape, texturePath }: { shape: THREE.Shape; texturePath
   );
 }
 
+/** Component that loads PBR textures from Poly Haven URLs */
+function PolyHavenSurface({
+  shape,
+  position,
+  rotation,
+  textureData,
+  repeatScale = 0.5,
+}: {
+  shape?: THREE.Shape;
+  position: [number, number, number];
+  rotation: [number, number, number];
+  textureData: PolyHavenTexture;
+  repeatScale?: number;
+}) {
+  const urls = textureData.urls;
+  const diffuseTex = useLoader(THREE.TextureLoader, urls.diffuse || "");
+  const normalTex = urls.normal ? useLoader(THREE.TextureLoader, urls.normal) : null;
+  const roughTex = urls.roughness ? useLoader(THREE.TextureLoader, urls.roughness) : null;
+
+  const mats = useMemo(() => {
+    const configure = (t: THREE.Texture) => {
+      const c = t.clone();
+      c.wrapS = THREE.RepeatWrapping;
+      c.wrapT = THREE.RepeatWrapping;
+      c.repeat.set(repeatScale, repeatScale);
+      c.colorSpace = THREE.SRGBColorSpace;
+      c.needsUpdate = true;
+      return c;
+    };
+    return {
+      diffuse: configure(diffuseTex),
+      normal: normalTex ? configure(normalTex) : null,
+      roughness: roughTex ? configure(roughTex) : null,
+    };
+  }, [diffuseTex, normalTex, roughTex, repeatScale]);
+
+  if (shape) {
+    return (
+      <mesh rotation={rotation} position={position} receiveShadow>
+        <shapeGeometry args={[shape]} />
+        <meshStandardMaterial
+          map={mats.diffuse}
+          normalMap={mats.normal ?? undefined}
+          roughnessMap={mats.roughness ?? undefined}
+          roughness={mats.roughness ? 1 : 0.5}
+          metalness={0.02}
+          side={THREE.DoubleSide}
+          {...{} as any}
+        />
+      </mesh>
+    );
+  }
+  return null;
+}
+
+/** Box surface with Poly Haven PBR textures */
+function PolyHavenWallSegment({
+  position,
+  rotation,
+  size,
+  textureData,
+}: {
+  position: [number, number, number];
+  rotation: [number, number, number];
+  size: [number, number, number];
+  textureData: PolyHavenTexture;
+}) {
+  const urls = textureData.urls;
+  const diffuseTex = useLoader(THREE.TextureLoader, urls.diffuse || "");
+  const normalTex = urls.normal ? useLoader(THREE.TextureLoader, urls.normal) : null;
+  const roughTex = urls.roughness ? useLoader(THREE.TextureLoader, urls.roughness) : null;
+
+  const mats = useMemo(() => {
+    const configure = (t: THREE.Texture) => {
+      const c = t.clone();
+      c.wrapS = THREE.RepeatWrapping;
+      c.wrapT = THREE.RepeatWrapping;
+      c.repeat.set(size[0] * 1.5, size[1] * 0.5);
+      c.colorSpace = THREE.SRGBColorSpace;
+      c.needsUpdate = true;
+      return c;
+    };
+    return {
+      diffuse: configure(diffuseTex),
+      normal: normalTex ? configure(normalTex) : null,
+      roughness: roughTex ? configure(roughTex) : null,
+    };
+  }, [diffuseTex, normalTex, roughTex, size[0], size[1]]);
+
+  return (
+    <mesh position={position} rotation={rotation} castShadow receiveShadow>
+      <boxGeometry args={size} />
+      <meshStandardMaterial
+        map={mats.diffuse}
+        normalMap={mats.normal ?? undefined}
+        roughnessMap={mats.roughness ?? undefined}
+        roughness={mats.roughness ? 1 : 0.7}
+        metalness={0.02}
+        {...{} as any}
+      />
+    </mesh>
+  );
+}
+
 /** Inner component that loads and applies a wall texture */
 function TexturedWallSegment({
   position,
@@ -96,12 +200,14 @@ function TexturedWallSegment({
 
 export function Room3D({ room, doors, showFloor = true, showWalls = true, ambiance }: Props) {
   const wallHeight = ambiance?.wallHeight ?? 2.8;
+  const polyFloor = ambiance?.polyhavenFloor;
+  const polyWall = ambiance?.polyhavenWall;
   // Epoxy is best rendered as a smooth procedural material, not a tiled texture
-  const isEpoxy = ambiance?.floorTexture === "epoxy";
-  const floorTexturePath = ambiance?.floorTexture && ambiance.floorTexture !== "default" && !isEpoxy
+  const isEpoxy = !polyFloor && ambiance?.floorTexture === "epoxy";
+  const floorTexturePath = !polyFloor && ambiance?.floorTexture && ambiance.floorTexture !== "default" && !isEpoxy
     ? FLOOR_TEXTURE_MAP[ambiance.floorTexture]
     : null;
-  const wallTexturePath = ambiance?.wallFinish && ambiance.wallFinish !== "default" && ambiance.wallFinish !== "paint"
+  const wallTexturePath = !polyWall && ambiance?.wallFinish && ambiance.wallFinish !== "default" && ambiance.wallFinish !== "paint"
     ? WALL_TEXTURE_MAP[ambiance.wallFinish]
     : null;
   const wallColor = ambiance?.wallFinish === "paint" ? ambiance.wallColor : "#f0f0f0";
@@ -157,8 +263,18 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true, ambian
       {/* Floor */}
       {showFloor && (
         <group>
-          {/* Textured surface, epoxy, or default */}
-          {floorTexturePath ? (
+          {/* Poly Haven PBR floor, textured surface, epoxy, or default */}
+          {polyFloor?.urls?.diffuse ? (
+            <Suspense fallback={null}>
+              <PolyHavenSurface
+                shape={floorShape}
+                position={[0, 0.001, 0]}
+                rotation={[-Math.PI / 2, 0, 0]}
+                textureData={polyFloor}
+                repeatScale={0.5}
+              />
+            </Suspense>
+          ) : floorTexturePath ? (
             <TexturedFloor shape={floorShape} texturePath={floorTexturePath} />
           ) : isEpoxy ? (
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, 0]} receiveShadow>
@@ -210,6 +326,19 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true, ambian
           const pos: [number, number, number] = [cx, wallHeight / 2, cz];
           const rot: [number, number, number] = [0, -wall.angle, 0];
           const size: [number, number, number] = [segLength, wallHeight, WALL_THICKNESS];
+
+          if (polyWall?.urls?.diffuse) {
+            return (
+              <Suspense key={`wall-${wi}-${si}`} fallback={null}>
+                <PolyHavenWallSegment
+                  position={pos}
+                  rotation={rot}
+                  size={size}
+                  textureData={polyWall}
+                />
+              </Suspense>
+            );
+          }
 
           if (wallTexturePath) {
             return (

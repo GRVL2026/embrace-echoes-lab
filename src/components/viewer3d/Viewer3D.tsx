@@ -242,7 +242,7 @@ export function Viewer3D({ settings, onPresetApplied }: Props) {
         {ambiance.ceiling !== "none" && (
           <Suspense fallback={null}>
             {state.rooms.map((room) => (
-              <Ceiling3D key={`ceil-${room.id}`} room={room} ceilingType={ambiance.ceiling} height={ambiance.ceilingHeight} />
+              <Ceiling3D key={`ceil-${room.id}`} room={room} ceilingType={ambiance.ceiling} height={ambiance.ceilingHeight} polyhavenTexture={ambiance.polyhavenCeiling} />
             ))}
           </Suspense>
         )}

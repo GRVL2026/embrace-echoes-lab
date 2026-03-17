@@ -33,6 +33,18 @@ export type WallFinish = "default" | "paint" | "brick" | "concrete" | "wood";
 export type CeilingType = "none" | "tiles" | "beams" | "black" | "technical";
 export type AmbianceTheme = "custom" | "retro80s" | "cyberpunk" | "sportsbar";
 
+export type PolyHavenTexture = {
+  id: string;
+  name: string;
+  thumbnail: string;
+  urls: {
+    diffuse: string | null;
+    normal: string | null;
+    roughness: string | null;
+    ao: string | null;
+  };
+};
+
 export type AmbianceSettings = {
   floorTexture: FloorTexture;
   wallFinish: WallFinish;
@@ -43,6 +55,10 @@ export type AmbianceSettings = {
   fog: boolean;
   fogIntensity: number; // 0..1
   theme: AmbianceTheme;
+  // Poly Haven custom textures
+  polyhavenFloor?: PolyHavenTexture | null;
+  polyhavenWall?: PolyHavenTexture | null;
+  polyhavenCeiling?: PolyHavenTexture | null;
 };
 
 export type Viewer3DVisibility = {
@@ -88,6 +104,9 @@ export const DEFAULT_3D_SETTINGS: Viewer3DSettings = {
     fog: false,
     fogIntensity: 0.3,
     theme: "custom",
+    polyhavenFloor: null,
+    polyhavenWall: null,
+    polyhavenCeiling: null,
   },
 };
 
@@ -121,7 +140,7 @@ const visibilityToggles: { key: VisKey; label: string; icon: React.ElementType }
   { key: "heights", label: "Hauteurs", icon: Ruler },
 ];
 
-const DEFAULT_AMBIANCE: AmbianceSettings = { floorTexture: "default", wallFinish: "default", wallColor: "#f0f0f0", wallHeight: 2.8, ceiling: "none", ceilingHeight: 2.8, fog: false, fogIntensity: 0.3, theme: "custom" };
+const DEFAULT_AMBIANCE: AmbianceSettings = { floorTexture: "default", wallFinish: "default", wallColor: "#f0f0f0", wallHeight: 2.8, ceiling: "none", ceilingHeight: 2.8, fog: false, fogIntensity: 0.3, theme: "custom", polyhavenFloor: null, polyhavenWall: null, polyhavenCeiling: null };
 
 export function Viewer3DToolbar({ settings, onChange }: Props) {
   const [visExpanded, setVisExpanded] = useState(false);

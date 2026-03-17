@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { useLoader } from "@react-three/fiber";
 import type { Room } from "@/types/editor";
 import type { CeilingType, PolyHavenTexture } from "./Viewer3DToolbar";
+import { AntiTileMaterial } from "./AntiTileMaterial";
 
 type Props = {
   room: Room;

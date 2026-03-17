@@ -105,7 +105,7 @@ export function PolyHavenBrowser({ target, currentTexture, onSelect, onClose }: 
   }, [currentTexture, onSelect]);
 
   return (
-    <div className="fixed left-1/2 top-1/2 z-[90] flex max-h-[85vh] w-[min(92vw,20rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-border bg-card/95 backdrop-blur-md shadow-xl neon-border">
+    <div className="flex flex-col overflow-hidden max-h-[80vh]">
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b border-border">
         <div className="flex items-center gap-2">

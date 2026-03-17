@@ -30,19 +30,19 @@ function configCeilingTex(t: THREE.Texture, w: number, h: number, rotationStep =
 function TechnicalCeilingPanel({ shape, height, surfaceSize }: { shape: THREE.Shape; height: number; surfaceSize: [number, number] }) {
   const texture = useLoader(THREE.TextureLoader, "/textures/ceiling_technical.jpg");
   const tex = useMemo(() => {
-    return configCeilingTex(texture, surfaceSize[0], surfaceSize[1]);
+    const rot = Math.floor((Math.sin(surfaceSize[0] * 91.3 + surfaceSize[1] * 47.1) * 43758.5453 % 1 + 1) % 1 * 4);
+    return configCeilingTex(texture, surfaceSize[0], surfaceSize[1], rot);
   }, [texture, surfaceSize[0], surfaceSize[1]]);
 
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, height, 0]}>
       <shapeGeometry args={[shape]} />
-      <meshStandardMaterial
+      <AntiTileMaterial
         map={tex}
         color="#888888"
         roughness={0.85}
         metalness={0.15}
         side={THREE.DoubleSide}
-        {...({} as any)}
       />
     </mesh>
   );

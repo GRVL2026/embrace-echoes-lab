@@ -109,10 +109,11 @@ function PolyHavenSurface({
   const roughTex = urls.roughness ? useLoader(THREE.TextureLoader, urls.roughness) : null;
 
   const mats = useMemo(() => {
+    const rot = Math.floor(pseudoRandom(surfaceSize[0] * 7, surfaceSize[1] * 13) * 4);
     return {
-      diffuse: configureTexture(diffuseTex, surfaceSize[0], surfaceSize[1]),
-      normal: normalTex ? configureTexture(normalTex, surfaceSize[0], surfaceSize[1]) : null,
-      roughness: roughTex ? configureTexture(roughTex, surfaceSize[0], surfaceSize[1]) : null,
+      diffuse: configureTexture(diffuseTex, surfaceSize[0], surfaceSize[1], 0, 0, rot),
+      normal: normalTex ? configureTexture(normalTex, surfaceSize[0], surfaceSize[1], 0, 0, rot) : null,
+      roughness: roughTex ? configureTexture(roughTex, surfaceSize[0], surfaceSize[1], 0, 0, rot) : null,
     };
   }, [diffuseTex, normalTex, roughTex, surfaceSize[0], surfaceSize[1]]);
 

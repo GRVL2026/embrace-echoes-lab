@@ -200,10 +200,15 @@ function TexturedWallSegment({
 
 export function Room3D({ room, doors, showFloor = true, showWalls = true, ambiance }: Props) {
   const wallHeight = ambiance?.wallHeight ?? 2.8;
+  const polyFloor = ambiance?.polyhavenFloor;
+  const polyWall = ambiance?.polyhavenWall;
   // Epoxy is best rendered as a smooth procedural material, not a tiled texture
-  const isEpoxy = ambiance?.floorTexture === "epoxy";
-  const floorTexturePath = ambiance?.floorTexture && ambiance.floorTexture !== "default" && !isEpoxy
+  const isEpoxy = !polyFloor && ambiance?.floorTexture === "epoxy";
+  const floorTexturePath = !polyFloor && ambiance?.floorTexture && ambiance.floorTexture !== "default" && !isEpoxy
     ? FLOOR_TEXTURE_MAP[ambiance.floorTexture]
+    : null;
+  const wallTexturePath = !polyWall && ambiance?.wallFinish && ambiance.wallFinish !== "default" && ambiance.wallFinish !== "paint"
+    ? WALL_TEXTURE_MAP[ambiance.wallFinish]
     : null;
   const wallTexturePath = ambiance?.wallFinish && ambiance.wallFinish !== "default" && ambiance.wallFinish !== "paint"
     ? WALL_TEXTURE_MAP[ambiance.wallFinish]

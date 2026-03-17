@@ -1,9 +1,13 @@
-import { X, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { X, Sparkles, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
-import type { AmbianceSettings, FloorTexture, WallFinish, CeilingType, AmbianceTheme } from "./Viewer3DToolbar";
+import type { AmbianceSettings, FloorTexture, WallFinish, CeilingType, AmbianceTheme, PolyHavenTexture } from "./Viewer3DToolbar";
+import { PolyHavenBrowser } from "./PolyHavenBrowser";
+
+type SurfaceTarget = "floor" | "wall" | "ceiling";
 
 type Props = {
   ambiance: AmbianceSettings;

@@ -7,6 +7,8 @@ import type { PlacedEquipment } from "@/types/equipment";
 type Props = {
   equipment: PlacedEquipment;
   showHeight?: boolean;
+  /** Room floor dimensions in cm, used to scale autoScale models proportionally */
+  roomExtent?: { width: number; depth: number };
 };
 
 /** Parse HSL string like "hsl(263, 85%, 68%)" to a THREE.Color */

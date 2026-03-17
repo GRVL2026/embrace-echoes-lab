@@ -220,6 +220,7 @@ function SpacePlannerInner() {
         <CopilotPanel
           onActionsReady={executeActions}
           onClose={() => setCopilotOpen(false)}
+          roomContext={roomContext}
         />
       )}
     </div>

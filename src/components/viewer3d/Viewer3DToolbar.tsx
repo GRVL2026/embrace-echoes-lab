@@ -33,6 +33,18 @@ export type WallFinish = "default" | "paint" | "brick" | "concrete" | "wood";
 export type CeilingType = "none" | "tiles" | "beams" | "black" | "technical";
 export type AmbianceTheme = "custom" | "retro80s" | "cyberpunk" | "sportsbar";
 
+export type PolyHavenTexture = {
+  id: string;
+  name: string;
+  thumbnail: string;
+  urls: {
+    diffuse: string | null;
+    normal: string | null;
+    roughness: string | null;
+    ao: string | null;
+  };
+};
+
 export type AmbianceSettings = {
   floorTexture: FloorTexture;
   wallFinish: WallFinish;
@@ -43,6 +55,10 @@ export type AmbianceSettings = {
   fog: boolean;
   fogIntensity: number; // 0..1
   theme: AmbianceTheme;
+  // Poly Haven custom textures
+  polyhavenFloor?: PolyHavenTexture | null;
+  polyhavenWall?: PolyHavenTexture | null;
+  polyhavenCeiling?: PolyHavenTexture | null;
 };
 
 export type Viewer3DVisibility = {

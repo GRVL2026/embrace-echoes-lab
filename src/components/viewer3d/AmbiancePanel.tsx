@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { X, Globe, Box } from "lucide-react";
+import { X, Globe, Box, Trash2, RotateCw } from "lucide-react";
+import { useEditor } from "@/contexts/EditorContext";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";

@@ -30,6 +30,10 @@ const WALL_TEXTURE_MAP: Record<Exclude<WallFinish, "default" | "paint">, string>
  * repeatX/Y = surface dimension / physical tile size.
  * An optional UV offset breaks visible repetition.
  */
+/**
+ * Configure texture for boxGeometry surfaces (UVs are 0-1 normalised).
+ * repeatX/Y = surface dimension / physical tile size.
+ */
 function configureTexture(
   t: THREE.Texture,
   surfaceWidth: number,
@@ -45,6 +49,28 @@ function configureTexture(
     surfaceWidth / TEXTURE_PHYSICAL_SIZE,
     surfaceHeight / TEXTURE_PHYSICAL_SIZE,
   );
+  c.offset.set(offsetX, offsetY);
+  c.center.set(0.5, 0.5);
+  c.rotation = (rotationStep % 4) * (Math.PI / 2);
+  c.colorSpace = THREE.SRGBColorSpace;
+  c.needsUpdate = true;
+  return c;
+}
+
+/**
+ * Configure texture for shapeGeometry surfaces (UVs are already in world-space meters).
+ * repeat = 1/physicalTileSize so that 1 tile = TEXTURE_PHYSICAL_SIZE metres.
+ */
+function configureShapeTexture(
+  t: THREE.Texture,
+  offsetX = 0,
+  offsetY = 0,
+  rotationStep = 0,
+): THREE.Texture {
+  const c = t.clone();
+  c.wrapS = THREE.RepeatWrapping;
+  c.wrapT = THREE.RepeatWrapping;
+  c.repeat.set(1 / TEXTURE_PHYSICAL_SIZE, 1 / TEXTURE_PHYSICAL_SIZE);
   c.offset.set(offsetX, offsetY);
   c.center.set(0.5, 0.5);
   c.rotation = (rotationStep % 4) * (Math.PI / 2);

@@ -271,9 +271,14 @@ Deno.serve(async (req) => {
     let alternatives: string[] = [];
     let assetSearchResult: any = null;
 
+    console.log("AI response finish_reason:", choice?.finish_reason);
+    console.log("Tool calls count:", choice?.message?.tool_calls?.length || 0);
+    console.log("Content present:", !!choice?.message?.content);
+
     // Parse tool calls
     if (choice?.message?.tool_calls) {
       for (const tc of choice.message.tool_calls) {
+        console.log("Processing tool call:", tc.function.name);
         try {
           const args = JSON.parse(tc.function.arguments);
 
@@ -284,13 +289,19 @@ Deno.serve(async (req) => {
           }
 
           if (tc.function.name === "find_3d_assets") {
+            summary = args.summary || "Recherche d'assets 3D en cours...";
+
             // Call the sketchfab-search orchestrator
             const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+            const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+            console.log("Calling sketchfab-search, SUPABASE_URL:", supabaseUrl ? "set" : "MISSING", "ANON_KEY:", anonKey ? "set" : "MISSING");
+            console.log("Search plan categories:", args.search_plan?.map((s: any) => s.category).join(", "));
+
             const searchResp = await fetch(`${supabaseUrl}/functions/v1/sketchfab-search`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
+                Authorization: `Bearer ${anonKey}`,
               },
               body: JSON.stringify({
                 design_context: {
@@ -302,9 +313,11 @@ Deno.serve(async (req) => {
               }),
             });
 
+            console.log("sketchfab-search response status:", searchResp.status);
+
             if (searchResp.ok) {
               assetSearchResult = await searchResp.json();
-              summary = args.summary || summary;
+              console.log("Search results - curated:", assetSearchResult.curated_count, "discovery:", assetSearchResult.discovery_count, "selected:", assetSearchResult.selected?.length);
 
               // Convert selected assets to add_asset actions
               if (assetSearchResult.selected) {
@@ -322,16 +335,36 @@ Deno.serve(async (req) => {
                   }
                 }
               }
+
+              // Generate text if LLM didn't provide any (common with tool_calls)
+              if (!textResponse) {
+                const assetCount = sceneActions.filter((a: any) => a.type === "add_asset").length;
+                textResponse = assetCount > 0
+                  ? `J'ai trouvé **${assetCount} asset(s) 3D** correspondant à votre demande. Vous pouvez les prévisualiser et choisir lesquels ajouter à la scène.`
+                  : `La recherche n'a pas retourné d'assets correspondants. Essayez avec une description plus précise du style souhaité.`;
+              }
             } else {
               const errText = await searchResp.text();
-              console.error("Sketchfab search error:", errText);
-              textResponse += "\n\n⚠️ La recherche d'assets 3D a rencontré une erreur. Les modifications d'ambiance ont été appliquées.";
+              console.error("Sketchfab search error:", searchResp.status, errText);
+              if (!textResponse) {
+                textResponse = "⚠️ La recherche d'assets 3D a rencontré une erreur. Réessayez avec une description différente.";
+              } else {
+                textResponse += "\n\n⚠️ La recherche d'assets 3D a rencontré une erreur.";
+              }
             }
           }
         } catch (e) {
-          console.error("Failed to parse tool call:", e);
+          console.error("Failed to parse tool call:", tc.function.name, e);
+          if (!textResponse) {
+            textResponse = "⚠️ Une erreur est survenue lors du traitement de la demande.";
+          }
         }
       }
+    }
+
+    // Fallback: if no text at all after processing
+    if (!textResponse && sceneActions.length === 0) {
+      textResponse = "Je n'ai pas pu traiter cette demande. Pouvez-vous reformuler ou préciser votre souhait ?";
     }
 
     // Persist session

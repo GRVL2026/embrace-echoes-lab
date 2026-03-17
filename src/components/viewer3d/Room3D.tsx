@@ -155,13 +155,13 @@ function PolyHavenWallSegment({
   const roughTex = urls.roughness ? useLoader(THREE.TextureLoader, urls.roughness) : null;
 
   const mats = useMemo(() => {
-    // Per-segment UV offset to break repetition between adjacent walls
     const ox = pseudoRandom(segmentIndex, 0);
     const oy = pseudoRandom(segmentIndex, 1);
+    const rot = Math.floor(pseudoRandom(segmentIndex, 4) * 4);
     return {
-      diffuse: configureTexture(diffuseTex, size[0], size[1], ox, oy),
-      normal: normalTex ? configureTexture(normalTex, size[0], size[1], ox, oy) : null,
-      roughness: roughTex ? configureTexture(roughTex, size[0], size[1], ox, oy) : null,
+      diffuse: configureTexture(diffuseTex, size[0], size[1], ox, oy, rot),
+      normal: normalTex ? configureTexture(normalTex, size[0], size[1], ox, oy, rot) : null,
+      roughness: roughTex ? configureTexture(roughTex, size[0], size[1], ox, oy, rot) : null,
     };
   }, [diffuseTex, normalTex, roughTex, size[0], size[1], segmentIndex]);
 

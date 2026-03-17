@@ -194,14 +194,12 @@ function PolyHavenSurface({
   surfaceSize: [number, number];
 }) {
   const urls = textureData.urls;
-  const proxiedDiffuse = proxyPolyHavenUrl(urls.diffuse) || "";
-  const proxiedNormal = proxyPolyHavenUrl(urls.normal);
-  const proxiedRough = proxyPolyHavenUrl(urls.roughness);
-  const diffuseTex = useLoader(THREE.TextureLoader, proxiedDiffuse);
-  const normalTex = proxiedNormal ? useLoader(THREE.TextureLoader, proxiedNormal) : null;
-  const roughTex = proxiedRough ? useLoader(THREE.TextureLoader, proxiedRough) : null;
+  const diffuseTex = useProxiedTexture(urls.diffuse);
+  const normalTex = useProxiedTexture(urls.normal);
+  const roughTex = useProxiedTexture(urls.roughness);
 
   const mats = useMemo(() => {
+    if (!diffuseTex) return null;
     const rot = Math.floor(pseudoRandom(surfaceSize[0] * 7, surfaceSize[1] * 13) * 4);
     return {
       diffuse: configureShapeTexture(diffuseTex, 0, 0, rot),

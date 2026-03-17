@@ -33,7 +33,7 @@ const SUGGESTED_QUERIES = [
   "speaker",
 ];
 
-export function SketchfabBrowser({ onAddToScene, onClose }: Props) {
+export function SketchfabBrowser({ onAddToScene, onClose, rooms }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SketchfabModel[]>([]);
   const [loading, setLoading] = useState(false);

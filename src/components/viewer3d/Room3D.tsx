@@ -267,6 +267,7 @@ function PolyHavenWallSegment({
         roughnessMap={mats.roughness}
         roughness={mats.roughness ? 1 : 0.7}
         metalness={0.02}
+        side={THREE.DoubleSide}
       />
     </mesh>
   );

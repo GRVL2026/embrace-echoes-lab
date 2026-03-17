@@ -112,7 +112,7 @@ function BoxModel({ w, d, h, color }: { w: number; d: number; h: number; color: 
   );
 }
 
-export function Equipment3D({ equipment, showHeight = false }: Props) {
+export function Equipment3D({ equipment, showHeight = false, roomExtent }: Props) {
   const { w, d, h, color } = useMemo(() => {
     const w = equipment.width / 100;
     const d = equipment.depth / 100;

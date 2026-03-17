@@ -122,7 +122,7 @@ export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose, onAddE
 
           {/* List of non-catalog assets (Sketchfab + Copilot) */}
           {(() => {
-            const assets = state.placedEquipments.filter((eq) => eq.id.startsWith("sketchfab-") || eq.model3d);
+            const assets = state.placedEquipments.filter((eq) => eq.id.startsWith("sketchfab-") || eq.id.startsWith("copilot-"));
             if (assets.length === 0) return null;
             return (
               <div className="space-y-1">

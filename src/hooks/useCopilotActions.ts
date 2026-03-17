@@ -248,7 +248,7 @@ export function useCopilotActions({
             const assetAction = action as AddAssetAction;
             const pos = computePosition(assetAction, roomContext);
             const placed: PlacedEquipment = {
-              id: crypto.randomUUID(),
+              id: `copilot-${crypto.randomUUID()}`,
               equipmentId: assetAction.asset_id,
               name: assetAction.asset_name,
               width: 100,

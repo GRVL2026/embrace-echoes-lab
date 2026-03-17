@@ -235,6 +235,13 @@ export function Viewer3D({ settings, onPresetApplied }: Props) {
         {/* Fog */}
         <SceneFog enabled={ambiance.fog} intensity={ambiance.fogIntensity} color={fogColor} />
 
+        {/* HDRI Environment */}
+        <HDRIEnvironment
+          hdri={ambiance.polyhavenHDRI}
+          intensity={ambiance.hdriIntensity}
+          showBackground={ambiance.hdriBackground}
+        />
+
         {/* Lighting */}
         <SceneLighting preset={settings.lighting} />
 

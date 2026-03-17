@@ -14,6 +14,7 @@ import {
 import type { PolyHavenTexture } from "./Viewer3DToolbar";
 
 type SurfaceTarget = "floor" | "wall" | "ceiling";
+type ResolutionOption = "1k" | "2k" | "4k";
 
 type Props = {
   target: SurfaceTarget;

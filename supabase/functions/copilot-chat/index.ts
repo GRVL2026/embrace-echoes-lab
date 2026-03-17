@@ -143,6 +143,35 @@ const TOOLS = [
   },
 ];
 
+// ─── Poly Haven URL resolution ──────────────────────────────
+function resolvePolyHavenUrls(polyhavenId: string, resolution: string = "2k") {
+  const base = `https://dl.polyhaven.org/file/ph-assets/Textures`;
+  const res = resolution || "2k";
+  return {
+    diffuse: `${base}/${polyhavenId}/${res}/${polyhavenId}_diff_${res}.jpg`,
+    normal: `${base}/${polyhavenId}/${res}/${polyhavenId}_nor_gl_${res}.jpg`,
+    roughness: `${base}/${polyhavenId}/${res}/${polyhavenId}_rough_${res}.jpg`,
+  };
+}
+
+/** Enrich apply_material actions with resolved Poly Haven URLs */
+function enrichMaterialActions(actions: any[]): any[] {
+  return actions.map((action: any) => {
+    if (action.type === "apply_material") {
+      const phId = action.polyhaven_id || action.material_id;
+      if (phId) {
+        const urls = resolvePolyHavenUrls(phId, action.resolution);
+        return {
+          ...action,
+          material_id: phId,
+          urls,
+        };
+      }
+    }
+    return action;
+  });
+}
+
 // ─── Firecrawl helper ───────────────────────────────────────
 async function scrapeWebsite(url: string): Promise<string> {
   const apiKey = Deno.env.get("FIRECRAWL_API_KEY");

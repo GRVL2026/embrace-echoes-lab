@@ -235,20 +235,71 @@ async function searchCuratedAssets(supabase: any, context: DesignContext): Promi
   const results: ScoredResult[] = [];
 
   for (const plan of context.search_plan) {
+    // Build a broader search: category/subcategory + style_tags + material_tags + room_tags + description
+    const searchTerms = [
+      plan.category,
+      ...plan.queries.slice(0, 3), // Use first queries as search terms
+    ];
+    const styleTerms = context.style_profile.secondary.slice(0, 3);
+    const moodTerms = (context.style_profile.mood || []).slice(0, 2);
+
+    // Build OR filter across multiple metadata columns
+    const orFilters = [
+      `category.ilike.%${plan.category}%`,
+      `subcategory.ilike.%${plan.category}%`,
+      ...searchTerms.flatMap((term) => [
+        `name.ilike.%${term}%`,
+        `description.ilike.%${term}%`,
+      ]),
+    ].join(",");
+
     const { data } = await supabase
       .from("copilot_assets")
       .select("*")
       .eq("is_active", true)
       .eq("is_curated", true)
-      .or(`category.ilike.%${plan.category}%,subcategory.ilike.%${plan.category}%`)
-      .limit(10);
+      .or(orFilters)
+      .limit(15);
 
     if (data) {
       for (const asset of data) {
-        const styleTags = asset.style_tags || [];
-        const styleMatch = context.style_profile.secondary.some((s: string) =>
-          styleTags.some((t: string) => t.toLowerCase().includes(s.toLowerCase()))
-        );
+        const styleTags = (asset.style_tags || []).map((t: string) => t.toLowerCase());
+        const materialTags = (asset.material_tags || []).map((t: string) => t.toLowerCase());
+        const colorTags = (asset.color_tags || []).map((t: string) => t.toLowerCase());
+        const roomTags = (asset.room_tags || []).map((t: string) => t.toLowerCase());
+        const descLower = (asset.description || "").toLowerCase();
+        const nameLower = (asset.name || "").toLowerCase();
+
+        const allAssetText = [...styleTags, ...materialTags, ...colorTags, ...roomTags, nameLower, descLower];
+
+        // Style match: check across all metadata, not just style_tags
+        const styleHits = [...context.style_profile.secondary, ...moodTerms].filter((s) =>
+          allAssetText.some((t) => t.includes(s.toLowerCase()))
+        ).length;
+
+        // Material match
+        const matHits = (context.style_profile.materials || []).filter((m) =>
+          allAssetText.some((t) => t.includes(m.toLowerCase()))
+        ).length;
+
+        // Palette match
+        const paletteHits = context.style_profile.palette.filter((p) =>
+          allAssetText.some((t) => t.includes(p.toLowerCase()))
+        ).length;
+
+        // Category relevance: check query terms against all asset text
+        const queryHits = plan.queries.filter((q) => {
+          const words = q.toLowerCase().split(/\s+/);
+          return words.some((w) => allAssetText.some((t) => t.includes(w)));
+        }).length;
+
+        const totalSignals = styleHits + matHits + paletteHits + queryHits;
+        const maxSignals = context.style_profile.secondary.length + moodTerms.length +
+          (context.style_profile.materials || []).length + context.style_profile.palette.length + plan.queries.length;
+
+        const relevanceScore = Math.min(totalSignals / Math.max(maxSignals, 1), 1);
+        const curatedBonus = 0.2;
+        const finalScore = Math.min(relevanceScore * 0.8 + curatedBonus, 1);
 
         results.push({
           uid: `curated-${asset.id}`,
@@ -259,10 +310,17 @@ async function searchCuratedAssets(supabase: any, context: DesignContext): Promi
           face_count: asset.polycount || 0,
           is_downloadable: true,
           license: asset.license,
-          tags: styleTags,
+          tags: asset.style_tags || [],
           category: plan.category,
-          score: styleMatch ? 0.9 : 0.7, // Curated assets get a bonus
-          score_breakdown: { curated_bonus: 0.2, style_match: styleMatch ? 0.2 : 0 },
+          score: finalScore,
+          score_breakdown: {
+            curated_bonus: curatedBonus,
+            style_hits: styleHits,
+            material_hits: matHits,
+            palette_hits: paletteHits,
+            query_hits: queryHits,
+            relevance: relevanceScore,
+          },
         });
       }
     }

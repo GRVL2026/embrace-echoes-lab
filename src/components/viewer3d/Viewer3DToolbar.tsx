@@ -45,6 +45,13 @@ export type PolyHavenTexture = {
   };
 };
 
+export type PolyHavenHDRI = {
+  id: string;
+  name: string;
+  thumbnail: string;
+  url: string; // proxied HDR file URL
+};
+
 export type AmbianceSettings = {
   floorTexture: FloorTexture;
   wallFinish: WallFinish;
@@ -59,6 +66,10 @@ export type AmbianceSettings = {
   polyhavenFloor?: PolyHavenTexture | null;
   polyhavenWall?: PolyHavenTexture | null;
   polyhavenCeiling?: PolyHavenTexture | null;
+  // Poly Haven HDRI environment
+  polyhavenHDRI?: PolyHavenHDRI | null;
+  hdriIntensity?: number; // 0..3, default 1
+  hdriBackground?: boolean; // show HDRI as background, default false
 };
 
 export type Viewer3DVisibility = {
@@ -107,6 +118,9 @@ export const DEFAULT_3D_SETTINGS: Viewer3DSettings = {
     polyhavenFloor: null,
     polyhavenWall: null,
     polyhavenCeiling: null,
+    polyhavenHDRI: null,
+    hdriIntensity: 1,
+    hdriBackground: false,
   },
 };
 
@@ -141,7 +155,7 @@ const visibilityToggles: { key: VisKey; label: string; icon: React.ElementType }
   { key: "heights", label: "Hauteurs", icon: Ruler },
 ];
 
-const DEFAULT_AMBIANCE: AmbianceSettings = { floorTexture: "default", wallFinish: "default", wallColor: "#f0f0f0", wallHeight: 2.8, ceiling: "none", ceilingHeight: 2.8, fog: false, fogIntensity: 0.3, theme: "custom", polyhavenFloor: null, polyhavenWall: null, polyhavenCeiling: null };
+const DEFAULT_AMBIANCE: AmbianceSettings = { floorTexture: "default", wallFinish: "default", wallColor: "#f0f0f0", wallHeight: 2.8, ceiling: "none", ceilingHeight: 2.8, fog: false, fogIntensity: 0.3, theme: "custom", polyhavenFloor: null, polyhavenWall: null, polyhavenCeiling: null, polyhavenHDRI: null, hdriIntensity: 1, hdriBackground: false };
 
 export function Viewer3DToolbar({ settings, onChange, onAddEquipment }: Props) {
   const [visExpanded, setVisExpanded] = useState(false);

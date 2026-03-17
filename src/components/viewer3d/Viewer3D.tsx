@@ -11,6 +11,7 @@ import { Door3D } from "./Door3D";
 import { Ceiling3D } from "./Ceiling3D";
 import { SceneFog } from "./SceneFog";
 import { SceneCapturer } from "./SceneCapturer";
+import { HDRIEnvironment } from "./HDRIEnvironment";
 import * as THREE from "three";
 import type { Viewer3DSettings, PresetView, LightingPreset } from "./Viewer3DToolbar";
 
@@ -206,7 +207,7 @@ export function Viewer3D({ settings, onPresetApplied }: Props) {
   }, [allPoints]);
 
   const vis = settings.visibility;
-  const ambiance = settings.ambiance ?? { floorTexture: "default" as const, wallFinish: "default" as const, wallColor: "#f0f0f0", ceiling: "none" as const, fog: false, fogIntensity: 0.3, theme: "custom" as const };
+  const ambiance: import("./Viewer3DToolbar").AmbianceSettings = settings.ambiance ?? { floorTexture: "default", wallFinish: "default", wallColor: "#f0f0f0", wallHeight: 2.8, ceiling: "none", ceilingHeight: 2.8, fog: false, fogIntensity: 0.3, theme: "custom", polyhavenFloor: null, polyhavenWall: null, polyhavenCeiling: null, polyhavenHDRI: null, hdriIntensity: 1, hdriBackground: false };
   const bgColor = settings.lighting === "arcade" ? "#0f0f23" : "#dce4ec";
   const fogColor = settings.lighting === "arcade" ? "#0f0f23" : settings.lighting === "showroom" ? "#1a1a2e" : "#c8d0d8";
 
@@ -233,6 +234,13 @@ export function Viewer3D({ settings, onPresetApplied }: Props) {
 
         {/* Fog */}
         <SceneFog enabled={ambiance.fog} intensity={ambiance.fogIntensity} color={fogColor} />
+
+        {/* HDRI Environment */}
+        <HDRIEnvironment
+          hdri={ambiance.polyhavenHDRI}
+          intensity={ambiance.hdriIntensity}
+          showBackground={ambiance.hdriBackground}
+        />
 
         {/* Lighting */}
         <SceneLighting preset={settings.lighting} />

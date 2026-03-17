@@ -104,3 +104,58 @@ export const WALL_CATEGORIES = [
 export const CEILING_CATEGORIES = [
   "concrete", "metal", "wood", "plaster",
 ];
+
+// ──────────────────────────────────────────────
+// HDRI support
+// ──────────────────────────────────────────────
+
+export type PolyHavenHDRIAsset = {
+  name: string;
+  type: number;
+  categories: string[];
+  tags: string[];
+  thumbnail_url: string;
+  download_count: number;
+};
+
+export type PolyHavenHDRIFiles = {
+  hdri?: Record<string, Record<string, { url: string; size: number }>>;
+  [key: string]: any;
+};
+
+/** Search HDRIs with optional category filter */
+export async function searchHDRIs(
+  categories?: string
+): Promise<Record<string, PolyHavenHDRIAsset>> {
+  const params: Record<string, string> = { type: "hdris" };
+  if (categories) params.categories = categories;
+  return fetchPolyHaven("/assets", params);
+}
+
+/** Get files for a specific HDRI */
+export async function getHDRIFiles(
+  id: string
+): Promise<PolyHavenHDRIFiles> {
+  return fetchPolyHaven(`/files/${id}`);
+}
+
+/**
+ * Get the download URL for an HDRI at a given resolution.
+ * Returns the .hdr URL.
+ */
+export async function getHDRIUrl(
+  id: string,
+  resolution: string = "1k"
+): Promise<string | null> {
+  const files = await getHDRIFiles(id);
+  const hdriMap = files.hdri;
+  if (!hdriMap) return null;
+  const res = hdriMap[resolution] || hdriMap["1k"] || hdriMap["2k"];
+  if (!res) return null;
+  return res.hdr?.url || (Object.values(res)[0] as any)?.url || null;
+}
+
+/** HDRI categories relevant for interior/entertainment spaces */
+export const HDRI_CATEGORIES = [
+  "indoor", "studio", "urban", "skies", "outdoor", "night",
+];

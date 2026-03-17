@@ -15,10 +15,11 @@ import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { sendCopilotMessage, createSession, type CopilotChatResponse } from "@/lib/copilotApi";
+import { sendCopilotMessage, createSession, type CopilotChatResponse, type PendingAssetData } from "@/lib/copilotApi";
 import { QUICK_ACTIONS } from "@/types/copilot";
-import type { CopilotAction } from "@/types/copilot";
+import type { CopilotAction, AddAssetAction } from "@/types/copilot";
 import { toast } from "@/hooks/use-toast";
+import { AssetPreviewPanel, type PendingAsset } from "./AssetPreviewPanel";
 
 // ─── Types ──────────────────────────────────────────────────
 interface ChatMessage {
@@ -29,6 +30,7 @@ interface ChatMessage {
   links?: string[];
   actions?: CopilotAction[];
   alternatives?: string[];
+  pendingAssets?: PendingAsset[];
 }
 
 type Props = {
@@ -94,22 +96,49 @@ export function CopilotPanel({ onActionsReady, onClose }: Props) {
           links: userMessage.links,
         });
 
+        // Separate add_asset actions as pending (need user approval)
+        const assetActions = (response.actions || []).filter((a): a is AddAssetAction => a.type === "add_asset");
+        const nonAssetActions = (response.actions || []).filter((a) => a.type !== "add_asset");
+
+        // Build pending assets from either dedicated field or extracted actions
+        const pendingFromResponse: PendingAsset[] = (response.pending_assets || []).map((pa) => ({
+          type: "add_asset" as const,
+          asset_id: pa.asset_id,
+          asset_name: pa.asset_name,
+          glb_url: pa.glb_url,
+          category: pa.category,
+          thumbnail: pa.thumbnail,
+          score: pa.score,
+          source: pa.source,
+          polycount: pa.polycount,
+          file_size_mb: pa.file_size_mb,
+        }));
+
+        const pendingFromActions: PendingAsset[] = assetActions.map((a) => ({
+          ...a,
+          score: undefined,
+          source: undefined,
+        }));
+
+        const allPending = pendingFromResponse.length > 0 ? pendingFromResponse : pendingFromActions;
+
         const assistantMessage: ChatMessage = {
           id: crypto.randomUUID(),
           role: "assistant",
           text: response.text,
-          actions: response.actions,
+          actions: nonAssetActions.length > 0 ? nonAssetActions : undefined,
           alternatives: response.alternatives,
+          pendingAssets: allPending.length > 0 ? allPending : undefined,
         };
 
         setMessages((prev) => [...prev, assistantMessage]);
 
-        // Auto-apply actions
-        if (response.actions && response.actions.length > 0) {
-          onActionsReady(response.actions);
+        // Auto-apply non-asset actions immediately
+        if (nonAssetActions.length > 0) {
+          onActionsReady(nonAssetActions);
           toast({
-            title: "Modifications appliquées",
-            description: response.summary || `${response.actions.length} changement(s) appliqué(s)`,
+            title: "Ambiance appliquée",
+            description: response.summary || `${nonAssetActions.length} changement(s)`,
           });
         }
       } catch (err: any) {
@@ -274,6 +303,46 @@ export function CopilotPanel({ onActionsReady, onClose }: Props) {
               <div className="flex items-center gap-1 text-[10px] text-secondary">
                 <Wand2 className="h-3 w-3" />
                 {msg.actions.length} modification(s) appliquée(s)
+              </div>
+            )}
+
+            {/* Pending assets preview */}
+            {msg.pendingAssets && msg.pendingAssets.length > 0 && (
+              <div className="w-full max-w-[280px]">
+                <AssetPreviewPanel
+                  assets={msg.pendingAssets}
+                  onAccept={(accepted) => {
+                    const actions: CopilotAction[] = accepted.map((a) => ({
+                      type: "add_asset" as const,
+                      asset_id: a.asset_id,
+                      asset_name: a.asset_name,
+                      glb_url: a.glb_url,
+                      category: a.category,
+                      thumbnail: a.thumbnail,
+                      placement_rule: a.placement_rule,
+                    }));
+                    onActionsReady(actions);
+                    // Replace pending with accepted indicator
+                    setMessages((prev) =>
+                      prev.map((m) =>
+                        m.id === msg.id
+                          ? { ...m, pendingAssets: undefined, actions: [...(m.actions || []), ...actions] }
+                          : m
+                      )
+                    );
+                    toast({
+                      title: "Assets insérés",
+                      description: `${accepted.length} asset(s) ajouté(s) à la scène`,
+                    });
+                  }}
+                  onDismiss={() => {
+                    setMessages((prev) =>
+                      prev.map((m) =>
+                        m.id === msg.id ? { ...m, pendingAssets: undefined } : m
+                      )
+                    );
+                  }}
+                />
               </div>
             )}
 

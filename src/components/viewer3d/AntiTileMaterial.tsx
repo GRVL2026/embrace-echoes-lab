@@ -28,8 +28,8 @@ export function AntiTileMaterial({
   map,
   normalMap,
   roughnessMap,
-  detailScale = 0.27,
-  detailBlend = 0.25,
+  detailScale = 0.31,
+  detailBlend = 0.15,
   ...props
 }: Props) {
   const matRef = useRef<THREE.MeshStandardMaterial>(null);
@@ -42,7 +42,6 @@ export function AntiTileMaterial({
       shader.uniforms.uDetailScale = { value: detailScale };
       shader.uniforms.uDetailBlend = { value: detailBlend };
 
-      // Inject uniforms
       shader.fragmentShader = shader.fragmentShader.replace(
         "#include <common>",
         `#include <common>
@@ -50,13 +49,15 @@ export function AntiTileMaterial({
         uniform float uDetailBlend;`,
       );
 
-      // After standard map sampling, modulate with a coarser-scale sample
+      // Luminance-based modulation: convert the coarse sample to grayscale
+      // to avoid moiré / crosshatch artefacts on directional textures (wood, planks…)
       shader.fragmentShader = shader.fragmentShader.replace(
         "#include <map_fragment>",
         `#include <map_fragment>
         #ifdef USE_MAP
-          vec4 _detailTex = texture2D(map, vMapUv * uDetailScale);
-          diffuseColor.rgb *= mix(vec3(1.0), _detailTex.rgb * 2.0, uDetailBlend);
+          vec4 _dt = texture2D(map, vMapUv * uDetailScale);
+          float _lum = dot(_dt.rgb, vec3(0.299, 0.587, 0.114));
+          diffuseColor.rgb *= mix(vec3(1.0), vec3(_lum * 1.8 + 0.1), uDetailBlend);
         #endif`,
       );
     };

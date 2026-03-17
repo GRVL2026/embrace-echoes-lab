@@ -77,7 +77,7 @@ function PolyHavenCeilingPanel({ shape, height, textureData, surfaceSize }: { sh
 }
 
 export function Ceiling3D({ room, ceilingType, height = 2.8, polyhavenTexture }: Props) {
-  const { shape, beamLines, ducts } = useMemo(() => {
+  const { shape, beamLines, ducts, surfaceSize } = useMemo(() => {
     const pts = room.points.map((p) => new THREE.Vector2(p.x / 100, -p.y / 100));
     pts.reverse();
     const shape = new THREE.Shape(pts);

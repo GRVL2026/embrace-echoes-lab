@@ -95,6 +95,7 @@ export function CopilotPanel({ onActionsReady, onClose, roomContext }: Props) {
           messages: apiMessages,
           session_id: sessionId || undefined,
           links: userMessage.links,
+          room_context: roomContext,
         });
 
         // Separate add_asset actions as pending (need user approval)

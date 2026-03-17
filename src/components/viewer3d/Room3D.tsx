@@ -1,21 +1,72 @@
-import { useMemo, Suspense } from "react";
+import { useMemo, useState, useEffect, Suspense } from "react";
 import * as THREE from "three";
 import { useLoader } from "@react-three/fiber";
 import type { Room, Door } from "@/types/editor";
 import type { AmbianceSettings, FloorTexture, WallFinish, PolyHavenTexture } from "./Viewer3DToolbar";
 import { AntiTileMaterial } from "./AntiTileMaterial";
 
-/** Proxy Poly Haven CDN URLs through our edge function to avoid CORS issues */
-function proxyPolyHavenUrl(url: string | null): string | null {
-  if (!url) return null;
-  try {
-    const parsed = new URL(url);
-    if (parsed.hostname.endsWith("polyhaven.org") || parsed.hostname.endsWith("polyhaven.com")) {
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      return `https://${projectId}.supabase.co/functions/v1/polyhaven-proxy?file_url=${encodeURIComponent(url)}`;
-    }
-  } catch { /* not a valid URL, return as-is */ }
-  return url;
+/**
+ * Custom texture loader that fetches via fetch() to handle CORS.
+ * Poly Haven's dl.polyhaven.org doesn't serve CORS headers, so we proxy
+ * through our edge function using fetch (with apikey header).
+ */
+function useProxiedTexture(url: string | null): THREE.Texture | null {
+  const [texture, setTexture] = useState<THREE.Texture | null>(null);
+
+  useEffect(() => {
+    if (!url) { setTexture(null); return; }
+
+    let cancelled = false;
+    const isPolyHaven = url.includes("polyhaven.org") || url.includes("polyhaven.com");
+
+    const loadTexture = async () => {
+      try {
+        let imageUrl = url;
+
+        if (isPolyHaven) {
+          // Fetch via proxy edge function using fetch() so we can add headers
+          const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+          const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+          const proxyUrl = `https://${projectId}.supabase.co/functions/v1/polyhaven-proxy?file_url=${encodeURIComponent(url)}`;
+
+          const res = await fetch(proxyUrl, {
+            headers: {
+              apikey: anonKey,
+              Authorization: `Bearer ${anonKey}`,
+            },
+          });
+          if (!res.ok) throw new Error(`Proxy error: ${res.status}`);
+          const blob = await res.blob();
+          imageUrl = URL.createObjectURL(blob);
+        }
+
+        if (cancelled) return;
+
+        const loader = new THREE.TextureLoader();
+        loader.setCrossOrigin("anonymous");
+        loader.load(
+          imageUrl,
+          (tex) => {
+            if (!cancelled) setTexture(tex);
+            // Revoke blob URL after load
+            if (isPolyHaven) URL.revokeObjectURL(imageUrl);
+          },
+          undefined,
+          () => {
+            if (isPolyHaven) URL.revokeObjectURL(imageUrl);
+            console.warn("Failed to load texture:", url);
+          },
+        );
+      } catch (e) {
+        console.warn("Texture fetch failed:", url, e);
+      }
+    };
+
+    loadTexture();
+    return () => { cancelled = true; };
+  }, [url]);
+
+  return texture;
 }
 
 const WALL_THICKNESS = 0.15; // meters
@@ -143,14 +194,12 @@ function PolyHavenSurface({
   surfaceSize: [number, number];
 }) {
   const urls = textureData.urls;
-  const proxiedDiffuse = proxyPolyHavenUrl(urls.diffuse) || "";
-  const proxiedNormal = proxyPolyHavenUrl(urls.normal);
-  const proxiedRough = proxyPolyHavenUrl(urls.roughness);
-  const diffuseTex = useLoader(THREE.TextureLoader, proxiedDiffuse);
-  const normalTex = proxiedNormal ? useLoader(THREE.TextureLoader, proxiedNormal) : null;
-  const roughTex = proxiedRough ? useLoader(THREE.TextureLoader, proxiedRough) : null;
+  const diffuseTex = useProxiedTexture(urls.diffuse);
+  const normalTex = useProxiedTexture(urls.normal);
+  const roughTex = useProxiedTexture(urls.roughness);
 
   const mats = useMemo(() => {
+    if (!diffuseTex) return null;
     const rot = Math.floor(pseudoRandom(surfaceSize[0] * 7, surfaceSize[1] * 13) * 4);
     return {
       diffuse: configureShapeTexture(diffuseTex, 0, 0, rot),
@@ -159,22 +208,21 @@ function PolyHavenSurface({
     };
   }, [diffuseTex, normalTex, roughTex, surfaceSize[0], surfaceSize[1]]);
 
-  if (shape) {
-    return (
-      <mesh rotation={rotation} position={position} receiveShadow>
-        <shapeGeometry args={[shape]} />
-        <AntiTileMaterial
-          map={mats.diffuse}
-          normalMap={mats.normal}
-          roughnessMap={mats.roughness}
-          roughness={mats.roughness ? 1 : 0.5}
-          metalness={0.02}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-    );
-  }
-  return null;
+  if (!mats || !shape) return null;
+
+  return (
+    <mesh rotation={rotation} position={position} receiveShadow>
+      <shapeGeometry args={[shape]} />
+      <AntiTileMaterial
+        map={mats.diffuse}
+        normalMap={mats.normal}
+        roughnessMap={mats.roughness}
+        roughness={mats.roughness ? 1 : 0.5}
+        metalness={0.02}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
+  );
 }
 
 /** Box surface with Poly Haven PBR textures – anti-tiling via per-segment UV offset */
@@ -192,14 +240,12 @@ function PolyHavenWallSegment({
   segmentIndex: number;
 }) {
   const urls = textureData.urls;
-  const proxiedDiffuse = proxyPolyHavenUrl(urls.diffuse) || "";
-  const proxiedNormal = proxyPolyHavenUrl(urls.normal);
-  const proxiedRough = proxyPolyHavenUrl(urls.roughness);
-  const diffuseTex = useLoader(THREE.TextureLoader, proxiedDiffuse);
-  const normalTex = proxiedNormal ? useLoader(THREE.TextureLoader, proxiedNormal) : null;
-  const roughTex = proxiedRough ? useLoader(THREE.TextureLoader, proxiedRough) : null;
+  const diffuseTex = useProxiedTexture(urls.diffuse);
+  const normalTex = useProxiedTexture(urls.normal);
+  const roughTex = useProxiedTexture(urls.roughness);
 
   const mats = useMemo(() => {
+    if (!diffuseTex) return null;
     const ox = pseudoRandom(segmentIndex, 0);
     const oy = pseudoRandom(segmentIndex, 1);
     const rot = Math.floor(pseudoRandom(segmentIndex, 4) * 4);
@@ -209,6 +255,8 @@ function PolyHavenWallSegment({
       roughness: roughTex ? configureTexture(roughTex, size[0], size[1], ox, oy, rot) : null,
     };
   }, [diffuseTex, normalTex, roughTex, size[0], size[1], segmentIndex]);
+
+  if (!mats) return null;
 
   return (
     <mesh position={position} rotation={rotation} castShadow receiveShadow>

@@ -36,6 +36,7 @@ function configureTexture(
   surfaceHeight: number,
   offsetX = 0,
   offsetY = 0,
+  rotationStep = 0,
 ): THREE.Texture {
   const c = t.clone();
   c.wrapS = THREE.RepeatWrapping;
@@ -45,6 +46,8 @@ function configureTexture(
     surfaceHeight / TEXTURE_PHYSICAL_SIZE,
   );
   c.offset.set(offsetX, offsetY);
+  c.center.set(0.5, 0.5);
+  c.rotation = (rotationStep % 4) * (Math.PI / 2);
   c.colorSpace = THREE.SRGBColorSpace;
   c.needsUpdate = true;
   return c;

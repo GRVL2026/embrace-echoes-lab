@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { X, Globe, Box, Trash2, RotateCw } from "lucide-react";
+import { X, Globe, Box, Trash2, RotateCw, Sun } from "lucide-react";
 import { useEditor } from "@/contexts/EditorContext";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
-import type { AmbianceSettings, PolyHavenTexture } from "./Viewer3DToolbar";
+import type { AmbianceSettings, PolyHavenTexture, PolyHavenHDRI } from "./Viewer3DToolbar";
 import type { PlacedEquipment } from "@/types/equipment";
 import { PolyHavenBrowser } from "./PolyHavenBrowser";
+import { PolyHavenHDRIBrowser } from "./PolyHavenHDRIBrowser";
 import { SketchfabBrowser } from "./SketchfabBrowser";
 
 type SurfaceTarget = "floor" | "wall" | "ceiling";

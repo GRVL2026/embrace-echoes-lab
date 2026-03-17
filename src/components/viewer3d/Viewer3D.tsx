@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, Suspense } from "react";
+import { useRef, useEffect, useCallback, useMemo, Suspense } from "react";
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { OrbitControls, Grid, PointerLockControls } from "@react-three/drei";
 import { useEditor } from "@/contexts/EditorContext";
@@ -194,6 +194,17 @@ export function Viewer3D({ settings, onPresetApplied }: Props) {
     ? allPoints.reduce((s, p) => s + p.y, 0) / allPoints.length / 100
     : 0;
 
+  // Compute room floor extent (bounding box in cm) for proportional asset scaling
+  const roomExtent = useMemo(() => {
+    if (allPoints.length < 2) return { width: 500, depth: 500 };
+    const xs = allPoints.map(p => p.x);
+    const ys = allPoints.map(p => p.y);
+    return {
+      width: Math.max(...xs) - Math.min(...xs),
+      depth: Math.max(...ys) - Math.min(...ys),
+    };
+  }, [allPoints]);
+
   const vis = settings.visibility;
   const ambiance = settings.ambiance ?? { floorTexture: "default" as const, wallFinish: "default" as const, wallColor: "#f0f0f0", ceiling: "none" as const, fog: false, fogIntensity: 0.3, theme: "custom" as const };
   const bgColor = settings.lighting === "arcade" ? "#0f0f23" : "#dce4ec";
@@ -262,7 +273,7 @@ export function Viewer3D({ settings, onPresetApplied }: Props) {
         {/* Equipment */}
         {vis.equipment &&
           state.placedEquipments.map((eq) => (
-            <Equipment3D key={eq.id} equipment={eq} showHeight={vis.heights} />
+            <Equipment3D key={eq.id} equipment={eq} showHeight={vis.heights} roomExtent={roomExtent} />
           ))}
 
         {/* Circulation path */}

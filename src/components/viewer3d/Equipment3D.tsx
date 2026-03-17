@@ -7,6 +7,8 @@ import type { PlacedEquipment } from "@/types/equipment";
 type Props = {
   equipment: PlacedEquipment;
   showHeight?: boolean;
+  /** Room floor dimensions in cm, used to scale autoScale models proportionally */
+  roomExtent?: { width: number; depth: number };
 };
 
 /** Parse HSL string like "hsl(263, 85%, 68%)" to a THREE.Color */
@@ -22,7 +24,7 @@ function parseHSLColor(color: string): THREE.Color {
 }
 
 /** Renders a loaded .glb model scaled to fit equipment dimensions */
-function GLBModel({ url, width, depth, height, autoScale }: { url: string; width: number; depth: number; height: number; autoScale?: boolean }) {
+function GLBModel({ url, width, depth, height, autoScale, roomExtent }: { url: string; width: number; depth: number; height: number; autoScale?: boolean; roomExtent?: { width: number; depth: number } }) {
   const { scene } = useGLTF(url);
   
   const clonedScene = useMemo(() => {
@@ -54,11 +56,21 @@ function GLBModel({ url, width, depth, height, autoScale }: { url: string; width
     const size = box.getSize(new THREE.Vector3());
 
     if (autoScale) {
-      // Use model's natural size: assume GLB is in meters, scene is in meters (cm/100)
-      // No forced rescaling — just center and ground the model
-      const center = box.getCenter(new THREE.Vector3());
+      // Scale model proportionally to the room size
+      // Target: largest model dimension ≈ 15% of the room's smallest floor dimension
+      const roomMinCm = roomExtent
+        ? Math.min(roomExtent.width, roomExtent.depth)
+        : 500; // fallback 5m
+      const targetSize = (roomMinCm / 100) * 0.15; // in meters (scene units)
+      const modelMax = Math.max(size.x, size.y, size.z);
+      if (modelMax > 0) {
+        const s = targetSize / modelMax;
+        clone.scale.setScalar(s);
+      }
+      const scaledBox = new THREE.Box3().setFromObject(clone);
+      const center = scaledBox.getCenter(new THREE.Vector3());
       clone.position.sub(center);
-      clone.position.y += size.y / 2;
+      clone.position.y += scaledBox.getSize(new THREE.Vector3()).y / 2;
     } else {
       const targetW = width / 100;
       const targetD = depth / 100;
@@ -78,7 +90,7 @@ function GLBModel({ url, width, depth, height, autoScale }: { url: string; width
     }
     
     return clone;
-  }, [scene, width, depth, height, autoScale]);
+  }, [scene, width, depth, height, autoScale, roomExtent]);
 
   return <primitive object={clonedScene} />;
 }
@@ -100,7 +112,7 @@ function BoxModel({ w, d, h, color }: { w: number; d: number; h: number; color: 
   );
 }
 
-export function Equipment3D({ equipment, showHeight = false }: Props) {
+export function Equipment3D({ equipment, showHeight = false, roomExtent }: Props) {
   const { w, d, h, color } = useMemo(() => {
     const w = equipment.width / 100;
     const d = equipment.depth / 100;
@@ -127,6 +139,7 @@ export function Equipment3D({ equipment, showHeight = false }: Props) {
               depth={equipment.depth}
               height={equipment.height || 120}
               autoScale={equipment.autoScale}
+              roomExtent={roomExtent}
             />
           </Suspense>
         </ErrorBoundary>

@@ -208,22 +208,21 @@ function PolyHavenSurface({
     };
   }, [diffuseTex, normalTex, roughTex, surfaceSize[0], surfaceSize[1]]);
 
-  if (shape) {
-    return (
-      <mesh rotation={rotation} position={position} receiveShadow>
-        <shapeGeometry args={[shape]} />
-        <AntiTileMaterial
-          map={mats.diffuse}
-          normalMap={mats.normal}
-          roughnessMap={mats.roughness}
-          roughness={mats.roughness ? 1 : 0.5}
-          metalness={0.02}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-    );
-  }
-  return null;
+  if (!mats || !shape) return null;
+
+  return (
+    <mesh rotation={rotation} position={position} receiveShadow>
+      <shapeGeometry args={[shape]} />
+      <AntiTileMaterial
+        map={mats.diffuse}
+        normalMap={mats.normal}
+        roughnessMap={mats.roughness}
+        roughness={mats.roughness ? 1 : 0.5}
+        metalness={0.02}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
+  );
 }
 
 /** Box surface with Poly Haven PBR textures – anti-tiling via per-segment UV offset */

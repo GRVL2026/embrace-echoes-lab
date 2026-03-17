@@ -45,6 +45,7 @@ export type PlacedEquipment = {
   height?: number; // cm
   model3d?: string; // URL to .glb model
   centerPlacement?: boolean; // true for tables (palet, power puck) — no "front", players on short sides
+  autoScale?: boolean; // true = use model's natural size instead of forcing width/depth/height
 };
 
 /** Sample catalog JSON schema for import */

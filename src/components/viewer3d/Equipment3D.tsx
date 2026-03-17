@@ -22,7 +22,7 @@ function parseHSLColor(color: string): THREE.Color {
 }
 
 /** Renders a loaded .glb model scaled to fit equipment dimensions */
-function GLBModel({ url, width, depth, height }: { url: string; width: number; depth: number; height: number }) {
+function GLBModel({ url, width, depth, height, autoScale }: { url: string; width: number; depth: number; height: number; autoScale?: boolean }) {
   const { scene } = useGLTF(url);
   
   const clonedScene = useMemo(() => {
@@ -34,7 +34,6 @@ function GLBModel({ url, width, depth, height }: { url: string; width: number; d
         const mesh = child as THREE.Mesh;
         const fixMaterial = (m: THREE.Material) => {
           const mat = m.clone();
-          // Ensure sRGB encoding on all color-related texture maps
           const std = mat as THREE.MeshStandardMaterial;
           if (std.map) std.map.colorSpace = THREE.SRGBColorSpace;
           if (std.emissiveMap) std.emissiveMap.colorSpace = THREE.SRGBColorSpace;
@@ -53,25 +52,33 @@ function GLBModel({ url, width, depth, height }: { url: string; width: number; d
     
     const box = new THREE.Box3().setFromObject(clone);
     const size = box.getSize(new THREE.Vector3());
-    
-    const targetW = width / 100;
-    const targetD = depth / 100;
-    const targetH = height / 100;
-    
-    const scaleX = size.x > 0 ? targetW / size.x : 1;
-    const scaleY = size.y > 0 ? targetH / size.y : 1;
-    const scaleZ = size.z > 0 ? targetD / size.z : 1;
-    const scale = Math.min(scaleX, scaleY, scaleZ);
-    
-    clone.scale.setScalar(scale);
-    
-    const newBox = new THREE.Box3().setFromObject(clone);
-    const center = newBox.getCenter(new THREE.Vector3());
-    clone.position.sub(center);
-    clone.position.y += newBox.getSize(new THREE.Vector3()).y / 2;
+
+    if (autoScale) {
+      // Use model's natural size: assume GLB is in meters, scene is in meters (cm/100)
+      // No forced rescaling — just center and ground the model
+      const center = box.getCenter(new THREE.Vector3());
+      clone.position.sub(center);
+      clone.position.y += size.y / 2;
+    } else {
+      const targetW = width / 100;
+      const targetD = depth / 100;
+      const targetH = height / 100;
+      
+      const scaleX = size.x > 0 ? targetW / size.x : 1;
+      const scaleY = size.y > 0 ? targetH / size.y : 1;
+      const scaleZ = size.z > 0 ? targetD / size.z : 1;
+      const scale = Math.min(scaleX, scaleY, scaleZ);
+      
+      clone.scale.setScalar(scale);
+      
+      const newBox = new THREE.Box3().setFromObject(clone);
+      const center = newBox.getCenter(new THREE.Vector3());
+      clone.position.sub(center);
+      clone.position.y += newBox.getSize(new THREE.Vector3()).y / 2;
+    }
     
     return clone;
-  }, [scene, width, depth, height]);
+  }, [scene, width, depth, height, autoScale]);
 
   return <primitive object={clonedScene} />;
 }

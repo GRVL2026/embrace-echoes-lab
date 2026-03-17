@@ -101,6 +101,218 @@ export type Database = {
         }
         Relationships: []
       }
+      copilot_assets: {
+        Row: {
+          asset_type: string
+          bounding_box: number[] | null
+          category: string
+          color_tags: string[] | null
+          created_at: string
+          description: string | null
+          dimensions: number[] | null
+          file_url: string | null
+          format: string
+          id: string
+          is_active: boolean
+          license: string | null
+          material_tags: string[] | null
+          name: string
+          performance_tier: string | null
+          preview_url: string | null
+          room_tags: string[] | null
+          rotation_default: number[] | null
+          scale_default: number[] | null
+          source: string | null
+          style_tags: string[] | null
+          subcategory: string | null
+          thumbnail_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          asset_type?: string
+          bounding_box?: number[] | null
+          category?: string
+          color_tags?: string[] | null
+          created_at?: string
+          description?: string | null
+          dimensions?: number[] | null
+          file_url?: string | null
+          format?: string
+          id?: string
+          is_active?: boolean
+          license?: string | null
+          material_tags?: string[] | null
+          name: string
+          performance_tier?: string | null
+          preview_url?: string | null
+          room_tags?: string[] | null
+          rotation_default?: number[] | null
+          scale_default?: number[] | null
+          source?: string | null
+          style_tags?: string[] | null
+          subcategory?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          asset_type?: string
+          bounding_box?: number[] | null
+          category?: string
+          color_tags?: string[] | null
+          created_at?: string
+          description?: string | null
+          dimensions?: number[] | null
+          file_url?: string | null
+          format?: string
+          id?: string
+          is_active?: boolean
+          license?: string | null
+          material_tags?: string[] | null
+          name?: string
+          performance_tier?: string | null
+          preview_url?: string | null
+          room_tags?: string[] | null
+          rotation_default?: number[] | null
+          scale_default?: number[] | null
+          source?: string | null
+          style_tags?: string[] | null
+          subcategory?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      copilot_textures: {
+        Row: {
+          albedo_url: string | null
+          color_tags: string[] | null
+          created_at: string
+          id: string
+          is_active: boolean
+          metalness_url: string | null
+          name: string
+          normal_url: string | null
+          polyhaven_id: string | null
+          repeat_scale: number | null
+          room_usage: string[] | null
+          roughness_url: string | null
+          source: string
+          style_tags: string[] | null
+          texture_type: string
+          updated_at: string
+        }
+        Insert: {
+          albedo_url?: string | null
+          color_tags?: string[] | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          metalness_url?: string | null
+          name: string
+          normal_url?: string | null
+          polyhaven_id?: string | null
+          repeat_scale?: number | null
+          room_usage?: string[] | null
+          roughness_url?: string | null
+          source?: string
+          style_tags?: string[] | null
+          texture_type?: string
+          updated_at?: string
+        }
+        Update: {
+          albedo_url?: string | null
+          color_tags?: string[] | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          metalness_url?: string | null
+          name?: string
+          normal_url?: string | null
+          polyhaven_id?: string | null
+          repeat_scale?: number | null
+          room_usage?: string[] | null
+          roughness_url?: string | null
+          source?: string
+          style_tags?: string[] | null
+          texture_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      prompt_sessions: {
+        Row: {
+          created_at: string
+          current_style: Json | null
+          id: string
+          locked_elements: Json | null
+          messages: Json
+          status: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          current_style?: Json | null
+          id?: string
+          locked_elements?: Json | null
+          messages?: Json
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          current_style?: Json | null
+          id?: string
+          locked_elements?: Json | null
+          messages?: Json
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      scene_revisions: {
+        Row: {
+          actions_applied: Json | null
+          asset_list: Json | null
+          created_at: string
+          generated_summary: string | null
+          id: string
+          placement_data: Json | null
+          scene_snapshot: Json | null
+          session_id: string
+        }
+        Insert: {
+          actions_applied?: Json | null
+          asset_list?: Json | null
+          created_at?: string
+          generated_summary?: string | null
+          id?: string
+          placement_data?: Json | null
+          scene_snapshot?: Json | null
+          session_id: string
+        }
+        Update: {
+          actions_applied?: Json | null
+          asset_list?: Json | null
+          created_at?: string
+          generated_summary?: string | null
+          id?: string
+          placement_data?: Json | null
+          scene_snapshot?: Json | null
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scene_revisions_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "prompt_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

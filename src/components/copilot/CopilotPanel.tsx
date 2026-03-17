@@ -322,6 +322,11 @@ export function CopilotPanel({ onActionsReady, onClose, roomContext }: Props) {
                       category: a.category,
                       thumbnail: a.thumbnail,
                       placement_rule: a.placement_rule,
+                      placement_surface: a.placement_surface,
+                      position: a.position,
+                      rotation: a.rotation,
+                      wall_index: a.wall_index,
+                      wall_height: a.wall_height,
                     }));
                     onActionsReady(actions);
                     // Replace pending with accepted indicator

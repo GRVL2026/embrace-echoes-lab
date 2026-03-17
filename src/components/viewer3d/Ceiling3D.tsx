@@ -35,7 +35,7 @@ function TechnicalCeilingPanel({ shape, height, surfaceSize }: { shape: THREE.Sh
   const texture = useLoader(THREE.TextureLoader, "/textures/ceiling_technical.jpg");
   const tex = useMemo(() => {
     const rot = Math.floor((Math.sin(surfaceSize[0] * 91.3 + surfaceSize[1] * 47.1) * 43758.5453 % 1 + 1) % 1 * 4);
-    return configCeilingTex(texture, surfaceSize[0], surfaceSize[1], rot);
+    return configCeilingTex(texture, rot);
   }, [texture, surfaceSize[0], surfaceSize[1]]);
 
   return (

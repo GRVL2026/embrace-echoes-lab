@@ -96,22 +96,49 @@ export function CopilotPanel({ onActionsReady, onClose }: Props) {
           links: userMessage.links,
         });
 
+        // Separate add_asset actions as pending (need user approval)
+        const assetActions = (response.actions || []).filter((a): a is AddAssetAction => a.type === "add_asset");
+        const nonAssetActions = (response.actions || []).filter((a) => a.type !== "add_asset");
+
+        // Build pending assets from either dedicated field or extracted actions
+        const pendingFromResponse: PendingAsset[] = (response.pending_assets || []).map((pa) => ({
+          type: "add_asset" as const,
+          asset_id: pa.asset_id,
+          asset_name: pa.asset_name,
+          glb_url: pa.glb_url,
+          category: pa.category,
+          thumbnail: pa.thumbnail,
+          score: pa.score,
+          source: pa.source,
+          polycount: pa.polycount,
+          file_size_mb: pa.file_size_mb,
+        }));
+
+        const pendingFromActions: PendingAsset[] = assetActions.map((a) => ({
+          ...a,
+          score: undefined,
+          source: undefined,
+        }));
+
+        const allPending = pendingFromResponse.length > 0 ? pendingFromResponse : pendingFromActions;
+
         const assistantMessage: ChatMessage = {
           id: crypto.randomUUID(),
           role: "assistant",
           text: response.text,
-          actions: response.actions,
+          actions: nonAssetActions.length > 0 ? nonAssetActions : undefined,
           alternatives: response.alternatives,
+          pendingAssets: allPending.length > 0 ? allPending : undefined,
         };
 
         setMessages((prev) => [...prev, assistantMessage]);
 
-        // Auto-apply actions
-        if (response.actions && response.actions.length > 0) {
-          onActionsReady(response.actions);
+        // Auto-apply non-asset actions immediately
+        if (nonAssetActions.length > 0) {
+          onActionsReady(nonAssetActions);
           toast({
-            title: "Modifications appliquées",
-            description: response.summary || `${response.actions.length} changement(s) appliqué(s)`,
+            title: "Ambiance appliquée",
+            description: response.summary || `${nonAssetActions.length} changement(s)`,
           });
         }
       } catch (err: any) {

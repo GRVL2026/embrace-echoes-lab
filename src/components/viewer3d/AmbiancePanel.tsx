@@ -116,6 +116,9 @@ const defaults: AmbianceSettings = {
   fog: false,
   fogIntensity: 0.3,
   theme: "custom",
+  polyhavenFloor: null,
+  polyhavenWall: null,
+  polyhavenCeiling: null,
 };
 
 function ensureDefaults(a: Partial<AmbianceSettings> | undefined): AmbianceSettings {

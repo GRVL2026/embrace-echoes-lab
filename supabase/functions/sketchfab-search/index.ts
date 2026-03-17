@@ -241,7 +241,7 @@ async function searchCuratedAssets(supabase: any, context: DesignContext): Promi
       ...plan.queries.slice(0, 3), // Use first queries as search terms
     ];
     const styleTerms = context.style_profile.secondary.slice(0, 3);
-    const moodTerms = (context.style_profile.mood || []).slice(0, 2);
+    const moodTerms = (Array.isArray(context.style_profile.mood) ? context.style_profile.mood : typeof context.style_profile.mood === "string" ? [context.style_profile.mood] : []).slice(0, 2);
 
     // Build OR filter across multiple metadata columns
     const orFilters = [

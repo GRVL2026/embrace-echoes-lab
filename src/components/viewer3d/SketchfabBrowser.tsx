@@ -5,15 +5,14 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { searchSketchfab, getSketchfabDownload, type SketchfabModel } from "@/lib/sketchfabApi";
 import type { PlacedEquipment } from "@/types/equipment";
-import type { Room } from "@/types/editor";
+import { useEditor } from "@/contexts/EditorContext";
 
 type Props = {
   onAddToScene: (equipment: PlacedEquipment) => void;
   onClose: () => void;
-  rooms?: Room[];
 };
 
-function getRoomCenter(rooms?: Room[]): { x: number; y: number } {
+function getRoomCenter(rooms: { points: { x: number; y: number }[] }[]): { x: number; y: number } {
   if (!rooms || rooms.length === 0) return { x: 400, y: 400 };
   const room = rooms[0];
   if (!room.points || room.points.length === 0) return { x: 400, y: 400 };

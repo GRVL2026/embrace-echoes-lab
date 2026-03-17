@@ -442,18 +442,41 @@ Deno.serve(async (req) => {
               assetSearchResult = await searchResp.json();
               console.log("Search results - curated:", assetSearchResult.curated_count, "discovery:", assetSearchResult.discovery_count, "selected:", assetSearchResult.selected?.length);
 
-              // Convert selected assets to add_asset actions
+              // Convert selected assets to add_asset actions with V2 placement data
               if (assetSearchResult.selected) {
+                // Build a map of category → placement info from the search plan
+                const placementMap: Record<string, any> = {};
+                for (const sp of (args.search_plan || [])) {
+                  placementMap[sp.category] = {
+                    surface: sp.placement_surface || "floor",
+                    positions: sp.placement_positions || [],
+                  };
+                }
+
+                let posIndex: Record<string, number> = {};
                 for (const asset of assetSearchResult.selected) {
                   if (asset.glb_url) {
+                    const cat = asset.category || "props";
+                    const pm = placementMap[cat] || { surface: "floor", positions: [] };
+                    const idx = posIndex[cat] || 0;
+                    posIndex[cat] = idx + 1;
+                    const pos = pm.positions[idx];
+
                     sceneActions.push({
                       type: "add_asset",
                       asset_id: asset.asset_db_id || asset.uid,
                       asset_name: asset.name,
                       glb_url: asset.glb_url,
-                      category: asset.category,
+                      category: cat,
                       thumbnail: asset.thumbnail,
-                      placement_rule: args.placement_rules?.[asset.category] || "auto",
+                      placement_rule: args.placement_rules?.[cat] || "auto",
+                      placement_surface: pm.surface,
+                      ...(pos ? {
+                        position: [pos.x || 0, pos.y || 0, pos.z || 0],
+                        rotation: [0, pos.rotation_y || 0, 0],
+                        wall_index: pos.wall_index,
+                        wall_height: pos.wall_height,
+                      } : {}),
                     });
                   }
                 }

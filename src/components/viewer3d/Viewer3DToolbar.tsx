@@ -45,6 +45,13 @@ export type PolyHavenTexture = {
   };
 };
 
+export type PolyHavenHDRI = {
+  id: string;
+  name: string;
+  thumbnail: string;
+  url: string; // proxied HDR file URL
+};
+
 export type AmbianceSettings = {
   floorTexture: FloorTexture;
   wallFinish: WallFinish;
@@ -59,6 +66,10 @@ export type AmbianceSettings = {
   polyhavenFloor?: PolyHavenTexture | null;
   polyhavenWall?: PolyHavenTexture | null;
   polyhavenCeiling?: PolyHavenTexture | null;
+  // Poly Haven HDRI environment
+  polyhavenHDRI?: PolyHavenHDRI | null;
+  hdriIntensity?: number; // 0..3, default 1
+  hdriBackground?: boolean; // show HDRI as background, default false
 };
 
 export type Viewer3DVisibility = {

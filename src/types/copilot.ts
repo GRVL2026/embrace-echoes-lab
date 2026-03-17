@@ -101,6 +101,8 @@ export interface SetFogAction extends CopilotActionBase {
   density?: number;
 }
 
+export type PlacementSurface = "floor" | "wall" | "ceiling";
+
 export interface AddAssetAction extends CopilotActionBase {
   type: "add_asset";
   asset_id: string;
@@ -109,9 +111,16 @@ export interface AddAssetAction extends CopilotActionBase {
   category?: string;
   thumbnail?: string;
   placement_rule?: string;
+  placement_surface?: PlacementSurface;
+  /** Position in cm relative to room origin [x, y, z] */
   position?: [number, number, number];
+  /** Rotation in degrees [rx, ry, rz] */
   rotation?: [number, number, number];
   scale?: [number, number, number];
+  /** Wall index to attach to (for wall-mounted assets) */
+  wall_index?: number;
+  /** Height offset from floor in cm (for wall-mounted assets) */
+  wall_height?: number;
 }
 
 export interface RemoveAssetAction extends CopilotActionBase {

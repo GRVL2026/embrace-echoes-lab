@@ -56,11 +56,21 @@ function GLBModel({ url, width, depth, height, autoScale, roomExtent }: { url: s
     const size = box.getSize(new THREE.Vector3());
 
     if (autoScale) {
-      // Use model's natural size: assume GLB is in meters, scene is in meters (cm/100)
-      // No forced rescaling — just center and ground the model
-      const center = box.getCenter(new THREE.Vector3());
+      // Scale model proportionally to the room size
+      // Target: largest model dimension ≈ 15% of the room's smallest floor dimension
+      const roomMinCm = roomExtent
+        ? Math.min(roomExtent.width, roomExtent.depth)
+        : 500; // fallback 5m
+      const targetSize = (roomMinCm / 100) * 0.15; // in meters (scene units)
+      const modelMax = Math.max(size.x, size.y, size.z);
+      if (modelMax > 0) {
+        const s = targetSize / modelMax;
+        clone.scale.setScalar(s);
+      }
+      const scaledBox = new THREE.Box3().setFromObject(clone);
+      const center = scaledBox.getCenter(new THREE.Vector3());
       clone.position.sub(center);
-      clone.position.y += size.y / 2;
+      clone.position.y += scaledBox.getSize(new THREE.Vector3()).y / 2;
     } else {
       const targetW = width / 100;
       const targetD = depth / 100;

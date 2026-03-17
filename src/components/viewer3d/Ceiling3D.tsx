@@ -11,18 +11,24 @@ type Props = {
   polyhavenTexture?: PolyHavenTexture | null;
 };
 
+const TEXTURE_PHYSICAL_SIZE = 2.0;
+
+function configCeilingTex(t: THREE.Texture, w: number, h: number): THREE.Texture {
+  const c = t.clone();
+  c.wrapS = THREE.RepeatWrapping;
+  c.wrapT = THREE.RepeatWrapping;
+  c.repeat.set(w / TEXTURE_PHYSICAL_SIZE, h / TEXTURE_PHYSICAL_SIZE);
+  c.colorSpace = THREE.SRGBColorSpace;
+  c.needsUpdate = true;
+  return c;
+}
+
 /** Textured ceiling panel for technical ceiling */
-function TechnicalCeilingPanel({ shape, height }: { shape: THREE.Shape; height: number }) {
+function TechnicalCeilingPanel({ shape, height, surfaceSize }: { shape: THREE.Shape; height: number; surfaceSize: [number, number] }) {
   const texture = useLoader(THREE.TextureLoader, "/textures/ceiling_technical.jpg");
   const tex = useMemo(() => {
-    const t = texture.clone();
-    t.wrapS = THREE.RepeatWrapping;
-    t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(0.3, 0.3);
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.needsUpdate = true;
-    return t;
-  }, [texture]);
+    return configCeilingTex(texture, surfaceSize[0], surfaceSize[1]);
+  }, [texture, surfaceSize[0], surfaceSize[1]]);
 
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, height, 0]}>
@@ -40,28 +46,19 @@ function TechnicalCeilingPanel({ shape, height }: { shape: THREE.Shape; height: 
 }
 
 /** Poly Haven PBR ceiling panel */
-function PolyHavenCeilingPanel({ shape, height, textureData }: { shape: THREE.Shape; height: number; textureData: PolyHavenTexture }) {
+function PolyHavenCeilingPanel({ shape, height, textureData, surfaceSize }: { shape: THREE.Shape; height: number; textureData: PolyHavenTexture; surfaceSize: [number, number] }) {
   const urls = textureData.urls;
   const diffuseTex = useLoader(THREE.TextureLoader, urls.diffuse || "");
   const normalTex = urls.normal ? useLoader(THREE.TextureLoader, urls.normal) : null;
   const roughTex = urls.roughness ? useLoader(THREE.TextureLoader, urls.roughness) : null;
 
   const mats = useMemo(() => {
-    const configure = (t: THREE.Texture) => {
-      const c = t.clone();
-      c.wrapS = THREE.RepeatWrapping;
-      c.wrapT = THREE.RepeatWrapping;
-      c.repeat.set(0.3, 0.3);
-      c.colorSpace = THREE.SRGBColorSpace;
-      c.needsUpdate = true;
-      return c;
-    };
     return {
-      diffuse: configure(diffuseTex),
-      normal: normalTex ? configure(normalTex) : null,
-      roughness: roughTex ? configure(roughTex) : null,
+      diffuse: configCeilingTex(diffuseTex, surfaceSize[0], surfaceSize[1]),
+      normal: normalTex ? configCeilingTex(normalTex, surfaceSize[0], surfaceSize[1]) : null,
+      roughness: roughTex ? configCeilingTex(roughTex, surfaceSize[0], surfaceSize[1]) : null,
     };
-  }, [diffuseTex, normalTex, roughTex]);
+  }, [diffuseTex, normalTex, roughTex, surfaceSize[0], surfaceSize[1]]);
 
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, height, 0]}>
@@ -80,7 +77,7 @@ function PolyHavenCeilingPanel({ shape, height, textureData }: { shape: THREE.Sh
 }
 
 export function Ceiling3D({ room, ceilingType, height = 2.8, polyhavenTexture }: Props) {
-  const { shape, beamLines, ducts } = useMemo(() => {
+  const { shape, beamLines, ducts, surfaceSize } = useMemo(() => {
     const pts = room.points.map((p) => new THREE.Vector2(p.x / 100, -p.y / 100));
     pts.reverse();
     const shape = new THREE.Shape(pts);
@@ -172,7 +169,9 @@ export function Ceiling3D({ room, ceilingType, height = 2.8, polyhavenTexture }:
       });
     }
 
-    return { shape, beamLines, ducts };
+    const surfaceSize: [number, number] = [spanX, spanZ];
+
+    return { shape, beamLines, ducts, surfaceSize };
   }, [room]);
 
   if (ceilingType === "none" && !polyhavenTexture) return null;
@@ -199,10 +198,10 @@ export function Ceiling3D({ room, ceilingType, height = 2.8, polyhavenTexture }:
       {/* Main ceiling plane */}
       {polyhavenTexture?.urls?.diffuse ? (
         <Suspense fallback={null}>
-          <PolyHavenCeilingPanel shape={shape} height={height} textureData={polyhavenTexture} />
+          <PolyHavenCeilingPanel shape={shape} height={height} textureData={polyhavenTexture} surfaceSize={surfaceSize} />
         </Suspense>
       ) : isTechnical ? (
-        <TechnicalCeilingPanel shape={shape} height={height} />
+        <TechnicalCeilingPanel shape={shape} height={height} surfaceSize={surfaceSize} />
       ) : ceilingType !== "none" ? (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, height, 0]}>
           <shapeGeometry args={[shape]} />

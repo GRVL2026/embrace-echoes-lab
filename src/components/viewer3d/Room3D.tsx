@@ -5,6 +5,19 @@ import type { Room, Door } from "@/types/editor";
 import type { AmbianceSettings, FloorTexture, WallFinish, PolyHavenTexture } from "./Viewer3DToolbar";
 import { AntiTileMaterial } from "./AntiTileMaterial";
 
+/** Proxy Poly Haven CDN URLs through our edge function to avoid CORS issues */
+function proxyPolyHavenUrl(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.endsWith("polyhaven.org") || parsed.hostname.endsWith("polyhaven.com")) {
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      return `https://${projectId}.supabase.co/functions/v1/polyhaven-proxy?file_url=${encodeURIComponent(url)}`;
+    }
+  } catch { /* not a valid URL, return as-is */ }
+  return url;
+}
+
 const WALL_THICKNESS = 0.15; // meters
 
 /** Physical size of one texture tile in meters – adjusting this changes how "zoomed" textures appear */

@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.polyhaven-proxy]
 verify_jwt = false
+
+[functions.copilot-chat]
+verify_jwt = false

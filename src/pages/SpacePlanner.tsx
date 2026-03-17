@@ -5,7 +5,9 @@ import { EditorCanvas } from "@/components/editor/EditorCanvas";
 import { EditorSidebar } from "@/components/editor/EditorSidebar";
 import { Viewer3D } from "@/components/viewer3d/Viewer3D";
 import { Viewer3DToolbar, DEFAULT_3D_SETTINGS, type Viewer3DSettings } from "@/components/viewer3d/Viewer3DToolbar";
-import { PanelRightClose, PanelRightOpen, Box, LayoutGrid } from "lucide-react";
+import { CopilotPanel } from "@/components/copilot/CopilotPanel";
+import { useCopilotActions } from "@/hooks/useCopilotActions";
+import { PanelRightClose, PanelRightOpen, Box, LayoutGrid, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fitToView } from "@/lib/fitToView";
@@ -13,9 +15,18 @@ import logoImg from "@/assets/logo.png";
 
 function SpacePlannerInner() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [copilotOpen, setCopilotOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
   const [viewer3DSettings, setViewer3DSettings] = useState<Viewer3DSettings>(DEFAULT_3D_SETTINGS);
   const { state, dispatch } = useEditor();
+
+  const { executeActions } = useCopilotActions({
+    currentAmbiance: viewer3DSettings.ambiance,
+    onAmbianceChange: (ambiance) =>
+      setViewer3DSettings((s) => ({ ...s, ambiance })),
+    onLightingChange: (preset) =>
+      setViewer3DSettings((s) => ({ ...s, lighting: preset })),
+  });
 
   const toggleSidebar = useCallback(() => {
     const nextOpen = !sidebarOpen;
@@ -115,6 +126,23 @@ function SpacePlannerInner() {
                 {sidebarOpen ? "Masquer le panneau" : "Afficher le panneau"}
               </TooltipContent>
             </Tooltip>
+
+            {/* Copilot toggle */}
+            <Tooltip delayDuration={200}>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={copilotOpen ? "default" : "ghost"}
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setCopilotOpen(!copilotOpen)}
+                >
+                  <Sparkles className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {copilotOpen ? "Fermer Copilot IA" : "Ouvrir Copilot IA"}
+              </TooltipContent>
+            </Tooltip>
           </div>
         </header>
 
@@ -132,7 +160,15 @@ function SpacePlannerInner() {
       </div>
 
       {/* Right sidebar */}
-      {sidebarOpen && <EditorSidebar />}
+      {sidebarOpen && !copilotOpen && <EditorSidebar />}
+
+      {/* Copilot panel */}
+      {copilotOpen && (
+        <CopilotPanel
+          onActionsReady={executeActions}
+          onClose={() => setCopilotOpen(false)}
+        />
+      )}
     </div>
   );
 }

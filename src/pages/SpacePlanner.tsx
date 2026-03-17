@@ -30,6 +30,7 @@ function SpacePlannerInner() {
       setViewer3DSettings((s) => ({ ...s, lighting: preset })),
     onAddEquipment: (equipment) =>
       dispatch({ type: "ADD_PLACED_EQUIPMENT", equipment }),
+    roomContext,
   });
 
   // Build room context for the copilot

@@ -90,7 +90,7 @@ function GLBModel({ url, width, depth, height, autoScale, roomExtent }: { url: s
     }
     
     return clone;
-  }, [scene, width, depth, height, autoScale]);
+  }, [scene, width, depth, height, autoScale, roomExtent]);
 
   return <primitive object={clonedScene} />;
 }

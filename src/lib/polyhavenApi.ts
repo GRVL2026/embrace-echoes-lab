@@ -4,13 +4,6 @@ const POLYHAVEN_CDN = "https://cdn.polyhaven.com";
 
 async function fetchPolyHaven(endpoint: string, params?: Record<string, string>) {
   const searchParams = new URLSearchParams({ endpoint, ...params });
-  const { data, error } = await supabase.functions.invoke("polyhaven-proxy", {
-    body: null,
-    method: "GET",
-    headers: {},
-  });
-
-  // Use direct fetch with edge function URL
   const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
   const url = `https://${projectId}.supabase.co/functions/v1/polyhaven-proxy?${searchParams}`;
   const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;

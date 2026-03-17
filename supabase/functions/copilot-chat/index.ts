@@ -12,32 +12,40 @@ Tu aides l'utilisateur à choisir l'ambiance, les matériaux, les textures, l'é
 
 Ton rôle est d'analyser les demandes (texte, images, liens web) et de proposer des modifications concrètes via des APPELS D'OUTILS (tool calls).
 
-## RÈGLE CRITIQUE
+## RÈGLE CRITIQUE — ROUTAGE DES SOURCES
 
 Tu DOIS TOUJOURS répondre en utilisant au moins un appel d'outil (tool call). Ne réponds JAMAIS uniquement en texte.
-- Si l'utilisateur demande des objets, du mobilier, des plantes, de la déco → appelle find_3d_assets
-- Si l'utilisateur demande des changements de matériaux, lumières, couleurs → appelle apply_scene_changes
-- Si la demande est ambiguë, appelle find_3d_assets ET/OU apply_scene_changes selon le contexte
 
-## Quand utiliser find_3d_assets
+### TEXTURES & MATÉRIAUX → apply_scene_changes (source: Poly Haven)
+Pour tout changement de matériau (sol, mur, plafond), utilise apply_scene_changes avec un **polyhaven_id** valide.
+Le système résout automatiquement les URLs de texture PBR depuis Poly Haven (diffuse, normal, roughness).
 
-Utilise find_3d_assets pour TOUTE demande impliquant des objets physiques :
+Exemples de polyhaven_id par catégorie :
+- SOL BÉTON : concrete_floor_02, concrete_floor_worn_001, polished_concrete
+- SOL BOIS : wood_floor_deck, hardwood_brown_planks, oak_veneer_01
+- SOL CARRELAGE : large_square_tiles, hexagonal_concrete, marble_01
+- SOL RÉSINE/VINYLE : rubber_tiles, plastic_roughened
+- MOQUETTE : fabric_pattern_05, carpet_twill
+- MUR BRIQUE : red_brick_04, brick_wall_003, medieval_blocks_02
+- MUR BÉTON : concrete_wall_008, concrete_layers_02
+- MUR BOIS : plywood, wood_cabinet_worn, oak_veneer_01
+- MUR PEINTURE : utilise set_wall_color avec un code hex, pas apply_material
+- PLAFOND : acoustic_foam, ceiling_tiles, concrete_ceiling
+
+Utilise TOUJOURS un polyhaven_id réel de cette liste ou similaire. Ne fabrique PAS d'IDs fictifs.
+
+### OBJETS 3D → find_3d_assets (source: Sketchfab + bibliothèque interne)
+Pour tout objet physique (plantes, mobilier, néons, déco, signalétique, props), utilise find_3d_assets.
+Le système cherche d'abord dans la bibliothèque interne validée, puis sur Sketchfab si nécessaire.
 - Plantes, végétation, pots de fleurs
 - Mobilier (chaises, tables, comptoirs, banquettes)
-- Éclairage décoratif (lampes, néons, enseignes)
+- Éclairage décoratif (lampes, néons, enseignes lumineuses)
 - Décoration murale (tableaux, panneaux, posters)
 - Signalétique
 - Props thématiques (trophées, figurines, etc.)
-- Tout objet 3D pour enrichir la scène
 
-## Quand utiliser apply_scene_changes
-
-Utilise apply_scene_changes pour :
-- Matériaux de sol, mur, plafond
-- Éclairage ambiant (presets)
-- Couleurs des murs
-- Type de plafond
-- Brouillard (fog)
+### DEMANDES MIXTES → appelle LES DEUX outils
+Si l'utilisateur dit "ambiance industrielle avec des plantes", appelle apply_scene_changes (béton, éclairage) ET find_3d_assets (plantes).
 
 ## Contraintes
 
@@ -66,11 +74,12 @@ const TOOLS = [
               properties: {
                 type: { type: "string", enum: ["apply_material", "apply_lighting", "set_wall_color", "set_ceiling", "set_fog"] },
                 target: { type: "string", enum: ["floor", "wall", "ceiling"] },
-                material_id: { type: "string" },
-                material_name: { type: "string" },
-                resolution: { type: "string", enum: ["1k", "2k", "4k"] },
+                polyhaven_id: { type: "string", description: "Poly Haven texture ID e.g. 'concrete_floor_02', 'red_brick_04'. The system will auto-resolve PBR URLs." },
+                material_id: { type: "string", description: "Alias for polyhaven_id (backward compat)" },
+                material_name: { type: "string", description: "Human-readable name of the texture" },
+                resolution: { type: "string", enum: ["1k", "2k", "4k"], description: "Texture resolution, default 2k" },
                 preset: { type: "string", enum: ["daylight", "arcade", "showroom"] },
-                color: { type: "string" },
+                color: { type: "string", description: "Hex color for set_wall_color" },
                 ceiling_type: { type: "string", enum: ["none", "tiles", "beams", "black", "technical"] },
                 enabled: { type: "boolean" },
                 fog_color: { type: "string" },
@@ -133,6 +142,35 @@ const TOOLS = [
     },
   },
 ];
+
+// ─── Poly Haven URL resolution ──────────────────────────────
+function resolvePolyHavenUrls(polyhavenId: string, resolution: string = "2k") {
+  const base = `https://dl.polyhaven.org/file/ph-assets/Textures`;
+  const res = resolution || "2k";
+  return {
+    diffuse: `${base}/${polyhavenId}/${res}/${polyhavenId}_diff_${res}.jpg`,
+    normal: `${base}/${polyhavenId}/${res}/${polyhavenId}_nor_gl_${res}.jpg`,
+    roughness: `${base}/${polyhavenId}/${res}/${polyhavenId}_rough_${res}.jpg`,
+  };
+}
+
+/** Enrich apply_material actions with resolved Poly Haven URLs */
+function enrichMaterialActions(actions: any[]): any[] {
+  return actions.map((action: any) => {
+    if (action.type === "apply_material") {
+      const phId = action.polyhaven_id || action.material_id;
+      if (phId) {
+        const urls = resolvePolyHavenUrls(phId, action.resolution);
+        return {
+          ...action,
+          material_id: phId,
+          urls,
+        };
+      }
+    }
+    return action;
+  });
+}
 
 // ─── Firecrawl helper ───────────────────────────────────────
 async function scrapeWebsite(url: string): Promise<string> {
@@ -284,9 +322,10 @@ Deno.serve(async (req) => {
           const args = JSON.parse(tc.function.arguments);
 
           if (tc.function.name === "apply_scene_changes") {
-            sceneActions = args.actions || [];
+            sceneActions = enrichMaterialActions(args.actions || []);
             summary = args.summary || "";
             alternatives = args.alternatives || [];
+            console.log("Scene actions enriched:", sceneActions.filter((a: any) => a.type === "apply_material").length, "materials with Poly Haven URLs");
           }
 
           if (tc.function.name === "find_3d_assets") {

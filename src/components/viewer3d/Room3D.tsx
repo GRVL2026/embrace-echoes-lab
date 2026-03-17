@@ -327,6 +327,19 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true, ambian
           const rot: [number, number, number] = [0, -wall.angle, 0];
           const size: [number, number, number] = [segLength, wallHeight, WALL_THICKNESS];
 
+          if (polyWall?.urls?.diffuse) {
+            return (
+              <Suspense key={`wall-${wi}-${si}`} fallback={null}>
+                <PolyHavenWallSegment
+                  position={pos}
+                  rotation={rot}
+                  size={size}
+                  textureData={polyWall}
+                />
+              </Suspense>
+            );
+          }
+
           if (wallTexturePath) {
             return (
               <TexturedWallSegment

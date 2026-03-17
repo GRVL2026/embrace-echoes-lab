@@ -118,6 +118,9 @@ export const DEFAULT_3D_SETTINGS: Viewer3DSettings = {
     polyhavenFloor: null,
     polyhavenWall: null,
     polyhavenCeiling: null,
+    polyhavenHDRI: null,
+    hdriIntensity: 1,
+    hdriBackground: false,
   },
 };
 

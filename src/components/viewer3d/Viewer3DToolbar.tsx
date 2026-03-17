@@ -320,6 +320,7 @@ export function Viewer3DToolbar({ settings, onChange, onAddEquipment }: Props) {
           ambiance={ambiance}
           onChange={setAmbiance}
           onClose={() => setAmbianceOpen(false)}
+          onAddEquipment={onAddEquipment}
         />
       )}
     </div>

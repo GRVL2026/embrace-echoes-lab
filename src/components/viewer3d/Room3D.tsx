@@ -71,7 +71,8 @@ type Props = {
 function TexturedFloor({ shape, texturePath, surfaceSize }: { shape: THREE.Shape; texturePath: string; surfaceSize: [number, number] }) {
   const texture = useLoader(THREE.TextureLoader, texturePath);
   const tex = useMemo(() => {
-    return configureTexture(texture, surfaceSize[0], surfaceSize[1]);
+    const rot = Math.floor(pseudoRandom(surfaceSize[0], surfaceSize[1]) * 4);
+    return configureTexture(texture, surfaceSize[0], surfaceSize[1], 0, 0, rot);
   }, [texture, surfaceSize[0], surfaceSize[1]]);
 
   return (

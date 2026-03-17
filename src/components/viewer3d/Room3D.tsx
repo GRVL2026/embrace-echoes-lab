@@ -438,19 +438,6 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true, ambian
             );
           }
 
-          if (wallTexturePath) {
-            return (
-              <TexturedWallSegment
-                key={`wall-${wi}-${si}`}
-                position={pos}
-                rotation={rot}
-                size={size}
-                texturePath={wallTexturePath}
-                segmentIndex={idx}
-              />
-            );
-          }
-
           return (
             <mesh
               key={`wall-${wi}-${si}`}

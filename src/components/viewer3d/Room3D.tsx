@@ -204,12 +204,11 @@ function TexturedWallSegment({
   return (
     <mesh position={position} rotation={rotation} castShadow receiveShadow>
       <boxGeometry args={size} />
-      <meshStandardMaterial
+      <AntiTileMaterial
         map={tex}
         color="#ffffff"
         roughness={0.7}
         metalness={0.02}
-        {...{} as any}
       />
     </mesh>
   );

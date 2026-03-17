@@ -56,24 +56,24 @@ function PolyHavenCeilingPanel({ shape, height, textureData, surfaceSize }: { sh
   const roughTex = urls.roughness ? useLoader(THREE.TextureLoader, urls.roughness) : null;
 
   const mats = useMemo(() => {
+    const rot = Math.floor((Math.sin(surfaceSize[0] * 127.1 + surfaceSize[1] * 311.7) * 43758.5453 % 1 + 1) % 1 * 4);
     return {
-      diffuse: configCeilingTex(diffuseTex, surfaceSize[0], surfaceSize[1]),
-      normal: normalTex ? configCeilingTex(normalTex, surfaceSize[0], surfaceSize[1]) : null,
-      roughness: roughTex ? configCeilingTex(roughTex, surfaceSize[0], surfaceSize[1]) : null,
+      diffuse: configCeilingTex(diffuseTex, surfaceSize[0], surfaceSize[1], rot),
+      normal: normalTex ? configCeilingTex(normalTex, surfaceSize[0], surfaceSize[1], rot) : null,
+      roughness: roughTex ? configCeilingTex(roughTex, surfaceSize[0], surfaceSize[1], rot) : null,
     };
   }, [diffuseTex, normalTex, roughTex, surfaceSize[0], surfaceSize[1]]);
 
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, height, 0]}>
       <shapeGeometry args={[shape]} />
-      <meshStandardMaterial
+      <AntiTileMaterial
         map={mats.diffuse}
-        normalMap={mats.normal ?? undefined}
-        roughnessMap={mats.roughness ?? undefined}
+        normalMap={mats.normal}
+        roughnessMap={mats.roughness}
         roughness={mats.roughness ? 1 : 0.6}
         metalness={0.02}
         side={THREE.DoubleSide}
-        {...({} as any)}
       />
     </mesh>
   );

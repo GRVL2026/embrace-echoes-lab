@@ -1,9 +1,9 @@
 import { useState, useCallback } from "react";
-import { Search, Loader2, X, Download, Box, ExternalLink, ArrowLeft, Eye, Triangle } from "lucide-react";
+import { Search, Loader2, X, Download, Box, ExternalLink, ArrowLeft, Eye, Triangle, HardDrive } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { searchSketchfab, getSketchfabDownload, type SketchfabModel } from "@/lib/sketchfabApi";
+import { searchSketchfab, getSketchfabDownload, type SketchfabModel, type SketchfabFormatInfo } from "@/lib/sketchfabApi";
 import type { PlacedEquipment } from "@/types/equipment";
 import { useEditor } from "@/contexts/EditorContext";
 
@@ -22,14 +22,8 @@ function getRoomCenter(rooms: { points: { x: number; y: number }[] }[]): { x: nu
 }
 
 const SUGGESTED_QUERIES = [
-  "arcade machine",
-  "neon sign",
-  "bar stool",
-  "sofa",
-  "table",
-  "plant pot",
-  "ceiling light",
-  "speaker",
+  "arcade machine", "neon sign", "bar stool", "sofa",
+  "table", "plant pot", "ceiling light", "speaker",
 ];
 
 const formatPolycount = (count?: number) => {
@@ -37,6 +31,22 @@ const formatPolycount = (count?: number) => {
   if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
   if (count >= 1_000) return `${(count / 1_000).toFixed(0)}k`;
   return String(count);
+};
+
+const formatSize = (bytes?: number) => {
+  if (!bytes) return "—";
+  if (bytes >= 1_000_000_000) return `${(bytes / 1_000_000_000).toFixed(1)} GB`;
+  if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
+  if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(0)} KB`;
+  return `${bytes} B`;
+};
+
+// Format labels for user display, ordered by quality preference
+const FORMAT_LABELS: Record<string, { label: string; quality: string; priority: number }> = {
+  source: { label: "Source", quality: "Qualité maximale", priority: 0 },
+  glb: { label: "GLB", quality: "Optimisé", priority: 1 },
+  gltf: { label: "glTF", quality: "Standard", priority: 2 },
+  usdz: { label: "USDZ", quality: "Apple AR", priority: 3 },
 };
 
 /* ─── Preview sub-panel ─── */
@@ -48,10 +58,40 @@ function ModelPreview({
 }: {
   model: SketchfabModel;
   onBack: () => void;
-  onAdd: () => void;
+  onAdd: (format: string) => void;
   isAdding: boolean;
 }) {
+  const [formats, setFormats] = useState<Record<string, SketchfabFormatInfo> | null>(null);
+  const [selectedFormat, setSelectedFormat] = useState<string>("glb");
+  const [loadingFormats, setLoadingFormats] = useState(false);
+
   const embedUrl = `https://sketchfab.com/models/${model.uid}/embed?autostart=1&ui_stop=0&ui_inspector=0&ui_watermark=0&ui_watermark_link=0&ui_hint=0&ui_ar=0&ui_help=0&ui_settings=0&ui_vr=0&ui_fullscreen=0&ui_annotations=0`;
+
+  // Fetch available formats on mount
+  useState(() => {
+    setLoadingFormats(true);
+    getSketchfabDownload(model.uid).then((dl) => {
+      if (dl.available_formats) {
+        setFormats(dl.available_formats);
+        // Auto-select best usable format (glb > gltf > source)
+        if (dl.available_formats.glb) setSelectedFormat("glb");
+        else if (dl.available_formats.gltf) setSelectedFormat("gltf");
+        else if (dl.available_formats.source) setSelectedFormat("source");
+      }
+    }).catch(() => {
+      // silently fail, user can still try to add
+    }).finally(() => setLoadingFormats(false));
+  });
+
+  // Sort formats by priority
+  const sortedFormats = formats
+    ? Object.entries(formats)
+        .filter(([key]) => ["glb", "gltf", "source", "usdz"].includes(key))
+        .sort(([a], [b]) => (FORMAT_LABELS[a]?.priority ?? 99) - (FORMAT_LABELS[b]?.priority ?? 99))
+    : [];
+
+  // Only allow glb/gltf/source for scene import
+  const canImport = selectedFormat === "glb" || selectedFormat === "gltf" || selectedFormat === "source";
 
   return (
     <div className="flex flex-col h-full">
@@ -75,7 +115,7 @@ function ModelPreview({
       </div>
 
       {/* Info */}
-      <div className="p-2.5 space-y-2 border-t border-border">
+      <div className="p-2.5 space-y-2.5 border-t border-border overflow-y-auto">
         <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
           <span className="inline-flex items-center gap-0.5">
             <Triangle className="h-2.5 w-2.5" /> {formatPolycount(model.face_count)} faces
@@ -98,22 +138,72 @@ function ModelPreview({
         )}
 
         {model.description && (
-          <p className="text-[10px] text-muted-foreground line-clamp-3">{model.description}</p>
+          <p className="text-[10px] text-muted-foreground line-clamp-2">{model.description}</p>
         )}
+
+        {/* Format selector */}
+        <div>
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+            Format & Qualité
+          </p>
+          {loadingFormats ? (
+            <div className="flex items-center gap-1.5 py-2">
+              <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+              <span className="text-[10px] text-muted-foreground">Chargement des formats…</span>
+            </div>
+          ) : sortedFormats.length > 0 ? (
+            <div className="space-y-1">
+              {sortedFormats.map(([key, info]) => {
+                const meta = FORMAT_LABELS[key] || { label: key.toUpperCase(), quality: "", priority: 99 };
+                const isSelected = selectedFormat === key;
+                const isUsable = key === "glb" || key === "gltf" || key === "source";
+                return (
+                  <button
+                    key={key}
+                    className={cn(
+                      "w-full flex items-center gap-2 rounded-md border p-2 text-left transition-all",
+                      isSelected
+                        ? "border-primary ring-1 ring-primary/50 bg-primary/5"
+                        : isUsable
+                          ? "border-border/50 hover:border-border"
+                          : "border-border/30 opacity-50 cursor-not-allowed"
+                    )}
+                    onClick={() => isUsable && setSelectedFormat(key)}
+                    disabled={!isUsable}
+                  >
+                    <HardDrive className={cn("h-3.5 w-3.5 shrink-0", isSelected ? "text-primary" : "text-muted-foreground")} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] font-medium text-foreground">{meta.label}</span>
+                        <span className="text-[9px] text-muted-foreground">— {meta.quality}</span>
+                      </div>
+                      <span className="text-[9px] text-muted-foreground">{formatSize(info.size)}</span>
+                    </div>
+                    {isSelected && (
+                      <span className="text-[8px] font-bold text-primary uppercase">Sélectionné</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-[10px] text-muted-foreground">Aucun format disponible</p>
+          )}
+        </div>
 
         <div className="flex gap-2 pt-1">
           <Button
             size="sm"
             className="flex-1 h-7 text-[11px] gap-1.5"
-            onClick={onAdd}
-            disabled={isAdding}
+            onClick={() => onAdd(selectedFormat)}
+            disabled={isAdding || !canImport}
           >
             {isAdding ? (
               <Loader2 className="h-3 w-3 animate-spin" />
             ) : (
               <Download className="h-3 w-3" />
             )}
-            Ajouter à la scène
+            Ajouter ({(FORMAT_LABELS[selectedFormat]?.label || selectedFormat).toUpperCase()})
           </Button>
           <a
             href={`https://sketchfab.com/3d-models/${model.uid}`}
@@ -165,12 +255,12 @@ export function SketchfabBrowser({ onAddToScene, onClose }: Props) {
     doSearch(query);
   };
 
-  const handleAddToScene = useCallback(async (model: SketchfabModel) => {
+  const handleAddToScene = useCallback(async (model: SketchfabModel, format: string) => {
     setDownloading(model.uid);
     try {
-      const dl = await getSketchfabDownload(model.uid);
+      const dl = await getSketchfabDownload(model.uid, format);
       if (!dl.download_url) {
-        setError("Ce modèle n'est pas téléchargeable au format GLB");
+        setError("Ce modèle n'est pas téléchargeable dans ce format");
         return;
       }
 
@@ -189,7 +279,7 @@ export function SketchfabBrowser({ onAddToScene, onClose }: Props) {
       };
 
       onAddToScene(equipment);
-      setPreview(null); // close preview after adding
+      setPreview(null);
     } catch (e: any) {
       setError(e.message || "Erreur de téléchargement");
     } finally {
@@ -204,7 +294,7 @@ export function SketchfabBrowser({ onAddToScene, onClose }: Props) {
         <ModelPreview
           model={preview}
           onBack={() => setPreview(null)}
-          onAdd={() => handleAddToScene(preview)}
+          onAdd={(format) => handleAddToScene(preview, format)}
           isAdding={downloading === preview.uid}
         />
       </div>
@@ -286,72 +376,49 @@ export function SketchfabBrowser({ onAddToScene, onClose }: Props) {
           </p>
         ) : (
           <div className="flex flex-col gap-1.5">
-            {results.map((model) => {
-              const isDownloading = downloading === model.uid;
-              return (
-                <div
-                  key={model.uid}
-                  className="flex items-center gap-2 rounded-md border border-border/50 p-1.5 hover:border-primary/50 transition-all group cursor-pointer"
-                  onClick={() => setPreview(model)}
-                >
-                  {/* Thumbnail */}
-                  <div className="h-14 w-14 shrink-0 rounded-md overflow-hidden bg-muted">
-                    {model.thumbnail ? (
-                      <img
-                        src={model.thumbnail}
-                        alt={model.name}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Box className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-medium text-foreground truncate">{model.name}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[9px] text-muted-foreground">
-                        △ {formatPolycount(model.face_count)}
-                      </span>
-                      {model.user && (
-                        <span className="text-[9px] text-muted-foreground truncate">
-                          par {model.user}
-                        </span>
-                      )}
+            {results.map((model) => (
+              <div
+                key={model.uid}
+                className="flex items-center gap-2 rounded-md border border-border/50 p-1.5 hover:border-primary/50 transition-all group cursor-pointer"
+                onClick={() => setPreview(model)}
+              >
+                <div className="h-14 w-14 shrink-0 rounded-md overflow-hidden bg-muted">
+                  {model.thumbnail ? (
+                    <img src={model.thumbnail} alt={model.name} className="w-full h-full object-cover" loading="lazy" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Box className="h-5 w-5 text-muted-foreground" />
                     </div>
-                    {model.license && (
-                      <span className={cn(
-                        "inline-block mt-0.5 px-1 py-0 rounded text-[8px] font-medium uppercase",
-                        model.license.includes("cc0") ? "bg-green-500/20 text-green-400" :
-                        model.license.includes("cc-by") ? "bg-blue-500/20 text-blue-400" :
-                        "bg-muted text-muted-foreground"
-                      )}>
-                        {model.license}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Preview hint */}
-                  <Eye className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  )}
                 </div>
-              );
-            })}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-medium text-foreground truncate">{model.name}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[9px] text-muted-foreground">△ {formatPolycount(model.face_count)}</span>
+                    {model.user && <span className="text-[9px] text-muted-foreground truncate">par {model.user}</span>}
+                  </div>
+                  {model.license && (
+                    <span className={cn(
+                      "inline-block mt-0.5 px-1 py-0 rounded text-[8px] font-medium uppercase",
+                      model.license.includes("cc0") ? "bg-green-500/20 text-green-400" :
+                      model.license.includes("cc-by") ? "bg-blue-500/20 text-blue-400" :
+                      "bg-muted text-muted-foreground"
+                    )}>
+                      {model.license}
+                    </span>
+                  )}
+                </div>
+                <Eye className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            ))}
           </div>
         )}
       </div>
 
       {/* Footer */}
       <div className="p-1.5 border-t border-border text-center">
-        <a
-          href="https://sketchfab.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-[9px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
-        >
+        <a href="https://sketchfab.com" target="_blank" rel="noopener noreferrer"
+          className="text-[9px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
           sketchfab.com <ExternalLink className="h-2.5 w-2.5" />
         </a>
       </div>

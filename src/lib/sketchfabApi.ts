@@ -20,12 +20,18 @@ export interface SketchfabSearchResult {
   total: number;
 }
 
+export interface SketchfabFormatInfo {
+  url: string;
+  size?: number;
+  expires?: number;
+}
+
 export interface SketchfabDownloadResult {
   download_url?: string;
   format?: string;
   size?: number;
   expires?: number;
-  available_formats?: string[];
+  available_formats?: Record<string, SketchfabFormatInfo>;
   error?: string;
 }
 
@@ -55,10 +61,10 @@ export async function getSketchfabDetails(uid: string): Promise<SketchfabModel> 
   return data as SketchfabModel;
 }
 
-/** Get download URL for a model */
-export async function getSketchfabDownload(uid: string): Promise<SketchfabDownloadResult> {
+/** Get download URL for a model, optionally requesting a specific format */
+export async function getSketchfabDownload(uid: string, format?: string): Promise<SketchfabDownloadResult> {
   const { data, error } = await supabase.functions.invoke("sketchfab-proxy", {
-    body: { action: "download", uid },
+    body: { action: "download", uid, ...(format ? { format } : {}) },
   });
   if (error) throw new Error(error.message || "Erreur Sketchfab download");
   if (data?.error) throw new Error(data.error);

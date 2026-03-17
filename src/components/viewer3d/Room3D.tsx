@@ -168,13 +168,12 @@ function PolyHavenWallSegment({
   return (
     <mesh position={position} rotation={rotation} castShadow receiveShadow>
       <boxGeometry args={size} />
-      <meshStandardMaterial
+      <AntiTileMaterial
         map={mats.diffuse}
-        normalMap={mats.normal ?? undefined}
-        roughnessMap={mats.roughness ?? undefined}
+        normalMap={mats.normal}
+        roughnessMap={mats.roughness}
         roughness={mats.roughness ? 1 : 0.7}
         metalness={0.02}
-        {...{} as any}
       />
     </mesh>
   );

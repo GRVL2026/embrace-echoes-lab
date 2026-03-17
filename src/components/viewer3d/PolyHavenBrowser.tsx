@@ -14,6 +14,7 @@ import {
 import type { PolyHavenTexture } from "./Viewer3DToolbar";
 
 type SurfaceTarget = "floor" | "wall" | "ceiling";
+type ResolutionOption = "1k" | "2k" | "4k";
 
 type Props = {
   target: SurfaceTarget;
@@ -41,6 +42,7 @@ export function PolyHavenBrowser({ target, currentTexture, onSelect, onClose }: 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [resolution, setResolution] = useState<ResolutionOption>("2k");
 
   const categories = TARGET_CATEGORIES[target];
 
@@ -90,7 +92,7 @@ export function PolyHavenBrowser({ target, currentTexture, onSelect, onClose }: 
     }
     setLoadingTexture(id);
     try {
-      const urls = await getTextureUrls(id, "2k");
+      const urls = await getTextureUrls(id, resolution);
       onSelect({
         id,
         name: asset.name,
@@ -102,7 +104,7 @@ export function PolyHavenBrowser({ target, currentTexture, onSelect, onClose }: 
     } finally {
       setLoadingTexture(null);
     }
-  }, [currentTexture, onSelect]);
+  }, [currentTexture, onSelect, resolution]);
 
   return (
     <div className="flex flex-col overflow-hidden max-h-[80vh]">
@@ -137,6 +139,25 @@ export function PolyHavenBrowser({ target, currentTexture, onSelect, onClose }: 
             onClick={() => setSelectedCategory(cat)}
           >
             {cat}
+          </button>
+        ))}
+      </div>
+
+      {/* Resolution selector */}
+      <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-border">
+        <span className="text-[9px] text-muted-foreground font-medium">Résolution :</span>
+        {(["1k", "2k", "4k"] as ResolutionOption[]).map((res) => (
+          <button
+            key={res}
+            className={cn(
+              "px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide transition-all",
+              resolution === res
+                ? "bg-primary/20 text-primary border border-primary/40"
+                : "bg-muted text-muted-foreground hover:bg-muted/80 border border-transparent"
+            )}
+            onClick={() => setResolution(res)}
+          >
+            {res}
           </button>
         ))}
       </div>

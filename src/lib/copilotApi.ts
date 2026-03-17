@@ -11,12 +11,26 @@ export interface CopilotChatRequest {
   links?: string[];
 }
 
+export interface PendingAssetData {
+  asset_id: string;
+  asset_name: string;
+  glb_url?: string;
+  category?: string;
+  thumbnail?: string;
+  placement_rule?: string;
+  score?: number;
+  source?: "curated" | "discovery";
+  polycount?: number;
+  file_size_mb?: number;
+}
+
 export interface CopilotChatResponse {
   text: string;
   actions: CopilotAction[];
   summary: string;
   alternatives: string[];
   error?: string;
+  pending_assets?: PendingAssetData[];
   asset_search?: {
     curated_count: number;
     discovery_count: number;

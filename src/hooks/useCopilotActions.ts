@@ -56,13 +56,23 @@ function computePosition(
     const wall = walls[wallIdx] || walls[0];
     // Place at midpoint of the wall
     const t = 0.5;
-    const x = wall.start.x + (wall.end.x - wall.start.x) * t;
-    const y = wall.start.y + (wall.end.y - wall.start.y) * t;
-    // Compute rotation to face inward (perpendicular to wall)
+    const wx = wall.start.x + (wall.end.x - wall.start.x) * t;
+    const wy = wall.start.y + (wall.end.y - wall.start.y) * t;
+    // Compute wall direction and inward normal
     const dx = wall.end.x - wall.start.x;
     const dy = wall.end.y - wall.start.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
     const angle = Math.atan2(dy, dx) * (180 / Math.PI) + 90;
-    return { x, y, rotation: angle };
+    // Normal perpendicular to wall pointing inward (toward room center)
+    const nx = -dy / len;
+    const ny = dx / len;
+    // Check which direction is toward center
+    const dotToCenter = nx * (centerX - wx) + ny * (centerY - wy);
+    const sign = dotToCenter >= 0 ? 1 : -1;
+    // Offset asset so its back is flush against the wall (half depth + small margin)
+    const assetDepth = 50; // default half-depth in cm
+    const offset = assetDepth * sign;
+    return { x: wx + nx * offset, y: wy + ny * offset, rotation: angle };
   }
 
   if (surface === "ceiling") {

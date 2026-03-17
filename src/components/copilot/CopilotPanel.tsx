@@ -306,6 +306,46 @@ export function CopilotPanel({ onActionsReady, onClose }: Props) {
               </div>
             )}
 
+            {/* Pending assets preview */}
+            {msg.pendingAssets && msg.pendingAssets.length > 0 && (
+              <div className="w-full max-w-[280px]">
+                <AssetPreviewPanel
+                  assets={msg.pendingAssets}
+                  onAccept={(accepted) => {
+                    const actions: CopilotAction[] = accepted.map((a) => ({
+                      type: "add_asset" as const,
+                      asset_id: a.asset_id,
+                      asset_name: a.asset_name,
+                      glb_url: a.glb_url,
+                      category: a.category,
+                      thumbnail: a.thumbnail,
+                      placement_rule: a.placement_rule,
+                    }));
+                    onActionsReady(actions);
+                    // Replace pending with accepted indicator
+                    setMessages((prev) =>
+                      prev.map((m) =>
+                        m.id === msg.id
+                          ? { ...m, pendingAssets: undefined, actions: [...(m.actions || []), ...actions] }
+                          : m
+                      )
+                    );
+                    toast({
+                      title: "Assets insérés",
+                      description: `${accepted.length} asset(s) ajouté(s) à la scène`,
+                    });
+                  }}
+                  onDismiss={() => {
+                    setMessages((prev) =>
+                      prev.map((m) =>
+                        m.id === msg.id ? { ...m, pendingAssets: undefined } : m
+                      )
+                    );
+                  }}
+                />
+              </div>
+            )}
+
             {/* Alternatives */}
             {msg.alternatives && msg.alternatives.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-1">

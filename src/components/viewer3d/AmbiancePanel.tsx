@@ -106,7 +106,7 @@ export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose, onAddE
         </Button>
       </div>
 
-      {/* Assets 3D – Sketchfab + scene list */}
+      {/* Assets 3D – Sketchfab only (non-catalog) */}
       {onAddEquipment && (
         <div className="mb-4">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
@@ -120,52 +120,48 @@ export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose, onAddE
             <span className="text-xs text-muted-foreground">Chercher sur Sketchfab…</span>
           </button>
 
-          {/* List of placed equipment */}
-          {state.placedEquipments.length > 0 && (
-            <div className="space-y-1">
-              <p className="text-[10px] text-muted-foreground mb-1">
-                {state.placedEquipments.length} élément{state.placedEquipments.length > 1 ? "s" : ""} dans la scène
-              </p>
-              <div className="max-h-40 overflow-y-auto space-y-0.5 pr-0.5">
-                {state.placedEquipments.map((eq) => (
-                  <div
-                    key={eq.id}
-                    className="flex items-center gap-1.5 rounded-md border border-border/50 hover:border-border p-1.5 group transition-all"
-                  >
+          {/* List of non-catalog (Sketchfab) assets */}
+          {(() => {
+            const assets = state.placedEquipments.filter((eq) => eq.id.startsWith("sketchfab-"));
+            if (assets.length === 0) return null;
+            return (
+              <div className="space-y-1">
+                <p className="text-[10px] text-muted-foreground mb-1">
+                  {assets.length} asset{assets.length > 1 ? "s" : ""} importé{assets.length > 1 ? "s" : ""}
+                </p>
+                <div className="max-h-40 overflow-y-auto space-y-0.5 pr-0.5">
+                  {assets.map((eq) => (
                     <div
-                      className="h-5 w-5 rounded shrink-0"
-                      style={{ backgroundColor: eq.color }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-medium text-foreground truncate">{eq.name}</p>
-                      <p className="text-[9px] text-muted-foreground">
-                        {eq.width}×{eq.depth}{eq.height ? `×${eq.height}` : ""} cm
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-5 w-5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/20 hover:text-destructive"
-                      onClick={() => dispatch({ type: "DELETE_PLACED_EQUIPMENT", id: eq.id })}
-                      title="Supprimer"
+                      key={eq.id}
+                      className="flex items-center gap-1.5 rounded-md border border-border/50 hover:border-border p-1.5 group transition-all"
                     >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ))}
+                      <div
+                        className="h-8 w-8 rounded shrink-0 flex items-center justify-center bg-muted"
+                        style={{ backgroundColor: eq.color }}
+                      >
+                        <Box className="h-3.5 w-3.5 text-foreground/60" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-medium text-foreground truncate">{eq.name}</p>
+                        <p className="text-[9px] text-muted-foreground">
+                          {eq.width}×{eq.depth}{eq.height ? `×${eq.height}` : ""} cm
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/20 hover:text-destructive"
+                        onClick={() => dispatch({ type: "DELETE_PLACED_EQUIPMENT", id: eq.id })}
+                        title="Supprimer"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               </div>
-              {state.placedEquipments.length > 1 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full h-6 text-[10px] text-destructive hover:bg-destructive/10 mt-1"
-                  onClick={() => dispatch({ type: "CLEAR_PLACED_EQUIPMENTS" })}
-                >
-                  <Trash2 className="h-3 w-3 mr-1" /> Tout supprimer
-                </Button>
-              )}
-            </div>
-          )}
+            );
+          })()}
         </div>
       )}
 

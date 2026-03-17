@@ -152,7 +152,7 @@ const visibilityToggles: { key: VisKey; label: string; icon: React.ElementType }
   { key: "heights", label: "Hauteurs", icon: Ruler },
 ];
 
-const DEFAULT_AMBIANCE: AmbianceSettings = { floorTexture: "default", wallFinish: "default", wallColor: "#f0f0f0", wallHeight: 2.8, ceiling: "none", ceilingHeight: 2.8, fog: false, fogIntensity: 0.3, theme: "custom", polyhavenFloor: null, polyhavenWall: null, polyhavenCeiling: null };
+const DEFAULT_AMBIANCE: AmbianceSettings = { floorTexture: "default", wallFinish: "default", wallColor: "#f0f0f0", wallHeight: 2.8, ceiling: "none", ceilingHeight: 2.8, fog: false, fogIntensity: 0.3, theme: "custom", polyhavenFloor: null, polyhavenWall: null, polyhavenCeiling: null, polyhavenHDRI: null, hdriIntensity: 1, hdriBackground: false };
 
 export function Viewer3DToolbar({ settings, onChange, onAddEquipment }: Props) {
   const [visExpanded, setVisExpanded] = useState(false);

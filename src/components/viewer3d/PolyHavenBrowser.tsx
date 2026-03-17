@@ -42,6 +42,7 @@ export function PolyHavenBrowser({ target, currentTexture, onSelect, onClose }: 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [resolution, setResolution] = useState<ResolutionOption>("2k");
 
   const categories = TARGET_CATEGORIES[target];
 

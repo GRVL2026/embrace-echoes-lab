@@ -62,9 +62,9 @@ function PolyHavenCeilingPanel({ shape, height, textureData, surfaceSize }: { sh
   const mats = useMemo(() => {
     const rot = Math.floor((Math.sin(surfaceSize[0] * 127.1 + surfaceSize[1] * 311.7) * 43758.5453 % 1 + 1) % 1 * 4);
     return {
-      diffuse: configCeilingTex(diffuseTex, surfaceSize[0], surfaceSize[1], rot),
-      normal: normalTex ? configCeilingTex(normalTex, surfaceSize[0], surfaceSize[1], rot) : null,
-      roughness: roughTex ? configCeilingTex(roughTex, surfaceSize[0], surfaceSize[1], rot) : null,
+      diffuse: configCeilingTex(diffuseTex, rot),
+      normal: normalTex ? configCeilingTex(normalTex, rot) : null,
+      roughness: roughTex ? configCeilingTex(roughTex, rot) : null,
     };
   }, [diffuseTex, normalTex, roughTex, surfaceSize[0], surfaceSize[1]]);
 

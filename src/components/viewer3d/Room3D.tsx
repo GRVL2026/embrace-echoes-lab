@@ -137,9 +137,9 @@ function PolyHavenSurface({
   const mats = useMemo(() => {
     const rot = Math.floor(pseudoRandom(surfaceSize[0] * 7, surfaceSize[1] * 13) * 4);
     return {
-      diffuse: configureTexture(diffuseTex, surfaceSize[0], surfaceSize[1], 0, 0, rot),
-      normal: normalTex ? configureTexture(normalTex, surfaceSize[0], surfaceSize[1], 0, 0, rot) : null,
-      roughness: roughTex ? configureTexture(roughTex, surfaceSize[0], surfaceSize[1], 0, 0, rot) : null,
+      diffuse: configureShapeTexture(diffuseTex, 0, 0, rot),
+      normal: normalTex ? configureShapeTexture(normalTex, 0, 0, rot) : null,
+      roughness: roughTex ? configureShapeTexture(roughTex, 0, 0, rot) : null,
     };
   }, [diffuseTex, normalTex, roughTex, surfaceSize[0], surfaceSize[1]]);
 

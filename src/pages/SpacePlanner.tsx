@@ -22,17 +22,6 @@ function SpacePlannerInner() {
   const [viewer3DSettings, setViewer3DSettings] = useState<Viewer3DSettings>(DEFAULT_3D_SETTINGS);
   const { state, dispatch } = useEditor();
 
-  const { executeActions } = useCopilotActions({
-    currentAmbiance: viewer3DSettings.ambiance,
-    onAmbianceChange: (ambiance) =>
-      setViewer3DSettings((s) => ({ ...s, ambiance })),
-    onLightingChange: (preset) =>
-      setViewer3DSettings((s) => ({ ...s, lighting: preset })),
-    onAddEquipment: (equipment) =>
-      dispatch({ type: "ADD_PLACED_EQUIPMENT", equipment }),
-    roomContext,
-  });
-
   // Build room context for the copilot
   const roomContext = useMemo<RoomContext | undefined>(() => {
     const room = state.rooms[0];
@@ -43,13 +32,11 @@ function SpacePlannerInner() {
     const minX = Math.min(...xs), maxX = Math.max(...xs);
     const minY = Math.min(...ys), maxY = Math.max(...ys);
 
-    // Build wall segments
     const walls = room.points.map((p, i) => {
       const next = room.points[(i + 1) % room.points.length];
       return { start: { x: p.x, y: p.y }, end: { x: next.x, y: next.y } };
     });
 
-    // Doors with world positions
     const doors = state.doors.map((d) => {
       const wall = walls[d.edgeIndex];
       if (!wall) return { position: { x: 0, y: 0 }, width: d.width, isMain: d.isMainDoor };
@@ -80,6 +67,17 @@ function SpacePlannerInner() {
       circulation_width_cm: SAFETY_ZONE_CM,
     };
   }, [state.rooms, state.doors, state.pillars, state.placedEquipments]);
+
+  const { executeActions } = useCopilotActions({
+    currentAmbiance: viewer3DSettings.ambiance,
+    onAmbianceChange: (ambiance) =>
+      setViewer3DSettings((s) => ({ ...s, ambiance })),
+    onLightingChange: (preset) =>
+      setViewer3DSettings((s) => ({ ...s, lighting: preset })),
+    onAddEquipment: (equipment) =>
+      dispatch({ type: "ADD_PLACED_EQUIPMENT", equipment }),
+    roomContext,
+  });
 
   const toggleSidebar = useCallback(() => {
     const nextOpen = !sidebarOpen;

@@ -175,7 +175,7 @@ export function Ceiling3D({ room, ceilingType, height = 2.8, polyhavenTexture }:
     return { shape, beamLines, ducts };
   }, [room]);
 
-  if (ceilingType === "none") return null;
+  if (ceilingType === "none" && !polyhavenTexture) return null;
 
   const isTechnical = ceilingType === "technical";
   const color = isTechnical

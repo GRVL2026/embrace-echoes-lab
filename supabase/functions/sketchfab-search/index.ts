@@ -235,20 +235,71 @@ async function searchCuratedAssets(supabase: any, context: DesignContext): Promi
   const results: ScoredResult[] = [];
 
   for (const plan of context.search_plan) {
+    // Build a broader search: category/subcategory + style_tags + material_tags + room_tags + description
+    const searchTerms = [
+      plan.category,
+      ...plan.queries.slice(0, 3), // Use first queries as search terms
+    ];
+    const styleTerms = context.style_profile.secondary.slice(0, 3);
+    const moodTerms = (context.style_profile.mood || []).slice(0, 2);
+
+    // Build OR filter across multiple metadata columns
+    const orFilters = [
+      `category.ilike.%${plan.category}%`,
+      `subcategory.ilike.%${plan.category}%`,
+      ...searchTerms.flatMap((term) => [
+        `name.ilike.%${term}%`,
+        `description.ilike.%${term}%`,
+      ]),
+    ].join(",");
+
     const { data } = await supabase
       .from("copilot_assets")
       .select("*")
       .eq("is_active", true)
       .eq("is_curated", true)
-      .or(`category.ilike.%${plan.category}%,subcategory.ilike.%${plan.category}%`)
-      .limit(10);
+      .or(orFilters)
+      .limit(15);
 
     if (data) {
       for (const asset of data) {
-        const styleTags = asset.style_tags || [];
-        const styleMatch = context.style_profile.secondary.some((s: string) =>
-          styleTags.some((t: string) => t.toLowerCase().includes(s.toLowerCase()))
-        );
+        const styleTags = (asset.style_tags || []).map((t: string) => t.toLowerCase());
+        const materialTags = (asset.material_tags || []).map((t: string) => t.toLowerCase());
+        const colorTags = (asset.color_tags || []).map((t: string) => t.toLowerCase());
+        const roomTags = (asset.room_tags || []).map((t: string) => t.toLowerCase());
+        const descLower = (asset.description || "").toLowerCase();
+        const nameLower = (asset.name || "").toLowerCase();
+
+        const allAssetText = [...styleTags, ...materialTags, ...colorTags, ...roomTags, nameLower, descLower];
+
+        // Style match: check across all metadata, not just style_tags
+        const styleHits = [...context.style_profile.secondary, ...moodTerms].filter((s) =>
+          allAssetText.some((t) => t.includes(s.toLowerCase()))
+        ).length;
+
+        // Material match
+        const matHits = (context.style_profile.materials || []).filter((m) =>
+          allAssetText.some((t) => t.includes(m.toLowerCase()))
+        ).length;
+
+        // Palette match
+        const paletteHits = context.style_profile.palette.filter((p) =>
+          allAssetText.some((t) => t.includes(p.toLowerCase()))
+        ).length;
+
+        // Category relevance: check query terms against all asset text
+        const queryHits = plan.queries.filter((q) => {
+          const words = q.toLowerCase().split(/\s+/);
+          return words.some((w) => allAssetText.some((t) => t.includes(w)));
+        }).length;
+
+        const totalSignals = styleHits + matHits + paletteHits + queryHits;
+        const maxSignals = context.style_profile.secondary.length + moodTerms.length +
+          (context.style_profile.materials || []).length + context.style_profile.palette.length + plan.queries.length;
+
+        const relevanceScore = Math.min(totalSignals / Math.max(maxSignals, 1), 1);
+        const curatedBonus = 0.2;
+        const finalScore = Math.min(relevanceScore * 0.8 + curatedBonus, 1);
 
         results.push({
           uid: `curated-${asset.id}`,
@@ -259,10 +310,17 @@ async function searchCuratedAssets(supabase: any, context: DesignContext): Promi
           face_count: asset.polycount || 0,
           is_downloadable: true,
           license: asset.license,
-          tags: styleTags,
+          tags: asset.style_tags || [],
           category: plan.category,
-          score: styleMatch ? 0.9 : 0.7, // Curated assets get a bonus
-          score_breakdown: { curated_bonus: 0.2, style_match: styleMatch ? 0.2 : 0 },
+          score: finalScore,
+          score_breakdown: {
+            curated_bonus: curatedBonus,
+            style_hits: styleHits,
+            material_hits: matHits,
+            palette_hits: paletteHits,
+            query_hits: queryHits,
+            relevance: relevanceScore,
+          },
         });
       }
     }
@@ -372,6 +430,11 @@ function filterResults(
 
 // ─── Layer 3: Scoring ───────────────────────────────────────
 
+/** Check if any term matches in a set of text fields */
+function matchesAny(term: string, ...fields: string[]): boolean {
+  return fields.some((f) => f.includes(term));
+}
+
 function scoreResults(
   results: (ScoredResult & { _raw_tags: string[] })[],
   context: DesignContext
@@ -380,50 +443,66 @@ function scoreResults(
     context.style_profile.primary.toLowerCase(),
     ...context.style_profile.secondary.map((s) => s.toLowerCase()),
   ];
+  const moodTags = (context.style_profile.mood || []).map((m) => m.toLowerCase());
   const paletteTags = context.style_profile.palette.map((p) => p.toLowerCase());
   const materialTags = (context.style_profile.materials || []).map((m) => m.toLowerCase());
-  const arcadeTerms = ["arcade", "gaming", "entertainment", "commercial", "retail", "amusement"];
+  const arcadeTerms = ["arcade", "gaming", "entertainment", "commercial", "retail", "amusement", "game room", "fun", "neon"];
+
+  // Build expanded search terms from query plans for the category
+  const categoryQueryMap: Record<string, string[]> = {};
+  for (const sp of context.search_plan) {
+    categoryQueryMap[sp.category] = sp.queries.flatMap((q) =>
+      q.toLowerCase().split(/\s+/).filter((w) => w.length > 2)
+    );
+  }
 
   return results.map((r) => {
     const tags = r._raw_tags;
     const nameLower = r.name.toLowerCase();
+    const descLower = (r.description || "").toLowerCase();
+    const allTagsJoined = tags.join(" ");
 
-    // Semantic relevance: how well tags/name match the category
-    const categoryWords = r.category.replace(/_/g, " ").split(" ");
-    const semanticHits = categoryWords.filter(
-      (w) => nameLower.includes(w) || tags.some((t) => t.includes(w))
+    // ── Semantic relevance: category words + query terms against name, description, tags
+    const categoryWords = r.category.replace(/_/g, " ").split(" ").filter((w) => w.length > 2);
+    const queryWords = categoryQueryMap[r.category] || [];
+    const allSemanticTerms = [...new Set([...categoryWords, ...queryWords])];
+
+    const semanticHits = allSemanticTerms.filter(
+      (w) => matchesAny(w, nameLower, descLower, allTagsJoined)
     ).length;
-    const semantic = Math.min(semanticHits / Math.max(categoryWords.length, 1), 1);
+    const semantic = Math.min(semanticHits / Math.max(allSemanticTerms.length * 0.3, 1), 1);
 
-    // Style compatibility
-    const styleHits = styleTags.filter(
-      (s) => nameLower.includes(s) || tags.some((t) => t.includes(s))
+    // ── Style compatibility: check style + mood against all text fields
+    const allStyleTerms = [...styleTags, ...moodTags];
+    const styleHits = allStyleTerms.filter(
+      (s) => matchesAny(s, nameLower, descLower, allTagsJoined)
     ).length;
-    const style = Math.min(styleHits / Math.max(styleTags.length, 1), 1);
+    const style = Math.min(styleHits / Math.max(allStyleTerms.length * 0.4, 1), 1);
 
-    // Palette & material
+    // ── Palette & material: check against all text fields
     const paletteHits = paletteTags.filter(
-      (p) => nameLower.includes(p) || tags.some((t) => t.includes(p))
+      (p) => matchesAny(p, nameLower, descLower, allTagsJoined)
     ).length;
     const matHits = materialTags.filter(
-      (m) => nameLower.includes(m) || tags.some((t) => t.includes(m))
+      (m) => matchesAny(m, nameLower, descLower, allTagsJoined)
     ).length;
+    const totalPaletteMatTerms = paletteTags.length + materialTags.length;
     const paletteMat = Math.min(
-      (paletteHits + matHits) / Math.max(paletteTags.length + materialTags.length, 1),
+      (paletteHits + matHits) / Math.max(totalPaletteMatTerms * 0.3, 1),
       1
     );
 
-    // Arcade relevance
+    // ── Arcade relevance: check against all text fields
     const arcadeHits = arcadeTerms.filter(
-      (a) => nameLower.includes(a) || tags.some((t) => t.includes(a))
+      (a) => matchesAny(a, nameLower, descLower, allTagsJoined)
     ).length;
     const arcade = Math.min(arcadeHits / 2, 1);
 
-    // Performance (lower polycount = better)
+    // ── Performance (lower polycount = better)
     const perf = r.vertex_count <= 10_000 ? 1 : r.vertex_count <= 50_000 ? 0.7 : r.vertex_count <= 100_000 ? 0.4 : 0.2;
 
-    // Cohesion placeholder (would improve with selected asset context)
-    const cohesion = style > 0.3 ? 0.7 : 0.3;
+    // ── Cohesion: combines style match + semantic match for a holistic signal
+    const cohesion = (style > 0.3 && semantic > 0.2) ? 0.8 : style > 0.2 ? 0.5 : 0.2;
 
     const totalScore =
       semantic * WEIGHTS.semantic_relevance +

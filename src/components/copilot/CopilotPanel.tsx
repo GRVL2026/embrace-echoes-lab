@@ -40,7 +40,7 @@ type Props = {
 };
 
 // ─── Component ──────────────────────────────────────────────
-export function CopilotPanel({ onActionsReady, onClose }: Props) {
+export function CopilotPanel({ onActionsReady, onClose, roomContext }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [images, setImages] = useState<string[]>([]);

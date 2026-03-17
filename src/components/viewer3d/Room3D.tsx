@@ -248,7 +248,8 @@ function PolyHavenWallSegment({
     if (!diffuseTex) return null;
     const ox = pseudoRandom(segmentIndex, 0);
     const oy = pseudoRandom(segmentIndex, 1);
-    const rot = Math.floor(pseudoRandom(segmentIndex, 4) * 4);
+    // Walls: only allow 0° or 180° rotation to preserve texture orientation (no 90°/270°)
+    const rot = Math.floor(pseudoRandom(segmentIndex, 4) * 2) * 2; // 0 or 2
     return {
       diffuse: configureTexture(diffuseTex, size[0], size[1], ox, oy, rot),
       normal: normalTex ? configureTexture(normalTex, size[0], size[1], ox, oy, rot) : null,

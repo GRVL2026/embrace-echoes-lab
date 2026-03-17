@@ -300,6 +300,30 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Inject room context for spatial placement intelligence
+    if (room_context) {
+      const wallsDesc = (room_context.walls || []).map((w: any, i: number) => {
+        const dx = w.end.x - w.start.x;
+        const dy = w.end.y - w.start.y;
+        const len = Math.round(Math.sqrt(dx * dx + dy * dy));
+        return `Mur ${i}: (${Math.round(w.start.x)},${Math.round(w.start.y)}) -> (${Math.round(w.end.x)},${Math.round(w.end.y)}) ${len}cm`;
+      }).join("\n");
+      const doorsDesc = (room_context.doors || []).map((d: any, i: number) =>
+        `Porte ${i}: pos(${Math.round(d.position.x)},${Math.round(d.position.y)}) larg ${d.width}cm${d.isMain ? " [PRINCIPALE]" : ""}`
+      ).join("\n");
+      const pillarsDesc = (room_context.pillars || []).map((p: any, i: number) =>
+        `Poteau ${i}: (${Math.round(p.position.x)},${Math.round(p.position.y)}) ${p.width}x${p.depth}cm`
+      ).join("\n");
+      const equipDesc = (room_context.existing_equipment || []).map((e: any) =>
+        `"${e.name}" a (${Math.round(e.position.x)},${Math.round(e.position.y)}) ${e.width}x${e.depth}cm rot${e.rotation}deg`
+      ).join("\n");
+
+      aiMessages.push({
+        role: "system",
+        content: `## CONTEXTE SPATIAL DE LA SALLE\n\nDimensions: ${room_context.room_width_cm}cm x ${room_context.room_depth_cm}cm, hauteur ${room_context.room_height_cm}cm.\nCorridor circulation: ${room_context.circulation_width_cm}cm.\n\n### Murs\n${wallsDesc}\n\n### Portes\n${doorsDesc}\n\n### Poteaux\n${pillarsDesc}\n\n### Equipements existants\n${equipDesc}\n\nIMPORTANT: Utilise ces donnees pour calculer les positions EXACTES. X=largeur, Z=profondeur (mappe au Y du plan 2D), Y=hauteur.`,
+      });
+    }
+
     // Add conversation history
     for (const msg of messages) {
       if (msg.role === "user") {

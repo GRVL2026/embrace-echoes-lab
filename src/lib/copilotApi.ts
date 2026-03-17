@@ -17,6 +17,12 @@ export interface CopilotChatResponse {
   summary: string;
   alternatives: string[];
   error?: string;
+  asset_search?: {
+    curated_count: number;
+    discovery_count: number;
+    selected_count: number;
+    placement_rules?: Record<string, string>;
+  };
 }
 
 export async function sendCopilotMessage(req: CopilotChatRequest): Promise<CopilotChatResponse> {

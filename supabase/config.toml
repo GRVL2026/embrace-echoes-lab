@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.sketchfab-proxy]
 verify_jwt = false
+
+[functions.sketchfab-search]
+verify_jwt = false

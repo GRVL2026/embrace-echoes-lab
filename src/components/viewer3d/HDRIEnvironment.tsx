@@ -13,7 +13,7 @@ type Props = {
 export function HDRIEnvironment({ hdri, intensity = 1, showBackground = false }: Props) {
   const { scene, gl } = useThree();
   const currentUrlRef = useRef<string | null>(null);
-  const envMapRef = useRef<THREE.Texture | null>(null);
+  const envMapRef = useRef<THREE.DataTexture | null>(null);
 
   useEffect(() => {
     if (!hdri?.url) {
@@ -32,7 +32,7 @@ export function HDRIEnvironment({ hdri, intensity = 1, showBackground = false }:
       // Same URL — just update intensity/background
       if (envMapRef.current) {
         scene.environment = envMapRef.current;
-        scene.environmentIntensity = intensity;
+        (scene as any).environmentIntensity = intensity;
         scene.background = showBackground ? envMapRef.current : null;
       }
       return;
@@ -42,7 +42,7 @@ export function HDRIEnvironment({ hdri, intensity = 1, showBackground = false }:
     currentUrlRef.current = hdri.url;
     const loader = new RGBELoader();
 
-    // We need to fetch through the proxy with auth headers
+    // Fetch through the proxy with auth headers, then use loader
     const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
     fetch(hdri.url, {
@@ -59,16 +59,28 @@ export function HDRIEnvironment({ hdri, intensity = 1, showBackground = false }:
         // Check if URL is still current
         if (currentUrlRef.current !== hdri.url) return;
 
-        const texture = loader.parse(buffer);
-        texture.mapping = THREE.EquirectangularReflectionMapping;
+        // Create a blob URL so RGBELoader can load it
+        const blob = new Blob([buffer], { type: "application/octet-stream" });
+        const blobUrl = URL.createObjectURL(blob);
 
-        // Dispose previous
-        if (envMapRef.current) envMapRef.current.dispose();
-        envMapRef.current = texture;
+        loader.load(blobUrl, (texture) => {
+          URL.revokeObjectURL(blobUrl);
 
-        scene.environment = texture;
-        scene.environmentIntensity = intensity;
-        scene.background = showBackground ? texture : null;
+          if (currentUrlRef.current !== hdri.url) {
+            texture.dispose();
+            return;
+          }
+
+          texture.mapping = THREE.EquirectangularReflectionMapping;
+
+          // Dispose previous
+          if (envMapRef.current) envMapRef.current.dispose();
+          envMapRef.current = texture;
+
+          scene.environment = texture;
+          (scene as any).environmentIntensity = intensity;
+          scene.background = showBackground ? texture : null;
+        });
       })
       .catch((err) => {
         console.error("[HDRI] Failed to load:", err);
@@ -89,7 +101,7 @@ export function HDRIEnvironment({ hdri, intensity = 1, showBackground = false }:
   // Update intensity/background when they change (without reloading)
   useEffect(() => {
     if (envMapRef.current) {
-      scene.environmentIntensity = intensity;
+      (scene as any).environmentIntensity = intensity;
       scene.background = showBackground ? envMapRef.current : null;
     }
   }, [intensity, showBackground, scene]);

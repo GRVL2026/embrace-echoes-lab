@@ -53,6 +53,7 @@ export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose, onAddE
   const ambiance = ensureDefaults(rawAmbiance);
   const [polyhavenTarget, setPolyhavenTarget] = useState<SurfaceTarget | null>(null);
   const [sketchfabOpen, setSketchfabOpen] = useState(false);
+  const [hdriOpen, setHdriOpen] = useState(false);
 
   const update = (partial: Partial<AmbianceSettings>) => {
     onChange({ ...ambiance, ...partial, theme: "custom" });

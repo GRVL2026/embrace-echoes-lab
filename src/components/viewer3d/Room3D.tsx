@@ -210,9 +210,6 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true, ambian
   const wallTexturePath = !polyWall && ambiance?.wallFinish && ambiance.wallFinish !== "default" && ambiance.wallFinish !== "paint"
     ? WALL_TEXTURE_MAP[ambiance.wallFinish]
     : null;
-  const wallTexturePath = ambiance?.wallFinish && ambiance.wallFinish !== "default" && ambiance.wallFinish !== "paint"
-    ? WALL_TEXTURE_MAP[ambiance.wallFinish]
-    : null;
   const wallColor = ambiance?.wallFinish === "paint" ? ambiance.wallColor : "#f0f0f0";
 
   const { floorShape, wallMeshes } = useMemo(() => {

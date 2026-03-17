@@ -214,7 +214,7 @@ export function Ceiling3D({ room, ceilingType, height = 2.8, polyhavenTexture }:
             {...({} as any)}
           />
         </mesh>
-      )}
+      ) : null}
 
       {/* Tiles grid lines */}
       {ceilingType === "tiles" && (

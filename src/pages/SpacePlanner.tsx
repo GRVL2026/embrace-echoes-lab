@@ -32,6 +32,54 @@ function SpacePlannerInner() {
       dispatch({ type: "ADD_PLACED_EQUIPMENT", equipment }),
   });
 
+  // Build room context for the copilot
+  const roomContext = useMemo<RoomContext | undefined>(() => {
+    const room = state.rooms[0];
+    if (!room || room.points.length < 3) return undefined;
+
+    const xs = room.points.map((p) => p.x);
+    const ys = room.points.map((p) => p.y);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+
+    // Build wall segments
+    const walls = room.points.map((p, i) => {
+      const next = room.points[(i + 1) % room.points.length];
+      return { start: { x: p.x, y: p.y }, end: { x: next.x, y: next.y } };
+    });
+
+    // Doors with world positions
+    const doors = state.doors.map((d) => {
+      const wall = walls[d.edgeIndex];
+      if (!wall) return { position: { x: 0, y: 0 }, width: d.width, isMain: d.isMainDoor };
+      const px = wall.start.x + (wall.end.x - wall.start.x) * d.positionRatio;
+      const py = wall.start.y + (wall.end.y - wall.start.y) * d.positionRatio;
+      return { position: { x: px, y: py }, width: d.width, isMain: d.isMainDoor };
+    });
+
+    return {
+      walls,
+      doors,
+      pillars: state.pillars.map((p) => ({
+        position: p.position,
+        width: p.width,
+        depth: p.depth,
+      })),
+      floor_points: room.points,
+      room_width_cm: maxX - minX,
+      room_depth_cm: maxY - minY,
+      room_height_cm: 300,
+      existing_equipment: state.placedEquipments.map((e) => ({
+        name: e.name,
+        position: e.position,
+        width: e.width,
+        depth: e.depth,
+        rotation: e.rotation,
+      })),
+      circulation_width_cm: SAFETY_ZONE_CM,
+    };
+  }, [state.rooms, state.doors, state.pillars, state.placedEquipments]);
+
   const toggleSidebar = useCallback(() => {
     const nextOpen = !sidebarOpen;
     setSidebarOpen(nextOpen);

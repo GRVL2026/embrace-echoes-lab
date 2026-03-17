@@ -322,9 +322,10 @@ Deno.serve(async (req) => {
           const args = JSON.parse(tc.function.arguments);
 
           if (tc.function.name === "apply_scene_changes") {
-            sceneActions = args.actions || [];
+            sceneActions = enrichMaterialActions(args.actions || []);
             summary = args.summary || "";
             alternatives = args.alternatives || [];
+            console.log("Scene actions enriched:", sceneActions.filter((a: any) => a.type === "apply_material").length, "materials with Poly Haven URLs");
           }
 
           if (tc.function.name === "find_3d_assets") {

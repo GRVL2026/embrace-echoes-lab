@@ -1,21 +1,72 @@
-import { useMemo, Suspense } from "react";
+import { useMemo, useState, useEffect, Suspense } from "react";
 import * as THREE from "three";
 import { useLoader } from "@react-three/fiber";
 import type { Room, Door } from "@/types/editor";
 import type { AmbianceSettings, FloorTexture, WallFinish, PolyHavenTexture } from "./Viewer3DToolbar";
 import { AntiTileMaterial } from "./AntiTileMaterial";
 
-/** Proxy Poly Haven CDN URLs through our edge function to avoid CORS issues */
-function proxyPolyHavenUrl(url: string | null): string | null {
-  if (!url) return null;
-  try {
-    const parsed = new URL(url);
-    if (parsed.hostname.endsWith("polyhaven.org") || parsed.hostname.endsWith("polyhaven.com")) {
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      return `https://${projectId}.supabase.co/functions/v1/polyhaven-proxy?file_url=${encodeURIComponent(url)}`;
-    }
-  } catch { /* not a valid URL, return as-is */ }
-  return url;
+/**
+ * Custom texture loader that fetches via fetch() to handle CORS.
+ * Poly Haven's dl.polyhaven.org doesn't serve CORS headers, so we proxy
+ * through our edge function using fetch (with apikey header).
+ */
+function useProxiedTexture(url: string | null): THREE.Texture | null {
+  const [texture, setTexture] = useState<THREE.Texture | null>(null);
+
+  useEffect(() => {
+    if (!url) { setTexture(null); return; }
+
+    let cancelled = false;
+    const isPolyHaven = url.includes("polyhaven.org") || url.includes("polyhaven.com");
+
+    const loadTexture = async () => {
+      try {
+        let imageUrl = url;
+
+        if (isPolyHaven) {
+          // Fetch via proxy edge function using fetch() so we can add headers
+          const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+          const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+          const proxyUrl = `https://${projectId}.supabase.co/functions/v1/polyhaven-proxy?file_url=${encodeURIComponent(url)}`;
+
+          const res = await fetch(proxyUrl, {
+            headers: {
+              apikey: anonKey,
+              Authorization: `Bearer ${anonKey}`,
+            },
+          });
+          if (!res.ok) throw new Error(`Proxy error: ${res.status}`);
+          const blob = await res.blob();
+          imageUrl = URL.createObjectURL(blob);
+        }
+
+        if (cancelled) return;
+
+        const loader = new THREE.TextureLoader();
+        loader.setCrossOrigin("anonymous");
+        loader.load(
+          imageUrl,
+          (tex) => {
+            if (!cancelled) setTexture(tex);
+            // Revoke blob URL after load
+            if (isPolyHaven) URL.revokeObjectURL(imageUrl);
+          },
+          undefined,
+          () => {
+            if (isPolyHaven) URL.revokeObjectURL(imageUrl);
+            console.warn("Failed to load texture:", url);
+          },
+        );
+      } catch (e) {
+        console.warn("Texture fetch failed:", url, e);
+      }
+    };
+
+    loadTexture();
+    return () => { cancelled = true; };
+  }, [url]);
+
+  return texture;
 }
 
 const WALL_THICKNESS = 0.15; // meters

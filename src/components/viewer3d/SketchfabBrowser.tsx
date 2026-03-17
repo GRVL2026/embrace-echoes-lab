@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Search, Loader2, X, Download, Box, ExternalLink } from "lucide-react";
+import { Search, Loader2, X, Download, Box, ExternalLink, ArrowLeft, Eye, Triangle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -32,6 +32,105 @@ const SUGGESTED_QUERIES = [
   "speaker",
 ];
 
+const formatPolycount = (count?: number) => {
+  if (!count) return "—";
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(0)}k`;
+  return String(count);
+};
+
+/* ─── Preview sub-panel ─── */
+function ModelPreview({
+  model,
+  onBack,
+  onAdd,
+  isAdding,
+}: {
+  model: SketchfabModel;
+  onBack: () => void;
+  onAdd: () => void;
+  isAdding: boolean;
+}) {
+  const embedUrl = `https://sketchfab.com/models/${model.uid}/embed?autostart=1&ui_stop=0&ui_inspector=0&ui_watermark=0&ui_watermark_link=0&ui_hint=0&ui_ar=0&ui_help=0&ui_settings=0&ui_vr=0&ui_fullscreen=0&ui_annotations=0`;
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center gap-2 p-2 border-b border-border">
+        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={onBack}>
+          <ArrowLeft className="h-3.5 w-3.5" />
+        </Button>
+        <p className="text-[11px] font-semibold text-foreground truncate flex-1">{model.name}</p>
+      </div>
+
+      {/* 3D Embed */}
+      <div className="relative w-full aspect-square bg-muted">
+        <iframe
+          title={model.name}
+          src={embedUrl}
+          className="absolute inset-0 w-full h-full"
+          allow="autoplay; fullscreen; xr-spatial-tracking"
+          allowFullScreen
+        />
+      </div>
+
+      {/* Info */}
+      <div className="p-2.5 space-y-2 border-t border-border">
+        <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+          <span className="inline-flex items-center gap-0.5">
+            <Triangle className="h-2.5 w-2.5" /> {formatPolycount(model.face_count)} faces
+          </span>
+          {model.vertex_count && (
+            <span>{formatPolycount(model.vertex_count)} vertices</span>
+          )}
+          {model.user && <span>par {model.user}</span>}
+        </div>
+
+        {model.license && (
+          <span className={cn(
+            "inline-block px-1.5 py-0.5 rounded text-[9px] font-medium uppercase",
+            model.license.includes("cc0") ? "bg-green-500/20 text-green-400" :
+            model.license.includes("cc-by") ? "bg-blue-500/20 text-blue-400" :
+            "bg-muted text-muted-foreground"
+          )}>
+            {model.license}
+          </span>
+        )}
+
+        {model.description && (
+          <p className="text-[10px] text-muted-foreground line-clamp-3">{model.description}</p>
+        )}
+
+        <div className="flex gap-2 pt-1">
+          <Button
+            size="sm"
+            className="flex-1 h-7 text-[11px] gap-1.5"
+            onClick={onAdd}
+            disabled={isAdding}
+          >
+            {isAdding ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Download className="h-3 w-3" />
+            )}
+            Ajouter à la scène
+          </Button>
+          <a
+            href={`https://sketchfab.com/3d-models/${model.uid}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Button variant="outline" size="sm" className="h-7 px-2">
+              <ExternalLink className="h-3 w-3" />
+            </Button>
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Main browser ─── */
 export function SketchfabBrowser({ onAddToScene, onClose }: Props) {
   const { state } = useEditor();
   const [query, setQuery] = useState("");
@@ -40,6 +139,7 @@ export function SketchfabBrowser({ onAddToScene, onClose }: Props) {
   const [downloading, setDownloading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [preview, setPreview] = useState<SketchfabModel | null>(null);
 
   const doSearch = useCallback(async (q: string) => {
     if (!q.trim()) return;
@@ -89,19 +189,27 @@ export function SketchfabBrowser({ onAddToScene, onClose }: Props) {
       };
 
       onAddToScene(equipment);
+      setPreview(null); // close preview after adding
     } catch (e: any) {
       setError(e.message || "Erreur de téléchargement");
     } finally {
       setDownloading(null);
     }
-  }, [onAddToScene]);
+  }, [onAddToScene, state.rooms]);
 
-  const formatPolycount = (count?: number) => {
-    if (!count) return "—";
-    if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
-    if (count >= 1_000) return `${(count / 1_000).toFixed(0)}k`;
-    return String(count);
-  };
+  // Preview mode
+  if (preview) {
+    return (
+      <div className="flex flex-col overflow-hidden max-h-[80vh]">
+        <ModelPreview
+          model={preview}
+          onBack={() => setPreview(null)}
+          onAdd={() => handleAddToScene(preview)}
+          isAdding={downloading === preview.uid}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col overflow-hidden max-h-[80vh]">
@@ -140,7 +248,7 @@ export function SketchfabBrowser({ onAddToScene, onClose }: Props) {
         </div>
       </form>
 
-      {/* Suggested queries (before first search) */}
+      {/* Suggested queries */}
       {!hasSearched && (
         <div className="p-2 border-b border-border">
           <p className="text-[10px] text-muted-foreground mb-1.5">Suggestions :</p>
@@ -183,7 +291,8 @@ export function SketchfabBrowser({ onAddToScene, onClose }: Props) {
               return (
                 <div
                   key={model.uid}
-                  className="flex items-center gap-2 rounded-md border border-border/50 p-1.5 hover:border-border transition-all group"
+                  className="flex items-center gap-2 rounded-md border border-border/50 p-1.5 hover:border-primary/50 transition-all group cursor-pointer"
+                  onClick={() => setPreview(model)}
                 >
                   {/* Thumbnail */}
                   <div className="h-14 w-14 shrink-0 rounded-md overflow-hidden bg-muted">
@@ -226,21 +335,8 @@ export function SketchfabBrowser({ onAddToScene, onClose }: Props) {
                     )}
                   </div>
 
-                  {/* Add button */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary/20 hover:text-primary"
-                    onClick={() => handleAddToScene(model)}
-                    disabled={isDownloading}
-                    title="Ajouter à la scène"
-                  >
-                    {isDownloading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Download className="h-4 w-4" />
-                    )}
-                  </Button>
+                  {/* Preview hint */}
+                  <Eye className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               );
             })}

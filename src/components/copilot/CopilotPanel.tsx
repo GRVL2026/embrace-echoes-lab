@@ -15,10 +15,11 @@ import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { sendCopilotMessage, createSession, type CopilotChatResponse } from "@/lib/copilotApi";
+import { sendCopilotMessage, createSession, type CopilotChatResponse, type PendingAssetData } from "@/lib/copilotApi";
 import { QUICK_ACTIONS } from "@/types/copilot";
-import type { CopilotAction } from "@/types/copilot";
+import type { CopilotAction, AddAssetAction } from "@/types/copilot";
 import { toast } from "@/hooks/use-toast";
+import { AssetPreviewPanel, type PendingAsset } from "./AssetPreviewPanel";
 
 // ─── Types ──────────────────────────────────────────────────
 interface ChatMessage {

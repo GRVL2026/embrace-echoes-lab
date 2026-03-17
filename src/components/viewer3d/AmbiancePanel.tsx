@@ -218,9 +218,27 @@ export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose }: Prop
             </button>
           ))}
         </div>
+        {/* Poly Haven floor button */}
+        <button
+          className={cn(
+            "mt-1.5 w-full flex items-center gap-1.5 rounded-md border-2 p-1.5 text-left transition-all",
+            ambiance.polyhavenFloor
+              ? "border-primary ring-1 ring-primary/50 bg-primary/5"
+              : "border-dashed border-border/50 hover:border-border"
+          )}
+          onClick={() => setPolyhavenTarget("floor")}
+        >
+          <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
+          {ambiance.polyhavenFloor ? (
+            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+              <img src={ambiance.polyhavenFloor.thumbnail} alt="" className="h-6 w-6 rounded object-cover" />
+              <span className="text-[10px] font-medium text-foreground truncate">{ambiance.polyhavenFloor.name}</span>
+            </div>
+          ) : (
+            <span className="text-[10px] text-muted-foreground">Parcourir Poly Haven…</span>
+          )}
+        </button>
       </div>
-
-      {/* Wall finishes */}
       <div className="mb-4">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
           Finition des murs

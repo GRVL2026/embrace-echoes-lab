@@ -45,6 +45,7 @@ function ensureDefaults(a: Partial<AmbianceSettings> | undefined): AmbianceSetti
 }
 
 export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose, onAddEquipment }: Props) {
+  const { state, dispatch } = useEditor();
   const ambiance = ensureDefaults(rawAmbiance);
   const [polyhavenTarget, setPolyhavenTarget] = useState<SurfaceTarget | null>(null);
   const [sketchfabOpen, setSketchfabOpen] = useState(false);

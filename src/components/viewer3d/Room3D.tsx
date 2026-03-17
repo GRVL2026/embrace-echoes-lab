@@ -197,7 +197,8 @@ function TexturedWallSegment({
   const tex = useMemo(() => {
     const ox = pseudoRandom(segmentIndex, 2);
     const oy = pseudoRandom(segmentIndex, 3);
-    return configureTexture(texture, size[0], size[1], ox, oy);
+    const rot = Math.floor(pseudoRandom(segmentIndex, 5) * 4);
+    return configureTexture(texture, size[0], size[1], ox, oy, rot);
   }, [texture, size[0], size[1], segmentIndex]);
 
   return (

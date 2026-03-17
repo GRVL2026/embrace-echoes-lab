@@ -57,6 +57,110 @@ function TexturedFloor({ shape, texturePath }: { shape: THREE.Shape; texturePath
   );
 }
 
+/** Component that loads PBR textures from Poly Haven URLs */
+function PolyHavenSurface({
+  shape,
+  position,
+  rotation,
+  textureData,
+  repeatScale = 0.5,
+}: {
+  shape?: THREE.Shape;
+  position: [number, number, number];
+  rotation: [number, number, number];
+  textureData: PolyHavenTexture;
+  repeatScale?: number;
+}) {
+  const urls = textureData.urls;
+  const diffuseTex = useLoader(THREE.TextureLoader, urls.diffuse || "");
+  const normalTex = urls.normal ? useLoader(THREE.TextureLoader, urls.normal) : null;
+  const roughTex = urls.roughness ? useLoader(THREE.TextureLoader, urls.roughness) : null;
+
+  const mats = useMemo(() => {
+    const configure = (t: THREE.Texture) => {
+      const c = t.clone();
+      c.wrapS = THREE.RepeatWrapping;
+      c.wrapT = THREE.RepeatWrapping;
+      c.repeat.set(repeatScale, repeatScale);
+      c.colorSpace = THREE.SRGBColorSpace;
+      c.needsUpdate = true;
+      return c;
+    };
+    return {
+      diffuse: configure(diffuseTex),
+      normal: normalTex ? configure(normalTex) : null,
+      roughness: roughTex ? configure(roughTex) : null,
+    };
+  }, [diffuseTex, normalTex, roughTex, repeatScale]);
+
+  if (shape) {
+    return (
+      <mesh rotation={rotation} position={position} receiveShadow>
+        <shapeGeometry args={[shape]} />
+        <meshStandardMaterial
+          map={mats.diffuse}
+          normalMap={mats.normal ?? undefined}
+          roughnessMap={mats.roughness ?? undefined}
+          roughness={mats.roughness ? 1 : 0.5}
+          metalness={0.02}
+          side={THREE.DoubleSide}
+          {...{} as any}
+        />
+      </mesh>
+    );
+  }
+  return null;
+}
+
+/** Box surface with Poly Haven PBR textures */
+function PolyHavenWallSegment({
+  position,
+  rotation,
+  size,
+  textureData,
+}: {
+  position: [number, number, number];
+  rotation: [number, number, number];
+  size: [number, number, number];
+  textureData: PolyHavenTexture;
+}) {
+  const urls = textureData.urls;
+  const diffuseTex = useLoader(THREE.TextureLoader, urls.diffuse || "");
+  const normalTex = urls.normal ? useLoader(THREE.TextureLoader, urls.normal) : null;
+  const roughTex = urls.roughness ? useLoader(THREE.TextureLoader, urls.roughness) : null;
+
+  const mats = useMemo(() => {
+    const configure = (t: THREE.Texture) => {
+      const c = t.clone();
+      c.wrapS = THREE.RepeatWrapping;
+      c.wrapT = THREE.RepeatWrapping;
+      c.repeat.set(size[0] * 1.5, size[1] * 0.5);
+      c.colorSpace = THREE.SRGBColorSpace;
+      c.needsUpdate = true;
+      return c;
+    };
+    return {
+      diffuse: configure(diffuseTex),
+      normal: normalTex ? configure(normalTex) : null,
+      roughness: roughTex ? configure(roughTex) : null,
+    };
+  }, [diffuseTex, normalTex, roughTex, size[0], size[1]]);
+
+  return (
+    <mesh position={position} rotation={rotation} castShadow receiveShadow>
+      <boxGeometry args={size} />
+      <meshStandardMaterial
+        map={mats.diffuse}
+        normalMap={mats.normal ?? undefined}
+        roughnessMap={mats.roughness ?? undefined}
+        roughness={mats.roughness ? 1 : 0.7}
+        metalness={0.02}
+        {...{} as any}
+      />
+    </mesh>
+  );
+}
+
 /** Inner component that loads and applies a wall texture */
 function TexturedWallSegment({
   position,

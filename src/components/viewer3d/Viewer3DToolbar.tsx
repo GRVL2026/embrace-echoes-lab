@@ -104,6 +104,9 @@ export const DEFAULT_3D_SETTINGS: Viewer3DSettings = {
     fog: false,
     fogIntensity: 0.3,
     theme: "custom",
+    polyhavenFloor: null,
+    polyhavenWall: null,
+    polyhavenCeiling: null,
   },
 };
 

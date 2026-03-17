@@ -39,7 +39,47 @@ function TechnicalCeilingPanel({ shape, height }: { shape: THREE.Shape; height: 
   );
 }
 
-export function Ceiling3D({ room, ceilingType, height = 2.8 }: Props) {
+/** Poly Haven PBR ceiling panel */
+function PolyHavenCeilingPanel({ shape, height, textureData }: { shape: THREE.Shape; height: number; textureData: PolyHavenTexture }) {
+  const urls = textureData.urls;
+  const diffuseTex = useLoader(THREE.TextureLoader, urls.diffuse || "");
+  const normalTex = urls.normal ? useLoader(THREE.TextureLoader, urls.normal) : null;
+  const roughTex = urls.roughness ? useLoader(THREE.TextureLoader, urls.roughness) : null;
+
+  const mats = useMemo(() => {
+    const configure = (t: THREE.Texture) => {
+      const c = t.clone();
+      c.wrapS = THREE.RepeatWrapping;
+      c.wrapT = THREE.RepeatWrapping;
+      c.repeat.set(0.3, 0.3);
+      c.colorSpace = THREE.SRGBColorSpace;
+      c.needsUpdate = true;
+      return c;
+    };
+    return {
+      diffuse: configure(diffuseTex),
+      normal: normalTex ? configure(normalTex) : null,
+      roughness: roughTex ? configure(roughTex) : null,
+    };
+  }, [diffuseTex, normalTex, roughTex]);
+
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, height, 0]}>
+      <shapeGeometry args={[shape]} />
+      <meshStandardMaterial
+        map={mats.diffuse}
+        normalMap={mats.normal ?? undefined}
+        roughnessMap={mats.roughness ?? undefined}
+        roughness={mats.roughness ? 1 : 0.6}
+        metalness={0.02}
+        side={THREE.DoubleSide}
+        {...({} as any)}
+      />
+    </mesh>
+  );
+}
+
+export function Ceiling3D({ room, ceilingType, height = 2.8, polyhavenTexture }: Props) {
   const { shape, beamLines, ducts } = useMemo(() => {
     const pts = room.points.map((p) => new THREE.Vector2(p.x / 100, -p.y / 100));
     pts.reverse();

@@ -311,14 +311,8 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true, ambian
   const wallHeight = ambiance?.wallHeight ?? 2.8;
   const polyFloor = ambiance?.polyhavenFloor;
   const polyWall = ambiance?.polyhavenWall;
-  const isEpoxy = !polyFloor && ambiance?.floorTexture === "epoxy";
-  const floorTexturePath = !polyFloor && ambiance?.floorTexture && ambiance.floorTexture !== "default" && !isEpoxy
-    ? FLOOR_TEXTURE_MAP[ambiance.floorTexture]
-    : null;
-  const wallTexturePath = !polyWall && ambiance?.wallFinish && ambiance.wallFinish !== "default" && ambiance.wallFinish !== "paint"
-    ? WALL_TEXTURE_MAP[ambiance.wallFinish]
-    : null;
-  const wallColor = ambiance?.wallFinish === "paint" ? ambiance.wallColor : "#f0f0f0";
+  // Only Poly Haven textures or plain color – built-in textures removed
+  const wallColor = ambiance?.wallColor ?? "#f0f0f0";
 
   const { floorShape, floorSize, wallMeshes } = useMemo(() => {
     const pts = room.points.map((p) => new THREE.Vector2(p.x / 100, p.y / 100));

@@ -126,6 +126,23 @@ function SpacePlannerInner() {
                 {sidebarOpen ? "Masquer le panneau" : "Afficher le panneau"}
               </TooltipContent>
             </Tooltip>
+
+            {/* Copilot toggle */}
+            <Tooltip delayDuration={200}>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={copilotOpen ? "default" : "ghost"}
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setCopilotOpen(!copilotOpen)}
+                >
+                  <Sparkles className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {copilotOpen ? "Fermer Copilot IA" : "Ouvrir Copilot IA"}
+              </TooltipContent>
+            </Tooltip>
           </div>
         </header>
 

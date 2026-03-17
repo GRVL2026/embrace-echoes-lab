@@ -240,14 +240,12 @@ function PolyHavenWallSegment({
   segmentIndex: number;
 }) {
   const urls = textureData.urls;
-  const proxiedDiffuse = proxyPolyHavenUrl(urls.diffuse) || "";
-  const proxiedNormal = proxyPolyHavenUrl(urls.normal);
-  const proxiedRough = proxyPolyHavenUrl(urls.roughness);
-  const diffuseTex = useLoader(THREE.TextureLoader, proxiedDiffuse);
-  const normalTex = proxiedNormal ? useLoader(THREE.TextureLoader, proxiedNormal) : null;
-  const roughTex = proxiedRough ? useLoader(THREE.TextureLoader, proxiedRough) : null;
+  const diffuseTex = useProxiedTexture(urls.diffuse);
+  const normalTex = useProxiedTexture(urls.normal);
+  const roughTex = useProxiedTexture(urls.roughness);
 
   const mats = useMemo(() => {
+    if (!diffuseTex) return null;
     const ox = pseudoRandom(segmentIndex, 0);
     const oy = pseudoRandom(segmentIndex, 1);
     const rot = Math.floor(pseudoRandom(segmentIndex, 4) * 4);
@@ -257,6 +255,8 @@ function PolyHavenWallSegment({
       roughness: roughTex ? configureTexture(roughTex, size[0], size[1], ox, oy, rot) : null,
     };
   }, [diffuseTex, normalTex, roughTex, size[0], size[1], segmentIndex]);
+
+  if (!mats) return null;
 
   return (
     <mesh position={position} rotation={rotation} castShadow receiveShadow>

@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { useLoader } from "@react-three/fiber";
 import type { Room } from "@/types/editor";
 import type { CeilingType, PolyHavenTexture } from "./Viewer3DToolbar";
+import { AntiTileMaterial } from "./AntiTileMaterial";
 
 type Props = {
   room: Room;
@@ -13,11 +14,13 @@ type Props = {
 
 const TEXTURE_PHYSICAL_SIZE = 2.0;
 
-function configCeilingTex(t: THREE.Texture, w: number, h: number): THREE.Texture {
+function configCeilingTex(t: THREE.Texture, w: number, h: number, rotationStep = 0): THREE.Texture {
   const c = t.clone();
   c.wrapS = THREE.RepeatWrapping;
   c.wrapT = THREE.RepeatWrapping;
   c.repeat.set(w / TEXTURE_PHYSICAL_SIZE, h / TEXTURE_PHYSICAL_SIZE);
+  c.center.set(0.5, 0.5);
+  c.rotation = (rotationStep % 4) * (Math.PI / 2);
   c.colorSpace = THREE.SRGBColorSpace;
   c.needsUpdate = true;
   return c;
@@ -27,19 +30,19 @@ function configCeilingTex(t: THREE.Texture, w: number, h: number): THREE.Texture
 function TechnicalCeilingPanel({ shape, height, surfaceSize }: { shape: THREE.Shape; height: number; surfaceSize: [number, number] }) {
   const texture = useLoader(THREE.TextureLoader, "/textures/ceiling_technical.jpg");
   const tex = useMemo(() => {
-    return configCeilingTex(texture, surfaceSize[0], surfaceSize[1]);
+    const rot = Math.floor((Math.sin(surfaceSize[0] * 91.3 + surfaceSize[1] * 47.1) * 43758.5453 % 1 + 1) % 1 * 4);
+    return configCeilingTex(texture, surfaceSize[0], surfaceSize[1], rot);
   }, [texture, surfaceSize[0], surfaceSize[1]]);
 
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, height, 0]}>
       <shapeGeometry args={[shape]} />
-      <meshStandardMaterial
+      <AntiTileMaterial
         map={tex}
         color="#888888"
         roughness={0.85}
         metalness={0.15}
         side={THREE.DoubleSide}
-        {...({} as any)}
       />
     </mesh>
   );
@@ -53,24 +56,24 @@ function PolyHavenCeilingPanel({ shape, height, textureData, surfaceSize }: { sh
   const roughTex = urls.roughness ? useLoader(THREE.TextureLoader, urls.roughness) : null;
 
   const mats = useMemo(() => {
+    const rot = Math.floor((Math.sin(surfaceSize[0] * 127.1 + surfaceSize[1] * 311.7) * 43758.5453 % 1 + 1) % 1 * 4);
     return {
-      diffuse: configCeilingTex(diffuseTex, surfaceSize[0], surfaceSize[1]),
-      normal: normalTex ? configCeilingTex(normalTex, surfaceSize[0], surfaceSize[1]) : null,
-      roughness: roughTex ? configCeilingTex(roughTex, surfaceSize[0], surfaceSize[1]) : null,
+      diffuse: configCeilingTex(diffuseTex, surfaceSize[0], surfaceSize[1], rot),
+      normal: normalTex ? configCeilingTex(normalTex, surfaceSize[0], surfaceSize[1], rot) : null,
+      roughness: roughTex ? configCeilingTex(roughTex, surfaceSize[0], surfaceSize[1], rot) : null,
     };
   }, [diffuseTex, normalTex, roughTex, surfaceSize[0], surfaceSize[1]]);
 
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, height, 0]}>
       <shapeGeometry args={[shape]} />
-      <meshStandardMaterial
+      <AntiTileMaterial
         map={mats.diffuse}
-        normalMap={mats.normal ?? undefined}
-        roughnessMap={mats.roughness ?? undefined}
+        normalMap={mats.normal}
+        roughnessMap={mats.roughness}
         roughness={mats.roughness ? 1 : 0.6}
         metalness={0.02}
         side={THREE.DoubleSide}
-        {...({} as any)}
       />
     </mesh>
   );

@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { useLoader } from "@react-three/fiber";
 import type { Room, Door } from "@/types/editor";
 import type { AmbianceSettings, FloorTexture, WallFinish, PolyHavenTexture } from "./Viewer3DToolbar";
+import { AntiTileMaterial } from "./AntiTileMaterial";
 
 const WALL_THICKNESS = 0.15; // meters
 
@@ -35,6 +36,7 @@ function configureTexture(
   surfaceHeight: number,
   offsetX = 0,
   offsetY = 0,
+  rotationStep = 0,
 ): THREE.Texture {
   const c = t.clone();
   c.wrapS = THREE.RepeatWrapping;
@@ -44,6 +46,8 @@ function configureTexture(
     surfaceHeight / TEXTURE_PHYSICAL_SIZE,
   );
   c.offset.set(offsetX, offsetY);
+  c.center.set(0.5, 0.5);
+  c.rotation = (rotationStep % 4) * (Math.PI / 2);
   c.colorSpace = THREE.SRGBColorSpace;
   c.needsUpdate = true;
   return c;
@@ -67,19 +71,19 @@ type Props = {
 function TexturedFloor({ shape, texturePath, surfaceSize }: { shape: THREE.Shape; texturePath: string; surfaceSize: [number, number] }) {
   const texture = useLoader(THREE.TextureLoader, texturePath);
   const tex = useMemo(() => {
-    return configureTexture(texture, surfaceSize[0], surfaceSize[1]);
+    const rot = Math.floor(pseudoRandom(surfaceSize[0], surfaceSize[1]) * 4);
+    return configureTexture(texture, surfaceSize[0], surfaceSize[1], 0, 0, rot);
   }, [texture, surfaceSize[0], surfaceSize[1]]);
 
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, 0]} receiveShadow>
       <shapeGeometry args={[shape]} />
-      <meshStandardMaterial
+      <AntiTileMaterial
         map={tex}
         color="#ffffff"
         roughness={0.5}
         metalness={0.05}
         side={THREE.DoubleSide}
-        {...{} as any}
       />
     </mesh>
   );
@@ -105,10 +109,11 @@ function PolyHavenSurface({
   const roughTex = urls.roughness ? useLoader(THREE.TextureLoader, urls.roughness) : null;
 
   const mats = useMemo(() => {
+    const rot = Math.floor(pseudoRandom(surfaceSize[0] * 7, surfaceSize[1] * 13) * 4);
     return {
-      diffuse: configureTexture(diffuseTex, surfaceSize[0], surfaceSize[1]),
-      normal: normalTex ? configureTexture(normalTex, surfaceSize[0], surfaceSize[1]) : null,
-      roughness: roughTex ? configureTexture(roughTex, surfaceSize[0], surfaceSize[1]) : null,
+      diffuse: configureTexture(diffuseTex, surfaceSize[0], surfaceSize[1], 0, 0, rot),
+      normal: normalTex ? configureTexture(normalTex, surfaceSize[0], surfaceSize[1], 0, 0, rot) : null,
+      roughness: roughTex ? configureTexture(roughTex, surfaceSize[0], surfaceSize[1], 0, 0, rot) : null,
     };
   }, [diffuseTex, normalTex, roughTex, surfaceSize[0], surfaceSize[1]]);
 
@@ -116,14 +121,13 @@ function PolyHavenSurface({
     return (
       <mesh rotation={rotation} position={position} receiveShadow>
         <shapeGeometry args={[shape]} />
-        <meshStandardMaterial
+        <AntiTileMaterial
           map={mats.diffuse}
-          normalMap={mats.normal ?? undefined}
-          roughnessMap={mats.roughness ?? undefined}
+          normalMap={mats.normal}
+          roughnessMap={mats.roughness}
           roughness={mats.roughness ? 1 : 0.5}
           metalness={0.02}
           side={THREE.DoubleSide}
-          {...{} as any}
         />
       </mesh>
     );
@@ -151,26 +155,25 @@ function PolyHavenWallSegment({
   const roughTex = urls.roughness ? useLoader(THREE.TextureLoader, urls.roughness) : null;
 
   const mats = useMemo(() => {
-    // Per-segment UV offset to break repetition between adjacent walls
     const ox = pseudoRandom(segmentIndex, 0);
     const oy = pseudoRandom(segmentIndex, 1);
+    const rot = Math.floor(pseudoRandom(segmentIndex, 4) * 4);
     return {
-      diffuse: configureTexture(diffuseTex, size[0], size[1], ox, oy),
-      normal: normalTex ? configureTexture(normalTex, size[0], size[1], ox, oy) : null,
-      roughness: roughTex ? configureTexture(roughTex, size[0], size[1], ox, oy) : null,
+      diffuse: configureTexture(diffuseTex, size[0], size[1], ox, oy, rot),
+      normal: normalTex ? configureTexture(normalTex, size[0], size[1], ox, oy, rot) : null,
+      roughness: roughTex ? configureTexture(roughTex, size[0], size[1], ox, oy, rot) : null,
     };
   }, [diffuseTex, normalTex, roughTex, size[0], size[1], segmentIndex]);
 
   return (
     <mesh position={position} rotation={rotation} castShadow receiveShadow>
       <boxGeometry args={size} />
-      <meshStandardMaterial
+      <AntiTileMaterial
         map={mats.diffuse}
-        normalMap={mats.normal ?? undefined}
-        roughnessMap={mats.roughness ?? undefined}
+        normalMap={mats.normal}
+        roughnessMap={mats.roughness}
         roughness={mats.roughness ? 1 : 0.7}
         metalness={0.02}
-        {...{} as any}
       />
     </mesh>
   );
@@ -194,18 +197,18 @@ function TexturedWallSegment({
   const tex = useMemo(() => {
     const ox = pseudoRandom(segmentIndex, 2);
     const oy = pseudoRandom(segmentIndex, 3);
-    return configureTexture(texture, size[0], size[1], ox, oy);
+    const rot = Math.floor(pseudoRandom(segmentIndex, 5) * 4);
+    return configureTexture(texture, size[0], size[1], ox, oy, rot);
   }, [texture, size[0], size[1], segmentIndex]);
 
   return (
     <mesh position={position} rotation={rotation} castShadow receiveShadow>
       <boxGeometry args={size} />
-      <meshStandardMaterial
+      <AntiTileMaterial
         map={tex}
         color="#ffffff"
         roughness={0.7}
         metalness={0.02}
-        {...{} as any}
       />
     </mesh>
   );

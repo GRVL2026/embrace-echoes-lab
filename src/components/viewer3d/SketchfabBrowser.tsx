@@ -5,11 +5,21 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { searchSketchfab, getSketchfabDownload, type SketchfabModel } from "@/lib/sketchfabApi";
 import type { PlacedEquipment } from "@/types/equipment";
+import { useEditor } from "@/contexts/EditorContext";
 
 type Props = {
   onAddToScene: (equipment: PlacedEquipment) => void;
   onClose: () => void;
 };
+
+function getRoomCenter(rooms: { points: { x: number; y: number }[] }[]): { x: number; y: number } {
+  if (!rooms || rooms.length === 0) return { x: 400, y: 400 };
+  const room = rooms[0];
+  if (!room.points || room.points.length === 0) return { x: 400, y: 400 };
+  const cx = room.points.reduce((s, p) => s + p.x, 0) / room.points.length;
+  const cy = room.points.reduce((s, p) => s + p.y, 0) / room.points.length;
+  return { x: cx, y: cy };
+}
 
 const SUGGESTED_QUERIES = [
   "arcade machine",
@@ -23,6 +33,7 @@ const SUGGESTED_QUERIES = [
 ];
 
 export function SketchfabBrowser({ onAddToScene, onClose }: Props) {
+  const { state } = useEditor();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SketchfabModel[]>([]);
   const [loading, setLoading] = useState(false);
@@ -66,7 +77,7 @@ export function SketchfabBrowser({ onAddToScene, onClose }: Props) {
       const equipment: PlacedEquipment = {
         id: `sketchfab-${model.uid}-${Date.now()}`,
         equipmentId: `sketchfab-${model.uid}`,
-        position: { x: 400, y: 400 }, // center-ish, will be adjusted
+        position: getRoomCenter(state.rooms),
         rotation: 0,
         name: model.name,
         width: 100,

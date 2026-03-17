@@ -8,6 +8,23 @@ const corsHeaders = {
 
 const POLYHAVEN_API = "https://api.polyhaven.com";
 
+function rewriteLegacyTextureUrl(fileUrl: string): string | null {
+  try {
+    const parsed = new URL(fileUrl);
+    const match = parsed.pathname.match(
+      /^\/file\/ph-assets\/Textures\/([^/]+)\/(\d+k)\/([^/]+)\.(jpg|png|exr)$/i,
+    );
+
+    if (!match) return null;
+
+    const [, assetId, resolution, fileBaseName, extension] = match;
+    parsed.pathname = `/file/ph-assets/Textures/${extension.toLowerCase()}/${resolution.toLowerCase()}/${assetId}/${fileBaseName}.${extension.toLowerCase()}`;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -28,15 +45,44 @@ serve(async (req) => {
         });
       }
 
-      const fileRes = await fetch(fileUrl, {
-        headers: { "User-Agent": "HypernovaPlanner/1.0" },
-      });
+      const rewrittenLegacyUrl = rewriteLegacyTextureUrl(fileUrl);
+      const candidateUrls = rewrittenLegacyUrl && rewrittenLegacyUrl !== fileUrl
+        ? [fileUrl, rewrittenLegacyUrl]
+        : [fileUrl];
 
-      if (!fileRes.ok) {
-        return new Response(JSON.stringify({ error: `File fetch error: ${fileRes.status}` }), {
-          status: fileRes.status,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+      let fileRes: Response | null = null;
+      let lastStatus = 500;
+
+      for (const candidateUrl of candidateUrls) {
+        const response = await fetch(candidateUrl, {
+          headers: { "User-Agent": "HypernovaPlanner/1.0" },
         });
+
+        if (response.ok) {
+          fileRes = response;
+          break;
+        }
+
+        lastStatus = response.status;
+
+        // If it's not a not-found, stop retrying immediately.
+        if (response.status !== 404) {
+          fileRes = response;
+          break;
+        }
+      }
+
+      if (!fileRes || !fileRes.ok) {
+        return new Response(
+          JSON.stringify({
+            error: `File fetch error: ${lastStatus}`,
+            attempted_urls: candidateUrls,
+          }),
+          {
+            status: lastStatus,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
 
       const contentType = fileRes.headers.get("content-type") || "application/octet-stream";

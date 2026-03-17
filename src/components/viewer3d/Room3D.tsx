@@ -263,8 +263,18 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true, ambian
       {/* Floor */}
       {showFloor && (
         <group>
-          {/* Textured surface, epoxy, or default */}
-          {floorTexturePath ? (
+          {/* Poly Haven PBR floor, textured surface, epoxy, or default */}
+          {polyFloor?.urls?.diffuse ? (
+            <Suspense fallback={null}>
+              <PolyHavenSurface
+                shape={floorShape}
+                position={[0, 0.001, 0]}
+                rotation={[-Math.PI / 2, 0, 0]}
+                textureData={polyFloor}
+                repeatScale={0.5}
+              />
+            </Suspense>
+          ) : floorTexturePath ? (
             <TexturedFloor shape={floorShape} texturePath={floorTexturePath} />
           ) : isEpoxy ? (
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, 0]} receiveShadow>

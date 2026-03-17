@@ -11,18 +11,24 @@ type Props = {
   polyhavenTexture?: PolyHavenTexture | null;
 };
 
+const TEXTURE_PHYSICAL_SIZE = 2.0;
+
+function configCeilingTex(t: THREE.Texture, w: number, h: number): THREE.Texture {
+  const c = t.clone();
+  c.wrapS = THREE.RepeatWrapping;
+  c.wrapT = THREE.RepeatWrapping;
+  c.repeat.set(w / TEXTURE_PHYSICAL_SIZE, h / TEXTURE_PHYSICAL_SIZE);
+  c.colorSpace = THREE.SRGBColorSpace;
+  c.needsUpdate = true;
+  return c;
+}
+
 /** Textured ceiling panel for technical ceiling */
-function TechnicalCeilingPanel({ shape, height }: { shape: THREE.Shape; height: number }) {
+function TechnicalCeilingPanel({ shape, height, surfaceSize }: { shape: THREE.Shape; height: number; surfaceSize: [number, number] }) {
   const texture = useLoader(THREE.TextureLoader, "/textures/ceiling_technical.jpg");
   const tex = useMemo(() => {
-    const t = texture.clone();
-    t.wrapS = THREE.RepeatWrapping;
-    t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(0.3, 0.3);
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.needsUpdate = true;
-    return t;
-  }, [texture]);
+    return configCeilingTex(texture, surfaceSize[0], surfaceSize[1]);
+  }, [texture, surfaceSize[0], surfaceSize[1]]);
 
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, height, 0]}>

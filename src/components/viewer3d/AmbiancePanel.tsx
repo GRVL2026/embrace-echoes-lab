@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { X, Globe } from "lucide-react";
+import { X, Globe, Box } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import type { AmbianceSettings, PolyHavenTexture } from "./Viewer3DToolbar";
+import type { PlacedEquipment } from "@/types/equipment";
 import { PolyHavenBrowser } from "./PolyHavenBrowser";
+import { SketchfabBrowser } from "./SketchfabBrowser";
 
 type SurfaceTarget = "floor" | "wall" | "ceiling";
 
@@ -13,6 +15,7 @@ type Props = {
   ambiance: AmbianceSettings;
   onChange: (ambiance: AmbianceSettings) => void;
   onClose: () => void;
+  onAddEquipment?: (equipment: PlacedEquipment) => void;
 };
 
 const PAINT_COLORS = [
@@ -40,9 +43,10 @@ function ensureDefaults(a: Partial<AmbianceSettings> | undefined): AmbianceSetti
   return { ...defaults, ...a };
 }
 
-export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose }: Props) {
+export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose, onAddEquipment }: Props) {
   const ambiance = ensureDefaults(rawAmbiance);
   const [polyhavenTarget, setPolyhavenTarget] = useState<SurfaceTarget | null>(null);
+  const [sketchfabOpen, setSketchfabOpen] = useState(false);
 
   const update = (partial: Partial<AmbianceSettings>) => {
     onChange({ ...ambiance, ...partial, theme: "custom" });
@@ -76,6 +80,18 @@ export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose }: Prop
     );
   }
 
+  // When Sketchfab browser is open, show it instead of the main panel
+  if (sketchfabOpen && onAddEquipment) {
+    return (
+      <div className="absolute left-full top-0 ml-3 z-50 w-80 max-h-[80vh] flex flex-col rounded-lg border border-border bg-card/95 backdrop-blur-md shadow-xl neon-border">
+        <SketchfabBrowser
+          onAddToScene={onAddEquipment}
+          onClose={() => setSketchfabOpen(false)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="absolute left-full top-0 ml-3 z-50 w-72 max-h-[80vh] overflow-y-auto rounded-lg border border-border bg-card/95 backdrop-blur-md p-4 shadow-xl neon-border">
       {/* Header */}
@@ -87,6 +103,22 @@ export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose }: Prop
           <X className="h-4 w-4" />
         </Button>
       </div>
+
+      {/* Assets 3D – Sketchfab */}
+      {onAddEquipment && (
+        <div className="mb-4">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+            Assets 3D
+          </p>
+          <button
+            className="w-full flex items-center gap-2 rounded-md border-2 border-dashed border-border/50 hover:border-border p-2 text-left transition-all"
+            onClick={() => setSketchfabOpen(true)}
+          >
+            <Box className="h-4 w-4 text-primary shrink-0" />
+            <span className="text-xs text-muted-foreground">Chercher sur Sketchfab…</span>
+          </button>
+        </div>
+      )}
 
       {/* Floor – Poly Haven only */}
       <div className="mb-4">

@@ -143,6 +143,25 @@ export function PolyHavenBrowser({ target, currentTexture, onSelect, onClose }: 
         ))}
       </div>
 
+      {/* Resolution selector */}
+      <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-border">
+        <span className="text-[9px] text-muted-foreground font-medium">Résolution :</span>
+        {(["1k", "2k", "4k"] as ResolutionOption[]).map((res) => (
+          <button
+            key={res}
+            className={cn(
+              "px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide transition-all",
+              resolution === res
+                ? "bg-primary/20 text-primary border border-primary/40"
+                : "bg-muted text-muted-foreground hover:bg-muted/80 border border-transparent"
+            )}
+            onClick={() => setResolution(res)}
+          >
+            {res}
+          </button>
+        ))}
+      </div>
+
       {/* Search */}
       <div className="p-2 border-b border-border">
         <div className="relative">

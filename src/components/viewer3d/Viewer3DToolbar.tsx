@@ -113,6 +113,7 @@ export const DEFAULT_3D_SETTINGS: Viewer3DSettings = {
 type Props = {
   settings: Viewer3DSettings;
   onChange: (settings: Viewer3DSettings) => void;
+  onAddEquipment?: (equipment: import("@/types/equipment").PlacedEquipment) => void;
 };
 
 const presetViews: { id: PresetView; label: string; icon: React.ElementType; shortcut: string }[] = [

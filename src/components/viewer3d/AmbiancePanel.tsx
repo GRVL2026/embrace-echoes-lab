@@ -268,6 +268,26 @@ export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose }: Prop
             </button>
           ))}
         </div>
+        {/* Poly Haven wall button */}
+        <button
+          className={cn(
+            "mt-1.5 w-full flex items-center gap-1.5 rounded-md border-2 p-1.5 text-left transition-all",
+            ambiance.polyhavenWall
+              ? "border-primary ring-1 ring-primary/50 bg-primary/5"
+              : "border-dashed border-border/50 hover:border-border"
+          )}
+          onClick={() => setPolyhavenTarget("wall")}
+        >
+          <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
+          {ambiance.polyhavenWall ? (
+            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+              <img src={ambiance.polyhavenWall.thumbnail} alt="" className="h-6 w-6 rounded object-cover" />
+              <span className="text-[10px] font-medium text-foreground truncate">{ambiance.polyhavenWall.name}</span>
+            </div>
+          ) : (
+            <span className="text-[10px] text-muted-foreground">Parcourir Poly Haven…</span>
+          )}
+        </button>
         {/* Wall height slider */}
         <div className="mt-2">
           <div className="flex items-center justify-between mb-1">

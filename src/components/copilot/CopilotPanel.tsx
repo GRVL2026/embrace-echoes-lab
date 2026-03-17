@@ -30,6 +30,7 @@ interface ChatMessage {
   links?: string[];
   actions?: CopilotAction[];
   alternatives?: string[];
+  pendingAssets?: PendingAsset[];
 }
 
 type Props = {

@@ -120,10 +120,9 @@ export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose, onAddE
             <span className="text-xs text-muted-foreground">Chercher sur Sketchfab…</span>
           </button>
 
-          {/* List of non-catalog assets (Sketchfab + Copilot) */}
+          {/* List of all assets in the scene */}
           {(() => {
-            const catalogIds = new Set(state.catalog.map((c) => c.id));
-            const assets = state.placedEquipments.filter((eq) => !catalogIds.has(eq.equipmentId));
+            const assets = state.placedEquipments;
             if (assets.length === 0) return null;
             return (
               <div className="space-y-1">

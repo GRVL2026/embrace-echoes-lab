@@ -77,7 +77,7 @@ export function SketchfabBrowser({ onAddToScene, onClose }: Props) {
       const equipment: PlacedEquipment = {
         id: `sketchfab-${model.uid}-${Date.now()}`,
         equipmentId: `sketchfab-${model.uid}`,
-        position: getRoomCenter(rooms),
+        position: getRoomCenter(state.rooms),
         rotation: 0,
         name: model.name,
         width: 100,

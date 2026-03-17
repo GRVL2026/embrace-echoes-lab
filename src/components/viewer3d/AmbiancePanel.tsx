@@ -384,6 +384,26 @@ export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose }: Prop
             </div>
           </div>
         )}
+        {/* Poly Haven ceiling button */}
+        <button
+          className={cn(
+            "mt-1.5 w-full flex items-center gap-1.5 rounded-md border-2 p-1.5 text-left transition-all",
+            ambiance.polyhavenCeiling
+              ? "border-primary ring-1 ring-primary/50 bg-primary/5"
+              : "border-dashed border-border/50 hover:border-border"
+          )}
+          onClick={() => setPolyhavenTarget("ceiling")}
+        >
+          <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
+          {ambiance.polyhavenCeiling ? (
+            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+              <img src={ambiance.polyhavenCeiling.thumbnail} alt="" className="h-6 w-6 rounded object-cover" />
+              <span className="text-[10px] font-medium text-foreground truncate">{ambiance.polyhavenCeiling.name}</span>
+            </div>
+          ) : (
+            <span className="text-[10px] text-muted-foreground">Parcourir Poly Haven…</span>
+          )}
+        </button>
       </div>
 
       {/* Fog */}
@@ -412,6 +432,20 @@ export function AmbiancePanel({ ambiance: rawAmbiance, onChange, onClose }: Prop
           </div>
         )}
       </div>
+
+      {/* Poly Haven Browser overlay */}
+      {polyhavenTarget && (
+        <PolyHavenBrowser
+          target={polyhavenTarget}
+          currentTexture={
+            polyhavenTarget === "floor" ? ambiance.polyhavenFloor :
+            polyhavenTarget === "wall" ? ambiance.polyhavenWall :
+            ambiance.polyhavenCeiling
+          }
+          onSelect={(tex) => handlePolyHavenSelect(polyhavenTarget, tex)}
+          onClose={() => setPolyhavenTarget(null)}
+        />
+      )}
     </div>
   );
 }

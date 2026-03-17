@@ -1,11 +1,13 @@
 import { useCallback } from "react";
-import type { CopilotAction } from "@/types/copilot";
+import type { CopilotAction, AddAssetAction } from "@/types/copilot";
 import type { AmbianceSettings, LightingPreset, CeilingType } from "@/components/viewer3d/Viewer3DToolbar";
+import type { PlacedEquipment } from "@/types/equipment";
 
 type ActionExecutorProps = {
   currentAmbiance: AmbianceSettings;
   onAmbianceChange: (ambiance: AmbianceSettings) => void;
   onLightingChange: (preset: LightingPreset) => void;
+  onAddEquipment: (equipment: PlacedEquipment) => void;
 };
 
 /**
@@ -16,6 +18,7 @@ export function useCopilotActions({
   currentAmbiance,
   onAmbianceChange,
   onLightingChange,
+  onAddEquipment,
 }: ActionExecutorProps) {
   const executeActions = useCallback(
     (actions: CopilotAction[]) => {
@@ -24,7 +27,6 @@ export function useCopilotActions({
       for (const action of actions) {
         switch (action.type) {
           case "apply_material": {
-            // For now, we store the polyhaven ID — the 3D viewer resolves the texture URLs
             const polyhavenTexture = {
               id: action.material_id,
               name: action.material_name || action.material_id,
@@ -71,6 +73,28 @@ export function useCopilotActions({
             break;
           }
 
+          case "add_asset": {
+            const assetAction = action as AddAssetAction;
+            const placed: PlacedEquipment = {
+              id: crypto.randomUUID(),
+              equipmentId: assetAction.asset_id,
+              name: assetAction.asset_name,
+              width: 100,
+              depth: 100,
+              height: 150,
+              safetyZone: 10,
+              color: "hsl(263, 85%, 68%)",
+              rotation: assetAction.rotation?.[1] ?? 0,
+              position: {
+                x: assetAction.position?.[0] ?? 300 + Math.random() * 200,
+                y: assetAction.position?.[2] ?? 300 + Math.random() * 200,
+              },
+              model3d: assetAction.glb_url,
+            };
+            onAddEquipment(placed);
+            break;
+          }
+
           default:
             console.warn("Unknown copilot action:", action);
         }
@@ -78,7 +102,7 @@ export function useCopilotActions({
 
       onAmbianceChange(ambiance);
     },
-    [currentAmbiance, onAmbianceChange, onLightingChange]
+    [currentAmbiance, onAmbianceChange, onLightingChange, onAddEquipment]
   );
 
   return { executeActions };

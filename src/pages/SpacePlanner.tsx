@@ -26,6 +26,8 @@ function SpacePlannerInner() {
       setViewer3DSettings((s) => ({ ...s, ambiance })),
     onLightingChange: (preset) =>
       setViewer3DSettings((s) => ({ ...s, lighting: preset })),
+    onAddEquipment: (equipment) =>
+      dispatch({ type: "ADD_PLACED_EQUIPMENT", equipment }),
   });
 
   const toggleSidebar = useCallback(() => {

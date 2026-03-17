@@ -197,9 +197,13 @@ export function Ceiling3D({ room, ceilingType, height = 2.8, polyhavenTexture }:
   return (
     <group>
       {/* Main ceiling plane */}
-      {isTechnical ? (
+      {polyhavenTexture?.urls?.diffuse ? (
+        <Suspense fallback={null}>
+          <PolyHavenCeilingPanel shape={shape} height={height} textureData={polyhavenTexture} />
+        </Suspense>
+      ) : isTechnical ? (
         <TechnicalCeilingPanel shape={shape} height={height} />
-      ) : (
+      ) : ceilingType !== "none" ? (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, height, 0]}>
           <shapeGeometry args={[shape]} />
           <meshStandardMaterial

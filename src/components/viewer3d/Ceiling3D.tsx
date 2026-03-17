@@ -1,13 +1,14 @@
-import { useMemo } from "react";
+import { useMemo, Suspense } from "react";
 import * as THREE from "three";
 import { useLoader } from "@react-three/fiber";
 import type { Room } from "@/types/editor";
-import type { CeilingType } from "./Viewer3DToolbar";
+import type { CeilingType, PolyHavenTexture } from "./Viewer3DToolbar";
 
 type Props = {
   room: Room;
   ceilingType: CeilingType;
   height?: number; // meters, default 2.8
+  polyhavenTexture?: PolyHavenTexture | null;
 };
 
 /** Textured ceiling panel for technical ceiling */

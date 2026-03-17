@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { EditorProvider, useEditor } from "@/contexts/EditorContext";
 import { EditorToolbar } from "@/components/editor/EditorToolbar";
 import { EditorCanvas } from "@/components/editor/EditorCanvas";
@@ -7,6 +7,8 @@ import { Viewer3D } from "@/components/viewer3d/Viewer3D";
 import { Viewer3DToolbar, DEFAULT_3D_SETTINGS, type Viewer3DSettings } from "@/components/viewer3d/Viewer3DToolbar";
 import { CopilotPanel } from "@/components/copilot/CopilotPanel";
 import { useCopilotActions } from "@/hooks/useCopilotActions";
+import type { RoomContext } from "@/lib/copilotApi";
+import { SAFETY_ZONE_CM } from "@/types/editor";
 import { PanelRightClose, PanelRightOpen, Box, LayoutGrid, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";

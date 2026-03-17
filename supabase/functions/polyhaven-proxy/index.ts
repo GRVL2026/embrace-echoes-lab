@@ -15,15 +15,51 @@ serve(async (req) => {
 
   try {
     const url = new URL(req.url);
+
+    // ── Mode 1: Proxy a raw texture file URL ──
+    const fileUrl = url.searchParams.get("file_url");
+    if (fileUrl) {
+      // Only allow polyhaven domains
+      const parsed = new URL(fileUrl);
+      if (!parsed.hostname.endsWith("polyhaven.org") && !parsed.hostname.endsWith("polyhaven.com")) {
+        return new Response(JSON.stringify({ error: "Only Poly Haven URLs allowed" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const fileRes = await fetch(fileUrl, {
+        headers: { "User-Agent": "HypernovaPlanner/1.0" },
+      });
+
+      if (!fileRes.ok) {
+        return new Response(JSON.stringify({ error: `File fetch error: ${fileRes.status}` }), {
+          status: fileRes.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const contentType = fileRes.headers.get("content-type") || "application/octet-stream";
+      const body = await fileRes.arrayBuffer();
+
+      return new Response(body, {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": contentType,
+          "Cache-Control": "public, max-age=86400",
+        },
+      });
+    }
+
+    // ── Mode 2: Proxy a JSON API call ──
     const endpoint = url.searchParams.get("endpoint");
     if (!endpoint) {
-      return new Response(JSON.stringify({ error: "Missing endpoint param" }), {
+      return new Response(JSON.stringify({ error: "Missing endpoint or file_url param" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Build target URL preserving extra query params
     const targetUrl = new URL(`${POLYHAVEN_API}${endpoint}`);
     for (const [key, value] of url.searchParams.entries()) {
       if (key !== "endpoint") {

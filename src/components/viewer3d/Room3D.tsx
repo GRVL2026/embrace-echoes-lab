@@ -5,6 +5,19 @@ import type { Room, Door } from "@/types/editor";
 import type { AmbianceSettings, FloorTexture, WallFinish, PolyHavenTexture } from "./Viewer3DToolbar";
 import { AntiTileMaterial } from "./AntiTileMaterial";
 
+/** Proxy Poly Haven CDN URLs through our edge function to avoid CORS issues */
+function proxyPolyHavenUrl(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.endsWith("polyhaven.org") || parsed.hostname.endsWith("polyhaven.com")) {
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      return `https://${projectId}.supabase.co/functions/v1/polyhaven-proxy?file_url=${encodeURIComponent(url)}`;
+    }
+  } catch { /* not a valid URL, return as-is */ }
+  return url;
+}
+
 const WALL_THICKNESS = 0.15; // meters
 
 /** Physical size of one texture tile in meters – adjusting this changes how "zoomed" textures appear */
@@ -130,9 +143,12 @@ function PolyHavenSurface({
   surfaceSize: [number, number];
 }) {
   const urls = textureData.urls;
-  const diffuseTex = useLoader(THREE.TextureLoader, urls.diffuse || "");
-  const normalTex = urls.normal ? useLoader(THREE.TextureLoader, urls.normal) : null;
-  const roughTex = urls.roughness ? useLoader(THREE.TextureLoader, urls.roughness) : null;
+  const proxiedDiffuse = proxyPolyHavenUrl(urls.diffuse) || "";
+  const proxiedNormal = proxyPolyHavenUrl(urls.normal);
+  const proxiedRough = proxyPolyHavenUrl(urls.roughness);
+  const diffuseTex = useLoader(THREE.TextureLoader, proxiedDiffuse);
+  const normalTex = proxiedNormal ? useLoader(THREE.TextureLoader, proxiedNormal) : null;
+  const roughTex = proxiedRough ? useLoader(THREE.TextureLoader, proxiedRough) : null;
 
   const mats = useMemo(() => {
     const rot = Math.floor(pseudoRandom(surfaceSize[0] * 7, surfaceSize[1] * 13) * 4);
@@ -176,9 +192,12 @@ function PolyHavenWallSegment({
   segmentIndex: number;
 }) {
   const urls = textureData.urls;
-  const diffuseTex = useLoader(THREE.TextureLoader, urls.diffuse || "");
-  const normalTex = urls.normal ? useLoader(THREE.TextureLoader, urls.normal) : null;
-  const roughTex = urls.roughness ? useLoader(THREE.TextureLoader, urls.roughness) : null;
+  const proxiedDiffuse = proxyPolyHavenUrl(urls.diffuse) || "";
+  const proxiedNormal = proxyPolyHavenUrl(urls.normal);
+  const proxiedRough = proxyPolyHavenUrl(urls.roughness);
+  const diffuseTex = useLoader(THREE.TextureLoader, proxiedDiffuse);
+  const normalTex = proxiedNormal ? useLoader(THREE.TextureLoader, proxiedNormal) : null;
+  const roughTex = proxiedRough ? useLoader(THREE.TextureLoader, proxiedRough) : null;
 
   const mats = useMemo(() => {
     const ox = pseudoRandom(segmentIndex, 0);

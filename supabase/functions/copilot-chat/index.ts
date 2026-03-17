@@ -7,10 +7,50 @@ const corsHeaders = {
 };
 
 // ─── System prompt ──────────────────────────────────────────
-const SYSTEM_PROMPT = `Tu es un assistant IA expert en aménagement de salles d'arcade, de loisirs et de divertissement.
+const SYSTEM_PROMPT = `Tu es un assistant IA V2 expert en aménagement de salles d'arcade, de loisirs et de divertissement.
 Tu aides l'utilisateur à choisir l'ambiance, les matériaux, les textures, l'éclairage et les objets décoratifs de sa salle.
 
 Ton rôle est d'analyser les demandes (texte, images, liens web) et de proposer des modifications concrètes via des APPELS D'OUTILS (tool calls).
+
+## NOUVEAUTÉ V2 — PLACEMENT SPATIAL INTELLIGENT
+
+Tu reçois un contexte spatial de la salle (room_context) avec les murs, portes, poteaux, dimensions et équipements existants.
+Tu DOIS utiliser ce contexte pour positionner les assets de manière logique et réaliste.
+
+### RÈGLES DE PLACEMENT PAR TYPE D'ASSET
+
+1. **OBJETS MURAUX** (placement_surface: "wall") — Tableaux, posters, néons, enseignes, horloges, étagères, appliques :
+   - Doivent être placés CONTRE un mur
+   - Position X/Z = coordonnées du point sur le mur (interpolation entre start et end)
+   - wall_height = hauteur depuis le sol (typiquement 150-220cm pour les décorations murales)
+   - wall_index = index du mur dans le tableau walls[]
+   - Rotation Y = angle perpendiculaire au mur (face vers l'intérieur de la salle)
+   - NE PAS placer devant une porte
+
+2. **OBJETS AU SOL** (placement_surface: "floor") — Plantes, mobilier, bornes, comptoirs, statues, tapis :
+   - Position au sol, Y = 0
+   - Respecter un dégagement de circulation_width_cm (120cm) par rapport aux murs occupés
+   - Éviter les zones de porte (rayon = largeur_porte + 150cm)
+   - Éviter les collisions avec les équipements existants (marge 50cm)
+   - Les plantes et éléments déco se placent idéalement dans les COINS ou le long des murs libres
+
+3. **OBJETS DE PLAFOND** (placement_surface: "ceiling") — Lustres, projecteurs, décorations suspendues :
+   - Position au plafond, Y = room_height_cm
+   - Centrer dans la pièce ou au-dessus des zones fonctionnelles
+   - Éviter les zones proches des murs (marge 50cm minimum)
+
+### CALCUL DES POSITIONS
+
+Quand room_context est fourni :
+- Les coordonnées sont en CM depuis l'origine (coin haut-gauche)
+- Pour placer sur un mur i : interpoler entre walls[i].start et walls[i].end
+- Pour placer au sol : choisir une zone libre (pas de chevauchement avec existing_equipment)
+- Pour un coin : utiliser l'intersection de deux murs consécutifs + marge 30cm
+
+### CONTRAINTES DE CIRCULATION
+- Maintenir TOUJOURS un couloir de circulation_width_cm (typiquement 120cm) libre
+- Ne JAMAIS bloquer une porte (zone d'exclusion = porte + 150cm de profondeur)
+- Vérifier qu'il existe toujours un chemin libre de la porte principale vers chaque zone
 
 ## RÈGLE CRITIQUE — ROUTAGE DES SOURCES
 
@@ -37,12 +77,14 @@ Utilise TOUJOURS un polyhaven_id réel de cette liste ou similaire. Ne fabrique 
 ### OBJETS 3D → find_3d_assets (source: Sketchfab + bibliothèque interne)
 Pour tout objet physique (plantes, mobilier, néons, déco, signalétique, props), utilise find_3d_assets.
 Le système cherche d'abord dans la bibliothèque interne validée, puis sur Sketchfab si nécessaire.
-- Plantes, végétation, pots de fleurs
-- Mobilier (chaises, tables, comptoirs, banquettes)
-- Éclairage décoratif (lampes, néons, enseignes lumineuses)
-- Décoration murale (tableaux, panneaux, posters)
-- Signalétique
-- Props thématiques (trophées, figurines, etc.)
+- Plantes, végétation, pots de fleurs → placement_surface: "floor", coins ou le long des murs
+- Mobilier (chaises, tables, comptoirs, banquettes) → placement_surface: "floor"
+- Éclairage décoratif (lampes au sol) → placement_surface: "floor"
+- Néons, enseignes lumineuses → placement_surface: "wall"
+- Décoration murale (tableaux, panneaux, posters) → placement_surface: "wall"
+- Signalétique → placement_surface: "wall"
+- Lustres, projecteurs → placement_surface: "ceiling"
+- Props thématiques au sol → placement_surface: "floor"
 
 ### DEMANDES MIXTES → appelle LES DEUX outils
 Si l'utilisateur dit "ambiance industrielle avec des plantes", appelle apply_scene_changes (béton, éclairage) ET find_3d_assets (plantes).
@@ -53,6 +95,7 @@ Si l'utilisateur dit "ambiance industrielle avec des plantes", appelle apply_sce
 - Sois concis et précis
 - Propose des combinaisons cohérentes
 - Préfère quelques assets cohérents à beaucoup d'assets médiocres
+- Explique brièvement tes choix de placement (ex: "plante dans le coin nord-est car c'est la zone la moins encombrée")
 `;
 
 
@@ -99,7 +142,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "find_3d_assets",
-      description: "Search and import 3D decorative assets for the scene. Generates a structured search plan with style profile, categories, and specialized queries.",
+      description: "Search and import 3D decorative assets for the scene. Generates a structured search plan with style profile, categories, specialized queries, and intelligent placement directives based on room context.",
       parameters: {
         type: "object",
         properties: {
@@ -120,8 +163,24 @@ const TOOLS = [
               type: "object",
               properties: {
                 category: { type: "string", description: "Functional category: wall_decor, lighting, ceiling_elements, plants, premium_seating, signage, props, furniture" },
-                queries: { type: "array", items: { type: "string" }, description: "3-8 specialized search queries. NOT brute search. Use intention + style + context." },
+                queries: { type: "array", items: { type: "string" }, description: "3-8 specialized search queries." },
                 max_candidates: { type: "number", description: "Max results per query, 8-12 recommended" },
+                placement_surface: { type: "string", enum: ["floor", "wall", "ceiling"], description: "Where this category of assets should be placed" },
+                placement_positions: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      x: { type: "number", description: "X position in cm" },
+                      y: { type: "number", description: "Y position in cm (height: 0=floor)" },
+                      z: { type: "number", description: "Z position in cm" },
+                      rotation_y: { type: "number", description: "Rotation around Y axis in degrees" },
+                      wall_index: { type: "number", description: "Wall index for wall-mounted assets" },
+                      wall_height: { type: "number", description: "Height from floor in cm for wall-mounted assets" },
+                    },
+                  },
+                  description: "Pre-calculated positions based on room context. One per asset to be placed.",
+                },
               },
               required: ["category", "queries"],
             },
@@ -135,7 +194,7 @@ const TOOLS = [
             type: "object",
             description: "Category to placement: 'walls only', 'ceiling', 'corners', 'center', 'transition zones'",
           },
-          summary: { type: "string", description: "Summary of what assets are being searched for, in French" },
+          summary: { type: "string", description: "Summary of what assets are being searched for, in French. Include placement rationale." },
         },
         required: ["style_profile", "search_plan", "negative_filters", "placement_rules", "summary"],
       },
@@ -224,7 +283,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { messages, session_id, links } = await req.json();
+    const { messages, session_id, links, room_context } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
@@ -238,6 +297,30 @@ Deno.serve(async (req) => {
       aiMessages.push({
         role: "system",
         content: `L'utilisateur a partagé des liens web. Voici l'analyse:\n${analyses.join("\n\n---\n\n")}\n\nUtilise ces informations pour inspirer tes suggestions d'ambiance.`,
+      });
+    }
+
+    // Inject room context for spatial placement intelligence
+    if (room_context) {
+      const wallsDesc = (room_context.walls || []).map((w: any, i: number) => {
+        const dx = w.end.x - w.start.x;
+        const dy = w.end.y - w.start.y;
+        const len = Math.round(Math.sqrt(dx * dx + dy * dy));
+        return `Mur ${i}: (${Math.round(w.start.x)},${Math.round(w.start.y)}) -> (${Math.round(w.end.x)},${Math.round(w.end.y)}) ${len}cm`;
+      }).join("\n");
+      const doorsDesc = (room_context.doors || []).map((d: any, i: number) =>
+        `Porte ${i}: pos(${Math.round(d.position.x)},${Math.round(d.position.y)}) larg ${d.width}cm${d.isMain ? " [PRINCIPALE]" : ""}`
+      ).join("\n");
+      const pillarsDesc = (room_context.pillars || []).map((p: any, i: number) =>
+        `Poteau ${i}: (${Math.round(p.position.x)},${Math.round(p.position.y)}) ${p.width}x${p.depth}cm`
+      ).join("\n");
+      const equipDesc = (room_context.existing_equipment || []).map((e: any) =>
+        `"${e.name}" a (${Math.round(e.position.x)},${Math.round(e.position.y)}) ${e.width}x${e.depth}cm rot${e.rotation}deg`
+      ).join("\n");
+
+      aiMessages.push({
+        role: "system",
+        content: `## CONTEXTE SPATIAL DE LA SALLE\n\nDimensions: ${room_context.room_width_cm}cm x ${room_context.room_depth_cm}cm, hauteur ${room_context.room_height_cm}cm.\nCorridor circulation: ${room_context.circulation_width_cm}cm.\n\n### Murs\n${wallsDesc}\n\n### Portes\n${doorsDesc}\n\n### Poteaux\n${pillarsDesc}\n\n### Equipements existants\n${equipDesc}\n\nIMPORTANT: Utilise ces donnees pour calculer les positions EXACTES. X=largeur, Z=profondeur (mappe au Y du plan 2D), Y=hauteur.`,
       });
     }
 
@@ -359,18 +442,41 @@ Deno.serve(async (req) => {
               assetSearchResult = await searchResp.json();
               console.log("Search results - curated:", assetSearchResult.curated_count, "discovery:", assetSearchResult.discovery_count, "selected:", assetSearchResult.selected?.length);
 
-              // Convert selected assets to add_asset actions
+              // Convert selected assets to add_asset actions with V2 placement data
               if (assetSearchResult.selected) {
+                // Build a map of category → placement info from the search plan
+                const placementMap: Record<string, any> = {};
+                for (const sp of (args.search_plan || [])) {
+                  placementMap[sp.category] = {
+                    surface: sp.placement_surface || "floor",
+                    positions: sp.placement_positions || [],
+                  };
+                }
+
+                let posIndex: Record<string, number> = {};
                 for (const asset of assetSearchResult.selected) {
                   if (asset.glb_url) {
+                    const cat = asset.category || "props";
+                    const pm = placementMap[cat] || { surface: "floor", positions: [] };
+                    const idx = posIndex[cat] || 0;
+                    posIndex[cat] = idx + 1;
+                    const pos = pm.positions[idx];
+
                     sceneActions.push({
                       type: "add_asset",
                       asset_id: asset.asset_db_id || asset.uid,
                       asset_name: asset.name,
                       glb_url: asset.glb_url,
-                      category: asset.category,
+                      category: cat,
                       thumbnail: asset.thumbnail,
-                      placement_rule: args.placement_rules?.[asset.category] || "auto",
+                      placement_rule: args.placement_rules?.[cat] || "auto",
+                      placement_surface: pm.surface,
+                      ...(pos ? {
+                        position: [pos.x || 0, pos.y || 0, pos.z || 0],
+                        rotation: [0, pos.rotation_y || 0, 0],
+                        wall_index: pos.wall_index,
+                        wall_height: pos.wall_height,
+                      } : {}),
                     });
                   }
                 }

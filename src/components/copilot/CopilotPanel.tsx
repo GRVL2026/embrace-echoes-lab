@@ -15,7 +15,7 @@ import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { sendCopilotMessage, createSession, type CopilotChatResponse, type PendingAssetData } from "@/lib/copilotApi";
+import { sendCopilotMessage, createSession, type CopilotChatResponse, type PendingAssetData, type RoomContext } from "@/lib/copilotApi";
 import { QUICK_ACTIONS } from "@/types/copilot";
 import type { CopilotAction, AddAssetAction } from "@/types/copilot";
 import { toast } from "@/hooks/use-toast";
@@ -36,10 +36,11 @@ interface ChatMessage {
 type Props = {
   onActionsReady: (actions: CopilotAction[]) => void;
   onClose: () => void;
+  roomContext?: RoomContext;
 };
 
 // ─── Component ──────────────────────────────────────────────
-export function CopilotPanel({ onActionsReady, onClose }: Props) {
+export function CopilotPanel({ onActionsReady, onClose, roomContext }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [images, setImages] = useState<string[]>([]);
@@ -94,6 +95,7 @@ export function CopilotPanel({ onActionsReady, onClose }: Props) {
           messages: apiMessages,
           session_id: sessionId || undefined,
           links: userMessage.links,
+          room_context: roomContext,
         });
 
         // Separate add_asset actions as pending (need user approval)
@@ -320,6 +322,11 @@ export function CopilotPanel({ onActionsReady, onClose }: Props) {
                       category: a.category,
                       thumbnail: a.thumbnail,
                       placement_rule: a.placement_rule,
+                      placement_surface: a.placement_surface,
+                      position: a.position,
+                      rotation: a.rotation,
+                      wall_index: a.wall_index,
+                      wall_height: a.wall_height,
                     }));
                     onActionsReady(actions);
                     // Replace pending with accepted indicator

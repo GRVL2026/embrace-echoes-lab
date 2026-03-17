@@ -1,6 +1,24 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { CopilotAction } from "@/types/copilot";
 
+export interface RoomContext {
+  walls: Array<{ start: { x: number; y: number }; end: { x: number; y: number } }>;
+  doors: Array<{ position: { x: number; y: number }; width: number; isMain?: boolean }>;
+  pillars: Array<{ position: { x: number; y: number }; width: number; depth: number }>;
+  floor_points: Array<{ x: number; y: number }>;
+  room_width_cm: number;
+  room_depth_cm: number;
+  room_height_cm: number;
+  existing_equipment: Array<{
+    name: string;
+    position: { x: number; y: number };
+    width: number;
+    depth: number;
+    rotation: number;
+  }>;
+  circulation_width_cm: number;
+}
+
 export interface CopilotChatRequest {
   messages: Array<{
     role: "user" | "assistant";
@@ -9,6 +27,7 @@ export interface CopilotChatRequest {
   }>;
   session_id?: string;
   links?: string[];
+  room_context?: RoomContext;
 }
 
 export interface PendingAssetData {

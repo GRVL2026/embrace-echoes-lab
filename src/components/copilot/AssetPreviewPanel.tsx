@@ -12,13 +12,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import type { AddAssetAction } from "@/types/copilot";
+import type { AddAssetAction, PlacementSurface } from "@/types/copilot";
 
 export interface PendingAsset extends AddAssetAction {
   score?: number;
   source?: "curated" | "discovery";
   polycount?: number;
   file_size_mb?: number;
+  placement_surface?: PlacementSurface;
 }
 
 type Props = {

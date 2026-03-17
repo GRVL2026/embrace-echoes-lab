@@ -192,9 +192,12 @@ function PolyHavenWallSegment({
   segmentIndex: number;
 }) {
   const urls = textureData.urls;
-  const diffuseTex = useLoader(THREE.TextureLoader, urls.diffuse || "");
-  const normalTex = urls.normal ? useLoader(THREE.TextureLoader, urls.normal) : null;
-  const roughTex = urls.roughness ? useLoader(THREE.TextureLoader, urls.roughness) : null;
+  const proxiedDiffuse = proxyPolyHavenUrl(urls.diffuse) || "";
+  const proxiedNormal = proxyPolyHavenUrl(urls.normal);
+  const proxiedRough = proxyPolyHavenUrl(urls.roughness);
+  const diffuseTex = useLoader(THREE.TextureLoader, proxiedDiffuse);
+  const normalTex = proxiedNormal ? useLoader(THREE.TextureLoader, proxiedNormal) : null;
+  const roughTex = proxiedRough ? useLoader(THREE.TextureLoader, proxiedRough) : null;
 
   const mats = useMemo(() => {
     const ox = pseudoRandom(segmentIndex, 0);

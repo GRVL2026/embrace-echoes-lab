@@ -14,11 +14,15 @@ type Props = {
 
 const TEXTURE_PHYSICAL_SIZE = 2.0;
 
-function configCeilingTex(t: THREE.Texture, w: number, h: number, rotationStep = 0): THREE.Texture {
+/**
+ * Configure texture for shapeGeometry (UVs in world-space metres).
+ * repeat = 1/physicalTileSize so 1 tile = TEXTURE_PHYSICAL_SIZE metres.
+ */
+function configCeilingTex(t: THREE.Texture, rotationStep = 0): THREE.Texture {
   const c = t.clone();
   c.wrapS = THREE.RepeatWrapping;
   c.wrapT = THREE.RepeatWrapping;
-  c.repeat.set(w / TEXTURE_PHYSICAL_SIZE, h / TEXTURE_PHYSICAL_SIZE);
+  c.repeat.set(1 / TEXTURE_PHYSICAL_SIZE, 1 / TEXTURE_PHYSICAL_SIZE);
   c.center.set(0.5, 0.5);
   c.rotation = (rotationStep % 4) * (Math.PI / 2);
   c.colorSpace = THREE.SRGBColorSpace;

@@ -142,7 +142,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "find_3d_assets",
-      description: "Search and import 3D decorative assets for the scene. Generates a structured search plan with style profile, categories, and specialized queries.",
+      description: "Search and import 3D decorative assets for the scene. Generates a structured search plan with style profile, categories, specialized queries, and intelligent placement directives based on room context.",
       parameters: {
         type: "object",
         properties: {
@@ -163,8 +163,24 @@ const TOOLS = [
               type: "object",
               properties: {
                 category: { type: "string", description: "Functional category: wall_decor, lighting, ceiling_elements, plants, premium_seating, signage, props, furniture" },
-                queries: { type: "array", items: { type: "string" }, description: "3-8 specialized search queries. NOT brute search. Use intention + style + context." },
+                queries: { type: "array", items: { type: "string" }, description: "3-8 specialized search queries." },
                 max_candidates: { type: "number", description: "Max results per query, 8-12 recommended" },
+                placement_surface: { type: "string", enum: ["floor", "wall", "ceiling"], description: "Where this category of assets should be placed" },
+                placement_positions: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      x: { type: "number", description: "X position in cm" },
+                      y: { type: "number", description: "Y position in cm (height: 0=floor)" },
+                      z: { type: "number", description: "Z position in cm" },
+                      rotation_y: { type: "number", description: "Rotation around Y axis in degrees" },
+                      wall_index: { type: "number", description: "Wall index for wall-mounted assets" },
+                      wall_height: { type: "number", description: "Height from floor in cm for wall-mounted assets" },
+                    },
+                  },
+                  description: "Pre-calculated positions based on room context. One per asset to be placed.",
+                },
               },
               required: ["category", "queries"],
             },
@@ -178,7 +194,7 @@ const TOOLS = [
             type: "object",
             description: "Category to placement: 'walls only', 'ceiling', 'corners', 'center', 'transition zones'",
           },
-          summary: { type: "string", description: "Summary of what assets are being searched for, in French" },
+          summary: { type: "string", description: "Summary of what assets are being searched for, in French. Include placement rationale." },
         },
         required: ["style_profile", "search_plan", "negative_filters", "placement_rules", "summary"],
       },

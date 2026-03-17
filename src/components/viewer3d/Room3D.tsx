@@ -311,14 +311,8 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true, ambian
   const wallHeight = ambiance?.wallHeight ?? 2.8;
   const polyFloor = ambiance?.polyhavenFloor;
   const polyWall = ambiance?.polyhavenWall;
-  const isEpoxy = !polyFloor && ambiance?.floorTexture === "epoxy";
-  const floorTexturePath = !polyFloor && ambiance?.floorTexture && ambiance.floorTexture !== "default" && !isEpoxy
-    ? FLOOR_TEXTURE_MAP[ambiance.floorTexture]
-    : null;
-  const wallTexturePath = !polyWall && ambiance?.wallFinish && ambiance.wallFinish !== "default" && ambiance.wallFinish !== "paint"
-    ? WALL_TEXTURE_MAP[ambiance.wallFinish]
-    : null;
-  const wallColor = ambiance?.wallFinish === "paint" ? ambiance.wallColor : "#f0f0f0";
+  // Only Poly Haven textures or plain color – built-in textures removed
+  const wallColor = ambiance?.wallColor ?? "#f0f0f0";
 
   const { floorShape, floorSize, wallMeshes } = useMemo(() => {
     const pts = room.points.map((p) => new THREE.Vector2(p.x / 100, p.y / 100));
@@ -392,22 +386,6 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true, ambian
                 surfaceSize={floorSize}
               />
             </Suspense>
-          ) : floorTexturePath ? (
-            <TexturedFloor shape={floorShape} texturePath={floorTexturePath} surfaceSize={floorSize} />
-          ) : isEpoxy ? (
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, 0]} receiveShadow>
-              <shapeGeometry args={[floorShape]} />
-              <meshPhysicalMaterial
-                color="#7a7a7f"
-                roughness={0.12}
-                metalness={0.08}
-                clearcoat={0.9}
-                clearcoatRoughness={0.05}
-                reflectivity={0.6}
-                side={THREE.DoubleSide}
-                {...{} as any}
-              />
-            </mesh>
           ) : (
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
               <shapeGeometry args={[floorShape]} />
@@ -457,19 +435,6 @@ export function Room3D({ room, doors, showFloor = true, showWalls = true, ambian
                   segmentIndex={idx}
                 />
               </Suspense>
-            );
-          }
-
-          if (wallTexturePath) {
-            return (
-              <TexturedWallSegment
-                key={`wall-${wi}-${si}`}
-                position={pos}
-                rotation={rot}
-                size={size}
-                texturePath={wallTexturePath}
-                segmentIndex={idx}
-              />
             );
           }
 

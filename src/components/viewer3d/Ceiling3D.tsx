@@ -14,11 +14,15 @@ type Props = {
 
 const TEXTURE_PHYSICAL_SIZE = 2.0;
 
-function configCeilingTex(t: THREE.Texture, w: number, h: number, rotationStep = 0): THREE.Texture {
+/**
+ * Configure texture for shapeGeometry (UVs in world-space metres).
+ * repeat = 1/physicalTileSize so 1 tile = TEXTURE_PHYSICAL_SIZE metres.
+ */
+function configCeilingTex(t: THREE.Texture, rotationStep = 0): THREE.Texture {
   const c = t.clone();
   c.wrapS = THREE.RepeatWrapping;
   c.wrapT = THREE.RepeatWrapping;
-  c.repeat.set(w / TEXTURE_PHYSICAL_SIZE, h / TEXTURE_PHYSICAL_SIZE);
+  c.repeat.set(1 / TEXTURE_PHYSICAL_SIZE, 1 / TEXTURE_PHYSICAL_SIZE);
   c.center.set(0.5, 0.5);
   c.rotation = (rotationStep % 4) * (Math.PI / 2);
   c.colorSpace = THREE.SRGBColorSpace;
@@ -31,7 +35,7 @@ function TechnicalCeilingPanel({ shape, height, surfaceSize }: { shape: THREE.Sh
   const texture = useLoader(THREE.TextureLoader, "/textures/ceiling_technical.jpg");
   const tex = useMemo(() => {
     const rot = Math.floor((Math.sin(surfaceSize[0] * 91.3 + surfaceSize[1] * 47.1) * 43758.5453 % 1 + 1) % 1 * 4);
-    return configCeilingTex(texture, surfaceSize[0], surfaceSize[1], rot);
+    return configCeilingTex(texture, rot);
   }, [texture, surfaceSize[0], surfaceSize[1]]);
 
   return (
@@ -58,9 +62,9 @@ function PolyHavenCeilingPanel({ shape, height, textureData, surfaceSize }: { sh
   const mats = useMemo(() => {
     const rot = Math.floor((Math.sin(surfaceSize[0] * 127.1 + surfaceSize[1] * 311.7) * 43758.5453 % 1 + 1) % 1 * 4);
     return {
-      diffuse: configCeilingTex(diffuseTex, surfaceSize[0], surfaceSize[1], rot),
-      normal: normalTex ? configCeilingTex(normalTex, surfaceSize[0], surfaceSize[1], rot) : null,
-      roughness: roughTex ? configCeilingTex(roughTex, surfaceSize[0], surfaceSize[1], rot) : null,
+      diffuse: configCeilingTex(diffuseTex, rot),
+      normal: normalTex ? configCeilingTex(normalTex, rot) : null,
+      roughness: roughTex ? configCeilingTex(roughTex, rot) : null,
     };
   }, [diffuseTex, normalTex, roughTex, surfaceSize[0], surfaceSize[1]]);
 

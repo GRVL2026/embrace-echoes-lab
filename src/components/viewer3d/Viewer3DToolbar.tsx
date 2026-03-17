@@ -90,7 +90,7 @@ export const DEFAULT_3D_SETTINGS: Viewer3DSettings = {
     doors: true,
     pillars: true,
     grid: true,
-    circulation: true,
+    circulation: false,
     heights: false,
   },
   lighting: "daylight",

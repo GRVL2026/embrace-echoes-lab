@@ -70,6 +70,9 @@ const THEME_PRESETS: ThemePreset[] = [
       ceilingHeight: 2.8,
       fog: true,
       fogIntensity: 0.25,
+      polyhavenFloor: null,
+      polyhavenWall: null,
+      polyhavenCeiling: null,
     },
   },
   {

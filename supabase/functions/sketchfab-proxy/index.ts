@@ -148,7 +148,7 @@ async function handleDetails(
 
 // ─── Download ───────────────────────────────────────────────
 async function handleDownload(
-  body: { uid: string },
+  body: { uid: string; format?: string },
   headers: Record<string, string>
 ) {
   if (!body.uid) {
@@ -177,19 +177,43 @@ async function handleDownload(
 
   const data = await resp.json();
 
-  // Prefer glb, then gltf
-  const glb = data.glb || data.gltf;
-  const result: any = {};
-
-  if (glb) {
-    result.download_url = glb.url;
-    result.format = data.glb ? "glb" : "gltf";
-    result.size = glb.size;
-    result.expires = glb.expires;
+  // Build formats list with details
+  const formats: Record<string, { url: string; size?: number; expires?: number }> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value && typeof value === "object" && "url" in (value as any)) {
+      const v = value as { url: string; size?: number; expires?: number };
+      formats[key] = { url: v.url, size: v.size, expires: v.expires };
+    }
   }
 
-  // Also include other available formats
-  result.available_formats = Object.keys(data);
+  // If a specific format is requested, return just that
+  const requested = body.format;
+  if (requested && formats[requested]) {
+    return new Response(
+      JSON.stringify({
+        download_url: formats[requested].url,
+        format: requested,
+        size: formats[requested].size,
+        expires: formats[requested].expires,
+        available_formats: formats,
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Default: prefer glb, then gltf
+  const preferred = formats.glb || formats.gltf;
+  const result: any = {
+    available_formats: formats,
+  };
+
+  if (preferred) {
+    const fmt = formats.glb ? "glb" : "gltf";
+    result.download_url = preferred.url;
+    result.format = fmt;
+    result.size = preferred.size;
+    result.expires = preferred.expires;
+  }
 
   return new Response(JSON.stringify(result), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },

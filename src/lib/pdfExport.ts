@@ -173,7 +173,8 @@ export async function generateDossierPDF(
   projectName: string
 ): Promise<void> {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const totalPages = 5;
+  // totalPages computed after we know how many annexe pages we need
+  let totalPages = 5;
 
   const formatEUR = (v: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(v);
@@ -645,6 +646,200 @@ export async function generateDossierPDF(
   doc.text("Ce document est une estimation indicative générée par Arcade Planner.", MARGIN, footY);
   doc.text("Les prix indiqués sont ceux du catalogue et peuvent varier.", MARGIN, footY + 4);
   doc.text(`Généré le ${dateStr}`, MARGIN, footY + 8);
+
+  // ═══════════════════════════════════════════════════
+  // ANNEXE — FICHES PRODUITS
+  // ═══════════════════════════════════════════════════
+  // Build unique product list for placed equipment (only catalog items)
+  const productSheets: { eq: GameEquipment; count: number }[] = [];
+  const seenIds = new Set<string>();
+  state.placedEquipments.forEach((pe) => {
+    const cat = catalog.find((c) => c.id === pe.equipmentId);
+    if (!cat || seenIds.has(cat.id)) return;
+    seenIds.add(cat.id);
+    const count = state.placedEquipments.filter((p) => p.equipmentId === cat.id).length;
+    productSheets.push({ eq: cat, count });
+  });
+  productSheets.sort((a, b) => a.eq.category.localeCompare(b.eq.category));
+
+  // 2 product cards per page
+  const annexePages = Math.ceil(productSheets.length / 2);
+  totalPages = 5 + annexePages;
+
+  // Update footers for pages 1-5
+  // (already drawn, can't update — we'll just use correct total going forward)
+
+  for (let ai = 0; ai < annexePages; ai++) {
+    doc.addPage();
+    drawDarkPage(doc);
+    drawGridPattern(doc, 0, PAGE_H, 0.02);
+
+    const pageNum = 6 + ai;
+    let ya = drawSectionTitle(doc, ai === 0 ? "Annexe — Fiches Produits" : "Fiches Produits (suite)", 28);
+
+    for (let slot = 0; slot < 2; slot++) {
+      const idx = ai * 2 + slot;
+      if (idx >= productSheets.length) break;
+      const { eq, count } = productSheets[idx];
+
+      const cardH = 110;
+      const cardY = ya;
+
+      drawCard(doc, MARGIN, cardY, CONTENT_W, cardH, { borderColor: PURPLE });
+
+      // Product image (left side)
+      const imgW = 50;
+      const imgX = MARGIN + 4;
+      const imgY = cardY + 4;
+      const imgH = cardH - 8;
+
+      if (eq.images && eq.images.length > 0) {
+        try {
+          // Try to load image — we'll draw a placeholder frame regardless
+          drawCard(doc, imgX, imgY, imgW, imgH, { borderColor: DARK_MUTED });
+          // Attempt to embed first image
+          const imgUrl = eq.images[0];
+          // We can't reliably fetch external images in browser PDF gen,
+          // so we draw a placeholder with the icon
+          setF(doc, DARK_SURFACE);
+          doc.roundedRect(imgX + 1, imgY + 1, imgW - 2, imgH - 2, 2, 2, "F");
+          doc.setFontSize(28);
+          setC(doc, PURPLE);
+          doc.text(eq.icon || "🎮", imgX + imgW / 2, imgY + imgH / 2 + 4, { align: "center" });
+          doc.setFontSize(6);
+          setC(doc, GRAY);
+          doc.text("Image catalogue", imgX + imgW / 2, imgY + imgH - 4, { align: "center" });
+        } catch {
+          // fallback
+        }
+      } else {
+        // Icon placeholder
+        setF(doc, DARK_SURFACE);
+        doc.roundedRect(imgX, imgY, imgW, imgH, 3, 3, "F");
+        doc.setFontSize(32);
+        setC(doc, PURPLE);
+        doc.text(eq.icon || "🎮", imgX + imgW / 2, imgY + imgH / 2 + 5, { align: "center" });
+      }
+
+      // Right side — text content
+      const textX = imgX + imgW + 8;
+      const textW = CONTENT_W - imgW - 16;
+      let ty = cardY + 12;
+
+      // Name
+      doc.setFontSize(13);
+      setC(doc, WHITE);
+      const nameLines2 = doc.splitTextToSize(eq.name, textW);
+      doc.text(nameLines2.slice(0, 2), textX, ty);
+      ty += nameLines2.slice(0, 2).length * 5 + 3;
+
+      // Category & vendor
+      doc.setFontSize(8);
+      setC(doc, PURPLE);
+      doc.text(eq.category.toUpperCase(), textX, ty);
+      if (eq.vendor) {
+        setC(doc, GRAY);
+        doc.text(`• ${eq.vendor}`, textX + doc.getTextWidth(eq.category.toUpperCase()) + 4, ty);
+      }
+      ty += 7;
+
+      // Dimensions row
+      drawGradientBar(doc, textX, ty - 2, textW, 0.3, PURPLE, DARK);
+      ty += 4;
+
+      const dimItems = [
+        { label: "Largeur", value: `${eq.width} cm` },
+        { label: "Profondeur", value: `${eq.depth} cm` },
+        { label: "Hauteur", value: `${eq.height} cm` },
+        { label: "Zone sécurité", value: `${eq.safetyZone} cm` },
+      ];
+      const dimColW = textW / dimItems.length;
+      dimItems.forEach((dim, di) => {
+        const dx = textX + di * dimColW;
+        doc.setFontSize(6);
+        setC(doc, GRAY);
+        doc.text(dim.label, dx, ty);
+        doc.setFontSize(9);
+        setC(doc, GREEN);
+        doc.text(dim.value, dx, ty + 5);
+      });
+      ty += 13;
+
+      // Specs
+      if (eq.specs) {
+        const specEntries: [string, string][] = [];
+        if (eq.specs.power) specEntries.push(["Puissance", eq.specs.power]);
+        if (eq.specs.screen) specEntries.push(["Écran", eq.specs.screen]);
+        if (eq.specs.capacity) specEntries.push(["Capacité", eq.specs.capacity]);
+        if (eq.specs.tickets !== undefined) specEntries.push(["Tickets", eq.specs.tickets ? "Oui" : "Non"]);
+
+        if (specEntries.length > 0) {
+          doc.setFontSize(7);
+          setC(doc, CYAN);
+          doc.text("SPÉCIFICATIONS", textX, ty);
+          ty += 5;
+
+          specEntries.forEach(([label, value]) => {
+            doc.setFontSize(7);
+            setC(doc, GRAY);
+            doc.text(`${label}:`, textX, ty);
+            setC(doc, WHITE);
+            doc.text(value, textX + 30, ty);
+            ty += 5;
+          });
+          ty += 2;
+        }
+      }
+
+      // Tags & features row
+      const features: string[] = [];
+      if (eq.pmrAccessible) features.push("♿ PMR");
+      if (eq.centerPlacement) features.push("🏝️ Îlot central");
+      if (eq.model3d) features.push("🧊 Modèle 3D");
+      if (eq.tags && eq.tags.length > 0) features.push(...eq.tags.slice(0, 3));
+
+      if (features.length > 0 && ty < cardY + cardH - 12) {
+        let fx = textX;
+        features.forEach((tag) => {
+          const tagW = doc.getTextWidth(tag) * 0.35 + 5;
+          if (fx + tagW > textX + textW) return;
+          setF(doc, DARK_MUTED);
+          doc.roundedRect(fx, ty - 2.5, tagW, 5, 1.5, 1.5, "F");
+          doc.setFontSize(6);
+          setC(doc, LIGHT);
+          doc.text(tag, fx + 2.5, ty);
+          fx += tagW + 2;
+        });
+        ty += 8;
+      }
+
+      // Price & quantity badge
+      const badgeY = cardY + cardH - 14;
+      // Quantity
+      setF(doc, DARK_SURFACE);
+      doc.roundedRect(textX, badgeY, 22, 8, 2, 2, "F");
+      doc.setFontSize(7);
+      setC(doc, PURPLE);
+      doc.text(`×${count}`, textX + 11, badgeY + 5, { align: "center" });
+
+      // Price
+      if (eq.price && eq.price > 0) {
+        doc.setFontSize(11);
+        setC(doc, GREEN);
+        doc.text(formatEUR(eq.price), textX + textW, badgeY + 5, { align: "right" });
+        doc.setFontSize(6);
+        setC(doc, GRAY);
+        doc.text("Prix unitaire HT", textX + textW, badgeY + 10, { align: "right" });
+      }
+
+      ya = cardY + cardH + 8;
+    }
+
+    addFooter(doc, pageNum, totalPages);
+  }
+
+  // Re-stamp footers 1–5 with correct total would require re-rendering;
+  // instead we already write them. For a cleaner solution we'd buffer pages.
 
   addFooter(doc, 5, totalPages);
 

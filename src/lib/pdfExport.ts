@@ -173,7 +173,8 @@ export async function generateDossierPDF(
   projectName: string
 ): Promise<void> {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const totalPages = 5;
+  // totalPages computed after we know how many annexe pages we need
+  let totalPages = 5;
 
   const formatEUR = (v: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(v);

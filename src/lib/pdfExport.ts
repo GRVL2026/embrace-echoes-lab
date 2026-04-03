@@ -36,11 +36,11 @@ function setD(doc: jsPDF, c: RGB) { doc.setDrawColor(c[0], c[1], c[2]); }
 // ─── Decorative helpers ──────────────────────────────────────
 
 /** Draw a subtle grid pattern (like the site background) */
-function drawGridPattern(doc: jsPDF, y: number, h: number, opacity = 0.06) {
+function drawGridPattern(doc: jsPDF, y: number, h: number, opacity = 0.025) {
   doc.setGState(new (doc as any).GState({ opacity }));
   setD(doc, PURPLE);
-  doc.setLineWidth(0.15);
-  const step = 12;
+  doc.setLineWidth(0.1);
+  const step = 18;
   for (let gx = 0; gx <= PAGE_W; gx += step) {
     doc.line(gx, y, gx, y + h);
   }

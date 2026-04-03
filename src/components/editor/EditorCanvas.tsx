@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useCallback, useState } from "react";
-import { setCanvas2DSnapshot } from "@/lib/canvas2DSnapshot";
+import { setCanvas2DSnapshot, setCanvas2DMeasuredSnapshot } from "@/lib/canvas2DSnapshot";
 import { useEditor } from "@/contexts/EditorContext";
 import { CM_TO_PX, type Point, type Door, type Pillar, type CirculationSegment } from "@/types/editor";
 import type { PlacedEquipment } from "@/types/equipment";
@@ -715,6 +715,15 @@ export function EditorCanvas() {
     // Store snapshot for PDF export (available even when switching to 3D)
     try {
       setCanvas2DSnapshot(canvas.toDataURL("image/png"));
+
+      // Also capture a version WITH gap measurements for the PDF
+      if (!state.showGapMeasurements && state.placedEquipments.length > 0 && state.rooms.length > 0) {
+        drawGapMeasurements(ctx, state.placedEquipments, state.rooms, state.pillars, state.zoom);
+        setCanvas2DMeasuredSnapshot(canvas.toDataURL("image/png"));
+      } else if (state.showGapMeasurements) {
+        // Already has measurements drawn
+        setCanvas2DMeasuredSnapshot(canvas.toDataURL("image/png"));
+      }
     } catch { /* ignore tainted canvas */ }
   });
 

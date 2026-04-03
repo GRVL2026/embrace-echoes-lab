@@ -7,7 +7,7 @@ import type { EditorState, Room } from "@/types/editor";
 import type { GameEquipment, PlacedEquipment } from "@/types/equipment";
 import { capture3DViews, type CaptureView } from "./render3DCaptures";
 import { captureFromLiveCanvas, isCanvasCaptureAvailable } from "./canvasCapture";
-import { getCanvas2DSnapshot } from "./canvas2DSnapshot";
+import { getCanvas2DSnapshot, getCanvas2DMeasuredSnapshot } from "./canvas2DSnapshot";
 
 // ─── Brand Palette ───────────────────────────────────────────
 const PURPLE = [155, 92, 255] as const;     // #9B5CFF
@@ -170,6 +170,7 @@ function capture2DCanvas(): string | null {
 export type DossierOptions = {
   cover?: boolean;
   plan2d?: boolean;
+  plan2dMeasured?: boolean;
   views3d?: boolean;
   equipmentList?: boolean;
   budget?: boolean;
@@ -183,7 +184,7 @@ export async function generateDossierPDF(
   options?: DossierOptions
 ): Promise<void> {
   const opts: Required<DossierOptions> = {
-    cover: true, plan2d: true, views3d: true,
+    cover: true, plan2d: true, plan2dMeasured: true, views3d: true,
     equipmentList: true, budget: true, productSheets: true,
     ...options,
   };
@@ -396,6 +397,36 @@ export async function generateDossierPDF(
   }
 
   } // end plan2d
+
+  // ═══════════════════════════════════════════════════
+  // PLAN 2D COTÉ (avec mesures)
+  // ═══════════════════════════════════════════════════
+  if (opts.plan2dMeasured) {
+    startPage();
+    drawGridPattern(doc, 0, PAGE_H, 0.03);
+    let ym = drawSectionTitle(doc, "Plan 2D coté", 28);
+
+    doc.setFontSize(9);
+    setC(doc, GRAY);
+    doc.text("Distances entre équipements, murs et obstacles", MARGIN + 10, ym - 3);
+    ym += 6;
+
+    const measured2D = getCanvas2DMeasuredSnapshot();
+    if (measured2D) {
+      const imgH = PAGE_H - ym - 20;
+      drawCard(doc, MARGIN, ym, CONTENT_W, imgH, { borderColor: GOLD });
+      try {
+        doc.addImage(measured2D, "PNG", MARGIN + 1, ym + 1, CONTENT_W - 2, imgH - 2, undefined, "FAST");
+      } catch { /* ignore */ }
+    } else {
+      drawCard(doc, MARGIN, ym, CONTENT_W, 80);
+      doc.setFontSize(11);
+      setC(doc, GRAY);
+      doc.text("Plan coté non disponible", PAGE_W / 2, ym + 40, { align: "center" });
+      doc.setFontSize(8);
+      doc.text("Activez les mesures sur le plan 2D avant d'exporter", PAGE_W / 2, ym + 50, { align: "center" });
+    }
+  } // end plan2dMeasured
 
   if (opts.views3d) {
   startPage();

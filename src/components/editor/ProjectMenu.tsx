@@ -156,6 +156,8 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
     toast.info("Génération du dossier PDF en cours…");
     try {
       await generateDossierPDF(state, catalog, currentProjectName);
+      // Save layout snapshot for AI learning
+      await saveLayoutSnapshot(state, catalog, currentProjectName);
       toast.success("Dossier PDF téléchargé !");
     } catch (e) {
       console.error("PDF export error:", e);

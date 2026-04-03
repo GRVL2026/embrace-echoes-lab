@@ -534,7 +534,7 @@ export async function generateDossierPDF(
     y4 += 7.5;
   });
 
-  addFooter(doc, 4, totalPages);
+  } // end equipmentList
 
   // ═══════════════════════════════════════════════════
   // PAGE 5 — BUDGET

@@ -1186,6 +1186,13 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
       </Dialog>
       </>
       )}
+
+      <ForcePlaceDialog
+        open={forcePlaceEquipments.length > 0}
+        notPlacedEquipments={forcePlaceEquipments}
+        onForcePlace={handleForcePlace}
+        onCancel={() => setForcePlaceEquipments([])}
+      />
     </div>
   );
 }

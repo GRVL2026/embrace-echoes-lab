@@ -170,6 +170,7 @@ function capture2DCanvas(): string | null {
 export type DossierOptions = {
   cover?: boolean;
   plan2d?: boolean;
+  plan2dMeasured?: boolean;
   views3d?: boolean;
   equipmentList?: boolean;
   budget?: boolean;

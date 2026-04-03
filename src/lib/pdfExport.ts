@@ -815,7 +815,7 @@ export async function generateDossierPDF(
             setC(doc, GRAY);
             doc.text(`${label}:`, textX, ty);
             setC(doc, WHITE);
-            doc.text(value, textX + 30, ty);
+            doc.text(String(value), textX + 30, ty);
             ty += 5;
           });
           ty += 2;

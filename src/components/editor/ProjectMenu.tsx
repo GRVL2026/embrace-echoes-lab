@@ -24,6 +24,7 @@ import {
 import { Save, FolderOpen, FilePlus, Trash2, Menu, Gamepad2, FileDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { generateDossierPDF } from "@/lib/pdfExport";
+import { ExportDossierDialog, type DossierSections } from "./ExportDossierDialog";
 import { saveLayoutSnapshot } from "@/lib/layoutLearning";
 import {
   listProjects,
@@ -44,6 +45,7 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [currentProjectName, setCurrentProjectName] = useState("Nouveau projet");
   const [isExporting, setIsExporting] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   // Save dialog
   const [saveOpen, setSaveOpen] = useState(false);
@@ -147,18 +149,22 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
     toast.success("Projet HYPER NOVA chargé (3 salles, 2 poteaux, 30+ équipements)");
   };
 
-  const handleExportDossier = async () => {
+  const handleOpenExport = () => {
     if (state.rooms.length === 0 && state.placedEquipments.length === 0) {
       toast.error("Rien à exporter — ajoutez au moins une salle ou des équipements");
       return;
     }
+    setExportDialogOpen(true);
+  };
+
+  const handleExportDossier = async (sections: DossierSections) => {
     setIsExporting(true);
     toast.info("Génération du dossier PDF en cours…");
     try {
-      await generateDossierPDF(state, catalog, currentProjectName);
-      // Save layout snapshot for AI learning
+      await generateDossierPDF(state, catalog, currentProjectName, sections);
       await saveLayoutSnapshot(state, catalog, currentProjectName);
       toast.success("Dossier PDF téléchargé !");
+      setExportDialogOpen(false);
     } catch (e) {
       console.error("PDF export error:", e);
       toast.error("Erreur lors de la génération du PDF");
@@ -195,7 +201,7 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
             Ouvrir un projet
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleExportDossier} disabled={isExporting} className="gap-2">
+          <DropdownMenuItem onClick={handleOpenExport} disabled={isExporting} className="gap-2">
             {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
             Dossier banque (PDF)
           </DropdownMenuItem>
@@ -283,6 +289,13 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
           )}
         </DialogContent>
       </Dialog>
+
+      <ExportDossierDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        onExport={handleExportDossier}
+        isExporting={isExporting}
+      />
     </>
   );
 }

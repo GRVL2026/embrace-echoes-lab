@@ -165,9 +165,9 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
       await saveLayoutSnapshot(state, catalog, currentProjectName);
       toast.success("Dossier PDF téléchargé !");
       setExportDialogOpen(false);
-    } catch (e) {
+    } catch (e: any) {
       console.error("PDF export error:", e);
-      toast.error("Erreur lors de la génération du PDF");
+      toast.error(`Erreur PDF : ${e?.message || "Erreur inconnue"}`, { duration: 8000 });
     } finally {
       setIsExporting(false);
     }

@@ -339,6 +339,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   const { state, dispatch } = useEditor();
   const [selectedQuantities, setSelectedQuantities] = useState<Map<string, number>>(new Map());
   const [notPlacedIds, setNotPlacedIds] = useState<Set<string>>(new Set());
+  const [layoutLocked, setLayoutLocked] = useState(false);
   const [forcePlaceEquipments, setForcePlaceEquipments] = useState<GameEquipment[]>([]);
   const [viewingProduct, setViewingProduct] = useState<GameEquipment | null>(null);
   const [searchQuery, setSearchQuery] = useState("");

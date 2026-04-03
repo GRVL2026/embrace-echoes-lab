@@ -295,6 +295,33 @@ Deno.serve(async (req) => {
         role: "system",
         content: `## CONTEXTE SPATIAL DE LA SALLE\n\nDimensions: ${room_context.room_width_cm}cm x ${room_context.room_depth_cm}cm, hauteur ${room_context.room_height_cm}cm.\nCorridor circulation: ${room_context.circulation_width_cm}cm.\n\n### Murs\n${wallsDesc}\n\n### Portes\n${doorsDesc}\n\n### Poteaux\n${pillarsDesc}\n\n### Equipements existants\n${equipDesc}\n\nIMPORTANT: Utilise ces donnees pour calculer les positions EXACTES. X=largeur, Z=profondeur (mappe au Y du plan 2D), Y=hauteur.`,
       });
+
+      // Fetch past layout snapshots for similar room sizes to learn from
+      try {
+        const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+        const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+        const roomArea = (room_context.room_width_cm * room_context.room_depth_cm) / 10000;
+        const { data: snapshots } = await sb
+          .from("layout_snapshots")
+          .select("project_name, equipment_placements, room_area_m2, equipment_count")
+          .gte("room_area_m2", roomArea * 0.5)
+          .lte("room_area_m2", roomArea * 2.0)
+          .order("created_at", { ascending: false })
+          .limit(3);
+
+        if (snapshots && snapshots.length > 0) {
+          const examples = snapshots.map((s: any) =>
+            `Projet "${s.project_name}" (${s.room_area_m2}m², ${s.equipment_count} jeux): ${JSON.stringify(s.equipment_placements).slice(0, 500)}`
+          ).join("\n\n");
+          aiMessages.push({
+            role: "system",
+            content: `## EXEMPLES DE LAYOUTS VALIDÉS (apprentissage)\nVoici des agencements approuvés par l'utilisateur pour des salles similaires. Inspire-toi de ces patterns de placement :\n\n${examples}`,
+          });
+        }
+      } catch (e) {
+        console.warn("Could not fetch layout snapshots:", e);
+      }
     }
 
     // Add conversation history

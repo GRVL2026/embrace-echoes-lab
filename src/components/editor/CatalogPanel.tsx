@@ -495,6 +495,50 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
       }
     });
 
+    // If layout is locked, only place NEW items without touching existing positions
+    if (layoutLocked) {
+      const placementResult = autoPlaceEquipmentWithReport(
+        selected,
+        state.rooms,
+        state.doors,
+        state.pillars,
+        state.placedEquipments, // keep existing as obstacles
+      );
+
+      if (placementResult.placed.length === 0) {
+        const failedIds = new Set(placementResult.notPlaced.map(e => e.id));
+        setNotPlacedIds(failedIds);
+        setForcePlaceEquipments(placementResult.notPlaced);
+        return;
+      }
+
+      dispatch({ type: "ADD_PLACED_EQUIPMENTS", equipments: placementResult.placed });
+
+      const allPlaced = [...state.placedEquipments, ...placementResult.placed];
+      const circResult = computeCirculation(state.rooms, state.doors, state.pillars, allPlaced);
+      dispatch({ type: "SET_CIRCULATION", circulation: circResult.segments });
+
+      const placed = placementResult.placed.length;
+      const failed = placementResult.notPlaced.length;
+      const failedIds = new Set(placementResult.notPlaced.map(e => e.id));
+      setNotPlacedIds(failedIds);
+
+      if (failed > 0) {
+        setForcePlaceEquipments(placementResult.notPlaced);
+        const newQuantities = new Map<string, number>();
+        placementResult.notPlaced.forEach(eq => {
+          const notPlacedQty = placementResult.notPlaced.filter(np => np.id === eq.id).length;
+          if (notPlacedQty > 0) newQuantities.set(eq.id, notPlacedQty);
+        });
+        setSelectedQuantities(newQuantities);
+        toast.success(`${placed} jeu${placed > 1 ? "x" : ""} placé${placed > 1 ? "s" : ""}`);
+      } else {
+        toast.success(`${placed} jeu${placed > 1 ? "x" : ""} placé${placed > 1 ? "s" : ""} avec succès`);
+        setSelectedQuantities(new Map());
+      }
+      return;
+    }
+
     // Convert existing placements back to GameEquipment entries so everything
     // can be re-placed together, keeping categories grouped optimally.
     const existingAsEquip: GameEquipment[] = state.placedEquipments.map(pe => {

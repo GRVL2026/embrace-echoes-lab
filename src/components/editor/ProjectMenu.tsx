@@ -289,6 +289,13 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
           )}
         </DialogContent>
       </Dialog>
+
+      <ExportDossierDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        onExport={handleExportDossier}
+        isExporting={isExporting}
+      />
     </>
   );
 }

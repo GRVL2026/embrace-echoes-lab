@@ -330,11 +330,8 @@ export async function generateDossierPDF(
   doc.text(dateStr, PAGE_W - MARGIN, PAGE_H - 6, { align: "right" });
   } // end cover
 
-  // ═══════════════════════════════════════════════════
-  // PAGE 2 — PLAN 2D
-  // ═══════════════════════════════════════════════════
-  doc.addPage();
-  drawDarkPage(doc);
+  if (opts.plan2d) {
+  startPage();
   drawGridPattern(doc, 0, PAGE_H, 0.03);
   let y2 = drawSectionTitle(doc, "Plan 2D", 28);
 

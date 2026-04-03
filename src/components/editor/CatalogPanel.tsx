@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Upload, Package, Play, Trash2, Check, X, Info, Search, Maximize2, Minus, Plus, ChevronDown, ChevronRight, RefreshCw, ShoppingBag, Loader2, Box } from "lucide-react";
+import { Upload, Package, Play, Trash2, Check, X, Info, Search, Maximize2, Minus, Plus, ChevronDown, ChevronRight, RefreshCw, ShoppingBag, Loader2, Box, Lock, Unlock } from "lucide-react";
 import type { GameEquipment, CatalogJSON } from "@/types/equipment";
 import { find3DModel } from "@/lib/shopifyApi";
 import { DEFAULT_SAFETY_ZONE } from "@/types/equipment";
@@ -339,6 +339,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   const { state, dispatch } = useEditor();
   const [selectedQuantities, setSelectedQuantities] = useState<Map<string, number>>(new Map());
   const [notPlacedIds, setNotPlacedIds] = useState<Set<string>>(new Set());
+  const [layoutLocked, setLayoutLocked] = useState(false);
   const [forcePlaceEquipments, setForcePlaceEquipments] = useState<GameEquipment[]>([]);
   const [viewingProduct, setViewingProduct] = useState<GameEquipment | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -493,6 +494,50 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
         }
       }
     });
+
+    // If layout is locked, only place NEW items without touching existing positions
+    if (layoutLocked) {
+      const placementResult = autoPlaceEquipmentWithReport(
+        selected,
+        state.rooms,
+        state.doors,
+        state.pillars,
+        state.placedEquipments, // keep existing as obstacles
+      );
+
+      if (placementResult.placed.length === 0) {
+        const failedIds = new Set(placementResult.notPlaced.map(e => e.id));
+        setNotPlacedIds(failedIds);
+        setForcePlaceEquipments(placementResult.notPlaced);
+        return;
+      }
+
+      dispatch({ type: "ADD_PLACED_EQUIPMENTS", equipments: placementResult.placed });
+
+      const allPlaced = [...state.placedEquipments, ...placementResult.placed];
+      const circResult = computeCirculation(state.rooms, state.doors, state.pillars, allPlaced);
+      dispatch({ type: "SET_CIRCULATION", circulation: circResult.segments });
+
+      const placed = placementResult.placed.length;
+      const failed = placementResult.notPlaced.length;
+      const failedIds = new Set(placementResult.notPlaced.map(e => e.id));
+      setNotPlacedIds(failedIds);
+
+      if (failed > 0) {
+        setForcePlaceEquipments(placementResult.notPlaced);
+        const newQuantities = new Map<string, number>();
+        placementResult.notPlaced.forEach(eq => {
+          const notPlacedQty = placementResult.notPlaced.filter(np => np.id === eq.id).length;
+          if (notPlacedQty > 0) newQuantities.set(eq.id, notPlacedQty);
+        });
+        setSelectedQuantities(newQuantities);
+        toast.success(`${placed} jeu${placed > 1 ? "x" : ""} placé${placed > 1 ? "s" : ""}`);
+      } else {
+        toast.success(`${placed} jeu${placed > 1 ? "x" : ""} placé${placed > 1 ? "s" : ""} avec succès`);
+        setSelectedQuantities(new Map());
+      }
+      return;
+    }
 
     // Convert existing placements back to GameEquipment entries so everything
     // can be re-placed together, keeping categories grouped optimally.
@@ -833,10 +878,36 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
       {state.placedEquipments.length > 0 && (
         <div className="border-t border-border flex-1 min-h-0 flex flex-col">
           <div className="flex items-center justify-between p-2 shrink-0">
-            <span className="text-xs font-semibold text-foreground">
-              Sur le plan ({state.placedEquipments.length})
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-foreground">
+                Sur le plan ({state.placedEquipments.length})
+              </span>
+              {layoutLocked && (
+                <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border-primary/50 text-primary">
+                  <Lock className="h-2.5 w-2.5 mr-0.5" />
+                  Verrouillé
+                </Badge>
+              )}
+            </div>
             <div className="flex items-center gap-1">
+              <Tooltip delayDuration={200}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={layoutLocked ? "default" : "ghost"}
+                    size="icon"
+                    className={`h-6 w-6 ${layoutLocked ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                    onClick={() => {
+                      setLayoutLocked(!layoutLocked);
+                      toast.info(layoutLocked ? "Positionnement déverrouillé" : "Positionnement validé et verrouillé");
+                    }}
+                  >
+                    {layoutLocked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="left">
+                  {layoutLocked ? "Déverrouiller le positionnement" : "Valider et verrouiller le positionnement"}
+                </TooltipContent>
+              </Tooltip>
               <Tooltip delayDuration={200}>
                 <TooltipTrigger asChild>
                   <Button
@@ -844,6 +915,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                     size="icon"
                     className="h-6 w-6 text-primary/60 hover:text-primary"
                     onClick={handleResetPlacements}
+                    disabled={layoutLocked}
                   >
                     <RefreshCw className="h-3 w-3" />
                   </Button>

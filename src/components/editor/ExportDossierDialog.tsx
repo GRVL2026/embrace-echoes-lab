@@ -14,6 +14,7 @@ import { FileDown, Loader2 } from "lucide-react";
 export type DossierSections = {
   cover: boolean;
   plan2d: boolean;
+  plan2dMeasured: boolean;
   views3d: boolean;
   equipmentList: boolean;
   budget: boolean;
@@ -23,6 +24,7 @@ export type DossierSections = {
 const DEFAULT_SECTIONS: DossierSections = {
   cover: true,
   plan2d: true,
+  plan2dMeasured: true,
   views3d: true,
   equipmentList: true,
   budget: true,

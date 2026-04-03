@@ -536,11 +536,8 @@ export async function generateDossierPDF(
 
   } // end equipmentList
 
-  // ═══════════════════════════════════════════════════
-  // PAGE 5 — BUDGET
-  // ═══════════════════════════════════════════════════
-  doc.addPage();
-  drawDarkPage(doc);
+  if (opts.budget) {
+  startPage();
   drawGridPattern(doc, 0, PAGE_H, 0.02);
   let y5 = drawSectionTitle(doc, "Budget Estimatif", 28);
 

@@ -7,7 +7,7 @@ import type { EditorState, Room } from "@/types/editor";
 import type { GameEquipment, PlacedEquipment } from "@/types/equipment";
 import { capture3DViews, type CaptureView } from "./render3DCaptures";
 import { captureFromLiveCanvas, isCanvasCaptureAvailable } from "./canvasCapture";
-import { getCanvas2DSnapshot } from "./canvas2DSnapshot";
+import { getCanvas2DSnapshot, getCanvas2DMeasuredSnapshot } from "./canvas2DSnapshot";
 
 // ─── Brand Palette ───────────────────────────────────────────
 const PURPLE = [155, 92, 255] as const;     // #9B5CFF

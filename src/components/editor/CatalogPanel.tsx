@@ -878,9 +878,17 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
       {state.placedEquipments.length > 0 && (
         <div className="border-t border-border flex-1 min-h-0 flex flex-col">
           <div className="flex items-center justify-between p-2 shrink-0">
-            <span className="text-xs font-semibold text-foreground">
-              Sur le plan ({state.placedEquipments.length})
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-foreground">
+                Sur le plan ({state.placedEquipments.length})
+              </span>
+              {layoutLocked && (
+                <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border-primary/50 text-primary">
+                  <Lock className="h-2.5 w-2.5 mr-0.5" />
+                  Verrouillé
+                </Badge>
+              )}
+            </div>
             <div className="flex items-center gap-1">
               <Tooltip delayDuration={200}>
                 <TooltipTrigger asChild>

@@ -525,7 +525,8 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
     if (placementResult.placed.length === 0) {
       const failedIds = new Set(placementResult.notPlaced.map(e => e.id));
       setNotPlacedIds(failedIds);
-      toast.error("Impossible de placer les jeux sélectionnés (espace insuffisant)");
+      // Show force-place dialog instead of just a toast
+      setForcePlaceEquipments(placementResult.notPlaced);
       return;
     }
 
@@ -548,7 +549,6 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
     if (failed > 0) {
       const newQuantities = new Map<string, number>();
       placementResult.notPlaced.forEach(eq => {
-        const currentQty = selected.filter(s => s.id === eq.id).length;
         const notPlacedQty = placementResult.notPlaced.filter(np => np.id === eq.id).length;
         if (notPlacedQty > 0) {
           newQuantities.set(eq.id, notPlacedQty);
@@ -556,12 +556,10 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
       });
       setSelectedQuantities(newQuantities);
       
-      const notPlacedNames = placementResult.notPlaced.map(e => e.name).slice(0, 5).join(", ");
-      const moreCount = placementResult.notPlaced.length > 5 ? ` +${placementResult.notPlaced.length - 5} autres` : "";
-      toast.warning(
-        `${placed} jeu${placed > 1 ? "x" : ""} placé${placed > 1 ? "s" : ""}. Non placés (${failed}): ${notPlacedNames}${moreCount}`,
-        { duration: 8000 }
-      );
+      // Show force-place dialog for not-placed items
+      setForcePlaceEquipments(placementResult.notPlaced);
+
+      toast.success(`${placed} jeu${placed > 1 ? "x" : ""} placé${placed > 1 ? "s" : ""}`);
     } else {
       toast.success(`${placed} jeu${placed > 1 ? "x" : ""} placé${placed > 1 ? "s" : ""} avec succès`);
       setSelectedQuantities(new Map());

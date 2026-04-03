@@ -184,7 +184,7 @@ export async function generateDossierPDF(
   options?: DossierOptions
 ): Promise<void> {
   const opts: Required<DossierOptions> = {
-    cover: true, plan2d: true, views3d: true,
+    cover: true, plan2d: true, plan2dMeasured: true, views3d: true,
     equipmentList: true, budget: true, productSheets: true,
     ...options,
   };

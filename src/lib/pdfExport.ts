@@ -453,11 +453,8 @@ export async function generateDossierPDF(
 
   } // end views3d
 
-  // ═══════════════════════════════════════════════════
-  // PAGE 4 — LISTE DES ÉQUIPEMENTS
-  // ═══════════════════════════════════════════════════
-  doc.addPage();
-  drawDarkPage(doc);
+  if (opts.equipmentList) {
+  startPage();
   drawGridPattern(doc, 0, PAGE_H, 0.02);
   let y4 = drawSectionTitle(doc, "Équipements", 28);
 

@@ -167,11 +167,26 @@ function capture2DCanvas(): string | null {
 // ═══════════════════════════════════════════════════════════════
 // MAIN EXPORT
 // ═══════════════════════════════════════════════════════════════
+export type DossierOptions = {
+  cover?: boolean;
+  plan2d?: boolean;
+  views3d?: boolean;
+  equipmentList?: boolean;
+  budget?: boolean;
+  productSheets?: boolean;
+};
+
 export async function generateDossierPDF(
   state: EditorState,
   catalog: GameEquipment[],
-  projectName: string
+  projectName: string,
+  options?: DossierOptions
 ): Promise<void> {
+  const opts: Required<DossierOptions> = {
+    cover: true, plan2d: true, views3d: true,
+    equipmentList: true, budget: true, productSheets: true,
+    ...options,
+  };
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   // totalPages computed after we know how many annexe pages we need
   let totalPages = 5;

@@ -397,11 +397,8 @@ export async function generateDossierPDF(
 
   } // end plan2d
 
-  // ═══════════════════════════════════════════════════
-  // PAGE 3 — VUES 3D
-  // ═══════════════════════════════════════════════════
-  doc.addPage();
-  drawDarkPage(doc);
+  if (opts.views3d) {
+  startPage();
   drawGridPattern(doc, 0, PAGE_H, 0.03);
   let y3 = drawSectionTitle(doc, "Vues 3D", 28);
 

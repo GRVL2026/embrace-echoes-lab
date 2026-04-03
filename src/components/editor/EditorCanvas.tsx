@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useCallback, useState } from "react";
-import { setCanvas2DSnapshot } from "@/lib/canvas2DSnapshot";
+import { setCanvas2DSnapshot, setCanvas2DMeasuredSnapshot } from "@/lib/canvas2DSnapshot";
 import { useEditor } from "@/contexts/EditorContext";
 import { CM_TO_PX, type Point, type Door, type Pillar, type CirculationSegment } from "@/types/editor";
 import type { PlacedEquipment } from "@/types/equipment";

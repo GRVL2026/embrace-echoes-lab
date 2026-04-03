@@ -18,6 +18,7 @@ import { DEFAULT_SAFETY_ZONE } from "@/types/equipment";
 import { autoPlaceEquipmentWithReport } from "@/lib/placement";
 import { computeCirculation } from "@/lib/circulation";
 import { ProductDialog } from "./ProductDialog";
+import { ForcePlaceDialog } from "./ForcePlaceDialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fetchShopifyCatalog } from "@/lib/shopifyApi";
 import { loadCatalogFromDB, syncShopifyToDB, updateCatalogProduct } from "@/lib/catalogDB";

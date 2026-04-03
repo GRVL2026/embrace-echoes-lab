@@ -566,6 +566,43 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
     }
   };
 
+  const handleForcePlace = (equipments: GameEquipment[]) => {
+    // Find the center of the room for manual placement
+    const closedRoom = state.rooms.find(r => r.isClosed);
+    let cx = 400, cy = 400;
+    if (closedRoom && closedRoom.points.length > 0) {
+      cx = closedRoom.points.reduce((s, p) => s + p.x, 0) / closedRoom.points.length;
+      cy = closedRoom.points.reduce((s, p) => s + p.y, 0) / closedRoom.points.length;
+    }
+
+    // Place each equipment at room center with slight offsets
+    const placed: import("@/types/equipment").PlacedEquipment[] = [];
+    equipments.forEach((eq, i) => {
+      const offset = i * 30; // stagger so they don't overlap exactly
+      const pe: import("@/types/equipment").PlacedEquipment = {
+        id: `force-${crypto.randomUUID()}`,
+        equipmentId: eq.id,
+        name: eq.name,
+        width: eq.width,
+        depth: eq.depth,
+        height: eq.height,
+        safetyZone: eq.safetyZone,
+        color: eq.color || "hsl(263, 85%, 68%)",
+        rotation: 0,
+        position: { x: cx + offset, y: cy + offset },
+        model3d: eq.model3d,
+        centerPlacement: eq.centerPlacement,
+      };
+      placed.push(pe);
+    });
+
+    placed.forEach(pe => dispatch({ type: "ADD_PLACED_EQUIPMENT", equipment: pe }));
+    setForcePlaceEquipments([]);
+    setSelectedQuantities(new Map());
+    setNotPlacedIds(new Set());
+    toast.success(`${placed.length} jeu${placed.length > 1 ? "x" : ""} ajouté${placed.length > 1 ? "s" : ""} au centre — déplacez-les manuellement`);
+  };
+
   const handleClearPlacements = () => {
     dispatch({ type: "CLEAR_PLACED_EQUIPMENTS" });
     toast.info("Tous les équipements retirés du plan");

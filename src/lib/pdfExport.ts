@@ -451,7 +451,7 @@ export async function generateDossierPDF(
     doc.text("Vues 3D non disponibles", PAGE_W / 2, y3 + 40, { align: "center" });
   }
 
-  addFooter(doc, 3, totalPages);
+  } // end views3d
 
   // ═══════════════════════════════════════════════════
   // PAGE 4 — LISTE DES ÉQUIPEMENTS

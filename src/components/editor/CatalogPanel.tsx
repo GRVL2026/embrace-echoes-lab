@@ -18,6 +18,7 @@ import { DEFAULT_SAFETY_ZONE } from "@/types/equipment";
 import { autoPlaceEquipmentWithReport } from "@/lib/placement";
 import { computeCirculation } from "@/lib/circulation";
 import { ProductDialog } from "./ProductDialog";
+import { ForcePlaceDialog } from "./ForcePlaceDialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fetchShopifyCatalog } from "@/lib/shopifyApi";
 import { loadCatalogFromDB, syncShopifyToDB, updateCatalogProduct } from "@/lib/catalogDB";
@@ -337,7 +338,8 @@ type CatalogPanelProps = {
 export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   const { state, dispatch } = useEditor();
   const [selectedQuantities, setSelectedQuantities] = useState<Map<string, number>>(new Map());
-  const [notPlacedIds, setNotPlacedIds] = useState<Set<string>>(new Set()); // Track equipment IDs that couldn't be placed
+  const [notPlacedIds, setNotPlacedIds] = useState<Set<string>>(new Set());
+  const [forcePlaceEquipments, setForcePlaceEquipments] = useState<GameEquipment[]>([]);
   const [viewingProduct, setViewingProduct] = useState<GameEquipment | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedView, setExpandedView] = useState(false);
@@ -523,7 +525,8 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
     if (placementResult.placed.length === 0) {
       const failedIds = new Set(placementResult.notPlaced.map(e => e.id));
       setNotPlacedIds(failedIds);
-      toast.error("Impossible de placer les jeux sélectionnés (espace insuffisant)");
+      // Show force-place dialog instead of just a toast
+      setForcePlaceEquipments(placementResult.notPlaced);
       return;
     }
 
@@ -546,7 +549,6 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
     if (failed > 0) {
       const newQuantities = new Map<string, number>();
       placementResult.notPlaced.forEach(eq => {
-        const currentQty = selected.filter(s => s.id === eq.id).length;
         const notPlacedQty = placementResult.notPlaced.filter(np => np.id === eq.id).length;
         if (notPlacedQty > 0) {
           newQuantities.set(eq.id, notPlacedQty);
@@ -554,16 +556,51 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
       });
       setSelectedQuantities(newQuantities);
       
-      const notPlacedNames = placementResult.notPlaced.map(e => e.name).slice(0, 5).join(", ");
-      const moreCount = placementResult.notPlaced.length > 5 ? ` +${placementResult.notPlaced.length - 5} autres` : "";
-      toast.warning(
-        `${placed} jeu${placed > 1 ? "x" : ""} placé${placed > 1 ? "s" : ""}. Non placés (${failed}): ${notPlacedNames}${moreCount}`,
-        { duration: 8000 }
-      );
+      // Show force-place dialog for not-placed items
+      setForcePlaceEquipments(placementResult.notPlaced);
+
+      toast.success(`${placed} jeu${placed > 1 ? "x" : ""} placé${placed > 1 ? "s" : ""}`);
     } else {
       toast.success(`${placed} jeu${placed > 1 ? "x" : ""} placé${placed > 1 ? "s" : ""} avec succès`);
       setSelectedQuantities(new Map());
     }
+  };
+
+  const handleForcePlace = (equipments: GameEquipment[]) => {
+    // Find the center of the room for manual placement
+    const closedRoom = state.rooms.find(r => r.isClosed);
+    let cx = 400, cy = 400;
+    if (closedRoom && closedRoom.points.length > 0) {
+      cx = closedRoom.points.reduce((s, p) => s + p.x, 0) / closedRoom.points.length;
+      cy = closedRoom.points.reduce((s, p) => s + p.y, 0) / closedRoom.points.length;
+    }
+
+    // Place each equipment at room center with slight offsets
+    const placed: import("@/types/equipment").PlacedEquipment[] = [];
+    equipments.forEach((eq, i) => {
+      const offset = i * 30; // stagger so they don't overlap exactly
+      const pe: import("@/types/equipment").PlacedEquipment = {
+        id: `force-${crypto.randomUUID()}`,
+        equipmentId: eq.id,
+        name: eq.name,
+        width: eq.width,
+        depth: eq.depth,
+        height: eq.height,
+        safetyZone: eq.safetyZone,
+        color: eq.color || "hsl(263, 85%, 68%)",
+        rotation: 0,
+        position: { x: cx + offset, y: cy + offset },
+        model3d: eq.model3d,
+        centerPlacement: eq.centerPlacement,
+      };
+      placed.push(pe);
+    });
+
+    placed.forEach(pe => dispatch({ type: "ADD_PLACED_EQUIPMENT", equipment: pe }));
+    setForcePlaceEquipments([]);
+    setSelectedQuantities(new Map());
+    setNotPlacedIds(new Set());
+    toast.success(`${placed.length} jeu${placed.length > 1 ? "x" : ""} ajouté${placed.length > 1 ? "s" : ""} au centre — déplacez-les manuellement`);
   };
 
   const handleClearPlacements = () => {
@@ -1149,6 +1186,13 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
       </Dialog>
       </>
       )}
+
+      <ForcePlaceDialog
+        open={forcePlaceEquipments.length > 0}
+        notPlacedEquipments={forcePlaceEquipments}
+        onForcePlace={handleForcePlace}
+        onCancel={() => setForcePlaceEquipments([])}
+      />
     </div>
   );
 }

@@ -296,6 +296,45 @@ export type Database = {
         }
         Relationships: []
       }
+      layout_snapshots: {
+        Row: {
+          ai_analysis: Json | null
+          catalog_used: Json | null
+          created_at: string
+          equipment_count: number | null
+          equipment_placements: Json
+          id: string
+          manual_adjustments: boolean | null
+          project_name: string
+          room_area_m2: number | null
+          room_geometry: Json
+        }
+        Insert: {
+          ai_analysis?: Json | null
+          catalog_used?: Json | null
+          created_at?: string
+          equipment_count?: number | null
+          equipment_placements: Json
+          id?: string
+          manual_adjustments?: boolean | null
+          project_name: string
+          room_area_m2?: number | null
+          room_geometry: Json
+        }
+        Update: {
+          ai_analysis?: Json | null
+          catalog_used?: Json | null
+          created_at?: string
+          equipment_count?: number | null
+          equipment_placements?: Json
+          id?: string
+          manual_adjustments?: boolean | null
+          project_name?: string
+          room_area_m2?: number | null
+          room_geometry?: Json
+        }
+        Relationships: []
+      }
       prompt_sessions: {
         Row: {
           created_at: string

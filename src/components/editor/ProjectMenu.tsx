@@ -24,6 +24,7 @@ import {
 import { Save, FolderOpen, FilePlus, Trash2, Menu, Gamepad2, FileDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { generateDossierPDF } from "@/lib/pdfExport";
+import { saveLayoutSnapshot } from "@/lib/layoutLearning";
 import {
   listProjects,
   saveProject,
@@ -155,6 +156,8 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
     toast.info("Génération du dossier PDF en cours…");
     try {
       await generateDossierPDF(state, catalog, currentProjectName);
+      // Save layout snapshot for AI learning
+      await saveLayoutSnapshot(state, catalog, currentProjectName);
       toast.success("Dossier PDF téléchargé !");
     } catch (e) {
       console.error("PDF export error:", e);

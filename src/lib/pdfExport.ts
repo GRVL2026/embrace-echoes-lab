@@ -225,7 +225,8 @@ export async function generateDossierPDF(
   // ═══════════════════════════════════════════════════
   // PAGE 1 — COUVERTURE
   // ═══════════════════════════════════════════════════
-  drawDarkPage(doc);
+  if (opts.cover) {
+  startPage();
   drawGridPattern(doc, 0, PAGE_H, 0.04);
   
   // Top gradient bar

@@ -328,7 +328,7 @@ export async function generateDossierPDF(
   doc.setFontSize(7);
   setC(doc, [50, 50, 90]);
   doc.text(dateStr, PAGE_W - MARGIN, PAGE_H - 6, { align: "right" });
-  doc.text("1/5", MARGIN, PAGE_H - 6);
+  } // end cover
 
   // ═══════════════════════════════════════════════════
   // PAGE 2 — PLAN 2D

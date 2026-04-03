@@ -395,7 +395,7 @@ export async function generateDossierPDF(
     });
   }
 
-  addFooter(doc, 2, totalPages);
+  } // end plan2d
 
   // ═══════════════════════════════════════════════════
   // PAGE 3 — VUES 3D

@@ -188,8 +188,15 @@ export async function generateDossierPDF(
     ...options,
   };
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  // totalPages computed after we know how many annexe pages we need
-  let totalPages = 5;
+  let pageNum = 0;
+  let isFirstPage = true;
+
+  const startPage = () => {
+    if (!isFirstPage) doc.addPage();
+    isFirstPage = false;
+    pageNum++;
+    drawDarkPage(doc);
+  };
 
   const formatEUR = (v: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(v);
@@ -203,15 +210,17 @@ export async function generateDossierPDF(
     return s + (cat?.price || 0);
   }, 0);
 
-  // 3D captures
+  // 3D captures (only if needed)
   let views: Record<CaptureView, string> | null = null;
-  try {
-    if (isCanvasCaptureAvailable()) {
-      views = await captureFromLiveCanvas();
-    } else {
-      views = await capture3DViews(state.rooms, state.doors, state.pillars, state.placedEquipments, state.circulationPath || []);
-    }
-  } catch (e) { console.warn("3D capture failed:", e); }
+  if (opts.cover || opts.views3d) {
+    try {
+      if (isCanvasCaptureAvailable()) {
+        views = await captureFromLiveCanvas();
+      } else {
+        views = await capture3DViews(state.rooms, state.doors, state.pillars, state.placedEquipments, state.circulationPath || []);
+      }
+    } catch (e) { console.warn("3D capture failed:", e); }
+  }
 
   // ═══════════════════════════════════════════════════
   // PAGE 1 — COUVERTURE

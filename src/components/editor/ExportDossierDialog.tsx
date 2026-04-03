@@ -34,6 +34,7 @@ const DEFAULT_SECTIONS: DossierSections = {
 const SECTION_LABELS: Record<keyof DossierSections, string> = {
   cover: "Page de couverture",
   plan2d: "Plan 2D",
+  plan2dMeasured: "Plan 2D coté (mesures)",
   views3d: "Vues 3D",
   equipmentList: "Liste des équipements",
   budget: "Budget estimatif",

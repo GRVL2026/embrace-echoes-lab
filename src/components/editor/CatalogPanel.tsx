@@ -885,10 +885,29 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
               <Tooltip delayDuration={200}>
                 <TooltipTrigger asChild>
                   <Button
+                    variant={layoutLocked ? "default" : "ghost"}
+                    size="icon"
+                    className={`h-6 w-6 ${layoutLocked ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                    onClick={() => {
+                      setLayoutLocked(!layoutLocked);
+                      toast.info(layoutLocked ? "Positionnement déverrouillé" : "Positionnement validé et verrouillé");
+                    }}
+                  >
+                    {layoutLocked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="left">
+                  {layoutLocked ? "Déverrouiller le positionnement" : "Valider et verrouiller le positionnement"}
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip delayDuration={200}>
+                <TooltipTrigger asChild>
+                  <Button
                     variant="ghost"
                     size="icon"
                     className="h-6 w-6 text-primary/60 hover:text-primary"
                     onClick={handleResetPlacements}
+                    disabled={layoutLocked}
                   >
                     <RefreshCw className="h-3 w-3" />
                   </Button>

@@ -27,7 +27,7 @@ export async function saveLayoutSnapshot(
 
     const roomGeometry = {
       rooms: state.rooms.map(r => ({ id: r.id, points: r.points, isClosed: r.isClosed })),
-      doors: state.doors.map(d => ({ id: d.id, position: d.position, width: d.width, roomId: d.roomId, edgeIndex: d.edgeIndex })),
+      doors: state.doors.map(d => ({ id: d.id, roomId: d.roomId, edgeIndex: d.edgeIndex, positionRatio: d.positionRatio, width: d.width })),
       pillars: state.pillars.map(p => ({ id: p.id, position: p.position, width: p.width, depth: p.depth, shape: p.shape })),
     };
 

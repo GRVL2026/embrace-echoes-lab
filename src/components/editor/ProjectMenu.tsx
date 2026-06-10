@@ -229,7 +229,11 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleOpenExport} disabled={isExporting} className="gap-2">
             {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
-            Dossier banque (PDF)
+            Dossier 3D banque (PDF)
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleOpenExport2D} disabled={isExporting} className="gap-2">
+            {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+            Dossier 2D client (PDF)
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

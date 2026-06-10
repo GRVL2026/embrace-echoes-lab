@@ -326,6 +326,13 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
         onExport={handleExportDossier}
         isExporting={isExporting}
       />
+
+      <Export2DDossierDialog
+        open={export2DDialogOpen}
+        onOpenChange={setExport2DDialogOpen}
+        onExport={handleExport2DDossier}
+        isExporting={isExporting}
+      />
     </>
   );
 }

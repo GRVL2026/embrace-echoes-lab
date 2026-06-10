@@ -24,7 +24,9 @@ import {
 import { Save, FolderOpen, FilePlus, Trash2, Menu, Gamepad2, FileDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { generateDossierPDF } from "@/lib/pdfExport";
+import { generate2DDossierPDF, type Dossier2DOptions } from "@/lib/pdfExport2D";
 import { ExportDossierDialog, type DossierSections } from "./ExportDossierDialog";
+import { Export2DDossierDialog } from "./Export2DDossierDialog";
 import { saveLayoutSnapshot } from "@/lib/layoutLearning";
 import {
   listProjects,
@@ -46,6 +48,7 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
   const [currentProjectName, setCurrentProjectName] = useState("Nouveau projet");
   const [isExporting, setIsExporting] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [export2DDialogOpen, setExport2DDialogOpen] = useState(false);
 
   // Save dialog
   const [saveOpen, setSaveOpen] = useState(false);
@@ -173,6 +176,29 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
     }
   };
 
+  const handleOpenExport2D = () => {
+    if (state.rooms.length === 0 && state.placedEquipments.length === 0) {
+      toast.error("Rien à exporter — ajoutez au moins une salle ou des équipements");
+      return;
+    }
+    setExport2DDialogOpen(true);
+  };
+
+  const handleExport2DDossier = async (opts: Dossier2DOptions) => {
+    setIsExporting(true);
+    toast.info("Génération du dossier 2D en cours…");
+    try {
+      await generate2DDossierPDF(state, catalog, currentProjectName, opts);
+      toast.success("Dossier 2D téléchargé !");
+      setExport2DDialogOpen(false);
+    } catch (e: any) {
+      console.error("PDF 2D export error:", e);
+      toast.error(`Erreur PDF : ${e?.message || "Erreur inconnue"}`, { duration: 8000 });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <>
       <DropdownMenu>
@@ -203,7 +229,11 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleOpenExport} disabled={isExporting} className="gap-2">
             {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
-            Dossier banque (PDF)
+            Dossier 3D banque (PDF)
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleOpenExport2D} disabled={isExporting} className="gap-2">
+            {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+            Dossier 2D client (PDF)
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -294,6 +324,13 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
         open={exportDialogOpen}
         onOpenChange={setExportDialogOpen}
         onExport={handleExportDossier}
+        isExporting={isExporting}
+      />
+
+      <Export2DDossierDialog
+        open={export2DDialogOpen}
+        onOpenChange={setExport2DDialogOpen}
+        onExport={handleExport2DDossier}
         isExporting={isExporting}
       />
     </>

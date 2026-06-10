@@ -24,7 +24,9 @@ import {
 import { Save, FolderOpen, FilePlus, Trash2, Menu, Gamepad2, FileDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { generateDossierPDF } from "@/lib/pdfExport";
+import { generate2DDossierPDF, type Dossier2DOptions } from "@/lib/pdfExport2D";
 import { ExportDossierDialog, type DossierSections } from "./ExportDossierDialog";
+import { Export2DDossierDialog } from "./Export2DDossierDialog";
 import { saveLayoutSnapshot } from "@/lib/layoutLearning";
 import {
   listProjects,

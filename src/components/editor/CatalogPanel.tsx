@@ -376,17 +376,21 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
     }
   };
 
-  // Filter catalog based on search query
+  // Filter catalog based on search query and 3D filter
   const filteredCatalog = useMemo(() => {
-    if (!searchQuery.trim()) return catalog;
+    let result = catalog;
+    if (show3DOnly) {
+      result = result.filter(eq => !!eq.model3d);
+    }
+    if (!searchQuery.trim()) return result;
     const query = searchQuery.toLowerCase().trim();
-    return catalog.filter(eq => 
+    return result.filter(eq => 
       eq.name.toLowerCase().includes(query) ||
       eq.category.toLowerCase().includes(query) ||
       (eq.vendor && eq.vendor.toLowerCase().includes(query)) ||
       (eq.tags && eq.tags.some(tag => tag.toLowerCase().includes(query)))
     );
-  }, [catalog, searchQuery]);
+  }, [catalog, searchQuery, show3DOnly]);
 
   // Total selected items count
   const totalSelectedCount = useMemo(() => {

@@ -717,12 +717,25 @@ export function EditorCanvas() {
       setCanvas2DSnapshot(canvas.toDataURL("image/png"));
 
       // Also capture a version WITH gap measurements for the PDF
-      if (!state.showGapMeasurements && state.placedEquipments.length > 0 && state.rooms.length > 0) {
-        drawGapMeasurements(ctx, state.placedEquipments, state.rooms, state.pillars, state.zoom);
+      if (state.showGapMeasurements) {
+        // Already has measurements drawn on the live canvas
         setCanvas2DMeasuredSnapshot(canvas.toDataURL("image/png"));
-      } else if (state.showGapMeasurements) {
-        // Already has measurements drawn
-        setCanvas2DMeasuredSnapshot(canvas.toDataURL("image/png"));
+      } else if (state.placedEquipments.length > 0 && state.rooms.length > 0) {
+        // Render to an OFFSCREEN canvas so the live view stays clean
+        const off = document.createElement("canvas");
+        off.width = canvas.width;
+        off.height = canvas.height;
+        const offCtx = off.getContext("2d");
+        if (offCtx) {
+          offCtx.drawImage(canvas, 0, 0);
+          // Apply the same world transform used by `draw()` so cotes align
+          offCtx.save();
+          offCtx.translate(state.panOffset.x, state.panOffset.y);
+          offCtx.scale(state.zoom, state.zoom);
+          drawGapMeasurements(offCtx, state.placedEquipments, state.rooms, state.pillars, state.zoom);
+          offCtx.restore();
+          setCanvas2DMeasuredSnapshot(off.toDataURL("image/png"));
+        }
       }
     } catch { /* ignore tainted canvas */ }
   });

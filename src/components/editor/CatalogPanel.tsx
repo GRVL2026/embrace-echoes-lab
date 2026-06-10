@@ -792,7 +792,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
 
       {/* Search bar */}
       {catalog.length > 0 && (
-        <div className="p-2 border-b border-border">
+        <div className="p-2 border-b border-border space-y-2">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
@@ -812,11 +812,22 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
               </Button>
             )}
           </div>
-          {searchQuery && (
-            <p className="text-[10px] text-muted-foreground mt-1.5 px-1">
-              {filteredCatalog.length} résultat{filteredCatalog.length > 1 ? "s" : ""} sur {catalog.length}
-            </p>
-          )}
+          <div className="flex items-center gap-2">
+            <Button
+              variant={show3DOnly ? "default" : "outline"}
+              size="sm"
+              className="h-7 gap-1.5 text-[10px] px-2"
+              onClick={() => setShow3DOnly(v => !v)}
+            >
+              <Box className="h-3 w-3" />
+              3D uniquement
+            </Button>
+            {(searchQuery || show3DOnly) && (
+              <p className="text-[10px] text-muted-foreground">
+                {filteredCatalog.length} résultat{filteredCatalog.length > 1 ? "s" : ""} sur {catalog.length}
+              </p>
+            )}
+          </div>
         </div>
       )}
 

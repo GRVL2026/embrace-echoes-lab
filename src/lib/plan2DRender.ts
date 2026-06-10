@@ -445,7 +445,6 @@ export function renderPlan2D(
   ctx.fillStyle = COLORS.muted;
   ctx.font = "10px sans-serif";
   ctx.textAlign = "right";
-  const scaleM = (100 / scale).toFixed(0);
   ctx.fillText(`Échelle : 1 carreau = 1 m`, W - 24, H - 20);
 
   return canvas.toDataURL("image/png");

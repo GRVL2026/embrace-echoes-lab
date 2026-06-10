@@ -322,8 +322,15 @@ export function ProductDialog({ equipment, open, onOpenChange, onUpdate3DModel }
                   disabled={uploading}
                 >
                   <Upload className="h-4 w-4" />
-                  {uploading ? "Chargement..." : equipment.model3d ? "Remplacer le modèle (.glb)" : "Uploader un modèle 3D (.glb)"}
+                  {uploading
+                    ? uploadStatus || "Chargement..."
+                    : equipment.model3d
+                    ? "Remplacer le modèle (.glb, max 500 Mo)"
+                    : "Uploader un modèle 3D (.glb, max 500 Mo)"}
                 </Button>
+                {uploading && uploadProgress > 0 && (
+                  <Progress value={uploadProgress} className="mt-2 h-1.5" />
+                )}
               </div>
             </div>
 

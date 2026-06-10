@@ -344,6 +344,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   const [viewingProduct, setViewingProduct] = useState<GameEquipment | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedView, setExpandedView] = useState(false);
+  const [show3DOnly, setShow3DOnly] = useState(false);
   const [loadingShopify, setLoadingShopify] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -375,17 +376,21 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
     }
   };
 
-  // Filter catalog based on search query
+  // Filter catalog based on search query and 3D filter
   const filteredCatalog = useMemo(() => {
-    if (!searchQuery.trim()) return catalog;
+    let result = catalog;
+    if (show3DOnly) {
+      result = result.filter(eq => !!eq.model3d);
+    }
+    if (!searchQuery.trim()) return result;
     const query = searchQuery.toLowerCase().trim();
-    return catalog.filter(eq => 
+    return result.filter(eq => 
       eq.name.toLowerCase().includes(query) ||
       eq.category.toLowerCase().includes(query) ||
       (eq.vendor && eq.vendor.toLowerCase().includes(query)) ||
       (eq.tags && eq.tags.some(tag => tag.toLowerCase().includes(query)))
     );
-  }, [catalog, searchQuery]);
+  }, [catalog, searchQuery, show3DOnly]);
 
   // Total selected items count
   const totalSelectedCount = useMemo(() => {
@@ -787,7 +792,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
 
       {/* Search bar */}
       {catalog.length > 0 && (
-        <div className="p-2 border-b border-border">
+        <div className="p-2 border-b border-border space-y-2">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
@@ -807,11 +812,22 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
               </Button>
             )}
           </div>
-          {searchQuery && (
-            <p className="text-[10px] text-muted-foreground mt-1.5 px-1">
-              {filteredCatalog.length} résultat{filteredCatalog.length > 1 ? "s" : ""} sur {catalog.length}
-            </p>
-          )}
+          <div className="flex items-center gap-2">
+            <Button
+              variant={show3DOnly ? "default" : "outline"}
+              size="sm"
+              className="h-7 gap-1.5 text-[10px] px-2"
+              onClick={() => setShow3DOnly(v => !v)}
+            >
+              <Box className="h-3 w-3" />
+              3D uniquement
+            </Button>
+            {(searchQuery || show3DOnly) && (
+              <p className="text-[10px] text-muted-foreground">
+                {filteredCatalog.length} résultat{filteredCatalog.length > 1 ? "s" : ""} sur {catalog.length}
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -1016,11 +1032,22 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                   )}
                 </div>
                 
-                {searchQuery && (
-                  <p className="text-sm text-muted-foreground mb-3">
-                    {filteredCatalog.length} résultat{filteredCatalog.length > 1 ? "s" : ""} sur {catalog.length}
-                  </p>
-                )}
+                <div className="flex items-center gap-3 mb-3">
+                  <Button
+                    variant={show3DOnly ? "default" : "outline"}
+                    size="sm"
+                    className="h-8 gap-1.5 text-xs"
+                    onClick={() => setShow3DOnly(v => !v)}
+                  >
+                    <Box className="h-3.5 w-3.5" />
+                    Modèle 3D uniquement
+                  </Button>
+                  {(searchQuery || show3DOnly) && (
+                    <p className="text-sm text-muted-foreground">
+                      {filteredCatalog.length} résultat{filteredCatalog.length > 1 ? "s" : ""} sur {catalog.length}
+                    </p>
+                  )}
+                </div>
 
                 {/* Expanded catalog grid */}
                 <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-2">

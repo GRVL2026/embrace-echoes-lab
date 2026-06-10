@@ -9,9 +9,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { ChevronLeft, ChevronRight, Play, Zap, Monitor, Users, Ticket, Package, Box, Upload, Check, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { GameEquipment } from "@/types/equipment";
+import { compressGLB, formatBytes } from "@/lib/glbCompression";
+import { uploadFileResumable } from "@/lib/resumableUpload";
+
+const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 Mo
 
 type ProductDialogProps = {
   equipment: GameEquipment | null;
@@ -23,6 +28,8 @@ type ProductDialogProps = {
 export function ProductDialog({ equipment, open, onOpenChange, onUpdate3DModel }: ProductDialogProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<string>("");
+  const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!equipment) return null;
@@ -58,28 +65,55 @@ export function ProductDialog({ equipment, open, onOpenChange, onUpdate3DModel }
       return;
     }
 
-    if (file.size > 50 * 1024 * 1024) {
-      toast.error("Fichier trop volumineux (max 50 Mo)");
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error(`Fichier trop volumineux (max ${formatBytes(MAX_FILE_SIZE)})`);
       return;
     }
 
     setUploading(true);
+    setUploadProgress(0);
+    setUploadStatus("Préparation…");
     try {
-      const filePath = `${equipment.id}/${Date.now()}-${file.name}`;
-      const { error } = await supabase.storage
-        .from("models-3d")
-        .upload(filePath, file, { upsert: true });
-      if (error) throw error;
+      // 1) Compression Draco (côté navigateur) — sans perte visuelle
+      let fileToUpload = file;
+      if (file.name.toLowerCase().endsWith(".glb")) {
+        setUploadStatus("Compression Draco…");
+        const originalSize = file.size;
+        fileToUpload = await compressGLB(file, (msg) => setUploadStatus(msg));
+        if (fileToUpload.size < originalSize) {
+          const ratio = Math.round((1 - fileToUpload.size / originalSize) * 100);
+          toast.success(
+            `Compression : ${formatBytes(originalSize)} → ${formatBytes(fileToUpload.size)} (-${ratio}%)`
+          );
+        }
+      }
+
+      // 2) Upload resumable (chunké, reprise sur erreur)
+      const filePath = `${equipment.id}/${Date.now()}-${fileToUpload.name}`;
+      setUploadStatus("Envoi vers le cloud…");
+      await uploadFileResumable({
+        bucket: "models-3d",
+        path: filePath,
+        file: fileToUpload,
+        upsert: true,
+        onProgress: (pct) => {
+          setUploadProgress(pct);
+          setUploadStatus(`Envoi… ${Math.round(pct)}%`);
+        },
+      });
+
       const { data: urlData } = supabase.storage
         .from("models-3d")
         .getPublicUrl(filePath);
       onUpdate3DModel?.(equipment.id, urlData.publicUrl);
-      toast.success(`Modèle 3D "${file.name}" associé à ${equipment.name}`);
-    } catch (err) {
+      toast.success(`Modèle 3D "${fileToUpload.name}" associé à ${equipment.name}`);
+    } catch (err: any) {
       console.error(err);
-      toast.error("Erreur lors du chargement du modèle 3D");
+      toast.error(`Erreur lors du chargement du modèle 3D : ${err?.message || "inconnue"}`);
     } finally {
       setUploading(false);
+      setUploadProgress(0);
+      setUploadStatus("");
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
@@ -288,8 +322,15 @@ export function ProductDialog({ equipment, open, onOpenChange, onUpdate3DModel }
                   disabled={uploading}
                 >
                   <Upload className="h-4 w-4" />
-                  {uploading ? "Chargement..." : equipment.model3d ? "Remplacer le modèle (.glb)" : "Uploader un modèle 3D (.glb)"}
+                  {uploading
+                    ? uploadStatus || "Chargement..."
+                    : equipment.model3d
+                    ? "Remplacer le modèle (.glb, max 500 Mo)"
+                    : "Uploader un modèle 3D (.glb, max 500 Mo)"}
                 </Button>
+                {uploading && uploadProgress > 0 && (
+                  <Progress value={uploadProgress} className="mt-2 h-1.5" />
+                )}
               </div>
             </div>
 

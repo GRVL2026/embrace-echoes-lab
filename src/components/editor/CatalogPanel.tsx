@@ -344,6 +344,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   const [viewingProduct, setViewingProduct] = useState<GameEquipment | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedView, setExpandedView] = useState(false);
+  const [show3DOnly, setShow3DOnly] = useState(false);
   const [loadingShopify, setLoadingShopify] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 

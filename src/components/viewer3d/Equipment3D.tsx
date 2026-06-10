@@ -75,14 +75,35 @@ function GLBModel({ url, width, depth, height, autoScale, roomExtent }: { url: s
       const targetW = width / 100;
       const targetD = depth / 100;
       const targetH = height / 100;
-      
-      const scaleX = size.x > 0 ? targetW / size.x : 1;
-      const scaleY = size.y > 0 ? targetH / size.y : 1;
-      const scaleZ = size.z > 0 ? targetD / size.z : 1;
-      const scale = Math.min(scaleX, scaleY, scaleZ);
-      
+
+      // Scale uniformly based on the horizontal footprint (width × depth).
+      // The model's horizontal axes might be swapped vs the equipment, so we
+      // pick the best match between (scaleX,scaleZ) and (scaleZ,scaleX) and
+      // average the two factors to fill the footprint robustly.
+      // Height is intentionally ignored as a scaling driver because catalog
+      // heights are frequently inaccurate and would otherwise shrink models.
+      const sx = size.x > 0 ? targetW / size.x : 1;
+      const sz = size.z > 0 ? targetD / size.z : 1;
+      const sxSwap = size.x > 0 ? targetD / size.x : 1;
+      const szSwap = size.z > 0 ? targetW / size.z : 1;
+      const avg = (sx + sz) / 2;
+      const avgSwap = (sxSwap + szSwap) / 2;
+      // Choose the orientation whose average factor is closer to the geometric
+      // mean of the two — i.e. the most "balanced" fit (less distortion).
+      const score = Math.abs(Math.log(sx) - Math.log(sz));
+      const scoreSwap = Math.abs(Math.log(sxSwap) - Math.log(szSwap));
+      let scale = scoreSwap < score ? avgSwap : avg;
+
+      // Safety clamp: if the resulting height would be wildly off (>3× target
+      // or <1/3×), nudge the scale toward the height target to avoid extremes.
+      if (size.y > 0) {
+        const projectedH = size.y * scale;
+        if (projectedH > targetH * 3) scale = (targetH * 3) / size.y;
+        else if (projectedH < targetH / 3) scale = (targetH / 3) / size.y;
+      }
+
       clone.scale.setScalar(scale);
-      
+
       const newBox = new THREE.Box3().setFromObject(clone);
       const center = newBox.getCenter(new THREE.Vector3());
       clone.position.sub(center);

@@ -176,6 +176,29 @@ export function ProjectMenu({ catalog, onLoadCatalog }: ProjectMenuProps) {
     }
   };
 
+  const handleOpenExport2D = () => {
+    if (state.rooms.length === 0 && state.placedEquipments.length === 0) {
+      toast.error("Rien à exporter — ajoutez au moins une salle ou des équipements");
+      return;
+    }
+    setExport2DDialogOpen(true);
+  };
+
+  const handleExport2DDossier = async (opts: Dossier2DOptions) => {
+    setIsExporting(true);
+    toast.info("Génération du dossier 2D en cours…");
+    try {
+      await generate2DDossierPDF(state, catalog, currentProjectName, opts);
+      toast.success("Dossier 2D téléchargé !");
+      setExport2DDialogOpen(false);
+    } catch (e: any) {
+      console.error("PDF 2D export error:", e);
+      toast.error(`Erreur PDF : ${e?.message || "Erreur inconnue"}`, { duration: 8000 });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <>
       <DropdownMenu>

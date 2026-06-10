@@ -730,7 +730,7 @@ export function EditorCanvas() {
           offCtx.drawImage(canvas, 0, 0);
           // Apply the same world transform used by `draw()` so cotes align
           offCtx.save();
-          offCtx.translate(state.pan.x, state.pan.y);
+          offCtx.translate(state.panOffset.x, state.panOffset.y);
           offCtx.scale(state.zoom, state.zoom);
           drawGapMeasurements(offCtx, state.placedEquipments, state.rooms, state.pillars, state.zoom);
           offCtx.restore();

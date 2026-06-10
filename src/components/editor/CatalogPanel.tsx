@@ -1032,11 +1032,22 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                   )}
                 </div>
                 
-                {searchQuery && (
-                  <p className="text-sm text-muted-foreground mb-3">
-                    {filteredCatalog.length} résultat{filteredCatalog.length > 1 ? "s" : ""} sur {catalog.length}
-                  </p>
-                )}
+                <div className="flex items-center gap-3 mb-3">
+                  <Button
+                    variant={show3DOnly ? "default" : "outline"}
+                    size="sm"
+                    className="h-8 gap-1.5 text-xs"
+                    onClick={() => setShow3DOnly(v => !v)}
+                  >
+                    <Box className="h-3.5 w-3.5" />
+                    Modèle 3D uniquement
+                  </Button>
+                  {(searchQuery || show3DOnly) && (
+                    <p className="text-sm text-muted-foreground">
+                      {filteredCatalog.length} résultat{filteredCatalog.length > 1 ? "s" : ""} sur {catalog.length}
+                    </p>
+                  )}
+                </div>
 
                 {/* Expanded catalog grid */}
                 <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-2">

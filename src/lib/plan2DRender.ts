@@ -18,22 +18,48 @@ export type Plan2DRenderOptions = {
 };
 
 const COLORS = {
-  bg: "#ffffff",
-  wall: "#0f172a",
-  wallFill: "#e2e8f0",
-  door: "#9b5cff",
+  bg: "#060619",
+  bgGradient: "#0c0c2a",
+  wall: "#9b5cff",
+  wallFill: "rgba(155, 92, 255, 0.08)",
+  door: "#73ffb8",
   pillar: "#475569",
-  equipment: "#9b5cff",
-  equipmentFill: "rgba(155, 92, 255, 0.18)",
-  equipmentLabel: "#1e293b",
-  dim: "#0ea5e9",
-  dimText: "#0369a1",
-  circulation: "#16a34a",
-  circulationFill: "rgba(34, 197, 94, 0.30)",
-  grid: "#f1f5f9",
-  text: "#0f172a",
-  muted: "#64748b",
+  pillarStroke: "#94a3b8",
+  equipmentDefault: "#9b5cff",
+  equipmentLabel: "#ffffff",
+  dim: "#73ffb8",
+  dimText: "#ffffff",
+  dimBg: "rgba(6, 6, 25, 0.85)",
+  circulation: "#73ffb8",
+  circulationFill: "rgba(115, 255, 184, 0.22)",
+  grid: "rgba(155, 92, 255, 0.08)",
+  gridMajor: "rgba(155, 92, 255, 0.16)",
+  text: "#f5f5ff",
+  muted: "#8b8bb5",
 };
+
+/** Parse "hsl(h, s%, l%)" or "#rrggbb" to {r,g,b}. */
+function parseColor(input?: string): { r: number; g: number; b: number } {
+  if (!input) return { r: 155, g: 92, b: 255 };
+  const m = input.match(/hsl\(\s*([\d.]+)[,\s]+([\d.]+)%?[,\s]+([\d.]+)%?\s*\)/i);
+  if (m) {
+    const h = parseFloat(m[1]) / 360, s = parseFloat(m[2]) / 100, l = parseFloat(m[3]) / 100;
+    const a = s * Math.min(l, 1 - l);
+    const f = (n: number) => {
+      const k = (n + h * 12) % 12;
+      return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+    };
+    return { r: Math.round(f(0) * 255), g: Math.round(f(8) * 255), b: Math.round(f(4) * 255) };
+  }
+  const h = input.replace("#", "");
+  if (h.length === 6) {
+    return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) };
+  }
+  return { r: 155, g: 92, b: 255 };
+}
+const rgba = (c: { r: number; g: number; b: number }, a: number) => `rgba(${c.r},${c.g},${c.b},${a})`;
+const rgb = (c: { r: number; g: number; b: number }) => `rgb(${c.r},${c.g},${c.b})`;
+
 
 function getBounds(rooms: Room[], equipments: PlacedEquipment[], pillars: Pillar[]) {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;

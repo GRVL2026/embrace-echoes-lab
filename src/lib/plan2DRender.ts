@@ -340,36 +340,45 @@ export function renderPlan2D(
     ctx.fillText(room.name, tx(cx), ty(cy));
   });
 
-  // Equipments
+  // Equipments — colored per category (matches editor canvas)
   if (showEq) {
     equipments.forEach((eq) => {
+      const col = parseColor(eq.color);
       ctx.save();
       ctx.translate(tx(eq.position.x), ty(eq.position.y));
       ctx.rotate(((eq.rotation || 0) * Math.PI) / 180);
       const w = ts(eq.width), d = ts(eq.depth);
-      ctx.fillStyle = COLORS.equipmentFill;
-      ctx.strokeStyle = COLORS.equipment;
-      ctx.lineWidth = 1.5;
+      // Soft glow
+      ctx.shadowColor = rgba(col, 0.55);
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = rgba(col, 0.22);
       ctx.fillRect(-w / 2, -d / 2, w, d);
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = rgb(col);
+      ctx.lineWidth = 2;
       ctx.strokeRect(-w / 2, -d / 2, w, d);
-      // Front indicator (small line on front edge -y in local)
+      // Front indicator
       ctx.beginPath();
       ctx.moveTo(-w / 2, -d / 2);
       ctx.lineTo(w / 2, -d / 2);
-      ctx.strokeStyle = COLORS.equipment;
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 3.5;
       ctx.stroke();
       ctx.restore();
 
-      // Label (no rotation for readability)
-      ctx.fillStyle = COLORS.equipmentLabel;
-      ctx.font = "bold 10px sans-serif";
+      // Label (no rotation for readability) — color matches equipment
+      ctx.fillStyle = rgb(col);
+      ctx.font = "bold 11px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       const label = eq.name.length > 18 ? eq.name.slice(0, 17) + "…" : eq.name;
+      // Slight dark halo behind label for legibility
+      ctx.shadowColor = "rgba(0,0,0,0.9)";
+      ctx.shadowBlur = 4;
       ctx.fillText(label, tx(eq.position.x), ty(eq.position.y));
+      ctx.shadowBlur = 0;
     });
   }
+
 
   // Gap measurements
   if (options.showGapMeasurements && showEq && equipments.length > 0) {

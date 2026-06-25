@@ -131,16 +131,26 @@ function sectionTitle(doc: jsPDF, title: string, subtitle: string, y: number): n
   return y + 14;
 }
 
-function addFooter(doc: jsPDF, page: number) {
+function addFooter(doc: jsPDF, page: number, logo?: { dataUrl: string; w: number; h: number } | null) {
   setF(doc, DARK_CARD);
   doc.rect(0, PAGE_H - 12, PAGE_W, 12, "F");
   drawGradientBar(doc, 0, PAGE_H - 12, PAGE_W, 0.6, PURPLE, GREEN);
+  let cursorX = MARGIN;
+  if (logo) {
+    const lh = 5;
+    const lw = lh * (logo.w / logo.h);
+    try { doc.addImage(logo.dataUrl, "PNG", cursorX, PAGE_H - 8.5, lw, lh, undefined, "FAST"); } catch {}
+    cursorX += lw + 2;
+  }
   doc.setFontSize(7);
+  setC(doc, WHITE);
+  doc.text("Arcade Planner", cursorX, PAGE_H - 5);
   setC(doc, GRAY);
-  doc.text("AVRANCHES AUTOMATIC — Dossier 2D", MARGIN, PAGE_H - 5);
+  doc.text("· Avranches Automatic · Dossier 2D", cursorX + doc.getTextWidth("Arcade Planner") + 1, PAGE_H - 5);
   setC(doc, GREEN);
   doc.text(String(page), PAGE_W - MARGIN, PAGE_H - 5, { align: "right" });
 }
+
 
 function fitImage(doc: jsPDF, dataUrl: string, x: number, y: number, maxW: number, maxH: number) {
   // We rendered at 1800x1200 (ratio 1.5)

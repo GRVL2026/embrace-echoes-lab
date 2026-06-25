@@ -233,8 +233,8 @@ export async function generate2DDossierPDF(
   const heroY = after + 14;
   const heroH = 130;
   drawCard(doc, MARGIN, heroY, CONTENT_W, heroH);
-  setF(doc, WHITE);
-  doc.roundedRect(MARGIN + 1, heroY + 1, CONTENT_W - 2, heroH - 2, 2, 2, "F");
+  // (no inner white surface — the dark plan blends with the dossier theme)
+
   const heroUrl = renderPlan2D(state.rooms, state.doors, state.pillars, state.placedEquipments, state.circulationPath || [], {
     width: 1800, height: 1200, showGames: true, showGapMeasurements: false, showCirculation: false, showWallDimensions: false,
   });

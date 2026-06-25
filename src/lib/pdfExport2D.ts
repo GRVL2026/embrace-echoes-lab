@@ -159,13 +159,11 @@ function planPage(
   const imgH = PAGE_H - y - 22;
   drawCard(doc, MARGIN, y, CONTENT_W, imgH);
   if (dataUrl) {
-    // White surface inside the dark card
-    setF(doc, WHITE);
-    doc.roundedRect(MARGIN + 1, y + 1, CONTENT_W - 2, imgH - 2, 2, 2, "F");
     fitImage(doc, dataUrl, MARGIN + 3, y + 3, CONTENT_W - 6, imgH - 6);
   }
   addFooter(doc, pageNum.n);
 }
+
 
 const formatEUR = (v: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(v);
@@ -235,8 +233,8 @@ export async function generate2DDossierPDF(
   const heroY = after + 14;
   const heroH = 130;
   drawCard(doc, MARGIN, heroY, CONTENT_W, heroH);
-  setF(doc, WHITE);
-  doc.roundedRect(MARGIN + 1, heroY + 1, CONTENT_W - 2, heroH - 2, 2, 2, "F");
+  // (no inner white surface — the dark plan blends with the dossier theme)
+
   const heroUrl = renderPlan2D(state.rooms, state.doors, state.pillars, state.placedEquipments, state.circulationPath || [], {
     width: 1800, height: 1200, showGames: true, showGapMeasurements: false, showCirculation: false, showWallDimensions: false,
   });

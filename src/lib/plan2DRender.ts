@@ -18,22 +18,48 @@ export type Plan2DRenderOptions = {
 };
 
 const COLORS = {
-  bg: "#ffffff",
-  wall: "#0f172a",
-  wallFill: "#e2e8f0",
-  door: "#9b5cff",
+  bg: "#060619",
+  bgGradient: "#0c0c2a",
+  wall: "#9b5cff",
+  wallFill: "rgba(155, 92, 255, 0.08)",
+  door: "#73ffb8",
   pillar: "#475569",
-  equipment: "#9b5cff",
-  equipmentFill: "rgba(155, 92, 255, 0.18)",
-  equipmentLabel: "#1e293b",
-  dim: "#0ea5e9",
-  dimText: "#0369a1",
-  circulation: "#16a34a",
-  circulationFill: "rgba(34, 197, 94, 0.30)",
-  grid: "#f1f5f9",
-  text: "#0f172a",
-  muted: "#64748b",
+  pillarStroke: "#94a3b8",
+  equipmentDefault: "#9b5cff",
+  equipmentLabel: "#ffffff",
+  dim: "#73ffb8",
+  dimText: "#ffffff",
+  dimBg: "rgba(6, 6, 25, 0.85)",
+  circulation: "#73ffb8",
+  circulationFill: "rgba(115, 255, 184, 0.22)",
+  grid: "rgba(155, 92, 255, 0.08)",
+  gridMajor: "rgba(155, 92, 255, 0.16)",
+  text: "#f5f5ff",
+  muted: "#8b8bb5",
 };
+
+/** Parse "hsl(h, s%, l%)" or "#rrggbb" to {r,g,b}. */
+function parseColor(input?: string): { r: number; g: number; b: number } {
+  if (!input) return { r: 155, g: 92, b: 255 };
+  const m = input.match(/hsl\(\s*([\d.]+)[,\s]+([\d.]+)%?[,\s]+([\d.]+)%?\s*\)/i);
+  if (m) {
+    const h = parseFloat(m[1]) / 360, s = parseFloat(m[2]) / 100, l = parseFloat(m[3]) / 100;
+    const a = s * Math.min(l, 1 - l);
+    const f = (n: number) => {
+      const k = (n + h * 12) % 12;
+      return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+    };
+    return { r: Math.round(f(0) * 255), g: Math.round(f(8) * 255), b: Math.round(f(4) * 255) };
+  }
+  const h = input.replace("#", "");
+  if (h.length === 6) {
+    return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) };
+  }
+  return { r: 155, g: 92, b: 255 };
+}
+const rgba = (c: { r: number; g: number; b: number }, a: number) => `rgba(${c.r},${c.g},${c.b},${a})`;
+const rgb = (c: { r: number; g: number; b: number }) => `rgb(${c.r},${c.g},${c.b})`;
+
 
 function getBounds(rooms: Room[], equipments: PlacedEquipment[], pillars: Pillar[]) {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -86,9 +112,13 @@ export function renderPlan2D(
   const ctx = canvas.getContext("2d");
   if (!ctx) return "";
 
-  // White background
-  ctx.fillStyle = COLORS.bg;
+  // Dark gradient background (matches editor)
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+  bgGrad.addColorStop(0, COLORS.bgGradient);
+  bgGrad.addColorStop(1, COLORS.bg);
+  ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, W, H);
+
 
   // Bounds & transform (fit to canvas)
   const showEq = options.showGames !== false;
@@ -310,36 +340,45 @@ export function renderPlan2D(
     ctx.fillText(room.name, tx(cx), ty(cy));
   });
 
-  // Equipments
+  // Equipments — colored per category (matches editor canvas)
   if (showEq) {
     equipments.forEach((eq) => {
+      const col = parseColor(eq.color);
       ctx.save();
       ctx.translate(tx(eq.position.x), ty(eq.position.y));
       ctx.rotate(((eq.rotation || 0) * Math.PI) / 180);
       const w = ts(eq.width), d = ts(eq.depth);
-      ctx.fillStyle = COLORS.equipmentFill;
-      ctx.strokeStyle = COLORS.equipment;
-      ctx.lineWidth = 1.5;
+      // Soft glow
+      ctx.shadowColor = rgba(col, 0.55);
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = rgba(col, 0.22);
       ctx.fillRect(-w / 2, -d / 2, w, d);
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = rgb(col);
+      ctx.lineWidth = 2;
       ctx.strokeRect(-w / 2, -d / 2, w, d);
-      // Front indicator (small line on front edge -y in local)
+      // Front indicator
       ctx.beginPath();
       ctx.moveTo(-w / 2, -d / 2);
       ctx.lineTo(w / 2, -d / 2);
-      ctx.strokeStyle = COLORS.equipment;
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 3.5;
       ctx.stroke();
       ctx.restore();
 
-      // Label (no rotation for readability)
-      ctx.fillStyle = COLORS.equipmentLabel;
-      ctx.font = "bold 10px sans-serif";
+      // Label (no rotation for readability) — color matches equipment
+      ctx.fillStyle = rgb(col);
+      ctx.font = "bold 11px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       const label = eq.name.length > 18 ? eq.name.slice(0, 17) + "…" : eq.name;
+      // Slight dark halo behind label for legibility
+      ctx.shadowColor = "rgba(0,0,0,0.9)";
+      ctx.shadowBlur = 4;
       ctx.fillText(label, tx(eq.position.x), ty(eq.position.y));
+      ctx.shadowBlur = 0;
     });
   }
+
 
   // Gap measurements
   if (options.showGapMeasurements && showEq && equipments.length > 0) {
@@ -428,9 +467,10 @@ export function renderPlan2D(
           // Label
           const mx = (sx + ex) / 2, my = (sy + ey) / 2;
           const label = distCm >= 100 ? `${(distCm / 100).toFixed(2)} m` : `${distCm} cm`;
-          ctx.fillStyle = "#ffffff";
-          const tw = ctx.measureText(label).width + 6;
-          ctx.fillRect(mx - tw / 2, my - 7, tw, 14);
+          ctx.fillStyle = COLORS.dimBg;
+          const tw = ctx.measureText(label).width + 8;
+          ctx.fillRect(mx - tw / 2, my - 8, tw, 16);
+
           ctx.fillStyle = COLORS.dimText;
           ctx.font = "bold 10px sans-serif";
           ctx.textAlign = "center";

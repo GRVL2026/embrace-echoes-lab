@@ -159,13 +159,11 @@ function planPage(
   const imgH = PAGE_H - y - 22;
   drawCard(doc, MARGIN, y, CONTENT_W, imgH);
   if (dataUrl) {
-    // White surface inside the dark card
-    setF(doc, WHITE);
-    doc.roundedRect(MARGIN + 1, y + 1, CONTENT_W - 2, imgH - 2, 2, 2, "F");
     fitImage(doc, dataUrl, MARGIN + 3, y + 3, CONTENT_W - 6, imgH - 6);
   }
   addFooter(doc, pageNum.n);
 }
+
 
 const formatEUR = (v: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(v);

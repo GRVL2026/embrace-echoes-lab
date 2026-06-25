@@ -170,6 +170,34 @@ function planPage(
 const formatEUR = (v: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(v);
 
+/** Load an image and return its data URL + natural dimensions (for aspect-ratio preservation). */
+async function loadImageMeta(src: string): Promise<{ dataUrl: string; w: number; h: number } | null> {
+  try {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    const loaded = await new Promise<HTMLImageElement | null>((resolve) => {
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+    if (!loaded) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = loaded.naturalWidth;
+    canvas.height = loaded.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(loaded, 0, 0);
+    return {
+      dataUrl: canvas.toDataURL("image/jpeg", 0.85),
+      w: loaded.naturalWidth,
+      h: loaded.naturalHeight,
+    };
+  } catch {
+    return null;
+  }
+}
+
+
 export async function generate2DDossierPDF(
   state: EditorState,
   catalog: GameEquipment[],

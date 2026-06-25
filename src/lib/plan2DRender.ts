@@ -112,9 +112,13 @@ export function renderPlan2D(
   const ctx = canvas.getContext("2d");
   if (!ctx) return "";
 
-  // White background
-  ctx.fillStyle = COLORS.bg;
+  // Dark gradient background (matches editor)
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+  bgGrad.addColorStop(0, COLORS.bgGradient);
+  bgGrad.addColorStop(1, COLORS.bg);
+  ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, W, H);
+
 
   // Bounds & transform (fit to canvas)
   const showEq = options.showGames !== false;

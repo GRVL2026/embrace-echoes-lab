@@ -467,9 +467,10 @@ export function renderPlan2D(
           // Label
           const mx = (sx + ex) / 2, my = (sy + ey) / 2;
           const label = distCm >= 100 ? `${(distCm / 100).toFixed(2)} m` : `${distCm} cm`;
-          ctx.fillStyle = "#ffffff";
-          const tw = ctx.measureText(label).width + 6;
-          ctx.fillRect(mx - tw / 2, my - 7, tw, 14);
+          ctx.fillStyle = COLORS.dimBg;
+          const tw = ctx.measureText(label).width + 8;
+          ctx.fillRect(mx - tw / 2, my - 8, tw, 16);
+
           ctx.fillStyle = COLORS.dimText;
           ctx.font = "bold 10px sans-serif";
           ctx.textAlign = "center";

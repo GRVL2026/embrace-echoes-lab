@@ -306,14 +306,15 @@ export async function generate2DDossierPDF(
       items.map(({ eq }) => (eq.images && eq.images[0] ? loadImageMeta(eq.images[0]) : Promise.resolve(null))),
     );
 
+    const PER_PAGE = 4;
+    const pages = Math.max(1, Math.ceil(items.length / PER_PAGE));
     const cardH = 58;
     const gap = 4;
     for (let p = 0; p < pages; p++) {
-      if (p > 0 || true) {
-        doc.addPage();
-        drawDarkPage(doc);
-        pageNum.n++;
-      }
+      doc.addPage();
+      drawDarkPage(doc);
+      pageNum.n++;
+
       let y = sectionTitle(
         doc,
         p === 0 ? "Catalogue des jeux sélectionnés" : "Catalogue (suite)",

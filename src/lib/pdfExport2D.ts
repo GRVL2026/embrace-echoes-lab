@@ -315,7 +315,7 @@ export async function generate2DDossierPDF(
   doc.setFontSize(7);
   setC(doc, [60, 60, 100]);
   doc.text(dateStr, PAGE_W - MARGIN, PAGE_H - 6, { align: "right" });
-  addFooter(doc, pageNum.n);
+  addFooter(doc, pageNum.n, logo);
 
   // ─── Plans 2D ──────────────────────────────────────
   if (options.planEmpty) {
@@ -478,7 +478,7 @@ export async function generate2DDossierPDF(
         const linkY = cardY + cardH - 4;
         doc.textWithLink(linkLabel, tx, linkY, { url });
       }
-      addFooter(doc, pageNum.n);
+      addFooter(doc, pageNum.n, logo);
     }
   }
 
@@ -589,7 +589,7 @@ export async function generate2DDossierPDF(
     setC(doc, [50, 50, 90]);
     doc.text("Document indicatif généré automatiquement. Prix et conditions susceptibles de varier.", MARGIN, fY);
     doc.text(`Généré le ${dateStr}`, MARGIN, fY + 4);
-    addFooter(doc, pageNum.n);
+    addFooter(doc, pageNum.n, logo);
   }
 
   // Save

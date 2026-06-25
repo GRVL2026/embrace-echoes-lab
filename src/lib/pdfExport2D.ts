@@ -15,6 +15,29 @@ import jsPDF from "jspdf";
 import type { EditorState, Room } from "@/types/editor";
 import type { GameEquipment } from "@/types/equipment";
 import { renderPlan2D } from "./plan2DRender";
+import logoImg from "@/assets/logo.png";
+
+/** Load the Arcade Planner logo as a data URL (cached). */
+let _logoCache: { dataUrl: string; w: number; h: number } | null | undefined;
+async function loadLogo(): Promise<{ dataUrl: string; w: number; h: number } | null> {
+  if (_logoCache !== undefined) return _logoCache;
+  try {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    const loaded = await new Promise<HTMLImageElement | null>((resolve) => {
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = logoImg;
+    });
+    if (!loaded) { _logoCache = null; return null; }
+    const c = document.createElement("canvas");
+    c.width = loaded.naturalWidth; c.height = loaded.naturalHeight;
+    c.getContext("2d")!.drawImage(loaded, 0, 0);
+    _logoCache = { dataUrl: c.toDataURL("image/png"), w: loaded.naturalWidth, h: loaded.naturalHeight };
+    return _logoCache;
+  } catch { _logoCache = null; return null; }
+}
+
 
 const PURPLE = [155, 92, 255] as const;
 const GREEN = [173, 255, 0] as const;
@@ -108,16 +131,26 @@ function sectionTitle(doc: jsPDF, title: string, subtitle: string, y: number): n
   return y + 14;
 }
 
-function addFooter(doc: jsPDF, page: number) {
+function addFooter(doc: jsPDF, page: number, logo?: { dataUrl: string; w: number; h: number } | null) {
   setF(doc, DARK_CARD);
   doc.rect(0, PAGE_H - 12, PAGE_W, 12, "F");
   drawGradientBar(doc, 0, PAGE_H - 12, PAGE_W, 0.6, PURPLE, GREEN);
+  let cursorX = MARGIN;
+  if (logo) {
+    const lh = 5;
+    const lw = lh * (logo.w / logo.h);
+    try { doc.addImage(logo.dataUrl, "PNG", cursorX, PAGE_H - 8.5, lw, lh, undefined, "FAST"); } catch {}
+    cursorX += lw + 2;
+  }
   doc.setFontSize(7);
+  setC(doc, WHITE);
+  doc.text("Arcade Planner", cursorX, PAGE_H - 5);
   setC(doc, GRAY);
-  doc.text("AVRANCHES AUTOMATIC — Dossier 2D", MARGIN, PAGE_H - 5);
+  doc.text("· Avranches Automatic · Dossier 2D", cursorX + doc.getTextWidth("Arcade Planner") + 1, PAGE_H - 5);
   setC(doc, GREEN);
   doc.text(String(page), PAGE_W - MARGIN, PAGE_H - 5, { align: "right" });
 }
+
 
 function fitImage(doc: jsPDF, dataUrl: string, x: number, y: number, maxW: number, maxH: number) {
   // We rendered at 1800x1200 (ratio 1.5)
@@ -136,6 +169,7 @@ function planPage(
   title: string,
   subtitle: string,
   opts: { showGames: boolean; showGapMeasurements: boolean; showCirculation: boolean },
+  logo?: { dataUrl: string; w: number; h: number } | null,
 ) {
   doc.addPage();
   drawDarkPage(doc);
@@ -161,8 +195,9 @@ function planPage(
   if (dataUrl) {
     fitImage(doc, dataUrl, MARGIN + 3, y + 3, CONTENT_W - 6, imgH - 6);
   }
-  addFooter(doc, pageNum.n);
+  addFooter(doc, pageNum.n, logo);
 }
+
 
 
 const formatEUR = (v: number) =>
@@ -212,22 +247,41 @@ export async function generate2DDossierPDF(
     return s + (c?.price || 0);
   }, 0);
 
+  const logo = await loadLogo();
+
   // ─── Cover ─────────────────────────────────────────
   drawDarkPage(doc);
   pageNum.n = 1;
   drawGradientBar(doc, 0, 0, PAGE_W, 3, GREEN, PURPLE);
+
+  // Brand header: logo + "Arcade Planner"
+  let brandX = MARGIN;
+  if (logo) {
+    const lh = 11;
+    const lw = lh * (logo.w / logo.h);
+    try { doc.addImage(logo.dataUrl, "PNG", brandX, 14, lw, lh, undefined, "FAST"); } catch {}
+    brandX += lw + 3;
+  }
+  setC(doc, WHITE);
+  doc.setFontSize(16);
+  doc.text("Arcade", brandX, 22);
+  const arcadeW = doc.getTextWidth("Arcade");
+  setC(doc, PURPLE);
+  doc.text(" Planner", brandX + arcadeW, 22);
+
   setC(doc, GREEN);
-  doc.setFontSize(9);
-  doc.text("AVRANCHES AUTOMATIC", MARGIN, 22);
+  doc.setFontSize(8);
+  doc.text("AVRANCHES AUTOMATIC", MARGIN, 34);
   setC(doc, GRAY);
   doc.setFontSize(10);
-  doc.text("DOSSIER PROJET — VUE 2D", MARGIN, 32);
+  doc.text("DOSSIER PROJET — VUE 2D", MARGIN, 42);
   doc.setFontSize(34);
   setC(doc, WHITE);
   const nameLines = doc.splitTextToSize(projectName.toUpperCase(), CONTENT_W);
-  doc.text(nameLines, MARGIN, 54);
-  const after = 54 + nameLines.length * 13;
+  doc.text(nameLines, MARGIN, 64);
+  const after = 64 + nameLines.length * 13;
   drawGradientBar(doc, MARGIN, after + 2, 80, 2, GREEN, GREEN);
+
 
   // Hero plan preview (always with games if any)
   const heroY = after + 14;
@@ -261,29 +315,30 @@ export async function generate2DDossierPDF(
   doc.setFontSize(7);
   setC(doc, [60, 60, 100]);
   doc.text(dateStr, PAGE_W - MARGIN, PAGE_H - 6, { align: "right" });
-  addFooter(doc, pageNum.n);
+  addFooter(doc, pageNum.n, logo);
 
   // ─── Plans 2D ──────────────────────────────────────
   if (options.planEmpty) {
     planPage(doc, pageNum, state, "Plan 2D — Coque", "Espace nu, sans équipements (cotes des murs).", {
       showGames: false, showGapMeasurements: false, showCirculation: false,
-    });
+    }, logo);
   }
   if (options.planWithGames) {
     planPage(doc, pageNum, state, "Plan 2D — Implantation", "Disposition des jeux dans l'espace.", {
       showGames: true, showGapMeasurements: false, showCirculation: false,
-    });
+    }, logo);
   }
   if (options.planWithDistances) {
     planPage(doc, pageNum, state, "Plan 2D — Distances", "Espacements entre jeux et obstacles.", {
       showGames: true, showGapMeasurements: true, showCirculation: false,
-    });
+    }, logo);
   }
   if (options.planPMR) {
     planPage(doc, pageNum, state, "Plan 2D — Cheminement PMR", "Parcours d'accessibilité dans l'espace.", {
       showGames: true, showGapMeasurements: false, showCirculation: true,
-    });
+    }, logo);
   }
+
 
   // ─── Equipment catalog ─────────────────────────────
   if (options.equipmentList) {
@@ -424,7 +479,7 @@ export async function generate2DDossierPDF(
         const linkY = cardY + cardH - 4;
         doc.textWithLink(linkLabel, tx, linkY, { url });
       }
-      addFooter(doc, pageNum.n);
+      addFooter(doc, pageNum.n, logo);
     }
   }
 
@@ -535,7 +590,7 @@ export async function generate2DDossierPDF(
     setC(doc, [50, 50, 90]);
     doc.text("Document indicatif généré automatiquement. Prix et conditions susceptibles de varier.", MARGIN, fY);
     doc.text(`Généré le ${dateStr}`, MARGIN, fY + 4);
-    addFooter(doc, pageNum.n);
+    addFooter(doc, pageNum.n, logo);
   }
 
   // Save

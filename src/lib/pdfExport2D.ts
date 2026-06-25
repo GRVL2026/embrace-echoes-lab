@@ -28,7 +28,7 @@ async function loadLogo(): Promise<{ dataUrl: string; w: number; h: number } | n
       img.onload = () => resolve(img);
       img.onerror = () => resolve(null);
       img.src = logoImg;
-    }, logo);
+    });
     if (!loaded) { _logoCache = null; return null; }
     const c = document.createElement("canvas");
     c.width = loaded.naturalWidth; c.height = loaded.naturalHeight;
@@ -212,7 +212,7 @@ async function loadImageMeta(src: string): Promise<{ dataUrl: string; w: number;
       img.onload = () => resolve(img);
       img.onerror = () => resolve(null);
       img.src = src;
-    }, logo);
+    });
     if (!loaded) return null;
     const canvas = document.createElement("canvas");
     canvas.width = loaded.naturalWidth;
@@ -321,22 +321,22 @@ export async function generate2DDossierPDF(
   if (options.planEmpty) {
     planPage(doc, pageNum, state, "Plan 2D — Coque", "Espace nu, sans équipements (cotes des murs).", {
       showGames: false, showGapMeasurements: false, showCirculation: false,
-    }, logo);
+    });
   }
   if (options.planWithGames) {
     planPage(doc, pageNum, state, "Plan 2D — Implantation", "Disposition des jeux dans l'espace.", {
       showGames: true, showGapMeasurements: false, showCirculation: false,
-    }, logo);
+    });
   }
   if (options.planWithDistances) {
     planPage(doc, pageNum, state, "Plan 2D — Distances", "Espacements entre jeux et obstacles.", {
       showGames: true, showGapMeasurements: true, showCirculation: false,
-    }, logo);
+    });
   }
   if (options.planPMR) {
     planPage(doc, pageNum, state, "Plan 2D — Cheminement PMR", "Parcours d'accessibilité dans l'espace.", {
       showGames: true, showGapMeasurements: false, showCirculation: true,
-    }, logo);
+    });
   }
 
   // ─── Equipment catalog ─────────────────────────────
@@ -348,7 +348,7 @@ export async function generate2DDossierPDF(
       const ex = usedMap.get(c.id);
       if (ex) ex.count++;
       else usedMap.set(c.id, { eq: c, count: 1 });
-    }, logo);
+    });
     const items = Array.from(usedMap.values()).sort((a, b) =>
       a.eq.category.localeCompare(b.eq.category) || a.eq.name.localeCompare(b.eq.name)
     );
@@ -501,7 +501,7 @@ export async function generate2DDossierPDF(
       ex.count++;
       ex.total += c?.price || 0;
       catBudget.set(k, ex);
-    }, logo);
+    });
 
     setF(doc, DARK_SURFACE);
     doc.roundedRect(MARGIN, y - 4, CONTENT_W, 8, 2, 2, "F");
@@ -527,7 +527,7 @@ export async function generate2DDossierPDF(
         if (data.total > 0) { setC(doc, GREEN); doc.text(formatEUR(data.total), MARGIN + 135, y); }
         else { setC(doc, [50, 50, 90]); doc.text("—", MARGIN + 135, y); }
         y += 9;
-      }, logo);
+      });
 
     // Total card
     y += 6;
@@ -578,7 +578,7 @@ export async function generate2DDossierPDF(
         doc.setFontSize(15);
         setC(doc, GREEN);
         doc.text(c.value && c.value > 0 ? `${formatEUR(c.value)}/mois` : "—", cx, cy + 18, { align: "center" });
-      }, logo);
+      });
 
       y += lH + 6;
     }

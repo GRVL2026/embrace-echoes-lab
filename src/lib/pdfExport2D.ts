@@ -169,6 +169,7 @@ function planPage(
   title: string,
   subtitle: string,
   opts: { showGames: boolean; showGapMeasurements: boolean; showCirculation: boolean },
+  logo?: { dataUrl: string; w: number; h: number } | null,
 ) {
   doc.addPage();
   drawDarkPage(doc);
@@ -194,8 +195,9 @@ function planPage(
   if (dataUrl) {
     fitImage(doc, dataUrl, MARGIN + 3, y + 3, CONTENT_W - 6, imgH - 6);
   }
-  addFooter(doc, pageNum.n);
+  addFooter(doc, pageNum.n, logo);
 }
+
 
 
 const formatEUR = (v: number) =>

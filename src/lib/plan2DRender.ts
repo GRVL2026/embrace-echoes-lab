@@ -183,30 +183,156 @@ export function renderPlan2D(
     ctx.globalAlpha = 1;
   });
 
-  // Circulation path (under everything else but above floor)
+  // Circulation path (matches editor: smoothed chains, green corridor, PMR turning zones)
   if (options.showCirculation && circulation.length > 0) {
+    // Build continuous chains from segments
+    const chains: Point[][] = [];
+    let cur: Point[] = [];
+    for (const seg of circulation) {
+      if (cur.length === 0) {
+        cur.push(seg.start, seg.end);
+      } else {
+        const last = cur[cur.length - 1];
+        const d = Math.hypot(last.x - seg.start.x, last.y - seg.start.y);
+        if (d < 30) cur.push(seg.end);
+        else { chains.push(cur); cur = [seg.start, seg.end]; }
+      }
+    }
+    if (cur.length > 0) chains.push(cur);
+
+    const dedup = (ch: Point[], minD: number) => {
+      const out: Point[] = [];
+      for (const p of ch) {
+        const last = out[out.length - 1];
+        if (!last || Math.hypot(p.x - last.x, p.y - last.y) >= minD) out.push(p);
+      }
+      return out;
+    };
+    const smooth = (ch: Point[], iters: number) => {
+      let pts = ch;
+      for (let k = 0; k < iters; k++) {
+        if (pts.length < 3) break;
+        const next: Point[] = [pts[0]];
+        for (let i = 0; i < pts.length - 1; i++) {
+          const a = pts[i], b = pts[i + 1];
+          next.push({ x: 0.75 * a.x + 0.25 * b.x, y: 0.75 * a.y + 0.25 * b.y });
+          next.push({ x: 0.25 * a.x + 0.75 * b.x, y: 0.25 * a.y + 0.75 * b.y });
+        }
+        next.push(pts[pts.length - 1]);
+        pts = next;
+      }
+      return pts;
+    };
+
+    const stdWidth = Math.min(...circulation.map(s => s.width || 120));
+    const corridorPx = ts(stdWidth);
+
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    circulation.forEach((seg) => {
-      const corridorW = ts(seg.width || 120);
-      ctx.strokeStyle = COLORS.circulationFill;
-      ctx.lineWidth = corridorW;
-      ctx.beginPath();
-      ctx.moveTo(tx(seg.start.x), ty(seg.start.y));
-      ctx.lineTo(tx(seg.end.x), ty(seg.end.y));
+
+    for (let ci = 0; ci < chains.length; ci++) {
+      let chain = dedup(chains[ci], 8);
+      chain = smooth(chain, 1);
+      chain = dedup(chain, 3);
+      if (chain.length < 2) continue;
+
+      const tracePath = () => {
+        ctx.beginPath();
+        ctx.moveTo(tx(chain[0].x), ty(chain[0].y));
+        for (let i = 1; i < chain.length - 1; i++) {
+          const mx = (chain[i].x + chain[i + 1].x) / 2;
+          const my = (chain[i].y + chain[i + 1].y) / 2;
+          ctx.quadraticCurveTo(tx(chain[i].x), ty(chain[i].y), tx(mx), ty(my));
+        }
+        const last = chain[chain.length - 1];
+        ctx.lineTo(tx(last.x), ty(last.y));
+      };
+
+      // Outer corridor — translucent green
+      tracePath();
+      ctx.strokeStyle = "hsla(142, 70%, 40%, 0.35)";
+      ctx.lineWidth = corridorPx;
       ctx.stroke();
-    });
-    // Centerline
-    ctx.strokeStyle = COLORS.circulation;
-    ctx.lineWidth = 2;
-    ctx.setLineDash([8, 6]);
-    circulation.forEach((seg) => {
-      ctx.beginPath();
-      ctx.moveTo(tx(seg.start.x), ty(seg.start.y));
-      ctx.lineTo(tx(seg.end.x), ty(seg.end.y));
+
+      // Inner lighter fill
+      tracePath();
+      ctx.strokeStyle = "hsla(142, 70%, 50%, 0.10)";
+      ctx.lineWidth = Math.max(1, corridorPx - 4);
       ctx.stroke();
-    });
-    ctx.setLineDash([]);
+
+      // Centerline dashed
+      tracePath();
+      ctx.strokeStyle = "hsla(142, 70%, 60%, 0.55)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([14, 10]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // PMR turning zones at chain ends (1.40 m diameter)
+      const turnR = ts(70);
+      for (const pt of [chain[0], chain[chain.length - 1]]) {
+        const px = tx(pt.x), py = ty(pt.y);
+        ctx.beginPath();
+        ctx.arc(px, py, turnR, 0, Math.PI * 2);
+        ctx.fillStyle = "hsla(200, 70%, 50%, 0.10)";
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(px, py, turnR, 0, Math.PI * 2);
+        ctx.strokeStyle = "hsla(200, 70%, 60%, 0.55)";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.font = "11px sans-serif";
+        ctx.fillStyle = "hsla(200, 80%, 75%, 0.85)";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "alphabetic";
+        ctx.fillText("PMR 1.40m", px, py - turnR - 4);
+        ctx.beginPath();
+        ctx.arc(px, py, 4, 0, Math.PI * 2);
+        ctx.fillStyle = "hsla(142, 70%, 55%, 0.8)";
+        ctx.fill();
+      }
+    }
+
+    // Width label on the central chain
+    if (chains.length > 0) {
+      let ch0 = dedup(chains[0], 8);
+      ch0 = smooth(ch0, 2);
+      ch0 = dedup(ch0, 3);
+      if (ch0.length > 1) {
+        const mid = ch0[Math.floor(ch0.length / 2)];
+        const mx = tx(mid.x), my = ty(mid.y);
+        const segWidth = circulation[Math.floor(circulation.length / 2)]?.width || 120;
+        const text = `↔ ${(segWidth / 100).toFixed(2).replace(/0$/, "")}m`;
+        ctx.font = "bold 13px sans-serif";
+        const tw = ctx.measureText(text).width;
+        const pad = 5;
+        const rw = tw + pad * 2, rh = 18 + pad;
+        const rx = mx - rw / 2, ry = my - rh / 2;
+        ctx.fillStyle = "hsla(142, 60%, 18%, 0.9)";
+        ctx.strokeStyle = "hsla(142, 70%, 50%, 0.6)";
+        ctx.lineWidth = 1;
+        const r = 5;
+        ctx.beginPath();
+        ctx.moveTo(rx + r, ry);
+        ctx.lineTo(rx + rw - r, ry);
+        ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + r);
+        ctx.lineTo(rx + rw, ry + rh - r);
+        ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - r, ry + rh);
+        ctx.lineTo(rx + r, ry + rh);
+        ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - r);
+        ctx.lineTo(rx, ry + r);
+        ctx.quadraticCurveTo(rx, ry, rx + r, ry);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "hsla(142, 85%, 78%, 1)";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(text, mx, my);
+      }
+    }
   }
 
   // Walls

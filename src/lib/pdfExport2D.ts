@@ -247,22 +247,41 @@ export async function generate2DDossierPDF(
     return s + (c?.price || 0);
   }, 0);
 
+  const logo = await loadLogo();
+
   // ─── Cover ─────────────────────────────────────────
   drawDarkPage(doc);
   pageNum.n = 1;
   drawGradientBar(doc, 0, 0, PAGE_W, 3, GREEN, PURPLE);
+
+  // Brand header: logo + "Arcade Planner"
+  let brandX = MARGIN;
+  if (logo) {
+    const lh = 11;
+    const lw = lh * (logo.w / logo.h);
+    try { doc.addImage(logo.dataUrl, "PNG", brandX, 14, lw, lh, undefined, "FAST"); } catch {}
+    brandX += lw + 3;
+  }
+  setC(doc, WHITE);
+  doc.setFontSize(16);
+  doc.text("Arcade", brandX, 22);
+  const arcadeW = doc.getTextWidth("Arcade");
+  setC(doc, PURPLE);
+  doc.text(" Planner", brandX + arcadeW, 22);
+
   setC(doc, GREEN);
-  doc.setFontSize(9);
-  doc.text("AVRANCHES AUTOMATIC", MARGIN, 22);
+  doc.setFontSize(8);
+  doc.text("AVRANCHES AUTOMATIC", MARGIN, 34);
   setC(doc, GRAY);
   doc.setFontSize(10);
-  doc.text("DOSSIER PROJET — VUE 2D", MARGIN, 32);
+  doc.text("DOSSIER PROJET — VUE 2D", MARGIN, 42);
   doc.setFontSize(34);
   setC(doc, WHITE);
   const nameLines = doc.splitTextToSize(projectName.toUpperCase(), CONTENT_W);
-  doc.text(nameLines, MARGIN, 54);
-  const after = 54 + nameLines.length * 13;
+  doc.text(nameLines, MARGIN, 64);
+  const after = 64 + nameLines.length * 13;
   drawGradientBar(doc, MARGIN, after + 2, 80, 2, GREEN, GREEN);
+
 
   // Hero plan preview (always with games if any)
   const heroY = after + 14;

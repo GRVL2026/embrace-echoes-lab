@@ -170,6 +170,34 @@ function planPage(
 const formatEUR = (v: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(v);
 
+/** Load an image and return its data URL + natural dimensions (for aspect-ratio preservation). */
+async function loadImageMeta(src: string): Promise<{ dataUrl: string; w: number; h: number } | null> {
+  try {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    const loaded = await new Promise<HTMLImageElement | null>((resolve) => {
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+    if (!loaded) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = loaded.naturalWidth;
+    canvas.height = loaded.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(loaded, 0, 0);
+    return {
+      dataUrl: canvas.toDataURL("image/jpeg", 0.85),
+      w: loaded.naturalWidth,
+      h: loaded.naturalHeight,
+    };
+  } catch {
+    return null;
+  }
+}
+
+
 export async function generate2DDossierPDF(
   state: EditorState,
   catalog: GameEquipment[],
@@ -273,12 +301,20 @@ export async function generate2DDossierPDF(
       a.eq.category.localeCompare(b.eq.category) || a.eq.name.localeCompare(b.eq.name)
     );
 
+    // Preload images with their natural dimensions so we can preserve aspect ratio.
+    const imageMetas = await Promise.all(
+      items.map(({ eq }) => (eq.images && eq.images[0] ? loadImageMeta(eq.images[0]) : Promise.resolve(null))),
+    );
+
     const PER_PAGE = 4;
     const pages = Math.max(1, Math.ceil(items.length / PER_PAGE));
+    const cardH = 58;
+    const gap = 4;
     for (let p = 0; p < pages; p++) {
       doc.addPage();
       drawDarkPage(doc);
       pageNum.n++;
+
       let y = sectionTitle(
         doc,
         p === 0 ? "Catalogue des jeux sélectionnés" : "Catalogue (suite)",
@@ -286,31 +322,44 @@ export async function generate2DDossierPDF(
         24,
       );
 
-      const cardH = 58;
-      const gap = 4;
       for (let i = 0; i < PER_PAGE; i++) {
         const idx = p * PER_PAGE + i;
         if (idx >= items.length) break;
         const { eq, count } = items[idx];
+        const meta = imageMetas[idx];
         const cardY = y + i * (cardH + gap);
         drawCard(doc, MARGIN, cardY, CONTENT_W, cardH, PURPLE);
 
         // Left: image / icon panel
         const imgW = 50;
+        const panelX = MARGIN + 3;
+        const panelY = cardY + 3;
+        const panelW = imgW;
+        const panelH = cardH - 6;
         setF(doc, DARK_SURFACE);
-        doc.roundedRect(MARGIN + 3, cardY + 3, imgW, cardH - 6, 2, 2, "F");
-        if (eq.images && eq.images[0]) {
+        doc.roundedRect(panelX, panelY, panelW, panelH, 2, 2, "F");
+
+        if (meta) {
+          // Fit image inside panel preserving aspect ratio.
+          const ratio = meta.w / meta.h;
+          const maxW = panelW - 2;
+          const maxH = panelH - 2;
+          let dw = maxW;
+          let dh = dw / ratio;
+          if (dh > maxH) { dh = maxH; dw = dh * ratio; }
+          const dx = panelX + (panelW - dw) / 2;
+          const dy = panelY + (panelH - dh) / 2;
           try {
-            doc.addImage(eq.images[0], "JPEG", MARGIN + 4, cardY + 4, imgW - 2, cardH - 8, undefined, "FAST");
+            doc.addImage(meta.dataUrl, "JPEG", dx, dy, dw, dh, undefined, "FAST");
           } catch {
             doc.setFontSize(24);
             setC(doc, PURPLE);
-            doc.text(eq.icon || "🎮", MARGIN + 3 + imgW / 2, cardY + cardH / 2 + 4, { align: "center" });
+            doc.text(eq.icon || "🎮", panelX + panelW / 2, cardY + cardH / 2 + 4, { align: "center" });
           }
         } else {
           doc.setFontSize(24);
           setC(doc, PURPLE);
-          doc.text(eq.icon || "🎮", MARGIN + 3 + imgW / 2, cardY + cardH / 2 + 4, { align: "center" });
+          doc.text(eq.icon || "🎮", panelX + panelW / 2, cardY + cardH / 2 + 4, { align: "center" });
         }
 
         // Right column
@@ -359,8 +408,8 @@ export async function generate2DDossierPDF(
           ty += 4;
         }
 
-        // Price (right)
-        if (eq.price && eq.price > 0) {
+        // Price (right) — only when budget option is enabled
+        if (options.budget && eq.price && eq.price > 0) {
           doc.setFontSize(12);
           setC(doc, GREEN);
           doc.text(formatEUR(eq.price), MARGIN + CONTENT_W - 4, cardY + 13, { align: "right" });
@@ -380,6 +429,9 @@ export async function generate2DDossierPDF(
       addFooter(doc, pageNum.n);
     }
   }
+
+
+
 
   // ─── Budget + Leasing ──────────────────────────────
   if (options.budget) {

@@ -428,6 +428,9 @@ export async function generate2DDossierPDF(
       }
       addFooter(doc, pageNum.n);
     }
+  }
+
+
 
 
   // ─── Budget + Leasing ──────────────────────────────

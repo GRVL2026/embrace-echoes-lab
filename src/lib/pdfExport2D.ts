@@ -15,6 +15,29 @@ import jsPDF from "jspdf";
 import type { EditorState, Room } from "@/types/editor";
 import type { GameEquipment } from "@/types/equipment";
 import { renderPlan2D } from "./plan2DRender";
+import logoImg from "@/assets/logo.png";
+
+/** Load the Arcade Planner logo as a data URL (cached). */
+let _logoCache: { dataUrl: string; w: number; h: number } | null | undefined;
+async function loadLogo(): Promise<{ dataUrl: string; w: number; h: number } | null> {
+  if (_logoCache !== undefined) return _logoCache;
+  try {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    const loaded = await new Promise<HTMLImageElement | null>((resolve) => {
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = logoImg;
+    });
+    if (!loaded) { _logoCache = null; return null; }
+    const c = document.createElement("canvas");
+    c.width = loaded.naturalWidth; c.height = loaded.naturalHeight;
+    c.getContext("2d")!.drawImage(loaded, 0, 0);
+    _logoCache = { dataUrl: c.toDataURL("image/png"), w: loaded.naturalWidth, h: loaded.naturalHeight };
+    return _logoCache;
+  } catch { _logoCache = null; return null; }
+}
+
 
 const PURPLE = [155, 92, 255] as const;
 const GREEN = [173, 255, 0] as const;

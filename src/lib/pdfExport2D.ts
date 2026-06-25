@@ -321,23 +321,24 @@ export async function generate2DDossierPDF(
   if (options.planEmpty) {
     planPage(doc, pageNum, state, "Plan 2D — Coque", "Espace nu, sans équipements (cotes des murs).", {
       showGames: false, showGapMeasurements: false, showCirculation: false,
-    });
+    }, logo);
   }
   if (options.planWithGames) {
     planPage(doc, pageNum, state, "Plan 2D — Implantation", "Disposition des jeux dans l'espace.", {
       showGames: true, showGapMeasurements: false, showCirculation: false,
-    });
+    }, logo);
   }
   if (options.planWithDistances) {
     planPage(doc, pageNum, state, "Plan 2D — Distances", "Espacements entre jeux et obstacles.", {
       showGames: true, showGapMeasurements: true, showCirculation: false,
-    });
+    }, logo);
   }
   if (options.planPMR) {
     planPage(doc, pageNum, state, "Plan 2D — Cheminement PMR", "Parcours d'accessibilité dans l'espace.", {
       showGames: true, showGapMeasurements: false, showCirculation: true,
-    });
+    }, logo);
   }
+
 
   // ─── Equipment catalog ─────────────────────────────
   if (options.equipmentList) {

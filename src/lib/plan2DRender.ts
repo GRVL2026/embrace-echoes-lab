@@ -493,7 +493,7 @@ export function renderPlan2D(
 
       // Label (no rotation for readability) — color matches equipment
       ctx.fillStyle = rgb(col);
-      ctx.font = "bold 11px sans-serif";
+      ctx.font = "bold 15px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       const label = eq.name.length > 18 ? eq.name.slice(0, 17) + "…" : eq.name;

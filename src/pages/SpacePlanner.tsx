@@ -163,6 +163,19 @@ function SpacePlannerInner() {
 
             <Tooltip delayDuration={200}>
               <TooltipTrigger asChild>
+                <Button asChild variant="ghost" size="sm" className="h-8 ml-2 gap-1 text-xs">
+                  <Link to="/dossiers">
+                    <FolderKanban className="h-3.5 w-3.5" />
+                    Dossiers
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Dossiers commerciaux</TooltipContent>
+            </Tooltip>
+
+
+            <Tooltip delayDuration={200}>
+              <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"

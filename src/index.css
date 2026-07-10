@@ -141,5 +141,8 @@
     image-rendering: -webkit-optimize-contrast;
     max-width: 100% !important;
   }
+  body.dossier-printing .dossier-pdf-link {
+    display: block !important;
+  }
 }
 

@@ -19,6 +19,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<SpacePlanner />} />
+          <Route path="/planner/dossier/:dossierId" element={<SpacePlanner />} />
           <Route path="/dossiers" element={<DossiersList />} />
           <Route path="/dossiers/:id" element={<DossierEdit />} />
           <Route path="/d/:slug" element={<PublicDossier />} />

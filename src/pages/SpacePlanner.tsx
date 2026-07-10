@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { EditorProvider, useEditor } from "@/contexts/EditorContext";
 import { EditorToolbar } from "@/components/editor/EditorToolbar";
 import { EditorCanvas } from "@/components/editor/EditorCanvas";
@@ -9,20 +9,83 @@ import { CopilotPanel } from "@/components/copilot/CopilotPanel";
 import { useCopilotActions } from "@/hooks/useCopilotActions";
 import type { RoomContext } from "@/lib/copilotApi";
 import { SAFETY_ZONE_CM } from "@/types/editor";
-import { PanelRightClose, PanelRightOpen, Box, LayoutGrid, Sparkles, FolderKanban } from "lucide-react";
+import { PanelRightClose, PanelRightOpen, Box, LayoutGrid, Sparkles, FolderKanban, Save, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fitToView } from "@/lib/fitToView";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 import logoImg from "@/assets/logo.png";
 
 
 function SpacePlannerInner() {
+  const { dossierId } = useParams<{ dossierId?: string }>();
+  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
   const [viewer3DSettings, setViewer3DSettings] = useState<Viewer3DSettings>(DEFAULT_3D_SETTINGS);
+  const [savingToDossier, setSavingToDossier] = useState(false);
   const { state, dispatch } = useEditor();
+
+  // Load plan_data from the dossier when opened for a specific dossier
+  useEffect(() => {
+    if (!dossierId) return;
+    (async () => {
+      const { data, error } = await (supabase as any)
+        .from("projects")
+        .select("plan_data")
+        .eq("id", dossierId)
+        .maybeSingle();
+      if (error) {
+        toast({ title: "Impossible de charger le plan", description: error.message, variant: "destructive" });
+        return;
+      }
+      const pd = data?.plan_data;
+      if (pd && typeof pd === "object") {
+        dispatch({
+          type: "LOAD_STATE",
+          state: {
+            rooms: pd.rooms ?? [],
+            doors: pd.doors ?? [],
+            pillars: pd.pillars ?? [],
+            placedEquipments: pd.placedEquipments ?? [],
+            circulationPath: pd.circulationPath ?? [],
+            gridSize: pd.gridSize ?? 20,
+            planRotation: pd.planRotation ?? 0,
+          },
+        });
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dossierId]);
+
+  const saveToDossier = useCallback(async () => {
+    if (!dossierId) return;
+    setSavingToDossier(true);
+    const payload = {
+      rooms: state.rooms,
+      doors: state.doors,
+      pillars: state.pillars,
+      placedEquipments: state.placedEquipments,
+      circulationPath: state.circulationPath,
+      gridSize: state.gridSize,
+      planRotation: state.planRotation,
+    };
+    const { error } = await (supabase as any)
+      .from("projects")
+      .update({ plan_data: payload })
+      .eq("id", dossierId);
+    setSavingToDossier(false);
+    if (error) {
+      toast({ title: "Enregistrement impossible", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Plan enregistré dans le dossier" });
+    navigate(`/dossiers/${dossierId}`);
+  }, [dossierId, state, navigate]);
+
 
   // Build room context for the copilot
   const roomContext = useMemo<RoomContext | undefined>(() => {
@@ -160,6 +223,23 @@ function SpacePlannerInner() {
                 <TooltipContent side="bottom">Vue 3D immersive</TooltipContent>
               </Tooltip>
             </div>
+
+            {dossierId && (
+              <Button
+                variant="default"
+                size="sm"
+                className="h-8 ml-2 gap-1 text-xs"
+                onClick={saveToDossier}
+                disabled={savingToDossier}
+              >
+                {savingToDossier ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="h-3.5 w-3.5" />
+                )}
+                Enregistrer dans le dossier
+              </Button>
+            )}
 
             <Tooltip delayDuration={200}>
               <TooltipTrigger asChild>

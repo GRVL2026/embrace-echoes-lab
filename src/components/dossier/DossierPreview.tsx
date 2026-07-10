@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Loader2, X, ChevronLeft, ChevronRight, Phone, Mail, Globe, MapPin, Download, Share2, Copy, Check } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { renderPlan2D } from "@/lib/plan2DRender";
 
 type BrandContact = {
   phone?: string;
@@ -25,6 +26,7 @@ type Project = {
   scope: { fourniture?: string; livraison?: string; formation?: string; garantie?: string } | null;
   share_slug?: string | null;
   is_shared?: boolean | null;
+  plan_data?: any | null;
 };
 
 const CREAM = "#F6F1E7";
@@ -108,7 +110,7 @@ export function DossierPreview({
       const { data: p } = await (supabase as any)
         .from("projects")
         .select(
-          "id, client_name, brand_id, offer, selected_modules, selected_products, pricing, context, solution, scope, share_slug, is_shared",
+          "id, client_name, brand_id, offer, selected_modules, selected_products, pricing, context, solution, scope, share_slug, is_shared, plan_data",
         )
         .eq("id", projectId)
         .maybeSingle();
@@ -141,7 +143,25 @@ export function DossierPreview({
   }, [projectId]);
 
   const slidePages = useMemo(() => modules.filter((m) => !!m.image_url), [modules]);
-  const customPages = 6;
+
+  const planImage = useMemo(() => {
+    const pd = project?.plan_data;
+    if (!pd || !Array.isArray(pd.rooms) || pd.rooms.length === 0) return null;
+    try {
+      return renderPlan2D(
+        pd.rooms ?? [],
+        pd.doors ?? [],
+        pd.pillars ?? [],
+        pd.placedEquipments ?? [],
+        pd.circulationPath ?? [],
+        { width: 1920, height: 1080, showGames: true, showWallDimensions: true, title: "Plan de la salle" },
+      );
+    } catch {
+      return null;
+    }
+  }, [project?.plan_data]);
+  const hasPlan = !!planImage;
+  const customPages = 6 + (hasPlan ? 1 : 0);
   const totalPages = slidePages.length + customPages;
 
   useEffect(() => {
@@ -309,6 +329,7 @@ export function DossierPreview({
             {/* PARTIE B — pages reconstruites */}
             {(() => {
               const offset = slidePages.length;
+              const planShift = hasPlan ? 1 : 0;
               return (
                 <>
                   {/* 1. Contexte & besoin */}
@@ -363,9 +384,22 @@ export function DossierPreview({
                     </Page>
                   </div>
 
+                  {/* Plan de la salle (optionnel) */}
+                  {hasPlan && (
+                    <div id={`dossier-page-${offset + 2}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
+                      <Page index={offset + 3} total={totalPages}>
+                        <PageFrame eyebrow="Agencement" title="Plan de la salle">
+                          <div className="flex h-full w-full items-center justify-center rounded-xl border overflow-hidden" style={{ borderColor: "rgba(0,0,0,0.08)", background: DARK }}>
+                            <img src={planImage!} alt="Plan de la salle" className="max-h-full max-w-full object-contain" />
+                          </div>
+                        </PageFrame>
+                      </Page>
+                    </div>
+                  )}
+
                   {/* 3. Sélection produits */}
-                  <div id={`dossier-page-${offset + 2}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
-                    <Page index={offset + 3} total={totalPages}>
+                  <div id={`dossier-page-${offset + 2 + planShift}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
+                    <Page index={offset + 3 + planShift} total={totalPages}>
                       <PageFrame eyebrow="Équipements" title="Sélection produits">
                         <div className="h-full overflow-auto rounded-xl border" style={{ borderColor: "rgba(0,0,0,0.08)", background: "rgba(255,255,255,0.55)" }}>
                           <table className="w-full text-left text-sm">
@@ -396,8 +430,8 @@ export function DossierPreview({
                   </div>
 
                   {/* 4. Périmètre & livrables */}
-                  <div id={`dossier-page-${offset + 3}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
-                    <Page index={offset + 4} total={totalPages}>
+                  <div id={`dossier-page-${offset + 3 + planShift}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
+                    <Page index={offset + 4 + planShift} total={totalPages}>
                       <PageFrame eyebrow="Notre engagement" title="Périmètre & livrables">
                         <div className="grid h-full grid-cols-2 grid-rows-2 gap-5">
                           {[
@@ -422,8 +456,8 @@ export function DossierPreview({
                   </div>
 
                   {/* 5. Tarifs & budget */}
-                  <div id={`dossier-page-${offset + 4}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
-                    <Page index={offset + 5} total={totalPages}>
+                  <div id={`dossier-page-${offset + 4 + planShift}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
+                    <Page index={offset + 5 + planShift} total={totalPages}>
                       <PageFrame eyebrow="Investissement" title="Tarifs & budget">
                         <div className="flex h-full flex-col gap-4">
                           <div className="flex-1 overflow-auto rounded-xl border" style={{ borderColor: "rgba(0,0,0,0.08)", background: "rgba(255,255,255,0.55)" }}>
@@ -466,8 +500,8 @@ export function DossierPreview({
                   </div>
 
                   {/* 6. Passons à l'action */}
-                  <div id={`dossier-page-${offset + 5}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
-                    <Page index={offset + 6} total={totalPages}>
+                  <div id={`dossier-page-${offset + 5 + planShift}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
+                    <Page index={offset + 6 + planShift} total={totalPages}>
                       <PageFrame eyebrow="Contact" title="Passons à l'action">
                         <div className="grid h-full grid-cols-2 gap-5">
                           <div className="flex flex-col justify-center gap-4 rounded-xl p-8" style={{ background: DARK, color: "white" }}>

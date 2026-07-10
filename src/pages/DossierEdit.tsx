@@ -22,6 +22,7 @@ import {
   Check,
   Eye,
   Loader2,
+  Map,
   Plus,
   Save,
   Search,
@@ -31,6 +32,7 @@ import {
 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { DossierPreview } from "@/components/dossier/DossierPreview";
+import { renderPlan2D } from "@/lib/plan2DRender";
 
 type Brand = { id: string; name: string; key: string | null };
 type BrandModule = {
@@ -79,6 +81,7 @@ type Project = {
   context: Context | null;
   solution: Solution | null;
   scope: Scope | null;
+  plan_data: any | null;
 };
 
 function computePricing(products: SelectedProduct[], offer: string | null): Pricing {
@@ -126,7 +129,7 @@ export default function DossierEdit() {
         (supabase as any)
           .from("projects")
           .select(
-            "id, brand_id, client_name, client_contact, offer, brief, status, selected_modules, selected_products, pricing, context, solution, scope",
+            "id, brand_id, client_name, client_contact, offer, brief, status, selected_modules, selected_products, pricing, context, solution, scope, plan_data",
           )
           .eq("id", id)
           .maybeSingle(),
@@ -299,6 +302,45 @@ export default function DossierEdit() {
       setGenerating(false);
     }
   };
+
+  // --- Plan de la salle ---
+  const planData = form?.plan_data;
+  const hasPlan = !!(planData && Array.isArray(planData.rooms) && planData.rooms.length > 0);
+  const planThumbnail = useMemo(() => {
+    if (!hasPlan) return null;
+    try {
+      return renderPlan2D(
+        planData.rooms ?? [],
+        planData.doors ?? [],
+        planData.pillars ?? [],
+        planData.placedEquipments ?? [],
+        planData.circulationPath ?? [],
+        { width: 800, height: 450, showGames: true, showWallDimensions: true },
+      );
+    } catch {
+      return null;
+    }
+  }, [planData, hasPlan]);
+
+  const openPlanner = () => {
+    if (!id) return;
+    navigate(`/planner/dossier/${id}`);
+  };
+
+  const removePlan = async () => {
+    if (!id) return;
+    const { error } = await (supabase as any)
+      .from("projects")
+      .update({ plan_data: null })
+      .eq("id", id);
+    if (error) {
+      toast({ title: "Suppression impossible", description: error.message, variant: "destructive" });
+      return;
+    }
+    setForm((f) => (f ? { ...f, plan_data: null } : f));
+    toast({ title: "Plan retiré du dossier" });
+  };
+
 
   // --- Modules helpers ---
   const brandNameById = useMemo(
@@ -601,6 +643,50 @@ export default function DossierEdit() {
                 ))}
               </div>
             </section>
+
+            {/* SECTION Plan de la salle (optionnel) */}
+            <section className="mt-6 space-y-4 rounded-lg border border-border bg-card/40 p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="font-display text-lg font-semibold">Plan de la salle (optionnel)</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Conçois l'agencement de la salle dans Arcade Planner et rattache-le à ce dossier.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" onClick={openPlanner}>
+                    <Map className="mr-2 h-4 w-4" />
+                    {hasPlan ? "Modifier le plan" : "Créer le plan"}
+                  </Button>
+                  {hasPlan && (
+                    <Button
+                      variant="ghost"
+                      onClick={removePlan}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Retirer le plan
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {hasPlan && planThumbnail ? (
+                <div className="overflow-hidden rounded-lg border border-border bg-background/40">
+                  <img
+                    src={planThumbnail}
+                    alt="Aperçu du plan"
+                    className="block w-full h-auto"
+                  />
+                </div>
+              ) : (
+                <div className="rounded-md border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
+                  Aucun plan enregistré pour ce dossier.
+                </div>
+              )}
+            </section>
+
+
 
             {/* SECTION A : Slides du dossier */}
             <section className="mt-6 space-y-6 rounded-lg border border-border bg-card/40 p-6">

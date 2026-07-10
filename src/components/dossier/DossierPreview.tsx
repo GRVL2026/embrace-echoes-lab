@@ -430,6 +430,7 @@ export function DossierPreview({
                           <table className="w-full text-left text-sm">
                             <thead>
                               <tr style={{ background: PURPLE, color: "white" }}>
+                                <th className="px-4 py-3 w-24">Visuel</th>
                                 <th className="px-4 py-3">Produit</th>
                                 <th className="px-4 py-3 text-center">Quantité</th>
                                 <th className="px-4 py-3 text-right">PU {isRecurring ? "/ mois" : ""}</th>
@@ -438,15 +439,37 @@ export function DossierPreview({
                             </thead>
                             <tbody>
                               {products.length === 0 ? (
-                                <tr><td colSpan={4} className="px-4 py-6 text-center opacity-60">Aucun produit sélectionné</td></tr>
-                              ) : products.map((p, i) => (
+                                <tr><td colSpan={5} className="px-4 py-6 text-center opacity-60">Aucun produit sélectionné</td></tr>
+                              ) : products.map((p, i) => {
+                                const cat = p.product_id ? catalogMap[p.product_id] : undefined;
+                                const img = cat?.images?.[0] ?? null;
+                                const href = productFicheUrl(p.name, cat?.product_url);
+                                return (
                                 <tr key={i} style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
-                                  <td className="px-4 py-3 font-medium">{p.name}</td>
+                                  <td className="px-4 py-3">
+                                    <a href={href} target="_blank" rel="noreferrer" className="block h-14 w-20 overflow-hidden rounded border" style={{ borderColor: "rgba(0,0,0,0.1)", background: "rgba(0,0,0,0.04)" }}>
+                                      {img ? (
+                                        <img src={img} alt={p.name} className="h-full w-full object-cover" loading="lazy" />
+                                      ) : (
+                                        <div className="flex h-full w-full items-center justify-center text-[9px] leading-tight text-center px-1" style={{ color: DARK, opacity: 0.5 }}>
+                                          visuel indisponible
+                                        </div>
+                                      )}
+                                    </a>
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <a href={href} target="_blank" rel="noreferrer" className="font-medium underline-offset-2 hover:underline" style={{ color: DARK }}>
+                                      {p.name}
+                                    </a>
+                                    <div className="dossier-pdf-link text-[10px] mt-0.5 break-all" style={{ color: PURPLE, display: "none" }}>
+                                      {href}
+                                    </div>
+                                  </td>
                                   <td className="px-4 py-3 text-center">{p.qty}</td>
                                   <td className="px-4 py-3 text-right tabular-nums">{fmtEUR(p.unit_price)}</td>
                                   <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmtEUR(p.qty * p.unit_price)}</td>
                                 </tr>
-                              ))}
+                              );})}
                             </tbody>
                           </table>
                         </div>

@@ -53,7 +53,14 @@ type CatalogProduct = {
   price: number | null;
   price_monthly: number | null;
   vendor: string | null;
+  images: string[] | null;
+  product_url: string | null;
 };
+
+function productFicheUrl(p: { product_url?: string | null; name: string }): string {
+  if (p.product_url && p.product_url.trim()) return p.product_url;
+  return `https://avranchesautomatic.com/search?q=${encodeURIComponent(p.name)}`;
+}
 type SelectedProduct = {
   product_id: string;
   name: string;
@@ -143,7 +150,7 @@ export default function DossierEdit() {
           .order("position", { ascending: true }),
         (supabase as any)
           .from("catalog_products")
-          .select("id, name, category, price, price_monthly, vendor")
+          .select("id, name, category, price, price_monthly, vendor, images, product_url")
           .eq("active", true)
           .order("name"),
       ]);

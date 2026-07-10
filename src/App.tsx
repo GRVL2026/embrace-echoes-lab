@@ -7,6 +7,7 @@ import SpacePlanner from "./pages/SpacePlanner";
 import DossiersList from "./pages/DossiersList";
 import DossierEdit from "./pages/DossierEdit";
 import NotFound from "./pages/NotFound";
+import PublicDossier from "./pages/PublicDossier";
 
 const queryClient = new QueryClient();
 
@@ -20,6 +21,7 @@ const App = () => (
           <Route path="/" element={<SpacePlanner />} />
           <Route path="/dossiers" element={<DossiersList />} />
           <Route path="/dossiers/:id" element={<DossierEdit />} />
+          <Route path="/d/:slug" element={<PublicDossier />} />
           <Route path="*" element={<NotFound />} />
 
         </Routes>

@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Loader2, X, ChevronLeft, ChevronRight, Phone, Mail, Globe, MapPin } from "lucide-react";
+import { Loader2, X, ChevronLeft, ChevronRight, Phone, Mail, Globe, MapPin, Download, Share2, Copy, Check } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 
 type BrandContact = {
   phone?: string;
@@ -22,6 +23,8 @@ type Project = {
   context: { contexte?: string; objectif?: string; enjeux?: string; lecture?: string } | null;
   solution: { selection?: string; deploiement?: string; suivi?: string } | null;
   scope: { fourniture?: string; livraison?: string; formation?: string; garantie?: string } | null;
+  share_slug?: string | null;
+  is_shared?: boolean | null;
 };
 
 const CREAM = "#F6F1E7";
@@ -33,10 +36,28 @@ function fmtEUR(n: number) {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(n || 0);
 }
 
+function slugify(input: string) {
+  return (input || "dossier")
+    .toString()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40) || "dossier";
+}
+
+function randomSuffix(len = 6) {
+  const alphabet = "abcdefghijkmnpqrstuvwxyz23456789";
+  let s = "";
+  for (let i = 0; i < len; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
+  return s;
+}
+
 function Page({ children, index, total }: { children: React.ReactNode; index: number; total: number }) {
   return (
     <section
-      className="relative flex w-full flex-shrink-0 snap-center items-center justify-center"
+      className="dossier-page relative flex w-full flex-shrink-0 snap-center items-center justify-center"
       style={{ aspectRatio: "16 / 9", background: CREAM, color: DARK }}
     >
       <div className="absolute right-6 top-4 text-xs font-medium tracking-widest" style={{ color: DARK, opacity: 0.5 }}>
@@ -63,12 +84,23 @@ function PageFrame({ eyebrow, title, children }: { eyebrow?: string; title: stri
   );
 }
 
-export function DossierPreview({ projectId, onClose }: { projectId: string; onClose: () => void }) {
+export function DossierPreview({
+  projectId,
+  onClose,
+  shareMode = false,
+}: {
+  projectId: string;
+  onClose?: () => void;
+  shareMode?: boolean;
+}) {
   const [loading, setLoading] = useState(true);
   const [project, setProject] = useState<Project | null>(null);
   const [brand, setBrand] = useState<Brand | null>(null);
   const [modules, setModules] = useState<BrandModule[]>([]);
   const [current, setCurrent] = useState(0);
+  const [sharing, setSharing] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -76,12 +108,15 @@ export function DossierPreview({ projectId, onClose }: { projectId: string; onCl
       const { data: p } = await (supabase as any)
         .from("projects")
         .select(
-          "id, client_name, brand_id, offer, selected_modules, selected_products, pricing, context, solution, scope",
+          "id, client_name, brand_id, offer, selected_modules, selected_products, pricing, context, solution, scope, share_slug, is_shared",
         )
         .eq("id", projectId)
         .maybeSingle();
       const proj = p as Project | null;
       setProject(proj);
+      if (proj?.share_slug && proj?.is_shared) {
+        setShareUrl(`${window.location.origin}/d/${proj.share_slug}`);
+      }
       if (proj?.brand_id) {
         const { data: b } = await (supabase as any)
           .from("brands")
@@ -105,26 +140,88 @@ export function DossierPreview({ projectId, onClose }: { projectId: string; onCl
     })();
   }, [projectId]);
 
+  const slidePages = useMemo(() => modules.filter((m) => !!m.image_url), [modules]);
+  const customPages = 6;
+  const totalPages = slidePages.length + customPages;
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && onClose) onClose();
       if (e.key === "ArrowRight") setCurrent((c) => Math.min(c + 1, totalPages - 1));
       if (e.key === "ArrowLeft") setCurrent((c) => Math.max(c - 1, 0));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modules.length]);
-
-  const slidePages = modules.filter((m) => !!m.image_url);
-  const customPages = 6;
-  const totalPages = slidePages.length + customPages;
+  }, [totalPages, onClose]);
 
   const goTo = (i: number) => {
     const clamped = Math.max(0, Math.min(totalPages - 1, i));
     setCurrent(clamped);
     const el = document.getElementById(`dossier-page-${clamped}`);
     el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
+  const handlePrint = () => {
+    document.body.classList.add("dossier-printing");
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => document.body.classList.remove("dossier-printing"), 500);
+    }, 100);
+  };
+
+  const handleShare = async () => {
+    if (!project) return;
+    setSharing(true);
+    try {
+      let slug = project.share_slug;
+      if (!slug) {
+        const base = slugify(project.client_name || brand?.name || "dossier");
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const candidate = `${base}-${randomSuffix(5)}`;
+          const { data: existing } = await (supabase as any)
+            .from("projects")
+            .select("id")
+            .eq("share_slug", candidate)
+            .maybeSingle();
+          if (!existing) {
+            slug = candidate;
+            break;
+          }
+        }
+      }
+      if (!slug) throw new Error("Impossible de générer un slug");
+      const { error } = await (supabase as any)
+        .from("projects")
+        .update({ share_slug: slug, is_shared: true })
+        .eq("id", project.id);
+      if (error) throw error;
+      const url = `${window.location.origin}/d/${slug}`;
+      setShareUrl(url);
+      setProject({ ...project, share_slug: slug, is_shared: true });
+      try {
+        await navigator.clipboard.writeText(url);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+        toast({ title: "Lien copié", description: url });
+      } catch {
+        toast({ title: "Lien de partage prêt", description: url });
+      }
+    } catch (e: any) {
+      toast({ title: "Erreur", description: e?.message ?? "Partage impossible", variant: "destructive" });
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const copyShareUrl = async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* noop */
+    }
   };
 
   const clientName = project?.client_name?.trim() || "votre projet";
@@ -138,13 +235,32 @@ export function DossierPreview({ projectId, onClose }: { projectId: string; onCl
   const sites = Array.isArray(contact.sites) ? contact.sites : contact.sites ? [contact.sites] : [];
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col bg-black/90">
-      <div className="flex h-12 flex-shrink-0 items-center justify-between border-b border-white/10 bg-black/60 px-4 text-white backdrop-blur">
+    <div className={`${shareMode ? "min-h-screen" : "fixed inset-0 z-[100]"} flex flex-col bg-black/90`}>
+      <div className="dossier-toolbar flex h-12 flex-shrink-0 items-center justify-between border-b border-white/10 bg-black/60 px-4 text-white backdrop-blur">
         <div className="flex items-center gap-3 text-sm">
           <span className="font-display font-semibold">Aperçu du dossier</span>
           {brand && <span className="text-white/60">— {brand.name}</span>}
         </div>
         <div className="flex items-center gap-2">
+          {!shareMode && (
+            <>
+              <Button variant="ghost" size="sm" onClick={handleShare} disabled={sharing || loading} className="text-white hover:bg-white/10">
+                {sharing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Share2 className="mr-1 h-4 w-4" />}
+                Partager
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handlePrint} disabled={loading} className="text-white hover:bg-white/10">
+                <Download className="mr-1 h-4 w-4" />
+                Télécharger PDF
+              </Button>
+              <div className="mx-1 h-6 w-px bg-white/20" />
+            </>
+          )}
+          {shareMode && (
+            <Button variant="ghost" size="sm" onClick={handlePrint} disabled={loading} className="text-white hover:bg-white/10">
+              <Download className="mr-1 h-4 w-4" />
+              Télécharger PDF
+            </Button>
+          )}
           <Button variant="ghost" size="sm" onClick={() => goTo(current - 1)} disabled={current === 0} className="text-white hover:bg-white/10">
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -154,11 +270,24 @@ export function DossierPreview({ projectId, onClose }: { projectId: string; onCl
           <Button variant="ghost" size="sm" onClick={() => goTo(current + 1)} disabled={current >= totalPages - 1} className="text-white hover:bg-white/10">
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={onClose} className="text-white hover:bg-white/10">
-            <X className="h-4 w-4" />
-          </Button>
+          {onClose && !shareMode && (
+            <Button variant="ghost" size="sm" onClick={onClose} className="text-white hover:bg-white/10">
+              <X className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
+
+      {shareUrl && !shareMode && (
+        <div className="dossier-toolbar flex flex-shrink-0 items-center gap-2 border-b border-white/10 bg-black/40 px-4 py-2 text-xs text-white">
+          <span className="text-white/60">Lien public :</span>
+          <code className="flex-1 truncate rounded bg-white/10 px-2 py-1 font-mono">{shareUrl}</code>
+          <Button variant="ghost" size="sm" onClick={copyShareUrl} className="text-white hover:bg-white/10">
+            {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+          </Button>
+          <a href={shareUrl} target="_blank" rel="noreferrer" className="text-white/80 underline hover:text-white">Ouvrir</a>
+        </div>
+      )}
 
       {loading || !project ? (
         <div className="flex flex-1 items-center justify-center text-white">
@@ -166,12 +295,12 @@ export function DossierPreview({ projectId, onClose }: { projectId: string; onCl
           Chargement…
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto snap-y snap-mandatory">
-          <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 p-6">
+        <div className="dossier-scroll flex-1 overflow-y-auto snap-y snap-mandatory">
+          <div className="dossier-print-root mx-auto flex w-full max-w-[1600px] flex-col gap-6 p-6">
             {/* PARTIE A — slides images */}
             {slidePages.map((m, i) => (
-              <div id={`dossier-page-${i}`} key={m.id} className="w-full overflow-hidden rounded-lg shadow-2xl">
-                <section className="relative w-full snap-center" style={{ aspectRatio: "16 / 9" }}>
+              <div id={`dossier-page-${i}`} key={m.id} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
+                <section className="dossier-page relative w-full snap-center" style={{ aspectRatio: "16 / 9" }}>
                   <img src={m.image_url!} alt={m.title ?? `Slide ${i + 1}`} className="h-full w-full object-cover" />
                 </section>
               </div>
@@ -183,7 +312,7 @@ export function DossierPreview({ projectId, onClose }: { projectId: string; onCl
               return (
                 <>
                   {/* 1. Contexte & besoin */}
-                  <div id={`dossier-page-${offset + 0}`} className="w-full overflow-hidden rounded-lg shadow-2xl">
+                  <div id={`dossier-page-${offset + 0}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
                     <Page index={offset + 1} total={totalPages}>
                       <PageFrame eyebrow="Contexte & besoin" title={`Le besoin de ${clientName}`}>
                         <div className="grid h-full grid-cols-2 grid-rows-2 gap-5">
@@ -211,7 +340,7 @@ export function DossierPreview({ projectId, onClose }: { projectId: string; onCl
                   </div>
 
                   {/* 2. Solution proposée */}
-                  <div id={`dossier-page-${offset + 1}`} className="w-full overflow-hidden rounded-lg shadow-2xl">
+                  <div id={`dossier-page-${offset + 1}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
                     <Page index={offset + 2} total={totalPages}>
                       <PageFrame eyebrow="Notre approche" title="Solution proposée">
                         <div className="grid h-full grid-cols-3 gap-5">
@@ -235,7 +364,7 @@ export function DossierPreview({ projectId, onClose }: { projectId: string; onCl
                   </div>
 
                   {/* 3. Sélection produits */}
-                  <div id={`dossier-page-${offset + 2}`} className="w-full overflow-hidden rounded-lg shadow-2xl">
+                  <div id={`dossier-page-${offset + 2}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
                     <Page index={offset + 3} total={totalPages}>
                       <PageFrame eyebrow="Équipements" title="Sélection produits">
                         <div className="h-full overflow-auto rounded-xl border" style={{ borderColor: "rgba(0,0,0,0.08)", background: "rgba(255,255,255,0.55)" }}>
@@ -267,7 +396,7 @@ export function DossierPreview({ projectId, onClose }: { projectId: string; onCl
                   </div>
 
                   {/* 4. Périmètre & livrables */}
-                  <div id={`dossier-page-${offset + 3}`} className="w-full overflow-hidden rounded-lg shadow-2xl">
+                  <div id={`dossier-page-${offset + 3}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
                     <Page index={offset + 4} total={totalPages}>
                       <PageFrame eyebrow="Notre engagement" title="Périmètre & livrables">
                         <div className="grid h-full grid-cols-2 grid-rows-2 gap-5">
@@ -293,7 +422,7 @@ export function DossierPreview({ projectId, onClose }: { projectId: string; onCl
                   </div>
 
                   {/* 5. Tarifs & budget */}
-                  <div id={`dossier-page-${offset + 4}`} className="w-full overflow-hidden rounded-lg shadow-2xl">
+                  <div id={`dossier-page-${offset + 4}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
                     <Page index={offset + 5} total={totalPages}>
                       <PageFrame eyebrow="Investissement" title="Tarifs & budget">
                         <div className="flex h-full flex-col gap-4">
@@ -337,7 +466,7 @@ export function DossierPreview({ projectId, onClose }: { projectId: string; onCl
                   </div>
 
                   {/* 6. Passons à l'action */}
-                  <div id={`dossier-page-${offset + 5}`} className="w-full overflow-hidden rounded-lg shadow-2xl">
+                  <div id={`dossier-page-${offset + 5}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
                     <Page index={offset + 6} total={totalPages}>
                       <PageFrame eyebrow="Contact" title="Passons à l'action">
                         <div className="grid h-full grid-cols-2 gap-5">

@@ -81,6 +81,7 @@ type Project = {
   context: Context | null;
   solution: Solution | null;
   scope: Scope | null;
+  plan_data: any | null;
 };
 
 function computePricing(products: SelectedProduct[], offer: string | null): Pricing {

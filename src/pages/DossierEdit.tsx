@@ -111,6 +111,7 @@ export default function DossierEdit() {
   const [productQuery, setProductQuery] = useState("");
   const [form, setForm] = useState<Project | null>(null);
   const [previewSlide, setPreviewSlide] = useState<BrandModule | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     if (!id) return;

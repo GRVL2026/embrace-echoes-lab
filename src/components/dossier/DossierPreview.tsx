@@ -329,6 +329,7 @@ export function DossierPreview({
             {/* PARTIE B — pages reconstruites */}
             {(() => {
               const offset = slidePages.length;
+              const planShift = hasPlan ? 1 : 0;
               return (
                 <>
                   {/* 1. Contexte & besoin */}

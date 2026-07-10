@@ -441,6 +441,14 @@ export default function DossierEdit() {
                 ) : null}
                 <Button
                   variant="outline"
+                  onClick={() => setPreviewOpen(true)}
+                  disabled={generating || saving}
+                >
+                  <Eye className="mr-2 h-4 w-4" />
+                  Aperçu
+                </Button>
+                <Button
+                  variant="outline"
                   onClick={generateWithAI}
                   disabled={generating || saving}
                 >

@@ -19,7 +19,7 @@ type Project = {
   brand_id: string | null;
   offer: string | null;
   selected_modules: string[] | null;
-  selected_products: { name: string; qty: number; unit_price: number }[] | null;
+  selected_products: { product_id?: string; name: string; qty: number; unit_price: number }[] | null;
   pricing: { lines?: { label: string; qty: number; amount: number }[]; total_ht?: number; monthly?: number } | null;
   context: { contexte?: string; objectif?: string; enjeux?: string; lecture?: string } | null;
   solution: { selection?: string; deploiement?: string; suivi?: string } | null;
@@ -28,6 +28,12 @@ type Project = {
   is_shared?: boolean | null;
   plan_data?: any | null;
 };
+type CatalogInfo = { id: string; images: string[] | null; product_url: string | null };
+
+function productFicheUrl(name: string, product_url?: string | null): string {
+  if (product_url && product_url.trim()) return product_url;
+  return `https://avranchesautomatic.com/search?q=${encodeURIComponent(name)}`;
+}
 
 const CREAM = "#F6F1E7";
 const DARK = "#1a1a1a";

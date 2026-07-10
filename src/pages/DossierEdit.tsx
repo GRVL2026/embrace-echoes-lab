@@ -591,127 +591,236 @@ export default function DossierEdit() {
               </div>
             </section>
 
-            {/* SECTION A : Blocs de contenu */}
-            <section className="mt-6 space-y-4 rounded-lg border border-border bg-card/40 p-6">
+            {/* SECTION A : Slides du dossier */}
+            <section className="mt-6 space-y-6 rounded-lg border border-border bg-card/40 p-6">
               <div>
                 <h3 className="font-display text-lg font-semibold">Blocs de contenu</h3>
                 <p className="text-sm text-muted-foreground">
-                  Sélectionne les blocs à inclure dans le dossier et ordonne-les.
+                  Choisis les slides à inclure. Clique sur une vignette pour l'ajouter, re-clique pour la retirer. Utilise la loupe pour agrandir.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                {/* Available modules grouped by brand */}
-                <div className="space-y-4">
-                  <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-                    Disponibles
-                  </div>
-                  {modules.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">Aucun bloc disponible.</div>
-                  ) : (
-                    Object.entries(modulesByBrand).map(([brandId, list]) => (
-                      <div key={brandId} className="space-y-2">
-                        <div className="text-xs font-semibold text-primary">
-                          {brandId === "__none__" ? "Sans marque" : brandNameById[brandId] ?? "Marque"}
-                        </div>
-                        <div className="space-y-1">
-                          {list.map((m) => {
-                            const checked = selectedModules.includes(m.id);
-                            return (
-                              <label
-                                key={m.id}
-                                className="flex cursor-pointer items-start gap-3 rounded-md border border-border/60 bg-background/40 p-3 hover:bg-background/70"
-                              >
-                                <Checkbox
-                                  checked={checked}
-                                  onCheckedChange={(v) => toggleModule(m.id, v === true)}
-                                  className="mt-0.5"
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <div className="truncate text-sm font-medium">
-                                    {m.title || m.slug || "Bloc"}
-                                  </div>
-                                  {m.subtitle ? (
-                                    <div className="truncate text-xs text-muted-foreground">
-                                      {m.subtitle}
-                                    </div>
-                                  ) : null}
-                                  {m.type ? (
-                                    <div className="mt-1 inline-block rounded-sm bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
-                                      {m.type}
-                                    </div>
-                                  ) : null}
-                                </div>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))
-                  )}
+              {/* Ordered selection */}
+              <div className="space-y-3">
+                <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                  Slides du dossier ({orderedSelectedModules.length})
                 </div>
-
-                {/* Ordered selection */}
-                <div className="space-y-2">
-                  <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-                    Ordre dans le dossier ({orderedSelectedModules.length})
+                {orderedSelectedModules.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
+                    Clique sur une vignette ci-dessous pour l'ajouter au dossier.
                   </div>
-                  {orderedSelectedModules.length === 0 ? (
-                    <div className="rounded-md border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
-                      Coche des blocs à gauche pour les ajouter ici.
-                    </div>
-                  ) : (
-                    <ol className="space-y-2">
-                      {orderedSelectedModules.map((m, i) => (
-                        <li
-                          key={m.id}
-                          className="flex items-center gap-2 rounded-md border border-border bg-background/60 p-2"
-                        >
-                          <span className="w-6 text-center text-xs text-muted-foreground">{i + 1}</span>
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm font-medium">
-                              {m.title || m.slug || "Bloc"}
+                ) : (
+                  <ol className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+                    {orderedSelectedModules.map((m, i) => (
+                      <li
+                        key={m.id}
+                        className="group relative overflow-hidden rounded-md border border-border bg-background/60"
+                      >
+                        <div className="relative aspect-video w-full overflow-hidden bg-muted">
+                          {m.image_url ? (
+                            <img
+                              src={m.image_url}
+                              alt={m.title || "Slide"}
+                              className="h-full w-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                              Aucune image
                             </div>
-                            <div className="truncate text-xs text-muted-foreground">
-                              {(m.brand_id && brandNameById[m.brand_id]) || "Sans marque"}
+                          )}
+                          <span className="absolute left-1 top-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                            {i + 1}
+                          </span>
+                        </div>
+                        <div className="p-2">
+                          <div className="truncate text-xs font-medium">
+                            {m.title || m.slug || "Slide"}
+                          </div>
+                          {m.subtitle ? (
+                            <div className="truncate text-[11px] text-muted-foreground">
+                              {m.subtitle}
                             </div>
+                          ) : null}
+                        </div>
+                        <div className="flex items-center justify-between gap-1 border-t border-border/60 bg-background/40 px-1 py-1">
+                          <div className="flex gap-0.5">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              disabled={i === 0}
+                              onClick={() => moveModule(i, -1)}
+                              aria-label="Reculer"
+                            >
+                              <ArrowUp className="h-3.5 w-3.5 -rotate-90" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              disabled={i === orderedSelectedModules.length - 1}
+                              onClick={() => moveModule(i, 1)}
+                              aria-label="Avancer"
+                            >
+                              <ArrowDown className="h-3.5 w-3.5 -rotate-90" />
+                            </Button>
                           </div>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7"
-                            disabled={i === 0}
-                            onClick={() => moveModule(i, -1)}
-                            aria-label="Monter"
-                          >
-                            <ArrowUp className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            disabled={i === orderedSelectedModules.length - 1}
-                            onClick={() => moveModule(i, 1)}
-                            aria-label="Descendre"
-                          >
-                            <ArrowDown className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            className="h-6 w-6 text-destructive hover:text-destructive"
                             onClick={() => toggleModule(m.id, false)}
                             aria-label="Retirer"
                           >
-                            <X className="h-4 w-4" />
+                            <X className="h-3.5 w-3.5" />
                           </Button>
-                        </li>
-                      ))}
-                    </ol>
-                  )}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
+
+              {/* Available slides gallery */}
+              <div className="space-y-4">
+                <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                  Bibliothèque de slides
                 </div>
+                {modules.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">Aucune slide disponible.</div>
+                ) : (
+                  Object.entries(modulesByBrand).map(([brandId, list]) => (
+                    <div key={brandId} className="space-y-2">
+                      <div className="text-xs font-semibold text-primary">
+                        {brandId === "__none__" ? "Sans marque" : brandNameById[brandId] ?? "Marque"}
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                        {list.map((m) => {
+                          const checked = selectedModules.includes(m.id);
+                          return (
+                            <div
+                              key={m.id}
+                              className={`group relative overflow-hidden rounded-md border transition ${
+                                checked
+                                  ? "border-primary ring-2 ring-primary/60"
+                                  : "border-border/60 hover:border-border"
+                              } bg-background/40`}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => toggleModule(m.id, !checked)}
+                                className="block w-full text-left"
+                              >
+                                <div className="relative aspect-video w-full overflow-hidden bg-muted">
+                                  {m.image_url ? (
+                                    <img
+                                      src={m.image_url}
+                                      alt={m.title || "Slide"}
+                                      className="h-full w-full object-cover transition group-hover:scale-[1.02]"
+                                      loading="lazy"
+                                    />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                                      Aucune image
+                                    </div>
+                                  )}
+                                  {m.slide_number != null ? (
+                                    <span className="absolute left-1 top-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                      #{m.slide_number}
+                                    </span>
+                                  ) : null}
+                                  {checked ? (
+                                    <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                                      <Check className="h-3 w-3" />
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <div className="p-2">
+                                  <div className="truncate text-xs font-medium">
+                                    {m.title || m.slug || "Slide"}
+                                  </div>
+                                  {m.subtitle ? (
+                                    <div className="truncate text-[11px] text-muted-foreground">
+                                      {m.subtitle}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPreviewSlide(m);
+                                }}
+                                className="absolute bottom-9 right-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white opacity-0 transition group-hover:opacity-100"
+                                aria-label="Agrandir"
+                              >
+                                Agrandir
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </section>
+
+            <Dialog open={!!previewSlide} onOpenChange={(o) => !o && setPreviewSlide(null)}>
+              <DialogContent className="max-w-5xl p-0 overflow-hidden bg-background">
+                {previewSlide ? (
+                  <div>
+                    <div className="aspect-video w-full bg-black">
+                      {previewSlide.image_url ? (
+                        <img
+                          src={previewSlide.image_url}
+                          alt={previewSlide.title || "Slide"}
+                          className="h-full w-full object-contain"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                          Aucune image
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between gap-3 border-t border-border p-4">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold">
+                          {previewSlide.title || previewSlide.slug || "Slide"}
+                        </div>
+                        {previewSlide.subtitle ? (
+                          <div className="truncate text-xs text-muted-foreground">
+                            {previewSlide.subtitle}
+                          </div>
+                        ) : null}
+                      </div>
+                      <Button
+                        variant={selectedModules.includes(previewSlide.id) ? "outline" : "default"}
+                        onClick={() => {
+                          toggleModule(previewSlide.id, !selectedModules.includes(previewSlide.id));
+                        }}
+                      >
+                        {selectedModules.includes(previewSlide.id) ? (
+                          <>
+                            <X className="mr-2 h-4 w-4" />
+                            Retirer du dossier
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="mr-2 h-4 w-4" />
+                            Ajouter au dossier
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+              </DialogContent>
+            </Dialog>
+
+
 
             {/* SECTION B : Jeux proposés */}
             <section className="mt-6 space-y-4 rounded-lg border border-border bg-card/40 p-6">

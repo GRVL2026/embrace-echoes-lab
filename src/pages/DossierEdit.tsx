@@ -307,6 +307,11 @@ export default function DossierEdit() {
       const key = m.brand_id ?? "__none__";
       (groups[key] ||= []).push(m);
     }
+    for (const key of Object.keys(groups)) {
+      groups[key].sort(
+        (a, b) => (a.slide_number ?? 9999) - (b.slide_number ?? 9999),
+      );
+    }
     return groups;
   }, [modules]);
 

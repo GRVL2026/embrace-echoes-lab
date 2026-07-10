@@ -303,6 +303,45 @@ export default function DossierEdit() {
     }
   };
 
+  // --- Plan de la salle ---
+  const planData = form?.plan_data;
+  const hasPlan = !!(planData && Array.isArray(planData.rooms) && planData.rooms.length > 0);
+  const planThumbnail = useMemo(() => {
+    if (!hasPlan) return null;
+    try {
+      return renderPlan2D(
+        planData.rooms ?? [],
+        planData.doors ?? [],
+        planData.pillars ?? [],
+        planData.placedEquipments ?? [],
+        planData.circulationPath ?? [],
+        { width: 800, height: 450, showGames: true, showWallDimensions: true },
+      );
+    } catch {
+      return null;
+    }
+  }, [planData, hasPlan]);
+
+  const openPlanner = () => {
+    if (!id) return;
+    navigate(`/planner/dossier/${id}`);
+  };
+
+  const removePlan = async () => {
+    if (!id) return;
+    const { error } = await (supabase as any)
+      .from("projects")
+      .update({ plan_data: null })
+      .eq("id", id);
+    if (error) {
+      toast({ title: "Suppression impossible", description: error.message, variant: "destructive" });
+      return;
+    }
+    setForm((f) => (f ? { ...f, plan_data: null } : f));
+    toast({ title: "Plan retiré du dossier" });
+  };
+
+
   // --- Modules helpers ---
   const brandNameById = useMemo(
     () => Object.fromEntries(brands.map((b) => [b.id, b.name])),

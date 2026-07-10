@@ -20,6 +20,7 @@ import {
   ArrowDown,
   ArrowUp,
   Check,
+  Eye,
   Loader2,
   Plus,
   Save,
@@ -29,6 +30,7 @@ import {
   X,
 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
+import { DossierPreview } from "@/components/dossier/DossierPreview";
 
 type Brand = { id: string; name: string; key: string | null };
 type BrandModule = {
@@ -109,6 +111,7 @@ export default function DossierEdit() {
   const [productQuery, setProductQuery] = useState("");
   const [form, setForm] = useState<Project | null>(null);
   const [previewSlide, setPreviewSlide] = useState<BrandModule | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -436,6 +439,14 @@ export default function DossierEdit() {
                     Enregistré à {savedAt.toLocaleTimeString("fr-FR")}
                   </span>
                 ) : null}
+                <Button
+                  variant="outline"
+                  onClick={() => setPreviewOpen(true)}
+                  disabled={generating || saving}
+                >
+                  <Eye className="mr-2 h-4 w-4" />
+                  Aperçu
+                </Button>
                 <Button
                   variant="outline"
                   onClick={generateWithAI}
@@ -974,6 +985,7 @@ export default function DossierEdit() {
           </>
         )}
       </main>
+      {previewOpen && id && <DossierPreview projectId={id} onClose={() => setPreviewOpen(false)} />}
     </div>
   );
 }

@@ -129,7 +129,7 @@ export default function DossierEdit() {
         (supabase as any)
           .from("projects")
           .select(
-            "id, brand_id, client_name, client_contact, offer, brief, status, selected_modules, selected_products, pricing, context, solution, scope",
+            "id, brand_id, client_name, client_contact, offer, brief, status, selected_modules, selected_products, pricing, context, solution, scope, plan_data",
           )
           .eq("id", id)
           .maybeSingle(),

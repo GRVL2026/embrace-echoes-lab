@@ -644,6 +644,50 @@ export default function DossierEdit() {
               </div>
             </section>
 
+            {/* SECTION Plan de la salle (optionnel) */}
+            <section className="mt-6 space-y-4 rounded-lg border border-border bg-card/40 p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="font-display text-lg font-semibold">Plan de la salle (optionnel)</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Conçois l'agencement de la salle dans Arcade Planner et rattache-le à ce dossier.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" onClick={openPlanner}>
+                    <Map className="mr-2 h-4 w-4" />
+                    {hasPlan ? "Modifier le plan" : "Créer le plan"}
+                  </Button>
+                  {hasPlan && (
+                    <Button
+                      variant="ghost"
+                      onClick={removePlan}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Retirer le plan
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {hasPlan && planThumbnail ? (
+                <div className="overflow-hidden rounded-lg border border-border bg-background/40">
+                  <img
+                    src={planThumbnail}
+                    alt="Aperçu du plan"
+                    className="block w-full h-auto"
+                  />
+                </div>
+              ) : (
+                <div className="rounded-md border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
+                  Aucun plan enregistré pour ce dossier.
+                </div>
+              )}
+            </section>
+
+
+
             {/* SECTION A : Slides du dossier */}
             <section className="mt-6 space-y-6 rounded-lg border border-border bg-card/40 p-6">
               <div>

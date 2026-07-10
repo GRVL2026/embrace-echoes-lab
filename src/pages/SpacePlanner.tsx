@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { EditorProvider, useEditor } from "@/contexts/EditorContext";
 import { EditorToolbar } from "@/components/editor/EditorToolbar";
 import { EditorCanvas } from "@/components/editor/EditorCanvas";
@@ -9,11 +9,13 @@ import { CopilotPanel } from "@/components/copilot/CopilotPanel";
 import { useCopilotActions } from "@/hooks/useCopilotActions";
 import type { RoomContext } from "@/lib/copilotApi";
 import { SAFETY_ZONE_CM } from "@/types/editor";
-import { PanelRightClose, PanelRightOpen, Box, LayoutGrid, Sparkles, FolderKanban } from "lucide-react";
+import { PanelRightClose, PanelRightOpen, Box, LayoutGrid, Sparkles, FolderKanban, Save, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fitToView } from "@/lib/fitToView";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 import logoImg from "@/assets/logo.png";
 
 

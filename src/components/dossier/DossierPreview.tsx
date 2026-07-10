@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Loader2, X, ChevronLeft, ChevronRight, Phone, Mail, Globe, MapPin, Download, Share2, Copy, Check } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { renderPlan2D } from "@/lib/plan2DRender";
 
 type BrandContact = {
   phone?: string;
@@ -25,6 +26,7 @@ type Project = {
   scope: { fourniture?: string; livraison?: string; formation?: string; garantie?: string } | null;
   share_slug?: string | null;
   is_shared?: boolean | null;
+  plan_data?: any | null;
 };
 
 const CREAM = "#F6F1E7";

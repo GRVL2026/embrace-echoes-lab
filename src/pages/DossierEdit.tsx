@@ -23,12 +23,13 @@ import {
   Plus,
   Save,
   Search,
+  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 
-type Brand = { id: string; name: string };
+type Brand = { id: string; name: string; key: string | null };
 type BrandModule = {
   id: string;
   brand_id: string | null;
@@ -55,6 +56,10 @@ type SelectedProduct = {
 type PricingLine = { label: string; qty: number; amount: number };
 type Pricing = { lines: PricingLine[]; total_ht: number; monthly: number };
 
+type Context = { contexte?: string; objectif?: string; enjeux?: string; lecture?: string };
+type Solution = { selection?: string; deploiement?: string; suivi?: string };
+type Scope = { fourniture?: string; livraison?: string; formation?: string; garantie?: string };
+
 type Project = {
   id: string;
   brand_id: string | null;
@@ -66,6 +71,9 @@ type Project = {
   selected_modules: string[] | null;
   selected_products: SelectedProduct[] | null;
   pricing: Pricing | null;
+  context: Context | null;
+  solution: Solution | null;
+  scope: Scope | null;
 };
 
 function computePricing(products: SelectedProduct[], offer: string | null): Pricing {
@@ -88,6 +96,8 @@ export default function DossierEdit() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -109,11 +119,11 @@ export default function DossierEdit() {
         (supabase as any)
           .from("projects")
           .select(
-            "id, brand_id, client_name, client_contact, offer, brief, status, selected_modules, selected_products, pricing",
+            "id, brand_id, client_name, client_contact, offer, brief, status, selected_modules, selected_products, pricing, context, solution, scope",
           )
           .eq("id", id)
           .maybeSingle(),
-        (supabase as any).from("brands").select("id, name").order("name"),
+        (supabase as any).from("brands").select("id, name, key").order("name"),
         (supabase as any)
           .from("brand_modules")
           .select("id, brand_id, type, slug, title, subtitle, position")
@@ -151,6 +161,15 @@ export default function DossierEdit() {
     setDirty(true);
   };
 
+  const updateNested = <S extends "context" | "solution" | "scope">(
+    section: S,
+    key: string,
+    value: string,
+  ) => {
+    setForm((f) => (f ? { ...f, [section]: { ...(f[section] ?? {}), [key]: value } } : f));
+    setDirty(true);
+  };
+
   // Recompute pricing whenever products or offer change
   const onProductsChange = (next: SelectedProduct[]) => {
     setForm((f) => {
@@ -163,7 +182,6 @@ export default function DossierEdit() {
     setForm((f) => {
       if (!f) return f;
       const products = f.selected_products ?? [];
-      // Update unit prices to match new offer type
       const nextProducts = products.map((p) => {
         const cat = catalog.find((c) => c.id === p.product_id);
         if (!cat) return p;
@@ -190,6 +208,9 @@ export default function DossierEdit() {
         selected_modules: form.selected_modules ?? [],
         selected_products: form.selected_products ?? [],
         pricing: form.pricing ?? computePricing(form.selected_products ?? [], form.offer),
+        context: form.context ?? null,
+        solution: form.solution ?? null,
+        scope: form.scope ?? null,
       })
       .eq("id", id);
     setSaving(false);
@@ -200,6 +221,75 @@ export default function DossierEdit() {
     setDirty(false);
     setSavedAt(new Date());
     toast({ title: "Dossier enregistré" });
+  };
+
+  const generateWithAI = async () => {
+    if (!form) return;
+    const brief = (form.brief ?? "").trim();
+    if (!brief) {
+      toast({
+        title: "Brief requis",
+        description: "Écris un brief avant de lancer la génération IA.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setGenerating(true);
+    setAiSummary(null);
+    try {
+      const brand = brands.find((b) => b.id === form.brand_id);
+      const { data, error } = await supabase.functions.invoke("generate-dossier", {
+        body: {
+          brief,
+          offer: form.offer,
+          client_name: form.client_name || undefined,
+          brand_key: brand?.key || undefined,
+        },
+      });
+      if (error) throw error;
+      const dossier = (data as any)?.dossier;
+      if (!dossier) throw new Error("Réponse IA invalide");
+
+      const recommended = Array.isArray(dossier.recommended_products) ? dossier.recommended_products : [];
+      const nextProducts: SelectedProduct[] = recommended
+        .filter((r: any) => r && r.product_id && r.name)
+        .map((r: any) => ({
+          product_id: String(r.product_id),
+          name: String(r.name),
+          qty: Number(r.qty) || 1,
+          unit_price: Number(r.unit_price) || 0,
+        }));
+      const moduleIds = Array.isArray(dossier.module_ids)
+        ? dossier.module_ids.map((x: any) => String(x))
+        : [];
+
+      setForm((f) => {
+        if (!f) return f;
+        const pricingFromAi = dossier.pricing && typeof dossier.pricing === "object"
+          ? dossier.pricing
+          : computePricing(nextProducts, f.offer);
+        return {
+          ...f,
+          context: dossier.context ?? f.context,
+          solution: dossier.solution ?? f.solution,
+          scope: dossier.scope ?? f.scope,
+          selected_modules: moduleIds,
+          selected_products: nextProducts,
+          pricing: pricingFromAi,
+        };
+      });
+      setAiSummary(typeof dossier.summary === "string" ? dossier.summary : null);
+      setDirty(true);
+      toast({ title: "Brouillon généré", description: "Ajuste librement avant d'enregistrer." });
+    } catch (e: any) {
+      toast({
+        title: "Génération impossible",
+        description: e?.message || "Une erreur est survenue lors de l'appel à l'IA.",
+        variant: "destructive",
+      });
+    } finally {
+      setGenerating(false);
+    }
   };
 
   // --- Modules helpers ---
@@ -269,6 +359,24 @@ export default function DossierEdit() {
   const isRecurring = form?.offer === "location" || form?.offer === "leasing";
   const totalAmount = selectedProducts.reduce((s, p) => s + p.qty * p.unit_price, 0);
 
+  const contextFields: { key: keyof Context; label: string; rows?: number }[] = [
+    { key: "contexte", label: "Contexte", rows: 3 },
+    { key: "objectif", label: "Objectif", rows: 3 },
+    { key: "enjeux", label: "Enjeux", rows: 3 },
+    { key: "lecture", label: "Lecture", rows: 3 },
+  ];
+  const solutionFields: { key: keyof Solution; label: string }[] = [
+    { key: "selection", label: "Sélection" },
+    { key: "deploiement", label: "Déploiement" },
+    { key: "suivi", label: "Suivi" },
+  ];
+  const scopeFields: { key: keyof Scope; label: string }[] = [
+    { key: "fourniture", label: "Fourniture" },
+    { key: "livraison", label: "Livraison" },
+    { key: "formation", label: "Formation" },
+    { key: "garantie", label: "Garantie" },
+  ];
+
   return (
     <div className="min-h-screen w-full bg-background text-foreground">
       <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-6">
@@ -318,6 +426,18 @@ export default function DossierEdit() {
                     Enregistré à {savedAt.toLocaleTimeString("fr-FR")}
                   </span>
                 ) : null}
+                <Button
+                  variant="outline"
+                  onClick={generateWithAI}
+                  disabled={generating || saving}
+                >
+                  {generating ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="mr-2 h-4 w-4" />
+                  )}
+                  Générer avec l'IA
+                </Button>
                 <Button onClick={save} disabled={saving || !dirty}>
                   {saving ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -393,6 +513,73 @@ export default function DossierEdit() {
                 />
               </div>
             </div>
+
+            {aiSummary ? (
+              <div className="mt-6 rounded-lg border border-primary/40 bg-primary/5 p-4">
+                <div className="flex items-start gap-3">
+                  <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-semibold uppercase tracking-widest text-primary">
+                      Note de l'IA
+                    </div>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-foreground/90">{aiSummary}</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => setAiSummary(null)}
+                    aria-label="Fermer"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            {/* SECTION Contexte */}
+            <section className="mt-6 space-y-4 rounded-lg border border-border bg-card/40 p-6">
+              <div>
+                <h3 className="font-display text-lg font-semibold">Contexte</h3>
+                <p className="text-sm text-muted-foreground">
+                  Cadre général du projet client. Modifiable librement.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {contextFields.map((f) => (
+                  <div key={f.key} className="space-y-2">
+                    <Label>{f.label}</Label>
+                    <Textarea
+                      value={form.context?.[f.key] ?? ""}
+                      onChange={(e) => updateNested("context", f.key, e.target.value)}
+                      rows={f.rows ?? 3}
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* SECTION Solution */}
+            <section className="mt-6 space-y-4 rounded-lg border border-border bg-card/40 p-6">
+              <div>
+                <h3 className="font-display text-lg font-semibold">Solution</h3>
+                <p className="text-sm text-muted-foreground">
+                  Approche proposée. Modifiable librement.
+                </p>
+              </div>
+              <div className="space-y-4">
+                {solutionFields.map((f) => (
+                  <div key={f.key} className="space-y-2">
+                    <Label>{f.label}</Label>
+                    <Textarea
+                      value={form.solution?.[f.key] ?? ""}
+                      onChange={(e) => updateNested("solution", f.key, e.target.value)}
+                      rows={3}
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
 
             {/* SECTION A : Blocs de contenu */}
             <section className="mt-6 space-y-4 rounded-lg border border-border bg-card/40 p-6">
@@ -642,6 +829,28 @@ export default function DossierEdit() {
                   </table>
                 </div>
               )}
+            </section>
+
+            {/* SECTION Périmètre */}
+            <section className="mt-6 space-y-4 rounded-lg border border-border bg-card/40 p-6">
+              <div>
+                <h3 className="font-display text-lg font-semibold">Périmètre</h3>
+                <p className="text-sm text-muted-foreground">
+                  Ce qui est couvert par l'offre. Modifiable librement.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {scopeFields.map((f) => (
+                  <div key={f.key} className="space-y-2">
+                    <Label>{f.label}</Label>
+                    <Textarea
+                      value={form.scope?.[f.key] ?? ""}
+                      onChange={(e) => updateNested("scope", f.key, e.target.value)}
+                      rows={3}
+                    />
+                  </div>
+                ))}
+              </div>
             </section>
           </>
         )}

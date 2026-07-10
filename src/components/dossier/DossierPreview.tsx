@@ -430,8 +430,8 @@ export function DossierPreview({
                   </div>
 
                   {/* 4. Périmètre & livrables */}
-                  <div id={`dossier-page-${offset + 3}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
-                    <Page index={offset + 4} total={totalPages}>
+                  <div id={`dossier-page-${offset + 3 + planShift}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
+                    <Page index={offset + 4 + planShift} total={totalPages}>
                       <PageFrame eyebrow="Notre engagement" title="Périmètre & livrables">
                         <div className="grid h-full grid-cols-2 grid-rows-2 gap-5">
                           {[

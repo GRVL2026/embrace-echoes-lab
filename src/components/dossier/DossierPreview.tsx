@@ -456,8 +456,8 @@ export function DossierPreview({
                   </div>
 
                   {/* 5. Tarifs & budget */}
-                  <div id={`dossier-page-${offset + 4}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
-                    <Page index={offset + 5} total={totalPages}>
+                  <div id={`dossier-page-${offset + 4 + planShift}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
+                    <Page index={offset + 5 + planShift} total={totalPages}>
                       <PageFrame eyebrow="Investissement" title="Tarifs & budget">
                         <div className="flex h-full flex-col gap-4">
                           <div className="flex-1 overflow-auto rounded-xl border" style={{ borderColor: "rgba(0,0,0,0.08)", background: "rgba(255,255,255,0.55)" }}>

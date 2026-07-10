@@ -500,8 +500,8 @@ export function DossierPreview({
                   </div>
 
                   {/* 6. Passons à l'action */}
-                  <div id={`dossier-page-${offset + 5}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
-                    <Page index={offset + 6} total={totalPages}>
+                  <div id={`dossier-page-${offset + 5 + planShift}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
+                    <Page index={offset + 6 + planShift} total={totalPages}>
                       <PageFrame eyebrow="Contact" title="Passons à l'action">
                         <div className="grid h-full grid-cols-2 gap-5">
                           <div className="flex flex-col justify-center gap-4 rounded-xl p-8" style={{ background: DARK, color: "white" }}>

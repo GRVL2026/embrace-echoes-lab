@@ -14,6 +14,110 @@ export type Database = {
   }
   public: {
     Tables: {
+      brand_modules: {
+        Row: {
+          brand_id: string
+          content: Json
+          created_at: string
+          id: string
+          image_url: string | null
+          is_active: boolean
+          position: number
+          reusable: boolean
+          slide_number: number | null
+          slug: string
+          subtitle: string | null
+          title: string | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          content?: Json
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          position?: number
+          reusable?: boolean
+          slide_number?: number | null
+          slug: string
+          subtitle?: string | null
+          title?: string | null
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          content?: Json
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          position?: number
+          reusable?: boolean
+          slide_number?: number | null
+          slug?: string
+          subtitle?: string | null
+          title?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_modules_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brands: {
+        Row: {
+          accent: string | null
+          color: string | null
+          contact: Json
+          created_at: string
+          id: string
+          is_active: boolean
+          key: string
+          logo_url: string | null
+          name: string
+          pitch: string | null
+          tagline: string | null
+          updated_at: string
+        }
+        Insert: {
+          accent?: string | null
+          color?: string | null
+          contact?: Json
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          key: string
+          logo_url?: string | null
+          name: string
+          pitch?: string | null
+          tagline?: string | null
+          updated_at?: string
+        }
+        Update: {
+          accent?: string | null
+          color?: string | null
+          contact?: Json
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          key?: string
+          logo_url?: string | null
+          name?: string
+          pitch?: string | null
+          tagline?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       catalog_products: {
         Row: {
           active: boolean
@@ -32,6 +136,7 @@ export type Database = {
           player_clearance: number | null
           pmr_accessible: boolean | null
           price: number | null
+          price_monthly: number | null
           safety_zone: number
           shopify_id: string | null
           specs: Json | null
@@ -60,6 +165,7 @@ export type Database = {
           player_clearance?: number | null
           pmr_accessible?: boolean | null
           price?: number | null
+          price_monthly?: number | null
           safety_zone?: number
           shopify_id?: string | null
           specs?: Json | null
@@ -88,6 +194,7 @@ export type Database = {
           player_clearance?: number | null
           pmr_accessible?: boolean | null
           price?: number | null
+          price_monthly?: number | null
           safety_zone?: number
           shopify_id?: string | null
           specs?: Json | null
@@ -334,6 +441,86 @@ export type Database = {
           room_geometry?: Json
         }
         Relationships: []
+      }
+      projects: {
+        Row: {
+          brand_id: string | null
+          brief: string | null
+          client_contact: string | null
+          client_name: string
+          context: Json
+          created_at: string
+          created_by: string | null
+          id: string
+          is_shared: boolean
+          offer: string
+          plan_data: Json | null
+          plan_snapshot_id: string | null
+          pricing: Json
+          scope: Json
+          selected_modules: Json
+          selected_products: Json
+          share_slug: string | null
+          share_token: string | null
+          solution: Json
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          brand_id?: string | null
+          brief?: string | null
+          client_contact?: string | null
+          client_name?: string
+          context?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_shared?: boolean
+          offer?: string
+          plan_data?: Json | null
+          plan_snapshot_id?: string | null
+          pricing?: Json
+          scope?: Json
+          selected_modules?: Json
+          selected_products?: Json
+          share_slug?: string | null
+          share_token?: string | null
+          solution?: Json
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string | null
+          brief?: string | null
+          client_contact?: string | null
+          client_name?: string
+          context?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_shared?: boolean
+          offer?: string
+          plan_data?: Json | null
+          plan_snapshot_id?: string | null
+          pricing?: Json
+          scope?: Json
+          selected_modules?: Json
+          selected_products?: Json
+          share_slug?: string | null
+          share_token?: string | null
+          solution?: Json
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       prompt_sessions: {
         Row: {

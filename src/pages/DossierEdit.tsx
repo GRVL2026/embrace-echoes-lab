@@ -20,6 +20,7 @@ import {
   ArrowDown,
   ArrowUp,
   Check,
+  Eye,
   Loader2,
   Plus,
   Save,
@@ -29,6 +30,7 @@ import {
   X,
 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
+import { DossierPreview } from "@/components/dossier/DossierPreview";
 
 type Brand = { id: string; name: string; key: string | null };
 type BrandModule = {

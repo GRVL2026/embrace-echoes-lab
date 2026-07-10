@@ -384,9 +384,22 @@ export function DossierPreview({
                     </Page>
                   </div>
 
+                  {/* Plan de la salle (optionnel) */}
+                  {hasPlan && (
+                    <div id={`dossier-page-${offset + 2}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
+                      <Page index={offset + 3} total={totalPages}>
+                        <PageFrame eyebrow="Agencement" title="Plan de la salle">
+                          <div className="flex h-full w-full items-center justify-center rounded-xl border overflow-hidden" style={{ borderColor: "rgba(0,0,0,0.08)", background: DARK }}>
+                            <img src={planImage!} alt="Plan de la salle" className="max-h-full max-w-full object-contain" />
+                          </div>
+                        </PageFrame>
+                      </Page>
+                    </div>
+                  )}
+
                   {/* 3. Sélection produits */}
-                  <div id={`dossier-page-${offset + 2}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
-                    <Page index={offset + 3} total={totalPages}>
+                  <div id={`dossier-page-${offset + 2 + planShift}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
+                    <Page index={offset + 3 + planShift} total={totalPages}>
                       <PageFrame eyebrow="Équipements" title="Sélection produits">
                         <div className="h-full overflow-auto rounded-xl border" style={{ borderColor: "rgba(0,0,0,0.08)", background: "rgba(255,255,255,0.55)" }}>
                           <table className="w-full text-left text-sm">

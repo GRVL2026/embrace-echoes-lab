@@ -19,7 +19,7 @@ type Project = {
   brand_id: string | null;
   offer: string | null;
   selected_modules: string[] | null;
-  selected_products: { name: string; qty: number; unit_price: number }[] | null;
+  selected_products: { product_id?: string; name: string; qty: number; unit_price: number }[] | null;
   pricing: { lines?: { label: string; qty: number; amount: number }[]; total_ht?: number; monthly?: number } | null;
   context: { contexte?: string; objectif?: string; enjeux?: string; lecture?: string } | null;
   solution: { selection?: string; deploiement?: string; suivi?: string } | null;
@@ -28,6 +28,12 @@ type Project = {
   is_shared?: boolean | null;
   plan_data?: any | null;
 };
+type CatalogInfo = { id: string; images: string[] | null; product_url: string | null };
+
+function productFicheUrl(name: string, product_url?: string | null): string {
+  if (product_url && product_url.trim()) return product_url;
+  return `https://avranchesautomatic.com/search?q=${encodeURIComponent(name)}`;
+}
 
 const CREAM = "#F6F1E7";
 const DARK = "#1a1a1a";
@@ -99,6 +105,7 @@ export function DossierPreview({
   const [project, setProject] = useState<Project | null>(null);
   const [brand, setBrand] = useState<Brand | null>(null);
   const [modules, setModules] = useState<BrandModule[]>([]);
+  const [catalogMap, setCatalogMap] = useState<Record<string, CatalogInfo>>({});
   const [current, setCurrent] = useState(0);
   const [sharing, setSharing] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -137,6 +144,24 @@ export function DossierPreview({
         setModules(ids.map((id) => map.get(id)).filter(Boolean) as BrandModule[]);
       } else {
         setModules([]);
+      }
+      const pids = Array.from(
+        new Set(
+          (proj?.selected_products ?? [])
+            .map((x) => x.product_id)
+            .filter((x): x is string => !!x),
+        ),
+      );
+      if (pids.length > 0) {
+        const { data: cp } = await (supabase as any)
+          .from("catalog_products")
+          .select("id, images, product_url")
+          .in("id", pids);
+        const cmap: Record<string, CatalogInfo> = {};
+        for (const c of (cp as CatalogInfo[]) ?? []) cmap[c.id] = c;
+        setCatalogMap(cmap);
+      } else {
+        setCatalogMap({});
       }
       setLoading(false);
     })();
@@ -405,6 +430,7 @@ export function DossierPreview({
                           <table className="w-full text-left text-sm">
                             <thead>
                               <tr style={{ background: PURPLE, color: "white" }}>
+                                <th className="px-4 py-3 w-24">Visuel</th>
                                 <th className="px-4 py-3">Produit</th>
                                 <th className="px-4 py-3 text-center">Quantité</th>
                                 <th className="px-4 py-3 text-right">PU {isRecurring ? "/ mois" : ""}</th>
@@ -413,15 +439,37 @@ export function DossierPreview({
                             </thead>
                             <tbody>
                               {products.length === 0 ? (
-                                <tr><td colSpan={4} className="px-4 py-6 text-center opacity-60">Aucun produit sélectionné</td></tr>
-                              ) : products.map((p, i) => (
+                                <tr><td colSpan={5} className="px-4 py-6 text-center opacity-60">Aucun produit sélectionné</td></tr>
+                              ) : products.map((p, i) => {
+                                const cat = p.product_id ? catalogMap[p.product_id] : undefined;
+                                const img = cat?.images?.[0] ?? null;
+                                const href = productFicheUrl(p.name, cat?.product_url);
+                                return (
                                 <tr key={i} style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
-                                  <td className="px-4 py-3 font-medium">{p.name}</td>
+                                  <td className="px-4 py-3">
+                                    <a href={href} target="_blank" rel="noreferrer" className="block h-14 w-20 overflow-hidden rounded border" style={{ borderColor: "rgba(0,0,0,0.1)", background: "rgba(0,0,0,0.04)" }}>
+                                      {img ? (
+                                        <img src={img} alt={p.name} className="h-full w-full object-cover" loading="lazy" />
+                                      ) : (
+                                        <div className="flex h-full w-full items-center justify-center text-[9px] leading-tight text-center px-1" style={{ color: DARK, opacity: 0.5 }}>
+                                          visuel indisponible
+                                        </div>
+                                      )}
+                                    </a>
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <a href={href} target="_blank" rel="noreferrer" className="font-medium underline-offset-2 hover:underline" style={{ color: DARK }}>
+                                      {p.name}
+                                    </a>
+                                    <div className="dossier-pdf-link text-[10px] mt-0.5 break-all" style={{ color: PURPLE, display: "none" }}>
+                                      {href}
+                                    </div>
+                                  </td>
                                   <td className="px-4 py-3 text-center">{p.qty}</td>
                                   <td className="px-4 py-3 text-right tabular-nums">{fmtEUR(p.unit_price)}</td>
                                   <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmtEUR(p.qty * p.unit_price)}</td>
                                 </tr>
-                              ))}
+                              );})}
                             </tbody>
                           </table>
                         </div>

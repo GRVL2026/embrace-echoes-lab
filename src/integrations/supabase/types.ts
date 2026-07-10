@@ -137,6 +137,7 @@ export type Database = {
           pmr_accessible: boolean | null
           price: number | null
           price_monthly: number | null
+          product_url: string | null
           safety_zone: number
           shopify_id: string | null
           specs: Json | null
@@ -166,6 +167,7 @@ export type Database = {
           pmr_accessible?: boolean | null
           price?: number | null
           price_monthly?: number | null
+          product_url?: string | null
           safety_zone?: number
           shopify_id?: string | null
           specs?: Json | null
@@ -195,6 +197,7 @@ export type Database = {
           pmr_accessible?: boolean | null
           price?: number | null
           price_monthly?: number | null
+          product_url?: string | null
           safety_zone?: number
           shopify_id?: string | null
           specs?: Json | null

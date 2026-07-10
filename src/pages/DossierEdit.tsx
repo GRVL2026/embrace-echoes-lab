@@ -53,7 +53,14 @@ type CatalogProduct = {
   price: number | null;
   price_monthly: number | null;
   vendor: string | null;
+  images: string[] | null;
+  product_url: string | null;
 };
+
+function productFicheUrl(p: { product_url?: string | null; name: string }): string {
+  if (p.product_url && p.product_url.trim()) return p.product_url;
+  return `https://avranchesautomatic.com/search?q=${encodeURIComponent(p.name)}`;
+}
 type SelectedProduct = {
   product_id: string;
   name: string;
@@ -143,7 +150,7 @@ export default function DossierEdit() {
           .order("position", { ascending: true }),
         (supabase as any)
           .from("catalog_products")
-          .select("id, name, category, price, price_monthly, vendor")
+          .select("id, name, category, price, price_monthly, vendor, images, product_url")
           .eq("active", true)
           .order("name"),
       ]);
@@ -978,6 +985,7 @@ export default function DossierEdit() {
                   <table className="w-full text-sm">
                     <thead className="bg-muted/60 text-xs uppercase tracking-wider text-muted-foreground">
                       <tr>
+                        <th className="w-20 px-3 py-2 text-left">Visuel</th>
                         <th className="px-3 py-2 text-left">Jeu</th>
                         <th className="w-24 px-3 py-2 text-right">Qté</th>
                         <th className="w-36 px-3 py-2 text-right">
@@ -988,9 +996,44 @@ export default function DossierEdit() {
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedProducts.map((p, i) => (
+                      {selectedProducts.map((p, i) => {
+                        const cat = catalog.find((c) => c.id === p.product_id);
+                        const img = cat?.images?.[0] ?? null;
+                        const href = productFicheUrl({ product_url: cat?.product_url ?? null, name: p.name });
+                        return (
                         <tr key={p.product_id + i} className="border-t border-border/60">
-                          <td className="px-3 py-2">{p.name}</td>
+                          <td className="px-3 py-2">
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="block h-12 w-16 overflow-hidden rounded border border-border/60 bg-muted"
+                              aria-label={`Fiche ${p.name}`}
+                            >
+                              {img ? (
+                                <img src={img} alt={p.name} className="h-full w-full object-cover" loading="lazy" />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-[9px] leading-tight text-muted-foreground text-center px-1">
+                                  visuel indisponible
+                                </div>
+                              )}
+                            </a>
+                          </td>
+                          <td className="px-3 py-2">
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-medium text-foreground underline-offset-2 hover:text-primary hover:underline"
+                            >
+                              {p.name}
+                            </a>
+                            {cat?.vendor || cat?.category ? (
+                              <div className="text-xs text-muted-foreground">
+                                {[cat?.vendor, cat?.category].filter(Boolean).join(" · ")}
+                              </div>
+                            ) : null}
+                          </td>
                           <td className="px-3 py-2 text-right">
                             <Input
                               type="number"
@@ -1029,11 +1072,11 @@ export default function DossierEdit() {
                             </Button>
                           </td>
                         </tr>
-                      ))}
+                      );})}
                     </tbody>
                     <tfoot>
                       <tr className="border-t border-border bg-muted/40">
-                        <td colSpan={3} className="px-3 py-2 text-right text-xs uppercase tracking-wider text-muted-foreground">
+                        <td colSpan={4} className="px-3 py-2 text-right text-xs uppercase tracking-wider text-muted-foreground">
                           {isRecurring ? "Total mensuel" : "Total HT"}
                         </td>
                         <td className="px-3 py-2 text-right font-semibold tabular-nums">

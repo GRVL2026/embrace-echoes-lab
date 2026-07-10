@@ -985,6 +985,7 @@ export default function DossierEdit() {
           </>
         )}
       </main>
+      {previewOpen && id && <DossierPreview projectId={id} onClose={() => setPreviewOpen(false)} />}
     </div>
   );
 }

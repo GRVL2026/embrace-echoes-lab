@@ -143,7 +143,25 @@ export function DossierPreview({
   }, [projectId]);
 
   const slidePages = useMemo(() => modules.filter((m) => !!m.image_url), [modules]);
-  const customPages = 6;
+
+  const planImage = useMemo(() => {
+    const pd = project?.plan_data;
+    if (!pd || !Array.isArray(pd.rooms) || pd.rooms.length === 0) return null;
+    try {
+      return renderPlan2D(
+        pd.rooms ?? [],
+        pd.doors ?? [],
+        pd.pillars ?? [],
+        pd.placedEquipments ?? [],
+        pd.circulationPath ?? [],
+        { width: 1920, height: 1080, showGames: true, showWallDimensions: true, title: "Plan de la salle" },
+      );
+    } catch {
+      return null;
+    }
+  }, [project?.plan_data]);
+  const hasPlan = !!planImage;
+  const customPages = 6 + (hasPlan ? 1 : 0);
   const totalPages = slidePages.length + customPages;
 
   useEffect(() => {

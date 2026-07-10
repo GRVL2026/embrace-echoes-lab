@@ -105,6 +105,7 @@ export function DossierPreview({
   const [project, setProject] = useState<Project | null>(null);
   const [brand, setBrand] = useState<Brand | null>(null);
   const [modules, setModules] = useState<BrandModule[]>([]);
+  const [catalogMap, setCatalogMap] = useState<Record<string, CatalogInfo>>({});
   const [current, setCurrent] = useState(0);
   const [sharing, setSharing] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -143,6 +144,24 @@ export function DossierPreview({
         setModules(ids.map((id) => map.get(id)).filter(Boolean) as BrandModule[]);
       } else {
         setModules([]);
+      }
+      const pids = Array.from(
+        new Set(
+          (proj?.selected_products ?? [])
+            .map((x) => x.product_id)
+            .filter((x): x is string => !!x),
+        ),
+      );
+      if (pids.length > 0) {
+        const { data: cp } = await (supabase as any)
+          .from("catalog_products")
+          .select("id, images, product_url")
+          .in("id", pids);
+        const cmap: Record<string, CatalogInfo> = {};
+        for (const c of (cp as CatalogInfo[]) ?? []) cmap[c.id] = c;
+        setCatalogMap(cmap);
+      } else {
+        setCatalogMap({});
       }
       setLoading(false);
     })();

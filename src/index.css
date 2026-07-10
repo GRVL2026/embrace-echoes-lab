@@ -91,3 +91,55 @@
       linear-gradient(90deg, hsl(240 30% 18% / 0.5) 1px, transparent 1px);
   }
 }
+
+/* Impression du dossier — une slide 16:9 par page paysage */
+@media print {
+  @page {
+    size: 297mm 167mm; /* 16:9 landscape */
+    margin: 0;
+  }
+  html, body {
+    background: #fff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  body.dossier-printing > *:not(.dossier-print-portal) {
+    /* keep normal layout, but hide non-dossier chrome */
+  }
+  body.dossier-printing .dossier-toolbar { display: none !important; }
+  body.dossier-printing .dossier-scroll {
+    overflow: visible !important;
+    height: auto !important;
+    scroll-snap-type: none !important;
+  }
+  body.dossier-printing .dossier-print-root {
+    max-width: none !important;
+    width: 100% !important;
+    padding: 0 !important;
+    gap: 0 !important;
+  }
+  body.dossier-printing .dossier-slide {
+    width: 100% !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    page-break-after: always;
+    break-after: page;
+  }
+  body.dossier-printing .dossier-slide:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+  body.dossier-printing .dossier-page {
+    width: 100% !important;
+    height: 167mm !important;
+    aspect-ratio: auto !important;
+  }
+  body.dossier-printing img {
+    image-rendering: -webkit-optimize-contrast;
+    max-width: 100% !important;
+  }
+}
+

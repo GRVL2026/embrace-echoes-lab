@@ -224,6 +224,23 @@ function SpacePlannerInner() {
               </Tooltip>
             </div>
 
+            {dossierId && (
+              <Button
+                variant="default"
+                size="sm"
+                className="h-8 ml-2 gap-1 text-xs"
+                onClick={saveToDossier}
+                disabled={savingToDossier}
+              >
+                {savingToDossier ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="h-3.5 w-3.5" />
+                )}
+                Enregistrer dans le dossier
+              </Button>
+            )}
+
             <Tooltip delayDuration={200}>
               <TooltipTrigger asChild>
                 <Button asChild variant="ghost" size="sm" className="h-8 ml-2 gap-1 text-xs">

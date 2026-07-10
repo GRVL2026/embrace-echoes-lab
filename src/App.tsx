@@ -4,6 +4,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import SpacePlanner from "./pages/SpacePlanner";
+import DossiersList from "./pages/DossiersList";
+import DossierEdit from "./pages/DossierEdit";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -16,7 +18,10 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<SpacePlanner />} />
+          <Route path="/dossiers" element={<DossiersList />} />
+          <Route path="/dossiers/:id" element={<DossierEdit />} />
           <Route path="*" element={<NotFound />} />
+
         </Routes>
       </BrowserRouter>
     </TooltipProvider>

@@ -9,11 +9,13 @@ import { CopilotPanel } from "@/components/copilot/CopilotPanel";
 import { useCopilotActions } from "@/hooks/useCopilotActions";
 import type { RoomContext } from "@/lib/copilotApi";
 import { SAFETY_ZONE_CM } from "@/types/editor";
-import { PanelRightClose, PanelRightOpen, Box, LayoutGrid, Sparkles } from "lucide-react";
+import { PanelRightClose, PanelRightOpen, Box, LayoutGrid, Sparkles, FolderKanban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fitToView } from "@/lib/fitToView";
+import { Link } from "react-router-dom";
 import logoImg from "@/assets/logo.png";
+
 
 function SpacePlannerInner() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -158,6 +160,19 @@ function SpacePlannerInner() {
                 <TooltipContent side="bottom">Vue 3D immersive</TooltipContent>
               </Tooltip>
             </div>
+
+            <Tooltip delayDuration={200}>
+              <TooltipTrigger asChild>
+                <Button asChild variant="ghost" size="sm" className="h-8 ml-2 gap-1 text-xs">
+                  <Link to="/dossiers">
+                    <FolderKanban className="h-3.5 w-3.5" />
+                    Dossiers
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Dossiers commerciaux</TooltipContent>
+            </Tooltip>
+
 
             <Tooltip delayDuration={200}>
               <TooltipTrigger asChild>

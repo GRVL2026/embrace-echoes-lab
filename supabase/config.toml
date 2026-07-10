@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.sketchfab-search]
 verify_jwt = false
+
+[functions.generate-dossier]
+verify_jwt = false

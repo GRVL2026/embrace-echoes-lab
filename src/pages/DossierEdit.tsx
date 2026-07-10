@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -13,10 +14,47 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, Check, Loader2, Save } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowDown,
+  ArrowUp,
+  Check,
+  Loader2,
+  Plus,
+  Save,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
 import logoImg from "@/assets/logo.png";
 
 type Brand = { id: string; name: string };
+type BrandModule = {
+  id: string;
+  brand_id: string | null;
+  type: string | null;
+  slug: string | null;
+  title: string | null;
+  subtitle: string | null;
+  position: number | null;
+};
+type CatalogProduct = {
+  id: string;
+  name: string;
+  category: string | null;
+  price: number | null;
+  price_monthly: number | null;
+  vendor: string | null;
+};
+type SelectedProduct = {
+  product_id: string;
+  name: string;
+  qty: number;
+  unit_price: number;
+};
+type PricingLine = { label: string; qty: number; amount: number };
+type Pricing = { lines: PricingLine[]; total_ht: number; monthly: number };
+
 type Project = {
   id: string;
   brand_id: string | null;
@@ -25,7 +63,25 @@ type Project = {
   offer: string | null;
   brief: string | null;
   status: string | null;
+  selected_modules: string[] | null;
+  selected_products: SelectedProduct[] | null;
+  pricing: Pricing | null;
 };
+
+function computePricing(products: SelectedProduct[], offer: string | null): Pricing {
+  const lines: PricingLine[] = products.map((p) => ({
+    label: p.name,
+    qty: p.qty,
+    amount: +(p.qty * p.unit_price).toFixed(2),
+  }));
+  const total = lines.reduce((s, l) => s + l.amount, 0);
+  const isRecurring = offer === "location" || offer === "leasing";
+  return {
+    lines,
+    total_ht: isRecurring ? 0 : +total.toFixed(2),
+    monthly: isRecurring ? +total.toFixed(2) : 0,
+  };
+}
 
 export default function DossierEdit() {
   const { id } = useParams<{ id: string }>();
@@ -35,35 +91,88 @@ export default function DossierEdit() {
   const [dirty, setDirty] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [brands, setBrands] = useState<Brand[]>([]);
+  const [modules, setModules] = useState<BrandModule[]>([]);
+  const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
+  const [productQuery, setProductQuery] = useState("");
   const [form, setForm] = useState<Project | null>(null);
 
   useEffect(() => {
     if (!id) return;
     (async () => {
       setLoading(true);
-      const [{ data: p, error: pe }, { data: b, error: be }] = await Promise.all([
+      const [
+        { data: p, error: pe },
+        { data: b, error: be },
+        { data: m, error: me },
+        { data: c, error: ce },
+      ] = await Promise.all([
         (supabase as any)
           .from("projects")
-          .select("id, brand_id, client_name, client_contact, offer, brief, status")
+          .select(
+            "id, brand_id, client_name, client_contact, offer, brief, status, selected_modules, selected_products, pricing",
+          )
           .eq("id", id)
           .maybeSingle(),
         (supabase as any).from("brands").select("id, name").order("name"),
+        (supabase as any)
+          .from("brand_modules")
+          .select("id, brand_id, type, slug, title, subtitle, position")
+          .eq("is_active", true)
+          .eq("reusable", true)
+          .order("position", { ascending: true }),
+        (supabase as any)
+          .from("catalog_products")
+          .select("id, name, category, price, price_monthly, vendor")
+          .eq("active", true)
+          .order("name"),
       ]);
       if (pe) toast({ title: "Erreur", description: pe.message, variant: "destructive" });
       if (be) toast({ title: "Erreur", description: be.message, variant: "destructive" });
+      if (me) toast({ title: "Erreur", description: me.message, variant: "destructive" });
+      if (ce) toast({ title: "Erreur", description: ce.message, variant: "destructive" });
       if (!p) {
         toast({ title: "Dossier introuvable", variant: "destructive" });
         navigate("/dossiers");
         return;
       }
-      setForm(p as Project);
+      const proj = p as Project;
+      proj.selected_modules = Array.isArray(proj.selected_modules) ? proj.selected_modules : [];
+      proj.selected_products = Array.isArray(proj.selected_products) ? proj.selected_products : [];
+      setForm(proj);
       setBrands((b as Brand[]) ?? []);
+      setModules((m as BrandModule[]) ?? []);
+      setCatalog((c as CatalogProduct[]) ?? []);
       setLoading(false);
     })();
   }, [id, navigate]);
 
   const update = <K extends keyof Project>(key: K, value: Project[K]) => {
     setForm((f) => (f ? { ...f, [key]: value } : f));
+    setDirty(true);
+  };
+
+  // Recompute pricing whenever products or offer change
+  const onProductsChange = (next: SelectedProduct[]) => {
+    setForm((f) => {
+      if (!f) return f;
+      return { ...f, selected_products: next, pricing: computePricing(next, f.offer) };
+    });
+    setDirty(true);
+  };
+  const onOfferChange = (v: string | null) => {
+    setForm((f) => {
+      if (!f) return f;
+      const products = f.selected_products ?? [];
+      // Update unit prices to match new offer type
+      const nextProducts = products.map((p) => {
+        const cat = catalog.find((c) => c.id === p.product_id);
+        if (!cat) return p;
+        const newPrice =
+          v === "vente" ? cat.price ?? 0 : v === "location" || v === "leasing" ? cat.price_monthly ?? 0 : p.unit_price;
+        return { ...p, unit_price: newPrice };
+      });
+      return { ...f, offer: v, selected_products: nextProducts, pricing: computePricing(nextProducts, v) };
+    });
     setDirty(true);
   };
 
@@ -78,6 +187,9 @@ export default function DossierEdit() {
         client_contact: form.client_contact,
         offer: form.offer,
         brief: form.brief,
+        selected_modules: form.selected_modules ?? [],
+        selected_products: form.selected_products ?? [],
+        pricing: form.pricing ?? computePricing(form.selected_products ?? [], form.offer),
       })
       .eq("id", id);
     setSaving(false);
@@ -89,6 +201,73 @@ export default function DossierEdit() {
     setSavedAt(new Date());
     toast({ title: "Dossier enregistré" });
   };
+
+  // --- Modules helpers ---
+  const brandNameById = useMemo(
+    () => Object.fromEntries(brands.map((b) => [b.id, b.name])),
+    [brands],
+  );
+  const modulesByBrand = useMemo(() => {
+    const groups: Record<string, BrandModule[]> = {};
+    for (const m of modules) {
+      const key = m.brand_id ?? "__none__";
+      (groups[key] ||= []).push(m);
+    }
+    return groups;
+  }, [modules]);
+
+  const selectedModules = form?.selected_modules ?? [];
+  const toggleModule = (moduleId: string, checked: boolean) => {
+    const current = selectedModules;
+    const next = checked
+      ? current.includes(moduleId)
+        ? current
+        : [...current, moduleId]
+      : current.filter((x) => x !== moduleId);
+    update("selected_modules", next);
+  };
+  const moveModule = (index: number, delta: number) => {
+    const current = [...selectedModules];
+    const target = index + delta;
+    if (target < 0 || target >= current.length) return;
+    [current[index], current[target]] = [current[target], current[index]];
+    update("selected_modules", current);
+  };
+  const orderedSelectedModules = useMemo(
+    () => selectedModules.map((id) => modules.find((m) => m.id === id)).filter(Boolean) as BrandModule[],
+    [selectedModules, modules],
+  );
+
+  // --- Products helpers ---
+  const selectedProducts = form?.selected_products ?? [];
+  const selectedProductIds = new Set(selectedProducts.map((p) => p.product_id));
+  const searchResults = useMemo(() => {
+    const q = productQuery.trim().toLowerCase();
+    if (!q) return [];
+    return catalog
+      .filter((c) => !selectedProductIds.has(c.id) && c.name.toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [productQuery, catalog, selectedProductIds]);
+
+  const addProduct = (p: CatalogProduct) => {
+    const offer = form?.offer;
+    const unit = offer === "vente" ? p.price ?? 0 : offer === "location" || offer === "leasing" ? p.price_monthly ?? 0 : p.price ?? 0;
+    onProductsChange([
+      ...selectedProducts,
+      { product_id: p.id, name: p.name, qty: 1, unit_price: unit },
+    ]);
+    setProductQuery("");
+  };
+  const updateProductLine = (idx: number, patch: Partial<SelectedProduct>) => {
+    const next = selectedProducts.map((p, i) => (i === idx ? { ...p, ...patch } : p));
+    onProductsChange(next);
+  };
+  const removeProduct = (idx: number) => {
+    onProductsChange(selectedProducts.filter((_, i) => i !== idx));
+  };
+
+  const isRecurring = form?.offer === "location" || form?.offer === "leasing";
+  const totalAmount = selectedProducts.reduce((s, p) => s + p.qty * p.unit_price, 0);
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground">
@@ -113,7 +292,7 @@ export default function DossierEdit() {
         </Button>
       </header>
 
-      <main className="mx-auto max-w-3xl px-6 py-8">
+      <main className="mx-auto max-w-4xl px-6 py-8">
         {loading || !form ? (
           <div className="flex items-center justify-center py-20 text-muted-foreground">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -127,7 +306,7 @@ export default function DossierEdit() {
                   {form.client_name?.trim() || "Nouveau dossier"}
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                  Renseigne les informations de base du dossier client.
+                  Renseigne les informations du dossier client.
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -190,10 +369,7 @@ export default function DossierEdit() {
                 </div>
                 <div className="space-y-2">
                   <Label>Type d'offre</Label>
-                  <Select
-                    value={form.offer ?? ""}
-                    onValueChange={(v) => update("offer", v || null)}
-                  >
+                  <Select value={form.offer ?? ""} onValueChange={(v) => onOfferChange(v || null)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Choisir un type" />
                     </SelectTrigger>
@@ -213,10 +389,260 @@ export default function DossierEdit() {
                   value={form.brief ?? ""}
                   onChange={(e) => update("brief", e.target.value)}
                   placeholder="Décris librement le besoin du client, le contexte, les contraintes, les envies…"
-                  rows={12}
+                  rows={10}
                 />
               </div>
             </div>
+
+            {/* SECTION A : Blocs de contenu */}
+            <section className="mt-6 space-y-4 rounded-lg border border-border bg-card/40 p-6">
+              <div>
+                <h3 className="font-display text-lg font-semibold">Blocs de contenu</h3>
+                <p className="text-sm text-muted-foreground">
+                  Sélectionne les blocs à inclure dans le dossier et ordonne-les.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                {/* Available modules grouped by brand */}
+                <div className="space-y-4">
+                  <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                    Disponibles
+                  </div>
+                  {modules.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">Aucun bloc disponible.</div>
+                  ) : (
+                    Object.entries(modulesByBrand).map(([brandId, list]) => (
+                      <div key={brandId} className="space-y-2">
+                        <div className="text-xs font-semibold text-primary">
+                          {brandId === "__none__" ? "Sans marque" : brandNameById[brandId] ?? "Marque"}
+                        </div>
+                        <div className="space-y-1">
+                          {list.map((m) => {
+                            const checked = selectedModules.includes(m.id);
+                            return (
+                              <label
+                                key={m.id}
+                                className="flex cursor-pointer items-start gap-3 rounded-md border border-border/60 bg-background/40 p-3 hover:bg-background/70"
+                              >
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={(v) => toggleModule(m.id, v === true)}
+                                  className="mt-0.5"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="truncate text-sm font-medium">
+                                    {m.title || m.slug || "Bloc"}
+                                  </div>
+                                  {m.subtitle ? (
+                                    <div className="truncate text-xs text-muted-foreground">
+                                      {m.subtitle}
+                                    </div>
+                                  ) : null}
+                                  {m.type ? (
+                                    <div className="mt-1 inline-block rounded-sm bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                                      {m.type}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Ordered selection */}
+                <div className="space-y-2">
+                  <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                    Ordre dans le dossier ({orderedSelectedModules.length})
+                  </div>
+                  {orderedSelectedModules.length === 0 ? (
+                    <div className="rounded-md border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
+                      Coche des blocs à gauche pour les ajouter ici.
+                    </div>
+                  ) : (
+                    <ol className="space-y-2">
+                      {orderedSelectedModules.map((m, i) => (
+                        <li
+                          key={m.id}
+                          className="flex items-center gap-2 rounded-md border border-border bg-background/60 p-2"
+                        >
+                          <span className="w-6 text-center text-xs text-muted-foreground">{i + 1}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-medium">
+                              {m.title || m.slug || "Bloc"}
+                            </div>
+                            <div className="truncate text-xs text-muted-foreground">
+                              {(m.brand_id && brandNameById[m.brand_id]) || "Sans marque"}
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            disabled={i === 0}
+                            onClick={() => moveModule(i, -1)}
+                            aria-label="Monter"
+                          >
+                            <ArrowUp className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            disabled={i === orderedSelectedModules.length - 1}
+                            onClick={() => moveModule(i, 1)}
+                            aria-label="Descendre"
+                          >
+                            <ArrowDown className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            onClick={() => toggleModule(m.id, false)}
+                            aria-label="Retirer"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            {/* SECTION B : Jeux proposés */}
+            <section className="mt-6 space-y-4 rounded-lg border border-border bg-card/40 p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="font-display text-lg font-semibold">Jeux proposés</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Recherche un jeu du catalogue et ajoute-le au dossier.
+                  </p>
+                </div>
+                {!form.offer ? (
+                  <span className="rounded-md border border-border bg-muted px-2 py-1 text-xs text-muted-foreground">
+                    Choisis un type d'offre pour pré-remplir les prix
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={productQuery}
+                  onChange={(e) => setProductQuery(e.target.value)}
+                  placeholder="Rechercher un jeu par nom…"
+                  className="pl-9"
+                />
+                {searchResults.length > 0 ? (
+                  <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-md border border-border bg-popover shadow-lg">
+                    {searchResults.map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => addProduct(r)}
+                        className="flex w-full items-center justify-between gap-3 border-b border-border/60 px-3 py-2 text-left text-sm hover:bg-accent last:border-b-0"
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate font-medium">{r.name}</div>
+                          <div className="truncate text-xs text-muted-foreground">
+                            {[r.vendor, r.category].filter(Boolean).join(" · ") || "—"}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          {r.price != null ? <span>{r.price} € HT</span> : null}
+                          {r.price_monthly != null ? <span>· {r.price_monthly} €/mois</span> : null}
+                          <Plus className="h-4 w-4" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
+              {selectedProducts.length === 0 ? (
+                <div className="rounded-md border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
+                  Aucun jeu ajouté pour l'instant.
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-md border border-border">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/60 text-xs uppercase tracking-wider text-muted-foreground">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Jeu</th>
+                        <th className="w-24 px-3 py-2 text-right">Qté</th>
+                        <th className="w-36 px-3 py-2 text-right">
+                          {isRecurring ? "PU / mois" : "PU HT"}
+                        </th>
+                        <th className="w-32 px-3 py-2 text-right">Sous-total</th>
+                        <th className="w-10 px-2 py-2" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedProducts.map((p, i) => (
+                        <tr key={p.product_id + i} className="border-t border-border/60">
+                          <td className="px-3 py-2">{p.name}</td>
+                          <td className="px-3 py-2 text-right">
+                            <Input
+                              type="number"
+                              min={1}
+                              value={p.qty}
+                              onChange={(e) =>
+                                updateProductLine(i, { qty: Math.max(1, Number(e.target.value) || 1) })
+                              }
+                              className="h-8 w-20 text-right"
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <Input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              value={p.unit_price}
+                              onChange={(e) =>
+                                updateProductLine(i, { unit_price: Number(e.target.value) || 0 })
+                              }
+                              className="h-8 w-28 text-right"
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums">
+                            {(p.qty * p.unit_price).toFixed(2)} €
+                          </td>
+                          <td className="px-2 py-2 text-right">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              onClick={() => removeProduct(i)}
+                              aria-label="Retirer"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-border bg-muted/40">
+                        <td colSpan={3} className="px-3 py-2 text-right text-xs uppercase tracking-wider text-muted-foreground">
+                          {isRecurring ? "Total mensuel" : "Total HT"}
+                        </td>
+                        <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                          {totalAmount.toFixed(2)} € {isRecurring ? "/ mois" : ""}
+                        </td>
+                        <td />
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </section>
           </>
         )}
       </main>

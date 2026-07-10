@@ -110,7 +110,7 @@ export function DossierPreview({
       const { data: p } = await (supabase as any)
         .from("projects")
         .select(
-          "id, client_name, brand_id, offer, selected_modules, selected_products, pricing, context, solution, scope, share_slug, is_shared",
+          "id, client_name, brand_id, offer, selected_modules, selected_products, pricing, context, solution, scope, share_slug, is_shared, plan_data",
         )
         .eq("id", projectId)
         .maybeSingle();

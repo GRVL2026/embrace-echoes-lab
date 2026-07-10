@@ -128,9 +128,10 @@ export default function DossierEdit() {
         (supabase as any).from("brands").select("id, name, key").order("name"),
         (supabase as any)
           .from("brand_modules")
-          .select("id, brand_id, type, slug, title, subtitle, position")
+          .select("id, brand_id, type, slug, title, subtitle, position, slide_number, image_url")
           .eq("is_active", true)
           .eq("reusable", true)
+          .order("slide_number", { ascending: true, nullsFirst: false })
           .order("position", { ascending: true }),
         (supabase as any)
           .from("catalog_products")

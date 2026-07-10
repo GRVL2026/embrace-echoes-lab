@@ -38,6 +38,8 @@ type BrandModule = {
   title: string | null;
   subtitle: string | null;
   position: number | null;
+  slide_number: number | null;
+  image_url: string | null;
 };
 type CatalogProduct = {
   id: string;

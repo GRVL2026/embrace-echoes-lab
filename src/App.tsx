@@ -7,6 +7,7 @@ import SpacePlanner from "./pages/SpacePlanner";
 import DossiersList from "./pages/DossiersList";
 import DossierEdit from "./pages/DossierEdit";
 import NotFound from "./pages/NotFound";
+import PublicDossier from "./pages/PublicDossier";
 
 const queryClient = new QueryClient();
 

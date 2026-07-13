@@ -10,6 +10,7 @@ const TOKEN_URL = 'https://xrp-flex.cegid.cloud/avranches-automatic/identity/con
 const TIMEOUT_MS = 25000;
 const PAGE_SIZE = 2000;
 const INSERT_BATCH = 500;
+const PAGES_PER_INVOCATION = 3;
 
 const FEEDS: { name: string; url: string }[] = [
   { name: 'BD-Clients',    url: 'https://xrp-flex.cegid.cloud/avranches-automatic/ODATA/AVRANCHES/BD-Clients' },
@@ -387,52 +388,60 @@ type SyncSummary = {
   ok: boolean;
   error?: string;
   duration_ms: number;
+  done?: boolean;
+  next_skip?: number;
+  total_rows?: number;
+  started_at?: string;
 };
 
-async function syncFeedStreaming(
+async function syncFeedChunk(
   admin: any,
   feedName: string,
   feedUrl: string,
   token: string,
+  options: { skip: number; reset: boolean; totalRows: number; startedAt?: string },
 ): Promise<SyncSummary> {
   const started = Date.now();
-  const startedAt = new Date().toISOString();
+  const startedAt = options.startedAt ?? new Date().toISOString();
   const mapper = MAPPERS[feedName];
   if (!mapper) {
     return { feed: feedName, rows: 0, ok: false, error: 'Mapper introuvable', duration_ms: 0 };
   }
 
-  let totalRows = 0;
+  let chunkRows = 0;
+  let skip = options.skip;
+  let done = false;
   try {
-    // Full-refresh: DELETE first
-    try {
-      const del = mapper.pk
-        ? await admin.from(mapper.table).delete().neq(mapper.pk, '__never_matches__')
-        : await admin.from(mapper.table).delete().gte('id', 0);
-      if (del.error) throw new Error(`DELETE ${mapper.table}: ${del.error.message}`);
-    } catch (e: any) {
-      throw new Error(`DELETE ${mapper.table}: ${e?.message ?? String(e)}`);
+    // Full-refresh uniquement au premier morceau. Les appels suivants reprennent au curseur reçu.
+    if (options.reset) {
+      try {
+        const del = mapper.pk
+          ? await admin.from(mapper.table).delete().neq(mapper.pk, '__never_matches__')
+          : await admin.from(mapper.table).delete().gte('id', 0);
+        if (del.error) throw new Error(`DELETE ${mapper.table}: ${del.error.message}`);
+      } catch (e: any) {
+        throw new Error(`DELETE ${mapper.table}: ${e?.message ?? String(e)}`);
+      }
     }
 
-    let skip = 0;
     let pendingBuffer: any[] = [];
 
-    const flushBuffer = async () => {
-      while (pendingBuffer.length >= INSERT_BATCH) {
+    const flushBuffer = async (flushAll = false) => {
+      while (pendingBuffer.length >= INSERT_BATCH || (flushAll && pendingBuffer.length > 0)) {
         const batch = pendingBuffer.slice(0, INSERT_BATCH);
         pendingBuffer = pendingBuffer.slice(INSERT_BATCH);
         try {
           const ins = await admin.from(mapper.table).insert(batch);
           if (ins.error) throw new Error(ins.error.message);
-          totalRows += batch.length;
+          chunkRows += batch.length;
         } catch (e: any) {
           throw new Error(`INSERT ${mapper.table}: ${e?.message ?? String(e)}`);
         }
       }
     };
 
-    // Safety cap
-    for (let page = 0; page < 500; page++) {
+    // Un appel traite au plus quelques pages afin de rester largement sous la limite de 150 s.
+    for (let page = 0; page < PAGES_PER_INVOCATION; page++) {
       const sep = feedUrl.includes('?') ? '&' : '?';
       const pageUrl = `${feedUrl}${sep}$top=${PAGE_SIZE}&$skip=${skip}`;
       const controller = new AbortController();
@@ -470,47 +479,62 @@ async function syncFeedStreaming(
       pendingBuffer.push(...mapped);
       await flushBuffer();
 
-      if (rows.length < PAGE_SIZE) break;
-      skip += PAGE_SIZE;
-    }
-
-    // Flush any remaining
-    if (pendingBuffer.length > 0) {
-      try {
-        const ins = await admin.from(mapper.table).insert(pendingBuffer);
-        if (ins.error) throw new Error(ins.error.message);
-        totalRows += pendingBuffer.length;
-        pendingBuffer = [];
-      } catch (e: any) {
-        throw new Error(`INSERT ${mapper.table} (final): ${e?.message ?? String(e)}`);
+      skip += rows.length;
+      if (rows.length < PAGE_SIZE) {
+        done = true;
+        break;
       }
     }
 
+    await flushBuffer(true);
+
     const duration_ms = Date.now() - started;
-    try {
-      await admin.from('gaia_sync_log').insert({
-        feed: feedName,
-        rows_loaded: totalRows,
-        ok: true,
-        started_at: startedAt,
-        finished_at: new Date().toISOString(),
-      });
-    } catch (_e) { /* ignore log failure */ }
-    return { feed: feedName, rows: totalRows, ok: true, duration_ms };
+    const totalRows = options.totalRows + chunkRows;
+    if (done) {
+      try {
+        await admin.from('gaia_sync_log').insert({
+          feed: feedName,
+          rows_loaded: totalRows,
+          ok: true,
+          started_at: startedAt,
+          finished_at: new Date().toISOString(),
+        });
+      } catch (_e) { /* ignore log failure */ }
+    }
+    return {
+      feed: feedName,
+      rows: chunkRows,
+      total_rows: totalRows,
+      ok: true,
+      done,
+      next_skip: skip,
+      started_at: startedAt,
+      duration_ms,
+    };
   } catch (e: any) {
     const duration_ms = Date.now() - started;
     const msg = e?.message ?? String(e);
     try {
       await admin.from('gaia_sync_log').insert({
         feed: feedName,
-        rows_loaded: totalRows,
+        rows_loaded: options.totalRows + chunkRows,
         ok: false,
         error: msg.slice(0, 1000),
         started_at: startedAt,
         finished_at: new Date().toISOString(),
       });
     } catch (_e) { /* ignore log failure */ }
-    return { feed: feedName, rows: totalRows, ok: false, error: msg, duration_ms };
+    return {
+      feed: feedName,
+      rows: chunkRows,
+      total_rows: options.totalRows + chunkRows,
+      ok: false,
+      done: true,
+      next_skip: skip,
+      started_at: startedAt,
+      error: msg,
+      duration_ms,
+    };
   }
 }
 
@@ -647,9 +671,20 @@ Deno.serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceKey);
     let s: SyncSummary;
     try {
-      console.log(`[cegid-sync] début flux ${target.name}`);
-      s = await syncFeedStreaming(admin, target.name, target.url, token_step.token!);
-      console.log(`[cegid-sync] fin flux ${target.name}: ok=${s.ok} rows=${s.rows}`);
+      const requestedSkip = Number(body?.skip ?? 0);
+      const requestedTotal = Number(body?.total_rows ?? 0);
+      const skip = Number.isFinite(requestedSkip) && requestedSkip >= 0 ? Math.trunc(requestedSkip) : 0;
+      const totalRows = Number.isFinite(requestedTotal) && requestedTotal >= 0 ? Math.trunc(requestedTotal) : 0;
+      const reset = body?.reset === true || skip === 0;
+      const startedAt = typeof body?.started_at === 'string' ? body.started_at : undefined;
+      console.log(`[cegid-sync] début flux ${target.name}, skip=${skip}, reset=${reset}`);
+      s = await syncFeedChunk(admin, target.name, target.url, token_step.token!, {
+        skip,
+        reset,
+        totalRows,
+        startedAt,
+      });
+      console.log(`[cegid-sync] fin morceau ${target.name}: ok=${s.ok} rows=${s.rows} total=${s.total_rows} done=${s.done}`);
     } catch (e: any) {
       const msg = `${e?.message ?? String(e)}\n${e?.stack ?? ''}`;
       console.error(`[cegid-sync] crash flux ${target.name}:`, msg);

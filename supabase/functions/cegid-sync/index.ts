@@ -6,6 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+const TOKEN_URL = 'https://xrp-flex.cegid.cloud/avranches-automatic/identity/connect/token';
+
 const FEEDS: { name: string; url: string }[] = [
   { name: 'BD-Clients',    url: 'https://xrp-flex.cegid.cloud/avranches-automatic/ODATA/AVRANCHES/BD-Clients' },
   { name: 'BD-Ventes',     url: 'https://xrp-flex.cegid.cloud/avranches-automatic/ODATA/AVRANCHES/BD-Ventes' },
@@ -21,7 +23,59 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
-async function fetchFeed(name: string, url: string, auth: string) {
+async function fetchToken(): Promise<{ ok: boolean; status: number; token?: string; error?: string; preview?: string }> {
+  const clientId = Deno.env.get('CEGID_CLIENT_ID');
+  const clientSecret = Deno.env.get('CEGID_CLIENT_SECRET');
+  const username = Deno.env.get('CEGID_USERNAME');
+  const password = Deno.env.get('CEGID_PASSWORD');
+
+  if (!clientId || !clientSecret || !username || !password) {
+    return { ok: false, status: 0, error: 'Secrets CEGID_CLIENT_ID / CEGID_CLIENT_SECRET / CEGID_USERNAME / CEGID_PASSWORD non configurés.' };
+  }
+
+  const form = new URLSearchParams();
+  form.set('grant_type', 'password');
+  form.set('client_id', clientId);
+  form.set('client_secret', clientSecret);
+  form.set('username', username);
+  form.set('password', password);
+  form.set('scope', 'api');
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
+  try {
+    const res = await fetch(TOKEN_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
+      },
+      body: form.toString(),
+      signal: controller.signal,
+    });
+    const status = res.status;
+    const text = await res.text();
+    if (!res.ok) {
+      return { ok: false, status, error: `Échec ticket OAuth (HTTP ${status})`, preview: text.slice(0, 500) };
+    }
+    try {
+      const json = JSON.parse(text);
+      const token = json?.access_token;
+      if (!token) {
+        return { ok: false, status, error: 'Réponse ticket sans access_token.', preview: text.slice(0, 500) };
+      }
+      return { ok: true, status, token };
+    } catch (_e) {
+      return { ok: false, status, error: 'Réponse ticket non JSON.', preview: text.slice(0, 500) };
+    }
+  } catch (e: any) {
+    return { ok: false, status: 0, error: e?.name === 'AbortError' ? 'Timeout ticket (20s).' : (e?.message ?? String(e)) };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchFeed(name: string, url: string, token: string) {
   const fullUrl = url + (url.includes('?') ? '&' : '?') + '$top=2';
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20000);
@@ -29,7 +83,7 @@ async function fetchFeed(name: string, url: string, auth: string) {
     const res = await fetch(fullUrl, {
       method: 'GET',
       headers: {
-        Authorization: `Basic ${auth}`,
+        Authorization: `Bearer ${token}`,
         Accept: 'application/json',
       },
       signal: controller.signal,
@@ -44,7 +98,7 @@ async function fetchFeed(name: string, url: string, auth: string) {
         url: fullUrl,
         status,
         ok: false,
-        error: status === 401 ? 'Identifiants Cegid invalides (401).' : `HTTP ${status}`,
+        error: status === 401 ? 'Non autorisé (401).' : `HTTP ${status}`,
         preview: text.slice(0, 500),
       };
     }
@@ -149,16 +203,19 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: `Unknown action: ${action}` }, 400);
     }
 
-    const user = Deno.env.get('CEGID_ODATA_USER');
-    const pass = Deno.env.get('CEGID_ODATA_PASSWORD');
-    if (!user || !pass) {
-      return jsonResponse({ error: 'Secrets CEGID_ODATA_USER / CEGID_ODATA_PASSWORD non configurés.' }, 500);
+    const ticket = await fetchToken();
+    if (!ticket.ok || !ticket.token) {
+      return jsonResponse({
+        ok: false,
+        ticket_status: ticket.status,
+        error: ticket.error ?? 'Échec authentification Cegid.',
+        preview: ticket.preview,
+      }, 200);
     }
-    const auth = btoa(`${user}:${pass}`);
 
-    const results = await Promise.all(FEEDS.map((f) => fetchFeed(f.name, f.url, auth)));
+    const results = await Promise.all(FEEDS.map((f) => fetchFeed(f.name, f.url, ticket.token!)));
 
-    return jsonResponse({ ok: true, results });
+    return jsonResponse({ ok: true, ticket_status: ticket.status, results });
   } catch (e: any) {
     console.error('cegid-sync error', e);
     return jsonResponse({ error: e?.message ?? String(e) }, 500);

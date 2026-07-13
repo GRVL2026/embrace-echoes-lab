@@ -418,8 +418,39 @@ export default function DossierEdit() {
     setDirty(true);
   };
 
-  const openPlanner = () => {
-    if (!id) return;
+  const openPlanner = async () => {
+    if (!id || !form) return;
+    // Persiste TOUT le dossier avant d'ouvrir le planner : sinon, les
+    // modifications non enregistrées (contexte, solution, jeux, client…) sont
+    // perdues au retour puisque le planner relit le dossier depuis la base.
+    setSaving(true);
+    const { error } = await (supabase as any)
+      .from("projects")
+      .update({
+        brand_id: form.brand_id,
+        client_name: form.client_name,
+        client_contact: form.client_contact,
+        offer: form.offer,
+        brief: form.brief,
+        selected_modules: form.selected_modules ?? [],
+        selected_products: form.selected_products ?? [],
+        pricing: form.pricing ?? computePricing(form.selected_products ?? [], form.offer),
+        context: form.context ?? null,
+        solution: form.solution ?? null,
+        scope: form.scope ?? null,
+      })
+      .eq("id", id);
+    setSaving(false);
+    if (error) {
+      toast({
+        title: "Enregistrement impossible",
+        description: `Impossible d'ouvrir le planner : ${error.message}`,
+        variant: "destructive",
+      });
+      return;
+    }
+    setDirty(false);
+    setSavedAt(new Date());
     navigate(`/planner/dossier/${id}`);
   };
 

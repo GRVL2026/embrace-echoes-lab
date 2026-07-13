@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import SpacePlanner from "./pages/SpacePlanner";
 import DossiersList from "./pages/DossiersList";
 import DossierEdit from "./pages/DossierEdit";
+import AdminDossiers from "./pages/AdminDossiers";
 import NotFound from "./pages/NotFound";
 import PublicDossier from "./pages/PublicDossier";
 import Login from "./pages/Login";

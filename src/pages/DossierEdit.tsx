@@ -17,10 +17,9 @@ import { toast } from "@/hooks/use-toast";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   ArrowLeft,
-  ArrowDown,
-  ArrowUp,
   Check,
   Eye,
+  GripVertical,
   Loader2,
   Map,
   Plus,

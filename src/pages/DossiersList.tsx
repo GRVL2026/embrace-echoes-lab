@@ -23,7 +23,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { UserMenu } from "@/components/UserMenu";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Shield, Trash2 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 import logoImg from "@/assets/logo.png";
 
 type Brand = { id: string; name: string; color?: string | null };
@@ -56,6 +57,7 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline" | "dest
 
 export default function DossiersList() {
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(true);
@@ -145,6 +147,14 @@ export default function DossiersList() {
             >
               Arcade Planner
             </Link>
+            {isAdmin && (
+              <Link
+                to="/admin"
+                className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center gap-1"
+              >
+                <Shield className="h-3 w-3" /> Admin
+              </Link>
+            )}
           </nav>
         </div>
         <div className="flex items-center gap-2">

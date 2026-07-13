@@ -465,7 +465,7 @@ export function DossierPreview({
       {shareUrl && !shareMode && (
         <div className="dossier-toolbar flex flex-shrink-0 flex-wrap items-center gap-2 border-b border-white/10 bg-black/40 px-4 py-2 text-xs text-white">
           <span className="text-white/60">
-            {project?.share_visibility === "password" ? "Lien protégé :" : "Lien public :"}
+            {shareInfo.share_visibility === "password" ? "Lien protégé :" : "Lien public :"}
           </span>
           <code className="min-w-0 flex-1 truncate rounded bg-white/10 px-2 py-1 font-mono">{shareUrl}</code>
           <Button variant="ghost" size="sm" onClick={copyShareUrl} className="text-white hover:bg-white/10" title="Copier le lien">

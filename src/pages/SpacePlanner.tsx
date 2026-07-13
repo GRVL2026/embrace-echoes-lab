@@ -21,7 +21,7 @@ import { UserMenu } from "@/components/UserMenu";
 import {
   buildInitialQuantities,
   mergeSelectedProductsFromPlan,
-  computePricing,
+  
   type CatalogRow,
   type SelectedProduct,
 } from "@/lib/dossierPlanSync";

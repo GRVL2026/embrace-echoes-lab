@@ -510,6 +510,8 @@ export default function AdminGaia() {
           </div>
         )}
 
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );

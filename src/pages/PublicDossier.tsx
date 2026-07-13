@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
-import { DossierPreview } from "@/components/dossier/DossierPreview";
+import { DossierPreview, type PreloadedDossier } from "@/components/dossier/DossierPreview";
 
 export default function PublicDossier() {
   const { slug } = useParams<{ slug: string }>();
   const [loading, setLoading] = useState(true);
-  const [projectId, setProjectId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [preloaded, setPreloaded] = useState<PreloadedDossier | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -17,17 +17,37 @@ export default function PublicDossier() {
         setLoading(false);
         return;
       }
-      const { data, error } = await (supabase as any)
-        .from("projects")
-        .select("id, is_shared")
-        .eq("share_slug", slug)
-        .maybeSingle();
-      if (error || !data || !data.is_shared) {
-        setError("Ce dossier n'est pas disponible.");
-      } else {
-        setProjectId(data.id as string);
+      try {
+        const { data, error } = await supabase.functions.invoke("get-shared-dossier", {
+          body: { slug },
+        });
+        if (error) throw error;
+        if (!data?.project) {
+          setError("Ce dossier n'est pas disponible.");
+        } else {
+          // Rebuild catalog map from enriched products payload (id -> {images, product_url}).
+          const catalog: Record<string, { id: string; images: string[] | null; product_url: string | null }> = {};
+          for (const p of data.products ?? []) {
+            if (p?.product_id) {
+              catalog[p.product_id] = {
+                id: p.product_id,
+                images: p.image ? [p.image] : null,
+                product_url: p.product_url ?? null,
+              };
+            }
+          }
+          setPreloaded({
+            project: data.project,
+            brand: data.brand ?? null,
+            modules: data.modules ?? [],
+            catalog,
+          });
+        }
+      } catch (e: any) {
+        setError(e?.message ?? "Ce dossier n'est pas disponible.");
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     })();
   }, [slug]);
 
@@ -39,7 +59,7 @@ export default function PublicDossier() {
       </div>
     );
   }
-  if (error || !projectId) {
+  if (error || !preloaded) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-black text-white">
         <div className="text-center">
@@ -49,5 +69,5 @@ export default function PublicDossier() {
       </div>
     );
   }
-  return <DossierPreview projectId={projectId} shareMode />;
+  return <DossierPreview shareMode preloaded={preloaded} />;
 }

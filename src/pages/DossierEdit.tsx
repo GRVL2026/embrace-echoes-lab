@@ -411,13 +411,17 @@ export default function DossierEdit() {
       : current.filter((x) => x !== moduleId);
     update("selected_modules", next);
   };
-  const moveModule = (index: number, delta: number) => {
+  const reorderModules = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0) return;
     const current = [...selectedModules];
-    const target = index + delta;
-    if (target < 0 || target >= current.length) return;
-    [current[index], current[target]] = [current[target], current[index]];
+    if (from >= current.length || to >= current.length) return;
+    const [moved] = current.splice(from, 1);
+    current.splice(to, 0, moved);
     update("selected_modules", current);
   };
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
   const orderedSelectedModules = useMemo(
     () => selectedModules.map((id) => modules.find((m) => m.id === id)).filter(Boolean) as BrandModule[],
     [selectedModules, modules],

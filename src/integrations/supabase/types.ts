@@ -382,6 +382,50 @@ export type Database = {
         }
         Relationships: []
       }
+      dossier_learning: {
+        Row: {
+          brand_id: string | null
+          brief: string | null
+          id: string
+          offer: string | null
+          owner_id: string | null
+          products: Json
+          project_id: string | null
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          brand_id?: string | null
+          brief?: string | null
+          id?: string
+          offer?: string | null
+          owner_id?: string | null
+          products?: Json
+          project_id?: string | null
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string | null
+          brief?: string | null
+          id?: string
+          offer?: string | null
+          owner_id?: string | null
+          products?: Json
+          project_id?: string | null
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dossier_learning_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       external_asset_sources: {
         Row: {
           created_at: string

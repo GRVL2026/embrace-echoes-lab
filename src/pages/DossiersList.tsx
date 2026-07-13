@@ -118,21 +118,32 @@ export default function DossiersList() {
     <div className="min-h-screen w-full bg-background text-foreground">
       <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-6">
         <div className="flex items-center gap-3">
-          <Link to="/" className="flex items-center gap-3">
+          <Link to="/dossiers" className="flex items-center gap-3">
             <img src={logoImg} alt="Arcade Planner logo" className="h-7 w-auto object-contain" />
             <h1 className="font-display text-xl font-bold tracking-tight">
               <span className="text-primary text-glow-purple">Arcade</span>{" "}
               <span className="text-secondary text-glow-green">Planner</span>
             </h1>
           </Link>
-          <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
-            Dossiers
-          </span>
+          <nav className="ml-4 flex items-center gap-1">
+            <Link
+              to="/dossiers"
+              className="rounded-md bg-primary/15 border border-primary/40 text-primary px-3 py-1 text-xs font-medium"
+            >
+              Dossiers
+            </Link>
+            <Link
+              to="/planner"
+              className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted"
+            >
+              Arcade Planner
+            </Link>
+          </nav>
         </div>
         <Button asChild variant="ghost" size="sm">
-          <Link to="/">
+          <Link to="/planner">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Retour au planner
+            Ouvrir le planner
           </Link>
         </Button>
       </header>

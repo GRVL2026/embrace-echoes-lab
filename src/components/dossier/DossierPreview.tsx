@@ -295,7 +295,7 @@ export function DossierPreview({
       if (error) throw error;
       const url = `${window.location.origin}/d/${slug}`;
       setShareUrl(url);
-      setProject({ ...project, share_slug: slug, is_shared: true });
+      setFetchedProject((prev) => (prev ? { ...prev, share_slug: slug!, is_shared: true } : prev));
       try {
         await navigator.clipboard.writeText(url);
         setCopied(true);

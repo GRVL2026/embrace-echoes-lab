@@ -31,6 +31,8 @@ type Project = {
   scope: { fourniture?: string; livraison?: string; formation?: string; garantie?: string } | null;
   share_slug?: string | null;
   is_shared?: boolean | null;
+  share_visibility?: string | null;
+  share_password?: string | null;
   plan_data?: any | null;
 };
 type CatalogInfo = { id: string; images: string[] | null; product_url: string | null };

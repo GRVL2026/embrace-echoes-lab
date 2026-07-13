@@ -7,6 +7,7 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
     const slug = typeof body?.slug === "string" ? body.slug.trim() : "";
+    const password = typeof body?.password === "string" ? body.password : "";
     if (!slug) {
       return new Response(JSON.stringify({ error: "slug requis" }), {
         status: 400,
@@ -22,7 +23,7 @@ Deno.serve(async (req) => {
     const { data: project, error: pErr } = await admin
       .from("projects")
       .select(
-        "id, client_name, brand_id, offer, selected_modules, selected_products, pricing, context, solution, scope, plan_data, status, share_slug, is_shared",
+        "id, client_name, brand_id, offer, selected_modules, selected_products, pricing, context, solution, scope, plan_data, status, share_slug, is_shared, share_visibility, share_password",
       )
       .eq("share_slug", slug)
       .eq("is_shared", true)
@@ -33,6 +34,29 @@ Deno.serve(async (req) => {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Password gate
+    if (project.share_visibility === "password") {
+      const required = (project.share_password ?? "").toString();
+      if (!required) {
+        return new Response(
+          JSON.stringify({ error: "Ce dossier est protégé mais aucun mot de passe n'est défini." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      if (!password) {
+        return new Response(
+          JSON.stringify({ password_required: true, error: "Mot de passe requis" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      if (password !== required) {
+        return new Response(
+          JSON.stringify({ password_required: true, error: "Mot de passe incorrect" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
     }
 
     // Brand
@@ -82,7 +106,7 @@ Deno.serve(async (req) => {
       };
     });
 
-    // Do NOT expose share_token or owner ids
+    // Never expose share_password / share_token / owner ids
     const safeProject = {
       id: project.id,
       client_name: project.client_name,

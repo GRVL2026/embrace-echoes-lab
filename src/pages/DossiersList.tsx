@@ -21,6 +21,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { UserMenu } from "@/components/UserMenu";
 import { toast } from "@/hooks/use-toast";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
@@ -86,9 +87,15 @@ export default function DossiersList() {
 
   const createDossier = async () => {
     setCreating(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setCreating(false);
+      toast({ title: "Non connecté", description: "Veuillez vous reconnecter.", variant: "destructive" });
+      return;
+    }
     const { data, error } = await (supabase as any)
       .from("projects")
-      .insert({ status: "draft", client_name: "" })
+      .insert({ status: "draft", client_name: "", owner_id: user.id })
       .select("id")
       .single();
     setCreating(false);
@@ -140,12 +147,15 @@ export default function DossiersList() {
             </Link>
           </nav>
         </div>
-        <Button asChild variant="ghost" size="sm">
-          <Link to="/planner">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Ouvrir le planner
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/planner">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Ouvrir le planner
+            </Link>
+          </Button>
+          <UserMenu />
+        </div>
       </header>
 
       <main className="mx-auto max-w-6xl px-6 py-8">

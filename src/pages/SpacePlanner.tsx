@@ -17,6 +17,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import logoImg from "@/assets/logo.png";
+import { UserMenu } from "@/components/UserMenu";
 
 
 function SpacePlannerInner() {
@@ -290,6 +291,9 @@ function SpacePlannerInner() {
                 {copilotOpen ? "Fermer Copilot IA" : "Ouvrir Copilot IA"}
               </TooltipContent>
             </Tooltip>
+            <div className="ml-2 pl-2 border-l border-border">
+              <UserMenu />
+            </div>
           </div>
         </header>
 

@@ -445,6 +445,27 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string | null
+          full_name: string | null
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
       projects: {
         Row: {
           brand_id: string | null
@@ -457,6 +478,7 @@ export type Database = {
           id: string
           is_shared: boolean
           offer: string
+          owner_id: string | null
           plan_data: Json | null
           plan_snapshot_id: string | null
           pricing: Json
@@ -480,6 +502,7 @@ export type Database = {
           id?: string
           is_shared?: boolean
           offer?: string
+          owner_id?: string | null
           plan_data?: Json | null
           plan_snapshot_id?: string | null
           pricing?: Json
@@ -503,6 +526,7 @@ export type Database = {
           id?: string
           is_shared?: boolean
           offer?: string
+          owner_id?: string | null
           plan_data?: Json | null
           plan_snapshot_id?: string | null
           pricing?: Json
@@ -599,12 +623,27 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          role: string
+          user_id: string
+        }
+        Insert: {
+          role?: string
+          user_id: string
+        }
+        Update: {
+          role?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_admin: { Args: never; Returns: boolean }
     }
     Enums: {
       [_ in never]: never

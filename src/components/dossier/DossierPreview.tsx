@@ -332,8 +332,12 @@ export function DossierPreview({
   const contact = brand?.contact ?? {};
   const sites = Array.isArray(contact.sites) ? contact.sites : contact.sites ? [contact.sites] : [];
 
+  const rootClass = embedded
+    ? "flex h-full w-full flex-col bg-black/90"
+    : `${shareMode ? "min-h-screen" : "fixed inset-0 z-[100]"} flex flex-col bg-black/90`;
   return (
-    <div className={`${shareMode ? "min-h-screen" : "fixed inset-0 z-[100]"} flex flex-col bg-black/90`}>
+    <div className={rootClass}>
+
       <div className="dossier-toolbar flex h-12 flex-shrink-0 items-center justify-between border-b border-white/10 bg-black/60 px-4 text-white backdrop-blur">
         <div className="flex items-center gap-3 text-sm">
           <span className="font-display font-semibold">Aperçu du dossier</span>

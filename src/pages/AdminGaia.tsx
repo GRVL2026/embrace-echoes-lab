@@ -59,6 +59,15 @@ export default function AdminGaia() {
   const [summary, setSummary] = useState<SyncSummary[] | null>(null);
   const [lastLogs, setLastLogs] = useState<SyncLogRow[]>([]);
   const [globalError, setGlobalError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<Record<string, SyncSummary & { status: "pending" | "running" | "done" }>>({});
+
+  const FEEDS = [
+    "BD-Clients",
+    "BD-Ventes",
+    "BD-Historique",
+    "BD-Commandes",
+    "BD-Stock",
+  ] as const;
 
   const loadLogs = async () => {
     const { data } = await (supabase as any)

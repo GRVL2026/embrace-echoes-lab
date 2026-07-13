@@ -114,6 +114,7 @@ export function DossierPreview({
   embedded = false,
   liveProject,
   preloaded,
+  onStatusChange,
 }: {
   projectId?: string;
   onClose?: () => void;
@@ -121,6 +122,7 @@ export function DossierPreview({
   embedded?: boolean;
   liveProject?: Project | null;
   preloaded?: PreloadedDossier | null;
+  onStatusChange?: (next: "draft" | "sent" | "won" | "lost") => void;
 }) {
   const usePreloaded = !!preloaded;
   const useLive = !usePreloaded && liveProject !== undefined;

@@ -214,10 +214,31 @@ export default function AdminGaia() {
         <UserMenu />
       </header>
 
-      <main className="mx-auto max-w-6xl px-6 py-8">
+      <main className="mx-auto max-w-7xl px-6 py-8">
+        <div className="mb-6">
+          <h2 className="font-display text-2xl font-bold">Dashboard Gaia — Avranches Automatic</h2>
+          <p className="text-sm text-muted-foreground">
+            Pilotage financier et synchronisation des flux Cegid XRP Flex.
+          </p>
+        </div>
+
+        <Tabs defaultValue="dashboard" className="w-full">
+          <TabsList className="mb-6">
+            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            <TabsTrigger value="sync">Synchronisation</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="dashboard">
+            <GaiaDashboard onGoToSync={() => {
+              const trigger = document.querySelector<HTMLButtonElement>('[role="tab"][value="sync"]');
+              trigger?.click();
+            }} />
+          </TabsContent>
+
+          <TabsContent value="sync">
         <div className="mb-6 flex items-center justify-between gap-4">
           <div>
-            <h2 className="font-display text-2xl font-bold">Dashboard Gaia</h2>
+            <h3 className="font-display text-xl font-bold">Synchronisation Cegid</h3>
             <p className="text-sm text-muted-foreground">
               Diagnostic de connexion aux flux OData Cegid XRP Flex.
             </p>

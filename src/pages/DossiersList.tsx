@@ -23,7 +23,7 @@ import {
 import { StatusSelect, updateProjectStatus, type DossierStatus } from "@/components/dossier/StatusSelect";
 import { UserMenu } from "@/components/UserMenu";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, Plus, Shield, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Shield, Trash2, Database } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import logoImg from "@/assets/logo.png";
 
@@ -136,12 +136,20 @@ export default function DossiersList() {
               Arcade Planner
             </Link>
             {isAdmin && (
-              <Link
-                to="/admin"
-                className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center gap-1"
-              >
-                <Shield className="h-3 w-3" /> Admin
-              </Link>
+              <>
+                <Link
+                  to="/admin"
+                  className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center gap-1"
+                >
+                  <Shield className="h-3 w-3" /> Admin
+                </Link>
+                <Link
+                  to="/admin/gaia"
+                  className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center gap-1"
+                >
+                  <Database className="h-3 w-3" /> Gaia
+                </Link>
+              </>
             )}
           </nav>
         </div>

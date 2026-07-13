@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { UserMenu } from "@/components/UserMenu";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, Shield } from "lucide-react";
+import { Loader2, Shield, Database } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 
 type Brand = { id: string; name: string };
@@ -135,6 +135,12 @@ export default function AdminDossiers() {
               className="rounded-md bg-primary/15 border border-primary/40 text-primary px-3 py-1 text-xs font-medium inline-flex items-center gap-1"
             >
               <Shield className="h-3 w-3" /> Admin
+            </Link>
+            <Link
+              to="/admin/gaia"
+              className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center gap-1"
+            >
+              <Database className="h-3 w-3" /> Gaia
             </Link>
           </nav>
         </div>

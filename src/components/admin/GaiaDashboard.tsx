@@ -91,16 +91,26 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
   // Séries mensuelles multi-années
   const years = useMemo(() => {
     const set = new Set<number>();
-    caMensuel.forEach((r) => set.add(r.annee));
+    caMensuel.forEach((r) => set.add(Number(r.annee)));
     return Array.from(set).sort((a, b) => b - a).slice(0, 3);
   }, [caMensuel]);
 
   const chartMensuel = useMemo(() => {
+    // Index by year -> month(1-12) -> ca
+    const idx = new Map<number, Map<number, number>>();
+    for (const r of caMensuel) {
+      const y = Number(r.annee);
+      const moisStr = typeof r.mois === "string" ? r.mois.slice(5, 7) : String(r.mois).padStart(2, "0");
+      const m = parseInt(moisStr, 10);
+      if (!m) continue;
+      const ca = Number(r.ca_ht) || 0;
+      if (!idx.has(y)) idx.set(y, new Map());
+      idx.get(y)!.set(m, (idx.get(y)!.get(m) ?? 0) + ca);
+    }
     return Array.from({ length: 12 }, (_, i) => {
       const row: Record<string, any> = { mois: MOIS[i] };
       for (const y of years) {
-        const rec = caMensuel.find((r) => r.annee === y && r.mois === i + 1);
-        row[String(y)] = rec ? Number(rec.ca_ht) : 0;
+        row[String(y)] = idx.get(y)?.get(i + 1) ?? 0;
       }
       return row;
     });

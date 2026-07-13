@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import SpacePlanner from "./pages/SpacePlanner";
 import DossiersList from "./pages/DossiersList";
+import { Navigate } from "react-router-dom";
 import DossierEdit from "./pages/DossierEdit";
 import NotFound from "./pages/NotFound";
 import PublicDossier from "./pages/PublicDossier";

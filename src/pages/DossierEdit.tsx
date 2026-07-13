@@ -229,6 +229,7 @@ export default function DossierEdit() {
         context: form.context ?? null,
         solution: form.solution ?? null,
         scope: form.scope ?? null,
+        plan_data: form.plan_data ?? null,
       })
       .eq("id", id);
     setSaving(false);
@@ -313,6 +314,14 @@ export default function DossierEdit() {
   // --- Plan de la salle ---
   const planData = form?.plan_data;
   const hasPlan = !!(planData && Array.isArray(planData.rooms) && planData.rooms.length > 0);
+  const planDisplayOptions = useMemo(
+    () => ({
+      showGames: planData?.displayOptions?.showGames ?? true,
+      showGapMeasurements: planData?.displayOptions?.showGapMeasurements ?? false,
+      showCirculation: planData?.displayOptions?.showCirculation ?? false,
+    }),
+    [planData?.displayOptions],
+  );
   const planThumbnail = useMemo(() => {
     if (!hasPlan) return null;
     try {
@@ -322,12 +331,37 @@ export default function DossierEdit() {
         planData.pillars ?? [],
         planData.placedEquipments ?? [],
         planData.circulationPath ?? [],
-        { width: 800, height: 450, showGames: true, showWallDimensions: true },
+        {
+          width: 800,
+          height: 450,
+          showWallDimensions: true,
+          showGames: planDisplayOptions.showGames,
+          showGapMeasurements: planDisplayOptions.showGapMeasurements,
+          showCirculation: planDisplayOptions.showCirculation,
+        },
       );
     } catch {
       return null;
     }
-  }, [planData, hasPlan]);
+  }, [planData, hasPlan, planDisplayOptions]);
+
+  const updatePlanDisplayOption = (
+    key: "showGames" | "showGapMeasurements" | "showCirculation",
+    value: boolean,
+  ) => {
+    setForm((f) => {
+      if (!f || !f.plan_data) return f;
+      const prev = (f.plan_data as any).displayOptions ?? {};
+      return {
+        ...f,
+        plan_data: {
+          ...(f.plan_data as any),
+          displayOptions: { ...prev, [key]: value },
+        },
+      };
+    });
+    setDirty(true);
+  };
 
   const openPlanner = () => {
     if (!id) return;
@@ -681,13 +715,44 @@ export default function DossierEdit() {
               </div>
 
               {hasPlan && planThumbnail ? (
-                <div className="overflow-hidden rounded-lg border border-border bg-background/40">
-                  <img
-                    src={planThumbnail}
-                    alt="Aperçu du plan"
-                    className="block w-full h-auto"
-                  />
-                </div>
+                <>
+                  <div className="overflow-hidden rounded-lg border border-border bg-background/40">
+                    <img
+                      src={planThumbnail}
+                      alt="Aperçu du plan"
+                      className="block w-full h-auto"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-4 rounded-md border border-border/60 bg-background/30 p-3 text-sm">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-primary"
+                        checked={planDisplayOptions.showGames}
+                        onChange={(e) => updatePlanDisplayOption("showGames", e.target.checked)}
+                      />
+                      Afficher les jeux
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-primary"
+                        checked={planDisplayOptions.showGapMeasurements}
+                        onChange={(e) => updatePlanDisplayOption("showGapMeasurements", e.target.checked)}
+                      />
+                      Afficher les mesures entre les jeux
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-primary"
+                        checked={planDisplayOptions.showCirculation}
+                        onChange={(e) => updatePlanDisplayOption("showCirculation", e.target.checked)}
+                      />
+                      Afficher le passage PMR
+                    </label>
+                  </div>
+                </>
               ) : (
                 <div className="rounded-md border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
                   Aucun plan enregistré pour ce dossier.

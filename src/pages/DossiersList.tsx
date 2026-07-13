@@ -147,6 +147,14 @@ export default function DossiersList() {
             >
               Arcade Planner
             </Link>
+            {isAdmin && (
+              <Link
+                to="/admin"
+                className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center gap-1"
+              >
+                <Shield className="h-3 w-3" /> Admin
+              </Link>
+            )}
           </nav>
         </div>
         <div className="flex items-center gap-2">

@@ -60,6 +60,25 @@ export default function AdminGaia() {
   const [lastLogs, setLastLogs] = useState<SyncLogRow[]>([]);
   const [globalError, setGlobalError] = useState<string | null>(null);
 
+  const loadLogs = async () => {
+    const { data } = await (supabase as any)
+      .from("gaia_sync_log")
+      .select("feed,rows_loaded,ok,error,finished_at")
+      .order("finished_at", { ascending: false })
+      .limit(50);
+    if (!data) return;
+    // keep only latest per feed
+    const map = new Map<string, SyncLogRow>();
+    for (const r of data as SyncLogRow[]) {
+      if (!map.has(r.feed)) map.set(r.feed, r);
+    }
+    setLastLogs(Array.from(map.values()));
+  };
+
+  useEffect(() => {
+    if (isAdmin) loadLogs();
+  }, [isAdmin]);
+
   if (authLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background text-foreground">

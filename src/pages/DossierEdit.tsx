@@ -462,14 +462,16 @@ export default function DossierEdit() {
         </Button>
       </header>
 
-      <main className="mx-auto max-w-4xl px-6 py-8">
+      <main className="mx-auto max-w-[1800px] px-6 py-8">
         {loading || !form ? (
           <div className="flex items-center justify-center py-20 text-muted-foreground">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             Chargement…
           </div>
         ) : (
-          <>
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(520px,760px)]">
+            <div className="min-w-0 space-y-6">
+
             <div className="mb-6 flex items-center justify-between">
               <div>
                 <h2 className="font-display text-2xl font-bold">

@@ -14,6 +14,21 @@ export type Database = {
   }
   public: {
     Tables: {
+      allowed_emails: {
+        Row: {
+          email: string
+          role: string
+        }
+        Insert: {
+          email: string
+          role?: string
+        }
+        Update: {
+          email?: string
+          role?: string
+        }
+        Relationships: []
+      }
       brand_modules: {
         Row: {
           brand_id: string

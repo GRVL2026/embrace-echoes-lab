@@ -88,8 +88,8 @@ export function StatusSelect({
   const s = normalizeStatus(value);
   const triggerCls =
     size === "sm"
-      ? "h-8 min-w-[140px] text-xs"
-      : "h-9 min-w-[160px] text-sm";
+      ? "h-8 w-auto min-w-[150px] text-xs"
+      : "h-9 w-auto min-w-[170px] text-sm";
   return (
     <Select
       value={s}
@@ -104,9 +104,9 @@ export function StatusSelect({
       }}
     >
       <SelectTrigger className={`${triggerCls} ${className}`}>
-        <span className="flex items-center gap-2">
+        <span className="flex items-center gap-2 whitespace-nowrap">
           <StatusDot status={s} />
-          <SelectValue />
+          <span>{STATUS_LABEL[s]}</span>
         </span>
       </SelectTrigger>
       <SelectContent>

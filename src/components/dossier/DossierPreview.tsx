@@ -498,7 +498,7 @@ export function DossierPreview({
           <DialogHeader>
             <DialogTitle>Partager le dossier</DialogTitle>
             <DialogDescription>
-              Choisis comment ce dossier est accessible via le lien /d/{project?.share_slug ?? "…"}.
+              Choisis comment ce dossier est accessible via le lien /d/{shareInfo.share_slug ?? "…"}.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">

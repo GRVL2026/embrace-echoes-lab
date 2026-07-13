@@ -785,74 +785,94 @@ export default function DossierEdit() {
                   </div>
                 ) : (
                   <ol className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-                    {orderedSelectedModules.map((m, i) => (
-                      <li
-                        key={m.id}
-                        className="group relative overflow-hidden rounded-md border border-border bg-background/60"
-                      >
-                        <div className="relative aspect-video w-full overflow-hidden bg-muted">
-                          {m.image_url ? (
-                            <img
-                              src={m.image_url}
-                              alt={m.title || "Slide"}
-                              className="h-full w-full object-cover"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-                              Aucune image
-                            </div>
-                          )}
-                          <span className="absolute left-1 top-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                            {i + 1}
-                          </span>
-                        </div>
-                        <div className="p-2">
-                          <div className="truncate text-xs font-medium">
-                            {m.title || m.slug || "Slide"}
+                    {orderedSelectedModules.map((m, i) => {
+                      const isDragged = dragIndex === i;
+                      const isOver = dragOverIndex === i && dragIndex !== null && dragIndex !== i;
+                      return (
+                        <li
+                          key={m.id}
+                          draggable
+                          onDragStart={(e) => {
+                            setDragIndex(i);
+                            e.dataTransfer.effectAllowed = "move";
+                            try { e.dataTransfer.setData("text/plain", String(i)); } catch { /* noop */ }
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = "move";
+                            if (dragOverIndex !== i) setDragOverIndex(i);
+                          }}
+                          onDragLeave={() => {
+                            if (dragOverIndex === i) setDragOverIndex(null);
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            const from = dragIndex ?? Number(e.dataTransfer.getData("text/plain"));
+                            if (Number.isFinite(from)) reorderModules(from as number, i);
+                            setDragIndex(null);
+                            setDragOverIndex(null);
+                          }}
+                          onDragEnd={() => {
+                            setDragIndex(null);
+                            setDragOverIndex(null);
+                          }}
+                          className={`group relative overflow-hidden rounded-md border bg-background/60 transition ${
+                            isDragged ? "opacity-40" : ""
+                          } ${isOver ? "border-primary ring-2 ring-primary/60" : "border-border"}`}
+                        >
+                          <div className="relative aspect-video w-full overflow-hidden bg-muted">
+                            {m.image_url ? (
+                              <img
+                                src={m.image_url}
+                                alt={m.title || "Slide"}
+                                className="h-full w-full object-cover pointer-events-none"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                                Aucune image
+                              </div>
+                            )}
+                            <span className="absolute left-1 top-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                              {i + 1}
+                            </span>
+                            <span
+                              className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded bg-black/60 text-white cursor-grab active:cursor-grabbing"
+                              aria-label="Glisser pour réordonner"
+                              title="Glisser pour réordonner"
+                            >
+                              <GripVertical className="h-3.5 w-3.5" />
+                            </span>
                           </div>
-                          {m.subtitle ? (
-                            <div className="truncate text-[11px] text-muted-foreground">
-                              {m.subtitle}
+                          <div className="p-2">
+                            <div className="truncate text-xs font-medium">
+                              {m.title || m.slug || "Slide"}
                             </div>
-                          ) : null}
-                        </div>
-                        <div className="flex items-center justify-between gap-1 border-t border-border/60 bg-background/40 px-1 py-1">
-                          <div className="flex gap-0.5">
+                            {m.subtitle ? (
+                              <div className="truncate text-[11px] text-muted-foreground">
+                                {m.subtitle}
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="flex items-center justify-between gap-1 border-t border-border/60 bg-background/40 px-2 py-1">
+                            <span className="text-[10px] text-muted-foreground">
+                              Glisser pour réordonner
+                            </span>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-6 w-6"
-                              disabled={i === 0}
-                              onClick={() => moveModule(i, -1)}
-                              aria-label="Reculer"
+                              className="h-6 w-6 text-destructive hover:text-destructive"
+                              onClick={() => toggleModule(m.id, false)}
+                              aria-label="Retirer"
                             >
-                              <ArrowUp className="h-3.5 w-3.5 -rotate-90" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              disabled={i === orderedSelectedModules.length - 1}
-                              onClick={() => moveModule(i, 1)}
-                              aria-label="Avancer"
-                            >
-                              <ArrowDown className="h-3.5 w-3.5 -rotate-90" />
+                              <X className="h-3.5 w-3.5" />
                             </Button>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-destructive hover:text-destructive"
-                            onClick={() => toggleModule(m.id, false)}
-                            aria-label="Retirer"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </li>
-                    ))}
+                        </li>
+                      );
+                    })}
                   </ol>
+
                 )}
               </div>
 

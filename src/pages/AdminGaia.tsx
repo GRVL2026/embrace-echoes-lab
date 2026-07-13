@@ -9,11 +9,20 @@ import { toast } from "@/hooks/use-toast";
 import { Loader2, Shield, Database, CheckCircle2, XCircle } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 
+type TokenStep = {
+  ok: boolean;
+  http_status?: number;
+  duration_ms: number;
+  error?: string;
+  preview?: string;
+};
+
 type FeedResult = {
   name: string;
   url: string;
-  status: number;
   ok: boolean;
+  http_status?: number;
+  duration_ms: number;
   error?: string;
   format?: "json" | "xml" | "text";
   columns?: string[];
@@ -21,10 +30,15 @@ type FeedResult = {
   preview?: string;
 };
 
+type Diagnostic = {
+  token_step: TokenStep;
+  feeds: FeedResult[];
+};
+
 export default function AdminGaia() {
   const { isAdmin, loading: authLoading } = useAuth();
   const [running, setRunning] = useState(false);
-  const [results, setResults] = useState<FeedResult[] | null>(null);
+  const [diag, setDiag] = useState<Diagnostic | null>(null);
   const [globalError, setGlobalError] = useState<string | null>(null);
 
   if (authLoading) {
@@ -39,15 +53,16 @@ export default function AdminGaia() {
   const runDiscover = async () => {
     setRunning(true);
     setGlobalError(null);
-    setResults(null);
+    setDiag(null);
     try {
       const { data, error } = await supabase.functions.invoke("cegid-sync", {
         body: { action: "discover" },
       });
       if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
-      setResults(((data as any)?.results ?? []) as FeedResult[]);
-      toast({ title: "Test Cegid terminé", description: "Voir les résultats ci-dessous." });
+      const d = data as Diagnostic | { error?: string };
+      if ((d as any)?.error && !(d as any)?.token_step) throw new Error((d as any).error);
+      setDiag(d as Diagnostic);
+      toast({ title: "Test Cegid terminé", description: "Voir le diagnostic ci-dessous." });
     } catch (e: any) {
       const msg = e?.message ?? String(e);
       setGlobalError(msg);
@@ -56,6 +71,7 @@ export default function AdminGaia() {
       setRunning(false);
     }
   };
+
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground">

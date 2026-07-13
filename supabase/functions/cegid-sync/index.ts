@@ -8,7 +8,7 @@ const corsHeaders = {
 
 const TOKEN_URL = 'https://xrp-flex.cegid.cloud/avranches-automatic/identity/connect/token';
 const TIMEOUT_MS = 25000;
-const PAGE_SIZE = 5000;
+const PAGE_SIZE = 2000;
 const INSERT_BATCH = 500;
 
 const FEEDS: { name: string; url: string }[] = [

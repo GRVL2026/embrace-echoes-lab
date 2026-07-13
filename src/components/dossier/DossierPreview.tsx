@@ -498,11 +498,11 @@ export function DossierPreview({
                             return (
                               <tr key={i} style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
                                 <td className="px-4 py-3">
-                                  <a href={href} target="_blank" rel="noreferrer" className="block h-14 w-20 overflow-hidden rounded border" style={{ borderColor: "rgba(0,0,0,0.1)", background: "rgba(0,0,0,0.04)" }}>
+                                  <a href={href} target="_blank" rel="noreferrer" className="flex h-16 w-24 items-center justify-center overflow-hidden rounded border p-1" style={{ borderColor: "rgba(0,0,0,0.1)", background: "#ffffff" }}>
                                     {img ? (
-                                      <img src={img} alt={p.name} className="h-full w-full object-cover" loading="lazy" />
+                                      <img src={img} alt={p.name} className="max-h-full max-w-full object-contain" loading="lazy" />
                                     ) : (
-                                      <div className="flex h-full w-full items-center justify-center text-[9px] leading-tight text-center px-1" style={{ color: DARK, opacity: 0.5 }}>
+                                      <div className="text-[9px] leading-tight text-center px-1" style={{ color: DARK, opacity: 0.5 }}>
                                         visuel indisponible
                                       </div>
                                     )}

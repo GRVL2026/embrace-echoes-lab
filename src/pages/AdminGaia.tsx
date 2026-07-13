@@ -110,35 +110,65 @@ export default function AdminGaia() {
     }
   };
 
+  const FEEDS = [
+    "BD-Clients",
+    "BD-Ventes",
+    "BD-Historique",
+    "BD-Commandes",
+    "BD-Stock",
+  ] as const;
+
+  const [progress, setProgress] = useState<Record<string, SyncSummary & { status: "pending" | "running" | "done" }>>({});
+
   const runSync = async () => {
     setSyncing(true);
     setGlobalError(null);
     setSummary(null);
-    try {
-      const { data, error } = await supabase.functions.invoke("cegid-sync", {
-        body: { action: "sync" },
-      });
-      if (error) throw error;
-      const d = data as { token_step?: TokenStep; summary?: SyncSummary[]; error?: string };
-      if (d?.error && !d?.token_step) throw new Error(d.error);
-      if (d?.token_step && !d.token_step.ok) {
-        setDiag({ token_step: d.token_step, feeds: [] });
-        throw new Error(d.token_step.error ?? "Échec ticket OAuth");
-      }
-      setSummary(d?.summary ?? []);
-      await loadLogs();
-      toast({
-        title: "Synchronisation terminée",
-        description: `${(d?.summary ?? []).reduce((n, s) => n + (s.ok ? s.rows : 0), 0)} lignes chargées.`,
-      });
-    } catch (e: any) {
-      const msg = e?.message ?? String(e);
-      setGlobalError(msg);
-      toast({ title: "Erreur de synchronisation", description: msg, variant: "destructive" });
-    } finally {
-      setSyncing(false);
+    const initial: Record<string, SyncSummary & { status: "pending" | "running" | "done" }> = {};
+    for (const f of FEEDS) {
+      initial[f] = { feed: f, rows: 0, ok: false, duration_ms: 0, status: "pending" };
     }
+    setProgress(initial);
+
+    const results: SyncSummary[] = [];
+    for (const feed of FEEDS) {
+      setProgress((p) => ({ ...p, [feed]: { ...p[feed], status: "running" } }));
+      try {
+        const { data, error } = await supabase.functions.invoke("cegid-sync", {
+          body: { action: "sync", feed },
+        });
+        if (error) throw error;
+        const d = data as { token_step?: TokenStep; summary?: SyncSummary[]; error?: string };
+        if (d?.token_step && !d.token_step.ok) {
+          const err = d.token_step.error ?? "Échec ticket OAuth";
+          const s: SyncSummary = { feed, rows: 0, ok: false, error: err, duration_ms: d.token_step.duration_ms ?? 0 };
+          results.push(s);
+          setProgress((p) => ({ ...p, [feed]: { ...s, status: "done" } }));
+          continue;
+        }
+        const s = d?.summary?.[0] ?? { feed, rows: 0, ok: false, error: "Réponse vide", duration_ms: 0 };
+        results.push(s);
+        setProgress((p) => ({ ...p, [feed]: { ...s, status: "done" } }));
+      } catch (e: any) {
+        const msg = e?.message ?? String(e);
+        const s: SyncSummary = { feed, rows: 0, ok: false, error: msg, duration_ms: 0 };
+        results.push(s);
+        setProgress((p) => ({ ...p, [feed]: { ...s, status: "done" } }));
+      }
+    }
+
+    setSummary(results);
+    await loadLogs();
+    const okCount = results.filter((r) => r.ok).length;
+    const totalRows = results.reduce((n, s) => n + (s.ok ? s.rows : 0), 0);
+    toast({
+      title: "Synchronisation terminée",
+      description: `${okCount}/${results.length} flux OK · ${totalRows} lignes chargées.`,
+      variant: okCount === results.length ? "default" : "destructive",
+    });
+    setSyncing(false);
   };
+
 
 
   return (

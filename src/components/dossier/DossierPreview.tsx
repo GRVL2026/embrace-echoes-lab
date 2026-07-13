@@ -205,6 +205,7 @@ export function DossierPreview({
   const planImage = useMemo(() => {
     const pd = project?.plan_data;
     if (!pd || !Array.isArray(pd.rooms) || pd.rooms.length === 0) return null;
+    const opts = pd.displayOptions ?? {};
     try {
       return renderPlan2D(
         pd.rooms ?? [],
@@ -212,7 +213,15 @@ export function DossierPreview({
         pd.pillars ?? [],
         pd.placedEquipments ?? [],
         pd.circulationPath ?? [],
-        { width: 1920, height: 1080, showGames: true, showWallDimensions: true, title: "Plan de la salle" },
+        {
+          width: 1920,
+          height: 1080,
+          showWallDimensions: true,
+          showGames: opts.showGames ?? true,
+          showGapMeasurements: opts.showGapMeasurements ?? false,
+          showCirculation: opts.showCirculation ?? false,
+          title: "Plan de la salle",
+        },
       );
     } catch {
       return null;

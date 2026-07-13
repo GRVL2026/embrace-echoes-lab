@@ -310,6 +310,57 @@ export default function DossierEdit() {
     }
   };
 
+  const [writingFromBrief, setWritingFromBrief] = useState(false);
+  const writeFromBrief = async () => {
+    if (!form) return;
+    const brief = (form.brief ?? "").trim();
+    if (!brief) {
+      toast({
+        title: "Brief requis",
+        description: "Écris un brief avant de générer les textes.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setWritingFromBrief(true);
+    try {
+      const brand = brands.find((b) => b.id === form.brand_id);
+      const { data, error } = await supabase.functions.invoke("generate-dossier", {
+        body: {
+          brief,
+          offer: form.offer,
+          client_name: form.client_name || undefined,
+          brand_key: brand?.key || undefined,
+        },
+      });
+      if (error) throw error;
+      const dossier = (data as any)?.dossier;
+      if (!dossier) throw new Error("Réponse IA invalide");
+      setForm((f) => {
+        if (!f) return f;
+        return {
+          ...f,
+          context: dossier.context ?? f.context,
+          solution: dossier.solution ?? f.solution,
+          scope: dossier.scope ?? f.scope,
+        };
+      });
+      setDirty(true);
+      toast({
+        title: "Textes rédigés",
+        description: "Contexte, Solution et Périmètre ont été remplis à partir du brief.",
+      });
+    } catch (e: any) {
+      toast({
+        title: "Rédaction impossible",
+        description: e?.message || "Une erreur est survenue lors de l'appel à l'IA.",
+        variant: "destructive",
+      });
+    } finally {
+      setWritingFromBrief(false);
+    }
+  };
+
   // --- Plan de la salle ---
   const planData = form?.plan_data;
   const hasPlan = !!(planData && Array.isArray(planData.rooms) && planData.rooms.length > 0);

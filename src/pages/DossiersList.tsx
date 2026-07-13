@@ -23,7 +23,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { UserMenu } from "@/components/UserMenu";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Shield, Trash2 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 import logoImg from "@/assets/logo.png";
 
 type Brand = { id: string; name: string; color?: string | null };

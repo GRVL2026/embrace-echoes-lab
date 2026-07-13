@@ -373,7 +373,7 @@ type SyncSummary = {
   duration_ms: number;
 };
 
-async function syncFeed(
+async function syncFeedStreaming(
   admin: any,
   feedName: string,
   feedUrl: string,
@@ -386,51 +386,118 @@ async function syncFeed(
     return { feed: feedName, rows: 0, ok: false, error: 'Mapper introuvable', duration_ms: 0 };
   }
 
+  let totalRows = 0;
   try {
-    const raw = await fetchAllRows(feedUrl, token);
-    const rows = raw.map(mapper.map).filter((r) => {
-      // drop rows where PK-ish field is empty for tables that need it
-      if (feedName === 'BD-Clients') return !!r.customer_id;
-      return true;
-    });
+    // Full-refresh: DELETE first
+    try {
+      const del = mapper.pk
+        ? await admin.from(mapper.table).delete().neq(mapper.pk, '__never_matches__')
+        : await admin.from(mapper.table).delete().gte('id', 0);
+      if (del.error) throw new Error(`DELETE ${mapper.table}: ${del.error.message}`);
+    } catch (e: any) {
+      throw new Error(`DELETE ${mapper.table}: ${e?.message ?? String(e)}`);
+    }
 
-    // Full-refresh: DELETE all then INSERT (PostgREST requires a filter)
-    const del = mapper.pk
-      ? await admin.from(mapper.table).delete().neq(mapper.pk, '__never_matches__')
-      : await admin.from(mapper.table).delete().gte('id', 0);
-    if (del.error) throw new Error(`DELETE ${mapper.table}: ${del.error.message}`);
+    let skip = 0;
+    let pendingBuffer: any[] = [];
 
-    for (let i = 0; i < rows.length; i += INSERT_BATCH) {
-      const batch = rows.slice(i, i + INSERT_BATCH);
-      const ins = await admin.from(mapper.table).insert(batch);
-      if (ins.error) throw new Error(`INSERT ${mapper.table} (batch ${i}): ${ins.error.message}`);
+    const flushBuffer = async () => {
+      while (pendingBuffer.length >= INSERT_BATCH) {
+        const batch = pendingBuffer.slice(0, INSERT_BATCH);
+        pendingBuffer = pendingBuffer.slice(INSERT_BATCH);
+        try {
+          const ins = await admin.from(mapper.table).insert(batch);
+          if (ins.error) throw new Error(ins.error.message);
+          totalRows += batch.length;
+        } catch (e: any) {
+          throw new Error(`INSERT ${mapper.table}: ${e?.message ?? String(e)}`);
+        }
+      }
+    };
+
+    // Safety cap
+    for (let page = 0; page < 500; page++) {
+      const sep = feedUrl.includes('?') ? '&' : '?';
+      const pageUrl = `${feedUrl}${sep}$top=${PAGE_SIZE}&$skip=${skip}`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+      let rows: any[] = [];
+      try {
+        const res = await fetch(pageUrl, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+          signal: controller.signal,
+        });
+        const text = await res.text();
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status} sur $skip=${skip} — ${text.slice(0, 200)}`);
+        }
+        let json: any;
+        try { json = JSON.parse(text); } catch (_e) {
+          throw new Error(`Réponse non JSON sur $skip=${skip}`);
+        }
+        rows = Array.isArray(json) ? json
+          : Array.isArray(json.value) ? json.value
+          : Array.isArray(json.d) ? json.d
+          : Array.isArray(json?.d?.results) ? json.d.results : [];
+      } catch (e: any) {
+        const isTimeout = e?.name === 'AbortError';
+        throw new Error(isTimeout ? `timeout (${TIMEOUT_MS / 1000}s) sur $skip=${skip}` : (e?.message ?? String(e)));
+      } finally {
+        clearTimeout(timeout);
+      }
+
+      const mapped = rows.map(mapper.map).filter((r) => {
+        if (feedName === 'BD-Clients') return !!r.customer_id;
+        return true;
+      });
+      pendingBuffer.push(...mapped);
+      await flushBuffer();
+
+      if (rows.length < PAGE_SIZE) break;
+      skip += PAGE_SIZE;
+    }
+
+    // Flush any remaining
+    if (pendingBuffer.length > 0) {
+      try {
+        const ins = await admin.from(mapper.table).insert(pendingBuffer);
+        if (ins.error) throw new Error(ins.error.message);
+        totalRows += pendingBuffer.length;
+        pendingBuffer = [];
+      } catch (e: any) {
+        throw new Error(`INSERT ${mapper.table} (final): ${e?.message ?? String(e)}`);
+      }
     }
 
     const duration_ms = Date.now() - started;
-    await admin.from('gaia_sync_log').insert({
-      feed: feedName,
-      rows_loaded: rows.length,
-      ok: true,
-      started_at: startedAt,
-      finished_at: new Date().toISOString(),
-    });
-    return { feed: feedName, rows: rows.length, ok: true, duration_ms };
+    try {
+      await admin.from('gaia_sync_log').insert({
+        feed: feedName,
+        rows_loaded: totalRows,
+        ok: true,
+        started_at: startedAt,
+        finished_at: new Date().toISOString(),
+      });
+    } catch (_e) { /* ignore log failure */ }
+    return { feed: feedName, rows: totalRows, ok: true, duration_ms };
   } catch (e: any) {
     const duration_ms = Date.now() - started;
     const msg = e?.message ?? String(e);
     try {
       await admin.from('gaia_sync_log').insert({
         feed: feedName,
-        rows_loaded: 0,
+        rows_loaded: totalRows,
         ok: false,
         error: msg.slice(0, 1000),
         started_at: startedAt,
         finished_at: new Date().toISOString(),
       });
     } catch (_e) { /* ignore log failure */ }
-    return { feed: feedName, rows: 0, ok: false, error: msg, duration_ms };
+    return { feed: feedName, rows: totalRows, ok: false, error: msg, duration_ms };
   }
 }
+
 
 // ---------- HTTP handler ----------
 

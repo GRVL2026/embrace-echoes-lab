@@ -88,6 +88,10 @@ type Project = {
   solution: Solution | null;
   scope: Scope | null;
   plan_data: any | null;
+  share_slug?: string | null;
+  is_shared?: boolean | null;
+  share_visibility?: string | null;
+  share_password?: string | null;
 };
 
 function computePricing(products: SelectedProduct[], offer: string | null): Pricing {

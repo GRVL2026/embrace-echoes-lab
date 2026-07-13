@@ -22,6 +22,7 @@ import { ForcePlaceDialog } from "./ForcePlaceDialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fetchShopifyCatalog } from "@/lib/shopifyApi";
 import { loadCatalogFromDB, syncShopifyToDB, updateCatalogProduct } from "@/lib/catalogDB";
+import { usePlannerBootstrap } from "@/contexts/PlannerBootstrap";
 
 /** Parse Shopify CSV dimensions like "L 1030 x P 2500 x H 2640 mm" or "35X22X12" */
 function parseShopifyDimensions(dimStr: string): { width: number; depth: number; height: number } | null {
@@ -348,6 +349,10 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   const [loadingShopify, setLoadingShopify] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Pré-remplit la sélection avec les jeux plaçables du dossier (une seule fois)
+  const { initialQuantities } = usePlannerBootstrap();
+  const bootstrapAppliedRef = useRef(false);
+
   // Auto-load catalog from database on mount
   useEffect(() => {
     loadCatalogFromDB().then(products => {
@@ -356,6 +361,29 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
       }
     });
   }, []);
+
+  // Applique les quantités initiales dès que le catalogue est disponible.
+  useEffect(() => {
+    if (bootstrapAppliedRef.current) return;
+    if (!initialQuantities || initialQuantities.size === 0) return;
+    if (catalog.length === 0) return;
+    const catalogIds = new Set(catalog.map((c) => c.id));
+    const seeded = new Map<string, number>();
+    for (const [id, qty] of initialQuantities) {
+      if (catalogIds.has(id)) seeded.set(id, qty);
+    }
+    if (seeded.size > 0) {
+      setSelectedQuantities((prev) => {
+        // On respecte une éventuelle sélection déjà commencée par l'utilisateur.
+        const next = new Map(prev);
+        for (const [id, qty] of seeded) {
+          if (!next.has(id)) next.set(id, qty);
+        }
+        return next;
+      });
+    }
+    bootstrapAppliedRef.current = true;
+  }, [initialQuantities, catalog]);
 
   const handleLoadShopify = async () => {
     setLoadingShopify(true);

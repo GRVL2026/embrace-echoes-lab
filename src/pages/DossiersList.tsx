@@ -23,7 +23,7 @@ import {
 import { StatusSelect, updateProjectStatus, type DossierStatus } from "@/components/dossier/StatusSelect";
 import { UserMenu } from "@/components/UserMenu";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, Plus, Shield, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Shield, Trash2, Database } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import logoImg from "@/assets/logo.png";
 

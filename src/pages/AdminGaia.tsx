@@ -46,6 +46,10 @@ type SyncSummary = {
   duration_ms: number;
   http_status?: number;
   response_body?: string;
+  done?: boolean;
+  next_skip?: number;
+  total_rows?: number;
+  started_at?: string;
 };
 
 type SyncLogRow = {
@@ -101,33 +105,90 @@ export default function AdminGaia() {
 
   const syncOneFeed = async (feed: FeedName): Promise<SyncSummary> => {
     const started = Date.now();
-    try {
-      const { data, error } = await supabase.functions.invoke("cegid-sync", {
-        body: { action: "sync", feed },
-      });
-      if (error) throw error;
-      const d = data as { token_step?: TokenStep; summary?: SyncSummary[]; error?: string };
-      if (d?.token_step && !d.token_step.ok) {
-        return {
-          feed,
-          rows: 0,
-          ok: false,
-          error: d.token_step.error ?? "Échec ticket OAuth",
-          duration_ms: d.token_step.duration_ms ?? Date.now() - started,
-        };
+    let skip = 0;
+    let totalRows = 0;
+    let startedAt: string | undefined;
+
+    // La fonction traite au plus trois pages par requête. Le front reprend le curseur
+    // jusqu'à la fin pour éviter le timeout serveur de 150 secondes.
+    for (let chunk = 0; chunk < 200; chunk++) {
+      try {
+        const { data, error } = await supabase.functions.invoke("cegid-sync", {
+          body: {
+            action: "sync",
+            feed,
+            skip,
+            total_rows: totalRows,
+            started_at: startedAt,
+            reset: chunk === 0,
+          },
+        });
+        if (error) throw error;
+        const d = data as { token_step?: TokenStep; summary?: SyncSummary[]; error?: string };
+        if (d?.token_step && !d.token_step.ok) {
+          return {
+            feed,
+            rows: totalRows,
+            ok: false,
+            error: d.token_step.error ?? "Échec ticket OAuth",
+            duration_ms: Date.now() - started,
+          };
+        }
+
+        const part = d?.summary?.[0];
+        if (!part) {
+          return {
+            feed,
+            rows: totalRows,
+            ok: false,
+            error: d?.error ?? "Réponse vide",
+            response_body: d ? JSON.stringify(d, null, 2) : undefined,
+            duration_ms: Date.now() - started,
+          };
+        }
+        if (!part.ok) {
+          return { ...part, feed, rows: part.total_rows ?? totalRows, duration_ms: Date.now() - started };
+        }
+
+        totalRows = part.total_rows ?? totalRows + part.rows;
+        startedAt = part.started_at ?? startedAt;
+        setProgress((current) => ({
+          ...current,
+          [feed]: {
+            feed,
+            rows: totalRows,
+            ok: false,
+            duration_ms: Date.now() - started,
+            status: "running",
+          },
+        }));
+
+        if (part.done) {
+          return { ...part, feed, rows: totalRows, total_rows: totalRows, duration_ms: Date.now() - started };
+        }
+        if (typeof part.next_skip !== "number" || part.next_skip <= skip) {
+          return {
+            feed,
+            rows: totalRows,
+            ok: false,
+            error: "La pagination Cegid n'a pas avancé.",
+            duration_ms: Date.now() - started,
+          };
+        }
+        skip = part.next_skip;
+      } catch (error: unknown) {
+        const detail = await readFunctionError(error);
+        return { feed, rows: totalRows, ok: false, duration_ms: Date.now() - started, ...detail };
       }
-      return d?.summary?.[0] ?? {
-        feed,
-        rows: 0,
-        ok: false,
-        error: d?.error ?? "Réponse vide",
-        response_body: d ? JSON.stringify(d, null, 2) : undefined,
-        duration_ms: Date.now() - started,
-      };
-    } catch (error: unknown) {
-      const detail = await readFunctionError(error);
-      return { feed, rows: 0, ok: false, duration_ms: Date.now() - started, ...detail };
     }
+
+    return {
+      feed,
+      rows: totalRows,
+      ok: false,
+      error: "Limite de sécurité de pagination atteinte.",
+      duration_ms: Date.now() - started,
+    };
   };
 
   const loadLogs = async () => {
@@ -389,7 +450,7 @@ export default function AdminGaia() {
                       </div>
                       <div className="flex items-center gap-3 text-xs">
                         {status === "pending" && <span className="text-muted-foreground">En attente…</span>}
-                        {status === "running" && <span className="text-primary">Synchronisation en cours…</span>}
+                        {status === "running" && <span className="text-primary">Synchronisation en cours… {p?.rows ? `· ${p.rows} lignes` : ""}</span>}
                         {status === "done" && p?.ok && <span className="text-secondary">OK · {p.rows} lignes</span>}
                         {status === "done" && p && !p.ok && <span className="text-destructive">{p.error ?? "Erreur"}</span>}
                         <Button

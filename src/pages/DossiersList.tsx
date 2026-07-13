@@ -146,12 +146,15 @@ export default function DossiersList() {
             </Link>
           </nav>
         </div>
-        <Button asChild variant="ghost" size="sm">
-          <Link to="/planner">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Ouvrir le planner
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/planner">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Ouvrir le planner
+            </Link>
+          </Button>
+          <UserMenu />
+        </div>
       </header>
 
       <main className="mx-auto max-w-6xl px-6 py-8">

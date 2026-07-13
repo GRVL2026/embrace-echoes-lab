@@ -290,6 +290,9 @@ function SpacePlannerInner() {
                 {copilotOpen ? "Fermer Copilot IA" : "Ouvrir Copilot IA"}
               </TooltipContent>
             </Tooltip>
+            <div className="ml-2 pl-2 border-l border-border">
+              <UserMenu />
+            </div>
           </div>
         </header>
 

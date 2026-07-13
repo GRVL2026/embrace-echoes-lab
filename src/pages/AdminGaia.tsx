@@ -110,6 +110,36 @@ export default function AdminGaia() {
     }
   };
 
+  const runSync = async () => {
+    setSyncing(true);
+    setGlobalError(null);
+    setSummary(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("cegid-sync", {
+        body: { action: "sync" },
+      });
+      if (error) throw error;
+      const d = data as { token_step?: TokenStep; summary?: SyncSummary[]; error?: string };
+      if (d?.error && !d?.token_step) throw new Error(d.error);
+      if (d?.token_step && !d.token_step.ok) {
+        setDiag({ token_step: d.token_step, feeds: [] });
+        throw new Error(d.token_step.error ?? "Échec ticket OAuth");
+      }
+      setSummary(d?.summary ?? []);
+      await loadLogs();
+      toast({
+        title: "Synchronisation terminée",
+        description: `${(d?.summary ?? []).reduce((n, s) => n + (s.ok ? s.rows : 0), 0)} lignes chargées.`,
+      });
+    } catch (e: any) {
+      const msg = e?.message ?? String(e);
+      setGlobalError(msg);
+      toast({ title: "Erreur de synchronisation", description: msg, variant: "destructive" });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground">

@@ -18,6 +18,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import logoImg from "@/assets/logo.png";
 import { UserMenu } from "@/components/UserMenu";
+import {
+  buildInitialQuantities,
+  mergeSelectedProductsFromPlan,
+  computePricing,
+  type CatalogRow,
+  type SelectedProduct,
+} from "@/lib/dossierPlanSync";
+import { PlannerBootstrapProvider } from "@/contexts/PlannerBootstrap";
 
 
 function SpacePlannerInner() {

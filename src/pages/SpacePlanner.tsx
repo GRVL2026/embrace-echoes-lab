@@ -216,6 +216,7 @@ function SpacePlannerInner() {
   }, [sidebarOpen, state, dispatch]);
 
   return (
+    <PlannerBootstrapProvider value={{ initialQuantities }}>
     <div className="flex h-screen w-screen overflow-hidden bg-background">
       {/* Left toolbar - switches based on view mode */}
       <div className="relative z-20 flex flex-col items-center justify-center p-2">

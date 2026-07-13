@@ -142,6 +142,7 @@ export function DossierPreview({
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [dialogVisibility, setDialogVisibility] = useState<"public" | "password">("public");
   const [dialogPassword, setDialogPassword] = useState("");
+  const [shareOverlay, setShareOverlay] = useState<{ share_slug?: string | null; is_shared?: boolean | null; share_visibility?: string | null; share_password?: string | null } | null>(null);
 
   // Fetch the project when not driven by live form state or preloaded bundle.
   useEffect(() => {

@@ -19,7 +19,7 @@ import {
   Cell,
 } from "recharts";
 
-type CaMensuel = { mois: number; annee: number; ca_ht: number; lignes: number };
+type CaMensuel = { mois: string; annee: number; ca_ht: number | string; lignes: number };
 type CaClient = { annee: number; code_client: string; client: string; ca_ht: number };
 type CaFamille = { annee: number; famille: string; ca_ht: number };
 type CommandesEtat = { etat: "signee" | "devis"; nb_commandes: number; total_ht: number };

@@ -229,6 +229,7 @@ export default function DossierEdit() {
         context: form.context ?? null,
         solution: form.solution ?? null,
         scope: form.scope ?? null,
+        plan_data: form.plan_data ?? null,
       })
       .eq("id", id);
     setSaving(false);

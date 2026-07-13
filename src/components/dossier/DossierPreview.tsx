@@ -475,12 +475,12 @@ export function DossierPreview({
           <Button variant="ghost" size="sm" onClick={openShareDialog} className="text-white hover:bg-white/10">
             Modifier
           </Button>
-          {project?.share_visibility === "password" && project?.share_password ? (
+          {shareInfo.share_visibility === "password" && shareInfo.share_password ? (
             <div className="flex w-full items-center gap-2 border-t border-white/10 pt-2 sm:w-auto sm:border-none sm:pt-0">
               <Lock className="h-3 w-3 text-white/60" />
               <span className="text-white/60">Mot de passe à transmettre :</span>
               <code className="rounded bg-white/10 px-2 py-1 font-mono">
-                {showPassword ? project.share_password : "•".repeat(Math.min(12, project.share_password.length))}
+                {showPassword ? shareInfo.share_password : "•".repeat(Math.min(12, shareInfo.share_password.length))}
               </code>
               <Button variant="ghost" size="sm" onClick={() => setShowPassword((v) => !v)} className="text-white hover:bg-white/10" title={showPassword ? "Masquer" : "Afficher"}>
                 {showPassword ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}

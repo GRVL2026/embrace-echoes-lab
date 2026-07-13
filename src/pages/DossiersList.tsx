@@ -20,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
+import { StatusSelect, updateProjectStatus, type DossierStatus } from "@/components/dossier/StatusSelect";
 import { UserMenu } from "@/components/UserMenu";
 import { toast } from "@/hooks/use-toast";
 import { ArrowLeft, Plus, Shield, Trash2 } from "lucide-react";

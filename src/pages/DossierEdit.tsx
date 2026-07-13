@@ -663,7 +663,23 @@ export default function DossierEdit() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="brief">Brief</Label>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Label htmlFor="brief">Brief</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={writeFromBrief}
+                    disabled={writingFromBrief || generating || !((form.brief ?? "").trim())}
+                  >
+                    {writingFromBrief ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="mr-2 h-4 w-4" />
+                    )}
+                    Rédiger depuis le brief
+                  </Button>
+                </div>
                 <Textarea
                   id="brief"
                   value={form.brief ?? ""}
@@ -671,7 +687,11 @@ export default function DossierEdit() {
                   placeholder="Décris librement le besoin du client, le contexte, les contraintes, les envies…"
                   rows={10}
                 />
+                <p className="text-[11px] text-muted-foreground">
+                  « Rédiger depuis le brief » remplit uniquement les sections Contexte, Solution et Périmètre. Les jeux, slides et prix ne sont pas modifiés.
+                </p>
               </div>
+
             </div>
 
             {aiSummary ? (

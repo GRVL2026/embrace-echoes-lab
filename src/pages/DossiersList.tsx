@@ -42,18 +42,6 @@ const OFFER_LABEL: Record<string, string> = {
   location: "Location",
   leasing: "Leasing",
 };
-const STATUS_LABEL: Record<string, string> = {
-  draft: "Brouillon",
-  sent: "Envoyé",
-  won: "Gagné",
-  lost: "Perdu",
-};
-const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
-  draft: "outline",
-  sent: "secondary",
-  won: "default",
-  lost: "destructive",
-};
 
 export default function DossiersList() {
   const navigate = useNavigate();

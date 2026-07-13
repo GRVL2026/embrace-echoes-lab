@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { DossierPreview } from "@/components/dossier/DossierPreview";
+import { StatusSelect, updateProjectStatus, type DossierStatus } from "@/components/dossier/StatusSelect";
 import { renderPlan2D } from "@/lib/plan2DRender";
 
 type Brand = { id: string; name: string; key: string | null };

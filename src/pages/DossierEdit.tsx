@@ -715,13 +715,44 @@ export default function DossierEdit() {
               </div>
 
               {hasPlan && planThumbnail ? (
-                <div className="overflow-hidden rounded-lg border border-border bg-background/40">
-                  <img
-                    src={planThumbnail}
-                    alt="Aperçu du plan"
-                    className="block w-full h-auto"
-                  />
-                </div>
+                <>
+                  <div className="overflow-hidden rounded-lg border border-border bg-background/40">
+                    <img
+                      src={planThumbnail}
+                      alt="Aperçu du plan"
+                      className="block w-full h-auto"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-4 rounded-md border border-border/60 bg-background/30 p-3 text-sm">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-primary"
+                        checked={planDisplayOptions.showGames}
+                        onChange={(e) => updatePlanDisplayOption("showGames", e.target.checked)}
+                      />
+                      Afficher les jeux
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-primary"
+                        checked={planDisplayOptions.showGapMeasurements}
+                        onChange={(e) => updatePlanDisplayOption("showGapMeasurements", e.target.checked)}
+                      />
+                      Afficher les mesures entre les jeux
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-primary"
+                        checked={planDisplayOptions.showCirculation}
+                        onChange={(e) => updatePlanDisplayOption("showCirculation", e.target.checked)}
+                      />
+                      Afficher le passage PMR
+                    </label>
+                  </div>
+                </>
               ) : (
                 <div className="rounded-md border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
                   Aucun plan enregistré pour ce dossier.

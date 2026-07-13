@@ -20,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
+import { StatusSelect, updateProjectStatus, type DossierStatus } from "@/components/dossier/StatusSelect";
 import { UserMenu } from "@/components/UserMenu";
 import { toast } from "@/hooks/use-toast";
 import { ArrowLeft, Plus, Shield, Trash2 } from "lucide-react";
@@ -41,18 +41,6 @@ const OFFER_LABEL: Record<string, string> = {
   vente: "Vente",
   location: "Location",
   leasing: "Leasing",
-};
-const STATUS_LABEL: Record<string, string> = {
-  draft: "Brouillon",
-  sent: "Envoyé",
-  won: "Gagné",
-  lost: "Perdu",
-};
-const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
-  draft: "outline",
-  sent: "secondary",
-  won: "default",
-  lost: "destructive",
 };
 
 export default function DossiersList() {
@@ -219,10 +207,17 @@ export default function DossiersList() {
                     </TableCell>
                     <TableCell>{brandName(p.brand_id)}</TableCell>
                     <TableCell>{p.offer ? OFFER_LABEL[p.offer] ?? p.offer : "—"}</TableCell>
-                    <TableCell>
-                      <Badge variant={STATUS_VARIANT[p.status ?? "draft"] ?? "outline"}>
-                        {STATUS_LABEL[p.status ?? "draft"] ?? p.status}
-                      </Badge>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <StatusSelect
+                        size="sm"
+                        value={p.status}
+                        onChange={async (next) => {
+                          const ok = await updateProjectStatus(p.id, next);
+                          if (ok) {
+                            setProjects((prev) => prev.map((r) => (r.id === p.id ? { ...r, status: next } : r)));
+                          }
+                        }}
+                      />
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {new Date(p.updated_at).toLocaleString("fr-FR")}

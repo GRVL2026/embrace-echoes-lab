@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { DossierPreview } from "@/components/dossier/DossierPreview";
+import { StatusSelect, updateProjectStatus, type DossierStatus } from "@/components/dossier/StatusSelect";
 import { renderPlan2D } from "@/lib/plan2DRender";
 
 type Brand = { id: string; name: string; key: string | null };
@@ -574,6 +575,16 @@ export default function DossierEdit() {
                 </p>
               </div>
               <div className="flex items-center gap-3">
+                <StatusSelect
+                  value={form.status}
+                  onChange={async (next) => {
+                    const ok = await updateProjectStatus(form.id, next);
+                    if (ok) {
+                      setForm((f) => (f ? { ...f, status: next } : f));
+                      toast({ title: "Statut mis à jour" });
+                    }
+                  }}
+                />
                 {dirty ? (
                   <span className="text-xs text-muted-foreground">Modifications non enregistrées</span>
                 ) : savedAt ? (
@@ -1279,13 +1290,25 @@ export default function DossierEdit() {
             </div>
             <aside className="hidden lg:block">
               <div className="sticky top-4 h-[calc(100vh-6rem)] overflow-hidden rounded-lg border border-border shadow-xl">
-                <DossierPreview projectId={id!} liveProject={form as any} embedded />
+                <DossierPreview
+                  projectId={id!}
+                  liveProject={form as any}
+                  embedded
+                  onStatusChange={(next) => setForm((f) => (f ? { ...f, status: next } : f))}
+                />
               </div>
             </aside>
           </div>
         )}
       </main>
-      {previewOpen && id && <DossierPreview projectId={id} onClose={() => setPreviewOpen(false)} liveProject={form as any} />}
+      {previewOpen && id && (
+        <DossierPreview
+          projectId={id}
+          onClose={() => setPreviewOpen(false)}
+          liveProject={form as any}
+          onStatusChange={(next) => setForm((f) => (f ? { ...f, status: next } : f))}
+        />
+      )}
     </div>
   );
 }

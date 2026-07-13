@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { markSentIfDraft } from "@/components/dossier/StatusSelect";
 
 
 type BrandContact = {
@@ -23,6 +24,7 @@ type Project = {
   client_name: string | null;
   brand_id: string | null;
   offer: string | null;
+  status?: string | null;
   selected_modules: string[] | null;
   selected_products: { product_id?: string; name: string; qty: number; unit_price: number }[] | null;
   pricing: { lines?: { label: string; qty: number; amount: number }[]; total_ht?: number; monthly?: number } | null;
@@ -113,6 +115,7 @@ export function DossierPreview({
   embedded = false,
   liveProject,
   preloaded,
+  onStatusChange,
 }: {
   projectId?: string;
   onClose?: () => void;
@@ -120,6 +123,7 @@ export function DossierPreview({
   embedded?: boolean;
   liveProject?: Project | null;
   preloaded?: PreloadedDossier | null;
+  onStatusChange?: (next: "draft" | "sent" | "won" | "lost") => void;
 }) {
   const usePreloaded = !!preloaded;
   const useLive = !usePreloaded && liveProject !== undefined;
@@ -152,7 +156,7 @@ export function DossierPreview({
       const { data: p } = await (supabase as any)
         .from("projects")
         .select(
-          "id, client_name, brand_id, offer, selected_modules, selected_products, pricing, context, solution, scope, share_slug, is_shared, share_visibility, share_password, plan_data",
+          "id, client_name, brand_id, offer, status, selected_modules, selected_products, pricing, context, solution, scope, share_slug, is_shared, share_visibility, share_password, plan_data",
         )
         .eq("id", projectId)
         .maybeSingle();
@@ -299,6 +303,15 @@ export function DossierPreview({
   };
 
   const handlePrint = () => {
+    // Auto-mark as sent on first export from the sales UI
+    if (!shareMode && project?.id) {
+      markSentIfDraft(project.id, project.status).then((next) => {
+        if (next !== project.status) {
+          setFetchedProject((prev) => (prev ? { ...prev, status: next } : prev));
+          onStatusChange?.(next);
+        }
+      });
+    }
     document.body.classList.add("dossier-printing");
     setTimeout(() => {
       window.print();
@@ -357,6 +370,12 @@ export function DossierPreview({
         .update(payload)
         .eq("id", project.id);
       if (error) throw error;
+      // Auto-mark as sent on first successful share
+      const nextStatus = await markSentIfDraft(project.id, project.status);
+      if (nextStatus !== project.status) {
+        setFetchedProject((prev) => (prev ? { ...prev, status: nextStatus } : prev));
+        onStatusChange?.(nextStatus);
+      }
       const url = `${window.location.origin}/d/${slug}`;
       setShareUrl(url);
       setShareOverlay(payload);

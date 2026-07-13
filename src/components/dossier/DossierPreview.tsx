@@ -502,9 +502,8 @@ export function DossierPreview({
                           <tr style={{ background: PURPLE, color: "white" }}>
                             <th className="px-4 py-3 w-24">Visuel</th>
                             <th className="px-4 py-3">Produit</th>
-                            <th className="px-4 py-3 text-center">Quantité</th>
-                            <th className="px-4 py-3 text-right">PU {isRecurring ? "/ mois" : ""}</th>
-                            <th className="px-4 py-3 text-right">Sous-total {isRecurring ? "/ mois" : ""}</th>
+                            <th className="px-4 py-3 text-center w-24">Quantité</th>
+                            <th className="px-4 py-3 text-right w-48">Fiche produit</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -533,9 +532,18 @@ export function DossierPreview({
                                     {href}
                                   </div>
                                 </td>
-                                <td className="px-4 py-3 text-center">{p.qty}</td>
-                                <td className="px-4 py-3 text-right tabular-nums">{fmtEUR(p.unit_price)}</td>
-                                <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmtEUR(p.qty * p.unit_price)}</td>
+                                <td className="px-4 py-3 text-center tabular-nums">{p.qty}</td>
+                                <td className="px-4 py-3 text-right">
+                                  <a
+                                    href={href}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold shadow-sm transition hover:opacity-90"
+                                    style={{ background: PURPLE, color: "white" }}
+                                  >
+                                    Voir la fiche produit →
+                                  </a>
+                                </td>
                               </tr>
                             );
                           })}
@@ -543,6 +551,7 @@ export function DossierPreview({
                       </table>
                     </div>
                   </PageFrame>
+
                 );
               }
 

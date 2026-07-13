@@ -452,15 +452,91 @@ export function DossierPreview({
       </div>
 
       {shareUrl && !shareMode && (
-        <div className="dossier-toolbar flex flex-shrink-0 items-center gap-2 border-b border-white/10 bg-black/40 px-4 py-2 text-xs text-white">
-          <span className="text-white/60">Lien public :</span>
-          <code className="flex-1 truncate rounded bg-white/10 px-2 py-1 font-mono">{shareUrl}</code>
-          <Button variant="ghost" size="sm" onClick={copyShareUrl} className="text-white hover:bg-white/10">
+        <div className="dossier-toolbar flex flex-shrink-0 flex-wrap items-center gap-2 border-b border-white/10 bg-black/40 px-4 py-2 text-xs text-white">
+          <span className="text-white/60">
+            {project?.share_visibility === "password" ? "Lien protégé :" : "Lien public :"}
+          </span>
+          <code className="min-w-0 flex-1 truncate rounded bg-white/10 px-2 py-1 font-mono">{shareUrl}</code>
+          <Button variant="ghost" size="sm" onClick={copyShareUrl} className="text-white hover:bg-white/10" title="Copier le lien">
             {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
           </Button>
           <a href={shareUrl} target="_blank" rel="noreferrer" className="text-white/80 underline hover:text-white">Ouvrir</a>
+          <Button variant="ghost" size="sm" onClick={openShareDialog} className="text-white hover:bg-white/10">
+            Modifier
+          </Button>
+          {project?.share_visibility === "password" && project?.share_password ? (
+            <div className="flex w-full items-center gap-2 border-t border-white/10 pt-2 sm:w-auto sm:border-none sm:pt-0">
+              <Lock className="h-3 w-3 text-white/60" />
+              <span className="text-white/60">Mot de passe à transmettre :</span>
+              <code className="rounded bg-white/10 px-2 py-1 font-mono">
+                {showPassword ? project.share_password : "•".repeat(Math.min(12, project.share_password.length))}
+              </code>
+              <Button variant="ghost" size="sm" onClick={() => setShowPassword((v) => !v)} className="text-white hover:bg-white/10" title={showPassword ? "Masquer" : "Afficher"}>
+                {showPassword ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={copyPassword} className="text-white hover:bg-white/10" title="Copier le mot de passe">
+                {passwordCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+              </Button>
+            </div>
+          ) : null}
         </div>
       )}
+
+      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Partager le dossier</DialogTitle>
+            <DialogDescription>
+              Choisis comment ce dossier est accessible via le lien /d/{project?.share_slug ?? "…"}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <RadioGroup value={dialogVisibility} onValueChange={(v) => setDialogVisibility(v as "public" | "password")}>
+              <div className="flex items-start gap-3 rounded-md border border-border p-3">
+                <RadioGroupItem value="public" id="vis-public" className="mt-1" />
+                <Label htmlFor="vis-public" className="flex-1 cursor-pointer">
+                  <div className="font-medium">Public</div>
+                  <div className="text-xs text-muted-foreground">Toute personne ayant le lien peut consulter le dossier.</div>
+                </Label>
+              </div>
+              <div className="flex items-start gap-3 rounded-md border border-border p-3">
+                <RadioGroupItem value="password" id="vis-password" className="mt-1" />
+                <Label htmlFor="vis-password" className="flex-1 cursor-pointer">
+                  <div className="font-medium">Protégé par mot de passe</div>
+                  <div className="text-xs text-muted-foreground">Le client devra saisir un mot de passe pour ouvrir le dossier.</div>
+                </Label>
+              </div>
+            </RadioGroup>
+            {dialogVisibility === "password" && (
+              <div className="space-y-2">
+                <Label htmlFor="share-pwd">Mot de passe</Label>
+                <Input
+                  id="share-pwd"
+                  type="text"
+                  autoComplete="off"
+                  value={dialogPassword}
+                  onChange={(e) => setDialogPassword(e.target.value)}
+                  placeholder="Ex : arcade2026"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Ce mot de passe s'affichera dans l'aperçu pour que tu puisses le transmettre au client.
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShareDialogOpen(false)} disabled={sharing}>
+              Annuler
+            </Button>
+            <Button onClick={submitShare} disabled={sharing}>
+              {sharing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Enregistrer et copier le lien
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
 
       {loading || !project ? (
         <div className="flex flex-1 items-center justify-center text-white">

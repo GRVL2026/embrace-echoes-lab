@@ -186,8 +186,28 @@ export function DossierPreview({
     }
   }, [project?.plan_data]);
   const hasPlan = !!planImage;
-  const customPages = 6 + (hasPlan ? 1 : 0);
-  const totalPages = slidePages.length + customPages;
+
+  const nonEmpty = (v: any) => typeof v === "string" && v.trim().length > 0;
+  const ctx = project?.context ?? {};
+  const sol = project?.solution ?? {};
+  const scp = project?.scope ?? {};
+  const prc = project?.pricing ?? {};
+  const hasContext = nonEmpty(ctx.contexte) || nonEmpty(ctx.objectif) || nonEmpty(ctx.enjeux) || nonEmpty(ctx.lecture);
+  const hasSolution = nonEmpty(sol.selection) || nonEmpty(sol.deploiement) || nonEmpty(sol.suivi);
+  const hasScope = nonEmpty(scp.fourniture) || nonEmpty(scp.livraison) || nonEmpty(scp.formation) || nonEmpty(scp.garantie);
+  const hasProducts = Array.isArray(project?.selected_products) && (project!.selected_products!.length > 0);
+  const hasPricing = (Array.isArray(prc.lines) && prc.lines.length > 0) || (prc.total_ht ?? 0) > 0 || (prc.monthly ?? 0) > 0;
+  const hasContact = !!brand;
+
+  const customPagesCount =
+    (hasContext ? 1 : 0) +
+    (hasSolution ? 1 : 0) +
+    (hasPlan ? 1 : 0) +
+    (hasProducts ? 1 : 0) +
+    (hasScope ? 1 : 0) +
+    (hasPricing ? 1 : 0) +
+    (hasContact ? 1 : 0);
+  const totalPages = slidePages.length + customPagesCount;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

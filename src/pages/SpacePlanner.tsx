@@ -36,17 +36,24 @@ function SpacePlannerInner() {
   const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
   const [viewer3DSettings, setViewer3DSettings] = useState<Viewer3DSettings>(DEFAULT_3D_SETTINGS);
   const [savingToDossier, setSavingToDossier] = useState(false);
+  const [initialQuantities, setInitialQuantities] = useState<Map<string, number> | null>(null);
   const { state, dispatch } = useEditor();
 
-  // Load plan_data from the dossier when opened for a specific dossier
+  // Load plan_data + dossier selection when opened for a specific dossier
   useEffect(() => {
     if (!dossierId) return;
     (async () => {
-      const { data, error } = await (supabase as any)
-        .from("projects")
-        .select("plan_data")
-        .eq("id", dossierId)
-        .maybeSingle();
+      const [{ data, error }, { data: catRows }] = await Promise.all([
+        (supabase as any)
+          .from("projects")
+          .select("plan_data, selected_products, offer")
+          .eq("id", dossierId)
+          .maybeSingle(),
+        (supabase as any)
+          .from("catalog_products")
+          .select("id, shopify_id, name, category, price, price_monthly")
+          .eq("active", true),
+      ]);
       if (error) {
         toast({ title: "Impossible de charger le plan", description: error.message, variant: "destructive" });
         return;
@@ -66,6 +73,12 @@ function SpacePlannerInner() {
           },
         });
       }
+      // Pré-charge la sélection catalogue avec les jeux plaçables du dossier.
+      const selected = Array.isArray(data?.selected_products)
+        ? (data!.selected_products as SelectedProduct[])
+        : [];
+      const rows = ((catRows as CatalogRow[]) ?? []).filter((r) => !!r);
+      setInitialQuantities(buildInitialQuantities(selected, rows));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dossierId]);
@@ -82,9 +95,44 @@ function SpacePlannerInner() {
       gridSize: state.gridSize,
       planRotation: state.planRotation,
     };
+
+    // On récupère l'état actuel du dossier (selected_products + offer) pour
+    // faire un merge cohérent (le dossier est un sur-ensemble du plan et ne
+    // doit jamais perdre ses articles non plaçables).
+    const { data: projRow, error: readErr } = await (supabase as any)
+      .from("projects")
+      .select("selected_products, offer")
+      .eq("id", dossierId)
+      .maybeSingle();
+    if (readErr) {
+      setSavingToDossier(false);
+      toast({ title: "Enregistrement impossible", description: readErr.message, variant: "destructive" });
+      return;
+    }
+    const { data: catRows } = await (supabase as any)
+      .from("catalog_products")
+      .select("id, shopify_id, name, category, price, price_monthly")
+      .eq("active", true);
+
+    const currentSelected = Array.isArray(projRow?.selected_products)
+      ? (projRow!.selected_products as SelectedProduct[])
+      : [];
+    const offer = (projRow?.offer as string | null) ?? null;
+    const mergedSelected = mergeSelectedProductsFromPlan(
+      currentSelected,
+      state.placedEquipments,
+      (catRows as CatalogRow[]) ?? [],
+      offer,
+    );
+    const mergedPricing = computePricing(mergedSelected, offer);
+
     const { error } = await (supabase as any)
       .from("projects")
-      .update({ plan_data: payload })
+      .update({
+        plan_data: payload,
+        selected_products: mergedSelected,
+        pricing: mergedPricing,
+      })
       .eq("id", dossierId);
     setSavingToDossier(false);
     if (error) {

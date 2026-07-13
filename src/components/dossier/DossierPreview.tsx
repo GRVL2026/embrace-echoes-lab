@@ -305,8 +305,20 @@ export function DossierPreview({
     }, 100);
   };
 
-  const handleShare = async () => {
+  const openShareDialog = () => {
     if (!project) return;
+    const vis = (project.share_visibility === "password" ? "password" : "public") as "public" | "password";
+    setDialogVisibility(vis);
+    setDialogPassword(project.share_password ?? "");
+    setShareDialogOpen(true);
+  };
+
+  const submitShare = async () => {
+    if (!project) return;
+    if (dialogVisibility === "password" && !dialogPassword.trim()) {
+      toast({ title: "Mot de passe requis", description: "Saisis un mot de passe pour protéger le partage.", variant: "destructive" });
+      return;
+    }
     setSharing(true);
     try {
       let slug = project.share_slug;
@@ -326,14 +338,20 @@ export function DossierPreview({
         }
       }
       if (!slug) throw new Error("Impossible de générer un slug");
+      const payload: any = {
+        share_slug: slug,
+        is_shared: true,
+        share_visibility: dialogVisibility,
+        share_password: dialogVisibility === "password" ? dialogPassword : null,
+      };
       const { error } = await (supabase as any)
         .from("projects")
-        .update({ share_slug: slug, is_shared: true })
+        .update(payload)
         .eq("id", project.id);
       if (error) throw error;
       const url = `${window.location.origin}/d/${slug}`;
       setShareUrl(url);
-      setFetchedProject((prev) => (prev ? { ...prev, share_slug: slug!, is_shared: true } : prev));
+      setFetchedProject((prev) => (prev ? { ...prev, ...payload } : prev));
       try {
         await navigator.clipboard.writeText(url);
         setCopied(true);
@@ -342,12 +360,27 @@ export function DossierPreview({
       } catch {
         toast({ title: "Lien de partage prêt", description: url });
       }
+      setShareDialogOpen(false);
     } catch (e: any) {
       toast({ title: "Erreur", description: e?.message ?? "Partage impossible", variant: "destructive" });
     } finally {
       setSharing(false);
     }
   };
+
+  const copyPassword = async () => {
+    const pwd = project?.share_password ?? "";
+    if (!pwd) return;
+    try {
+      await navigator.clipboard.writeText(pwd);
+      setPasswordCopied(true);
+      setTimeout(() => setPasswordCopied(false), 2000);
+      toast({ title: "Mot de passe copié" });
+    } catch {
+      /* noop */
+    }
+  };
+
 
   const copyShareUrl = async () => {
     if (!shareUrl) return;

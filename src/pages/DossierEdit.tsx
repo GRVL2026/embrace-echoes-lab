@@ -1074,13 +1074,13 @@ export default function DossierEdit() {
                               href={href}
                               target="_blank"
                               rel="noreferrer"
-                              className="block h-12 w-16 overflow-hidden rounded border border-border/60 bg-muted"
+                              className="flex h-14 w-20 items-center justify-center overflow-hidden rounded border border-border/60 bg-white p-1"
                               aria-label={`Fiche ${p.name}`}
                             >
                               {img ? (
-                                <img src={img} alt={p.name} className="h-full w-full object-cover" loading="lazy" />
+                                <img src={img} alt={p.name} className="max-h-full max-w-full object-contain" loading="lazy" />
                               ) : (
-                                <div className="flex h-full w-full items-center justify-center text-[9px] leading-tight text-muted-foreground text-center px-1">
+                                <div className="text-[9px] leading-tight text-muted-foreground text-center px-1">
                                   visuel indisponible
                                 </div>
                               )}

@@ -303,19 +303,26 @@ export function DossierPreview({
   };
 
   const handlePrint = () => {
-    // Auto-mark as sent on first export from the sales UI
-    if (!shareMode && project?.id) {
-      markSentIfDraft(project.id, project.status).then((next) => {
-        if (next !== project.status) {
-          setFetchedProject((prev) => (prev ? { ...prev, status: next } : prev));
-          onStatusChange?.(next);
-        }
-      });
-    }
     document.body.classList.add("dossier-printing");
+    // Only mark as sent when the print dialog actually completes (user printed/saved PDF),
+    // not on the mere click that opens the browser print options.
+    const onAfterPrint = () => {
+      window.removeEventListener("afterprint", onAfterPrint);
+      document.body.classList.remove("dossier-printing");
+      if (!shareMode && project?.id) {
+        markSentIfDraft(project.id, project.status).then((next) => {
+          if (next !== project.status) {
+            setFetchedProject((prev) => (prev ? { ...prev, status: next } : prev));
+            onStatusChange?.(next);
+          }
+        });
+      }
+    };
+    window.addEventListener("afterprint", onAfterPrint);
     setTimeout(() => {
       window.print();
-      setTimeout(() => document.body.classList.remove("dossier-printing"), 500);
+      // Safety net if afterprint never fires (rare)
+      setTimeout(() => document.body.classList.remove("dossier-printing"), 1000);
     }, 100);
   };
 

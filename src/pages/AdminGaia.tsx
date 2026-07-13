@@ -35,10 +35,29 @@ type Diagnostic = {
   feeds: FeedResult[];
 };
 
+type SyncSummary = {
+  feed: string;
+  rows: number;
+  ok: boolean;
+  error?: string;
+  duration_ms: number;
+};
+
+type SyncLogRow = {
+  feed: string;
+  rows_loaded: number | null;
+  ok: boolean;
+  error: string | null;
+  finished_at: string | null;
+};
+
 export default function AdminGaia() {
   const { isAdmin, loading: authLoading } = useAuth();
   const [running, setRunning] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [diag, setDiag] = useState<Diagnostic | null>(null);
+  const [summary, setSummary] = useState<SyncSummary[] | null>(null);
+  const [lastLogs, setLastLogs] = useState<SyncLogRow[]>([]);
   const [globalError, setGlobalError] = useState<string | null>(null);
 
   if (authLoading) {

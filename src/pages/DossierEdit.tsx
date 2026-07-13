@@ -575,6 +575,16 @@ export default function DossierEdit() {
                 </p>
               </div>
               <div className="flex items-center gap-3">
+                <StatusSelect
+                  value={form.status}
+                  onChange={async (next) => {
+                    const ok = await updateProjectStatus(form.id, next);
+                    if (ok) {
+                      setForm((f) => (f ? { ...f, status: next } : f));
+                      toast({ title: "Statut mis à jour" });
+                    }
+                  }}
+                />
                 {dirty ? (
                   <span className="text-xs text-muted-foreground">Modifications non enregistrées</span>
                 ) : savedAt ? (

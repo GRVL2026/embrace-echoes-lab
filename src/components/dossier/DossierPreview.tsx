@@ -96,13 +96,19 @@ export function DossierPreview({
   projectId,
   onClose,
   shareMode = false,
+  embedded = false,
+  liveProject,
 }: {
   projectId: string;
   onClose?: () => void;
   shareMode?: boolean;
+  embedded?: boolean;
+  liveProject?: Project | null;
 }) {
-  const [loading, setLoading] = useState(true);
-  const [project, setProject] = useState<Project | null>(null);
+  const useLive = liveProject !== undefined;
+  const [loading, setLoading] = useState(!useLive);
+  const [fetchedProject, setFetchedProject] = useState<Project | null>(null);
+  const project: Project | null = useLive ? (liveProject ?? null) : fetchedProject;
   const [brand, setBrand] = useState<Brand | null>(null);
   const [modules, setModules] = useState<BrandModule[]>([]);
   const [catalogMap, setCatalogMap] = useState<Record<string, CatalogInfo>>({});
@@ -111,7 +117,9 @@ export function DossierPreview({
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Fetch the project when not driven by live form state.
   useEffect(() => {
+    if (useLive) return;
     (async () => {
       setLoading(true);
       const { data: p } = await (supabase as any)
@@ -122,50 +130,75 @@ export function DossierPreview({
         .eq("id", projectId)
         .maybeSingle();
       const proj = p as Project | null;
-      setProject(proj);
+      setFetchedProject(proj);
       if (proj?.share_slug && proj?.is_shared) {
         setShareUrl(`${window.location.origin}/d/${proj.share_slug}`);
       }
-      if (proj?.brand_id) {
-        const { data: b } = await (supabase as any)
-          .from("brands")
-          .select("id, name, contact")
-          .eq("id", proj.brand_id)
-          .maybeSingle();
-        setBrand(b as Brand | null);
-      }
-      const ids = Array.isArray(proj?.selected_modules) ? (proj!.selected_modules as string[]) : [];
-      if (ids.length > 0) {
-        const { data: m } = await (supabase as any)
-          .from("brand_modules")
-          .select("id, image_url, title")
-          .in("id", ids);
-        const map = new Map<string, BrandModule>(((m as BrandModule[]) ?? []).map((x) => [x.id, x]));
-        setModules(ids.map((id) => map.get(id)).filter(Boolean) as BrandModule[]);
-      } else {
-        setModules([]);
-      }
-      const pids = Array.from(
-        new Set(
-          (proj?.selected_products ?? [])
-            .map((x) => x.product_id)
-            .filter((x): x is string => !!x),
-        ),
-      );
-      if (pids.length > 0) {
-        const { data: cp } = await (supabase as any)
-          .from("catalog_products")
-          .select("id, images, product_url")
-          .in("id", pids);
-        const cmap: Record<string, CatalogInfo> = {};
-        for (const c of (cp as CatalogInfo[]) ?? []) cmap[c.id] = c;
-        setCatalogMap(cmap);
-      } else {
-        setCatalogMap({});
-      }
       setLoading(false);
     })();
-  }, [projectId]);
+  }, [projectId, useLive]);
+
+  // Track share url from live project when available.
+  useEffect(() => {
+    if (useLive && liveProject?.share_slug && liveProject?.is_shared) {
+      setShareUrl(`${window.location.origin}/d/${liveProject.share_slug}`);
+    }
+  }, [useLive, liveProject?.share_slug, liveProject?.is_shared]);
+
+  // Fetch brand when brand_id changes.
+  const brandId = project?.brand_id ?? null;
+  useEffect(() => {
+    if (!brandId) { setBrand(null); return; }
+    let cancelled = false;
+    (async () => {
+      const { data: b } = await (supabase as any)
+        .from("brands")
+        .select("id, name, contact")
+        .eq("id", brandId)
+        .maybeSingle();
+      if (!cancelled) setBrand((b as Brand | null) ?? null);
+    })();
+    return () => { cancelled = true; };
+  }, [brandId]);
+
+  // Fetch modules when selection changes (keyed on id list).
+  const moduleIdsKey = (project?.selected_modules ?? []).join(",");
+  useEffect(() => {
+    const ids = moduleIdsKey ? moduleIdsKey.split(",").filter(Boolean) : [];
+    if (ids.length === 0) { setModules([]); return; }
+    let cancelled = false;
+    (async () => {
+      const { data: m } = await (supabase as any)
+        .from("brand_modules")
+        .select("id, image_url, title")
+        .in("id", ids);
+      if (cancelled) return;
+      const map = new Map<string, BrandModule>(((m as BrandModule[]) ?? []).map((x) => [x.id, x]));
+      setModules(ids.map((id) => map.get(id)).filter(Boolean) as BrandModule[]);
+    })();
+    return () => { cancelled = true; };
+  }, [moduleIdsKey]);
+
+  // Fetch catalog metadata when product ids change.
+  const productIdsKey = Array.from(
+    new Set((project?.selected_products ?? []).map((x) => x.product_id).filter((x): x is string => !!x)),
+  ).sort().join(",");
+  useEffect(() => {
+    const pids = productIdsKey ? productIdsKey.split(",").filter(Boolean) : [];
+    if (pids.length === 0) { setCatalogMap({}); return; }
+    let cancelled = false;
+    (async () => {
+      const { data: cp } = await (supabase as any)
+        .from("catalog_products")
+        .select("id, images, product_url")
+        .in("id", pids);
+      if (cancelled) return;
+      const cmap: Record<string, CatalogInfo> = {};
+      for (const c of (cp as CatalogInfo[]) ?? []) cmap[c.id] = c;
+      setCatalogMap(cmap);
+    })();
+    return () => { cancelled = true; };
+  }, [productIdsKey]);
 
   const slidePages = useMemo(() => modules.filter((m) => !!m.image_url), [modules]);
 
@@ -262,7 +295,7 @@ export function DossierPreview({
       if (error) throw error;
       const url = `${window.location.origin}/d/${slug}`;
       setShareUrl(url);
-      setProject({ ...project, share_slug: slug, is_shared: true });
+      setFetchedProject((prev) => (prev ? { ...prev, share_slug: slug!, is_shared: true } : prev));
       try {
         await navigator.clipboard.writeText(url);
         setCopied(true);
@@ -299,8 +332,12 @@ export function DossierPreview({
   const contact = brand?.contact ?? {};
   const sites = Array.isArray(contact.sites) ? contact.sites : contact.sites ? [contact.sites] : [];
 
+  const rootClass = embedded
+    ? "flex h-full w-full flex-col bg-black/90"
+    : `${shareMode ? "min-h-screen" : "fixed inset-0 z-[100]"} flex flex-col bg-black/90`;
   return (
-    <div className={`${shareMode ? "min-h-screen" : "fixed inset-0 z-[100]"} flex flex-col bg-black/90`}>
+    <div className={rootClass}>
+
       <div className="dossier-toolbar flex h-12 flex-shrink-0 items-center justify-between border-b border-white/10 bg-black/60 px-4 text-white backdrop-blur">
         <div className="flex items-center gap-3 text-sm">
           <span className="font-display font-semibold">Aperçu du dossier</span>

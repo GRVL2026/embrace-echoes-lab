@@ -370,6 +370,12 @@ export function DossierPreview({
         .update(payload)
         .eq("id", project.id);
       if (error) throw error;
+      // Auto-mark as sent on first successful share
+      const nextStatus = await markSentIfDraft(project.id, project.status);
+      if (nextStatus !== project.status) {
+        setFetchedProject((prev) => (prev ? { ...prev, status: nextStatus } : prev));
+        onStatusChange?.(nextStatus);
+      }
       const url = `${window.location.origin}/d/${slug}`;
       setShareUrl(url);
       setShareOverlay(payload);

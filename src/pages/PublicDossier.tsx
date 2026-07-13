@@ -29,12 +29,17 @@ export default function PublicDossier() {
           body: { slug, ...(password ? { password } : {}) },
         });
 
-        // The Supabase functions client wraps non-2xx as `error`; body is still in `data` sometimes.
-        // Detect password requirement from either channel.
-        const payload: any = data ?? (error as any)?.context?.body ?? null;
-        let parsed: any = payload;
-        if (typeof payload === "string") {
-          try { parsed = JSON.parse(payload); } catch { /* noop */ }
+        // Try to read a structured payload from either data or the error's Response body.
+        let parsed: any = data ?? null;
+        if (!parsed && error && (error as any).context) {
+          try {
+            const resp = (error as any).context as Response;
+            if (typeof resp?.clone === "function") {
+              parsed = await resp.clone().json().catch(() => null);
+            } else if (typeof (error as any).context?.body === "string") {
+              try { parsed = JSON.parse((error as any).context.body); } catch { /* noop */ }
+            }
+          } catch { /* noop */ }
         }
 
         if (parsed?.password_required) {
@@ -46,6 +51,7 @@ export default function PublicDossier() {
         }
 
         if (error) throw error;
+
 
         if (!data?.project) {
           setError("Ce dossier n'est pas disponible.");

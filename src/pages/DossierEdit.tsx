@@ -1290,13 +1290,25 @@ export default function DossierEdit() {
             </div>
             <aside className="hidden lg:block">
               <div className="sticky top-4 h-[calc(100vh-6rem)] overflow-hidden rounded-lg border border-border shadow-xl">
-                <DossierPreview projectId={id!} liveProject={form as any} embedded />
+                <DossierPreview
+                  projectId={id!}
+                  liveProject={form as any}
+                  embedded
+                  onStatusChange={(next) => setForm((f) => (f ? { ...f, status: next } : f))}
+                />
               </div>
             </aside>
           </div>
         )}
       </main>
-      {previewOpen && id && <DossierPreview projectId={id} onClose={() => setPreviewOpen(false)} liveProject={form as any} />}
+      {previewOpen && id && (
+        <DossierPreview
+          projectId={id}
+          onClose={() => setPreviewOpen(false)}
+          liveProject={form as any}
+          onStatusChange={(next) => setForm((f) => (f ? { ...f, status: next } : f))}
+        />
+      )}
     </div>
   );
 }

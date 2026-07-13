@@ -207,10 +207,17 @@ export default function DossiersList() {
                     </TableCell>
                     <TableCell>{brandName(p.brand_id)}</TableCell>
                     <TableCell>{p.offer ? OFFER_LABEL[p.offer] ?? p.offer : "—"}</TableCell>
-                    <TableCell>
-                      <Badge variant={STATUS_VARIANT[p.status ?? "draft"] ?? "outline"}>
-                        {STATUS_LABEL[p.status ?? "draft"] ?? p.status}
-                      </Badge>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <StatusSelect
+                        size="sm"
+                        value={p.status}
+                        onChange={async (next) => {
+                          const ok = await updateProjectStatus(p.id, next);
+                          if (ok) {
+                            setProjects((prev) => prev.map((r) => (r.id === p.id ? { ...r, status: next } : r)));
+                          }
+                        }}
+                      />
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {new Date(p.updated_at).toLocaleString("fr-FR")}

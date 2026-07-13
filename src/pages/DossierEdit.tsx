@@ -313,6 +313,14 @@ export default function DossierEdit() {
   // --- Plan de la salle ---
   const planData = form?.plan_data;
   const hasPlan = !!(planData && Array.isArray(planData.rooms) && planData.rooms.length > 0);
+  const planDisplayOptions = useMemo(
+    () => ({
+      showGames: planData?.displayOptions?.showGames ?? true,
+      showGapMeasurements: planData?.displayOptions?.showGapMeasurements ?? false,
+      showCirculation: planData?.displayOptions?.showCirculation ?? false,
+    }),
+    [planData?.displayOptions],
+  );
   const planThumbnail = useMemo(() => {
     if (!hasPlan) return null;
     try {
@@ -322,12 +330,37 @@ export default function DossierEdit() {
         planData.pillars ?? [],
         planData.placedEquipments ?? [],
         planData.circulationPath ?? [],
-        { width: 800, height: 450, showGames: true, showWallDimensions: true },
+        {
+          width: 800,
+          height: 450,
+          showWallDimensions: true,
+          showGames: planDisplayOptions.showGames,
+          showGapMeasurements: planDisplayOptions.showGapMeasurements,
+          showCirculation: planDisplayOptions.showCirculation,
+        },
       );
     } catch {
       return null;
     }
-  }, [planData, hasPlan]);
+  }, [planData, hasPlan, planDisplayOptions]);
+
+  const updatePlanDisplayOption = (
+    key: "showGames" | "showGapMeasurements" | "showCirculation",
+    value: boolean,
+  ) => {
+    setForm((f) => {
+      if (!f || !f.plan_data) return f;
+      const prev = (f.plan_data as any).displayOptions ?? {};
+      return {
+        ...f,
+        plan_data: {
+          ...(f.plan_data as any),
+          displayOptions: { ...prev, [key]: value },
+        },
+      };
+    });
+    setDirty(true);
+  };
 
   const openPlanner = () => {
     if (!id) return;

@@ -190,16 +190,98 @@ export default function AdminGaia() {
               Diagnostic de connexion aux flux OData Cegid XRP Flex.
             </p>
           </div>
-          <Button onClick={runDiscover} disabled={running}>
-            {running ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Test en cours…
-              </>
-            ) : (
-              <>Tester la connexion Cegid</>
-            )}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={runDiscover} disabled={running || syncing}>
+              {running ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Test en cours…
+                </>
+              ) : (
+                <>Tester la connexion Cegid</>
+              )}
+            </Button>
+            <Button onClick={runSync} disabled={running || syncing}>
+              {syncing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Synchronisation… (1-2 min)
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" /> Synchroniser les données
+                </>
+              )}
+            </Button>
+          </div>
         </div>
+
+        {/* Résumé des dernières synchros par flux */}
+        {lastLogs.length > 0 && (
+          <div className="mb-6 rounded-lg border border-border bg-card/40 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <Database className="h-4 w-4 text-primary" />
+              <h3 className="font-display text-lg font-semibold">Dernière synchronisation</h3>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {lastLogs.map((l) => (
+                <div
+                  key={l.feed}
+                  className="flex items-center justify-between rounded border border-border/60 bg-background/40 px-3 py-2 text-sm"
+                >
+                  <div className="flex items-center gap-2">
+                    {l.ok ? (
+                      <CheckCircle2 className="h-4 w-4 text-secondary" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-destructive" />
+                    )}
+                    <span className="font-medium">{l.feed}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>{l.rows_loaded ?? 0} lignes</span>
+                    {l.finished_at && (
+                      <span>· {new Date(l.finished_at).toLocaleString("fr-FR")}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Résumé de la synchro qui vient de tourner */}
+        {summary && summary.length > 0 && (
+          <div className="mb-6 rounded-lg border border-border bg-card/40 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <RefreshCw className="h-4 w-4 text-primary" />
+              <h3 className="font-display text-lg font-semibold">Résultat de la synchronisation</h3>
+            </div>
+            <div className="space-y-2">
+              {summary.map((s) => (
+                <div
+                  key={s.feed}
+                  className="flex items-center justify-between rounded border border-border/60 bg-background/40 px-3 py-2 text-sm"
+                >
+                  <div className="flex items-center gap-2">
+                    {s.ok ? (
+                      <CheckCircle2 className="h-4 w-4 text-secondary" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-destructive" />
+                    )}
+                    <span className="font-medium">{s.feed}</span>
+                    <Badge variant="outline">{s.duration_ms} ms</Badge>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs">
+                    <span className="text-muted-foreground">{s.rows} lignes</span>
+                    {s.error && (
+                      <span className="max-w-md truncate text-destructive" title={s.error}>
+                        {s.error}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {globalError && (
           <div className="mb-6 rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">

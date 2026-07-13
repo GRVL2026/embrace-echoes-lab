@@ -3,11 +3,13 @@ import { Link, Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UserMenu } from "@/components/UserMenu";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { Loader2, Shield, Database, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
 import logoImg from "@/assets/logo.png";
+import { GaiaDashboard } from "@/components/admin/GaiaDashboard";
 
 type TokenStep = {
   ok: boolean;

@@ -465,6 +465,297 @@ export type Database = {
         }
         Relationships: []
       }
+      gaia_clients: {
+        Row: {
+          customer_id: string
+          name: string | null
+          status: string | null
+          typologie: string | null
+        }
+        Insert: {
+          customer_id: string
+          name?: string | null
+          status?: string | null
+          typologie?: string | null
+        }
+        Update: {
+          customer_id?: string
+          name?: string | null
+          status?: string | null
+          typologie?: string | null
+        }
+        Relationships: []
+      }
+      gaia_commandes: {
+        Row: {
+          branch: string | null
+          classe_article: string | null
+          classe_client: string | null
+          code_article: string | null
+          code_client: string | null
+          completed: boolean | null
+          date_liv: string | null
+          devise: string | null
+          id: number
+          inventory_id: string | null
+          invoice_date: string | null
+          line_nbr: number | null
+          marge_brut: number | null
+          montant_ht: number | null
+          n_cde: string | null
+          order_nbr: string | null
+          order_type: string | null
+          pu_rem: number | null
+          qty: number | null
+          statut: string | null
+          type_cde: string | null
+          unit_cost: number | null
+        }
+        Insert: {
+          branch?: string | null
+          classe_article?: string | null
+          classe_client?: string | null
+          code_article?: string | null
+          code_client?: string | null
+          completed?: boolean | null
+          date_liv?: string | null
+          devise?: string | null
+          id?: never
+          inventory_id?: string | null
+          invoice_date?: string | null
+          line_nbr?: number | null
+          marge_brut?: number | null
+          montant_ht?: number | null
+          n_cde?: string | null
+          order_nbr?: string | null
+          order_type?: string | null
+          pu_rem?: number | null
+          qty?: number | null
+          statut?: string | null
+          type_cde?: string | null
+          unit_cost?: number | null
+        }
+        Update: {
+          branch?: string | null
+          classe_article?: string | null
+          classe_client?: string | null
+          code_article?: string | null
+          code_client?: string | null
+          completed?: boolean | null
+          date_liv?: string | null
+          devise?: string | null
+          id?: never
+          inventory_id?: string | null
+          invoice_date?: string | null
+          line_nbr?: number | null
+          marge_brut?: number | null
+          montant_ht?: number | null
+          n_cde?: string | null
+          order_nbr?: string | null
+          order_type?: string | null
+          pu_rem?: number | null
+          qty?: number | null
+          statut?: string | null
+          type_cde?: string | null
+          unit_cost?: number | null
+        }
+        Relationships: []
+      }
+      gaia_historique: {
+        Row: {
+          branch: string | null
+          classe_article: string | null
+          classe_client: string | null
+          code_article: string | null
+          code_client: string | null
+          devise: string | null
+          id: number
+          inventory_id: string | null
+          invoice_date: string | null
+          line_nbr: number | null
+          montant_ht: number | null
+          n_cde: string | null
+          order_nbr: string | null
+          order_type: string | null
+          pu_rem: number | null
+          qty: number | null
+        }
+        Insert: {
+          branch?: string | null
+          classe_article?: string | null
+          classe_client?: string | null
+          code_article?: string | null
+          code_client?: string | null
+          devise?: string | null
+          id?: never
+          inventory_id?: string | null
+          invoice_date?: string | null
+          line_nbr?: number | null
+          montant_ht?: number | null
+          n_cde?: string | null
+          order_nbr?: string | null
+          order_type?: string | null
+          pu_rem?: number | null
+          qty?: number | null
+        }
+        Update: {
+          branch?: string | null
+          classe_article?: string | null
+          classe_client?: string | null
+          code_article?: string | null
+          code_client?: string | null
+          devise?: string | null
+          id?: never
+          inventory_id?: string | null
+          invoice_date?: string | null
+          line_nbr?: number | null
+          montant_ht?: number | null
+          n_cde?: string | null
+          order_nbr?: string | null
+          order_type?: string | null
+          pu_rem?: number | null
+          qty?: number | null
+        }
+        Relationships: []
+      }
+      gaia_stock: {
+        Row: {
+          cout_stock: number | null
+          dernier_cout: number | null
+          description: string | null
+          famille2: string | null
+          famille3: string | null
+          id: number
+          inventory_id: string | null
+          item_class: string | null
+          item_status: string | null
+          prix_vente: number | null
+          qty_available: number | null
+          qty_on_hand: number | null
+          warehouse: string | null
+        }
+        Insert: {
+          cout_stock?: number | null
+          dernier_cout?: number | null
+          description?: string | null
+          famille2?: string | null
+          famille3?: string | null
+          id?: never
+          inventory_id?: string | null
+          item_class?: string | null
+          item_status?: string | null
+          prix_vente?: number | null
+          qty_available?: number | null
+          qty_on_hand?: number | null
+          warehouse?: string | null
+        }
+        Update: {
+          cout_stock?: number | null
+          dernier_cout?: number | null
+          description?: string | null
+          famille2?: string | null
+          famille3?: string | null
+          id?: never
+          inventory_id?: string | null
+          item_class?: string | null
+          item_status?: string | null
+          prix_vente?: number | null
+          qty_available?: number | null
+          qty_on_hand?: number | null
+          warehouse?: string | null
+        }
+        Relationships: []
+      }
+      gaia_sync_log: {
+        Row: {
+          error: string | null
+          feed: string
+          finished_at: string | null
+          id: number
+          ok: boolean
+          rows_loaded: number | null
+          started_at: string
+        }
+        Insert: {
+          error?: string | null
+          feed: string
+          finished_at?: string | null
+          id?: never
+          ok?: boolean
+          rows_loaded?: number | null
+          started_at?: string
+        }
+        Update: {
+          error?: string | null
+          feed?: string
+          finished_at?: string | null
+          id?: never
+          ok?: boolean
+          rows_loaded?: number | null
+          started_at?: string
+        }
+        Relationships: []
+      }
+      gaia_ventes: {
+        Row: {
+          branch: string | null
+          classe_article: string | null
+          classe_client: string | null
+          code_article: string | null
+          code_client: string | null
+          devise: string | null
+          id: number
+          inventory_id: string | null
+          invoice_date: string | null
+          line_nbr: number | null
+          montant_ht: number | null
+          n_fact: string | null
+          pu_rem: number | null
+          qty: number | null
+          reference_nbr: string | null
+          tran_type: string | null
+          vendeur: string | null
+        }
+        Insert: {
+          branch?: string | null
+          classe_article?: string | null
+          classe_client?: string | null
+          code_article?: string | null
+          code_client?: string | null
+          devise?: string | null
+          id?: never
+          inventory_id?: string | null
+          invoice_date?: string | null
+          line_nbr?: number | null
+          montant_ht?: number | null
+          n_fact?: string | null
+          pu_rem?: number | null
+          qty?: number | null
+          reference_nbr?: string | null
+          tran_type?: string | null
+          vendeur?: string | null
+        }
+        Update: {
+          branch?: string | null
+          classe_article?: string | null
+          classe_client?: string | null
+          code_article?: string | null
+          code_client?: string | null
+          devise?: string | null
+          id?: never
+          inventory_id?: string | null
+          invoice_date?: string | null
+          line_nbr?: number | null
+          montant_ht?: number | null
+          n_fact?: string | null
+          pu_rem?: number | null
+          qty?: number | null
+          reference_nbr?: string | null
+          tran_type?: string | null
+          vendeur?: string | null
+        }
+        Relationships: []
+      }
       layout_snapshots: {
         Row: {
           ai_analysis: Json | null

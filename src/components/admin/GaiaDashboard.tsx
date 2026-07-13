@@ -19,7 +19,7 @@ import {
   Cell,
 } from "recharts";
 
-type CaMensuel = { mois: number; annee: number; ca_ht: number; lignes: number };
+type CaMensuel = { mois: string; annee: number; ca_ht: number | string; lignes: number };
 type CaClient = { annee: number; code_client: string; client: string; ca_ht: number };
 type CaFamille = { annee: number; famille: string; ca_ht: number };
 type CommandesEtat = { etat: "signee" | "devis"; nb_commandes: number; total_ht: number };
@@ -91,16 +91,26 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
   // Séries mensuelles multi-années
   const years = useMemo(() => {
     const set = new Set<number>();
-    caMensuel.forEach((r) => set.add(r.annee));
+    caMensuel.forEach((r) => set.add(Number(r.annee)));
     return Array.from(set).sort((a, b) => b - a).slice(0, 3);
   }, [caMensuel]);
 
   const chartMensuel = useMemo(() => {
+    // Index by year -> month(1-12) -> ca
+    const idx = new Map<number, Map<number, number>>();
+    for (const r of caMensuel) {
+      const y = Number(r.annee);
+      const moisStr = typeof r.mois === "string" ? r.mois.slice(5, 7) : String(r.mois).padStart(2, "0");
+      const m = parseInt(moisStr, 10);
+      if (!m) continue;
+      const ca = Number(r.ca_ht) || 0;
+      if (!idx.has(y)) idx.set(y, new Map());
+      idx.get(y)!.set(m, (idx.get(y)!.get(m) ?? 0) + ca);
+    }
     return Array.from({ length: 12 }, (_, i) => {
       const row: Record<string, any> = { mois: MOIS[i] };
       for (const y of years) {
-        const rec = caMensuel.find((r) => r.annee === y && r.mois === i + 1);
-        row[String(y)] = rec ? Number(rec.ca_ht) : 0;
+        row[String(y)] = idx.get(y)?.get(i + 1) ?? 0;
       }
       return row;
     });
@@ -213,7 +223,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
               <YAxis
                 stroke="hsl(var(--muted-foreground))"
                 fontSize={12}
-                tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : String(v))}
+                tickFormatter={(v) => (v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)} M€` : v >= 1000 ? `${Math.round(v / 1000)} k€` : String(v))}
               />
               <Tooltip
                 contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}

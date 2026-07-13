@@ -88,6 +88,10 @@ type Project = {
   solution: Solution | null;
   scope: Scope | null;
   plan_data: any | null;
+  share_slug?: string | null;
+  is_shared?: boolean | null;
+  share_visibility?: string | null;
+  share_password?: string | null;
 };
 
 function computePricing(products: SelectedProduct[], offer: string | null): Pricing {
@@ -135,7 +139,7 @@ export default function DossierEdit() {
         (supabase as any)
           .from("projects")
           .select(
-            "id, brand_id, client_name, client_contact, offer, brief, status, selected_modules, selected_products, pricing, context, solution, scope, plan_data",
+            "id, brand_id, client_name, client_contact, offer, brief, status, selected_modules, selected_products, pricing, context, solution, scope, plan_data, share_slug, is_shared, share_visibility, share_password",
           )
           .eq("id", id)
           .maybeSingle(),

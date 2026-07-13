@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Loader2, X, ChevronLeft, ChevronRight, Phone, Mail, Globe, MapPin, Download, Share2, Copy, Check } from "lucide-react";
+import { Loader2, X, ChevronLeft, ChevronRight, Phone, Mail, Globe, MapPin, Download, Share2, Copy, Check, Lock, Eye, EyeOff } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { renderPlan2D } from "@/lib/plan2DRender";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+
 
 type BrandContact = {
   phone?: string;
@@ -26,6 +31,8 @@ type Project = {
   scope: { fourniture?: string; livraison?: string; formation?: string; garantie?: string } | null;
   share_slug?: string | null;
   is_shared?: boolean | null;
+  share_visibility?: string | null;
+  share_password?: string | null;
   plan_data?: any | null;
 };
 type CatalogInfo = { id: string; images: string[] | null; product_url: string | null };
@@ -130,6 +137,12 @@ export function DossierPreview({
   const [sharing, setSharing] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [passwordCopied, setPasswordCopied] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [dialogVisibility, setDialogVisibility] = useState<"public" | "password">("public");
+  const [dialogPassword, setDialogPassword] = useState("");
+  const [shareOverlay, setShareOverlay] = useState<{ share_slug?: string | null; is_shared?: boolean | null; share_visibility?: string | null; share_password?: string | null } | null>(null);
 
   // Fetch the project when not driven by live form state or preloaded bundle.
   useEffect(() => {
@@ -139,7 +152,7 @@ export function DossierPreview({
       const { data: p } = await (supabase as any)
         .from("projects")
         .select(
-          "id, client_name, brand_id, offer, selected_modules, selected_products, pricing, context, solution, scope, share_slug, is_shared, plan_data",
+          "id, client_name, brand_id, offer, selected_modules, selected_products, pricing, context, solution, scope, share_slug, is_shared, share_visibility, share_password, plan_data",
         )
         .eq("id", projectId)
         .maybeSingle();
@@ -293,11 +306,30 @@ export function DossierPreview({
     }, 100);
   };
 
-  const handleShare = async () => {
+  const shareInfo = {
+    share_slug: shareOverlay?.share_slug ?? project?.share_slug ?? null,
+    is_shared: shareOverlay?.is_shared ?? project?.is_shared ?? false,
+    share_visibility: shareOverlay?.share_visibility ?? project?.share_visibility ?? "public",
+    share_password: shareOverlay?.share_password ?? project?.share_password ?? null,
+  };
+
+  const openShareDialog = () => {
     if (!project) return;
+    const vis = (shareInfo.share_visibility === "password" ? "password" : "public") as "public" | "password";
+    setDialogVisibility(vis);
+    setDialogPassword(shareInfo.share_password ?? "");
+    setShareDialogOpen(true);
+  };
+
+  const submitShare = async () => {
+    if (!project) return;
+    if (dialogVisibility === "password" && !dialogPassword.trim()) {
+      toast({ title: "Mot de passe requis", description: "Saisis un mot de passe pour protéger le partage.", variant: "destructive" });
+      return;
+    }
     setSharing(true);
     try {
-      let slug = project.share_slug;
+      let slug = shareInfo.share_slug;
       if (!slug) {
         const base = slugify(project.client_name || brand?.name || "dossier");
         for (let attempt = 0; attempt < 5; attempt++) {
@@ -314,14 +346,21 @@ export function DossierPreview({
         }
       }
       if (!slug) throw new Error("Impossible de générer un slug");
+      const payload: any = {
+        share_slug: slug,
+        is_shared: true,
+        share_visibility: dialogVisibility,
+        share_password: dialogVisibility === "password" ? dialogPassword : null,
+      };
       const { error } = await (supabase as any)
         .from("projects")
-        .update({ share_slug: slug, is_shared: true })
+        .update(payload)
         .eq("id", project.id);
       if (error) throw error;
       const url = `${window.location.origin}/d/${slug}`;
       setShareUrl(url);
-      setFetchedProject((prev) => (prev ? { ...prev, share_slug: slug!, is_shared: true } : prev));
+      setShareOverlay(payload);
+      setFetchedProject((prev) => (prev ? { ...prev, ...payload } : prev));
       try {
         await navigator.clipboard.writeText(url);
         setCopied(true);
@@ -330,12 +369,29 @@ export function DossierPreview({
       } catch {
         toast({ title: "Lien de partage prêt", description: url });
       }
+      setShareDialogOpen(false);
     } catch (e: any) {
       toast({ title: "Erreur", description: e?.message ?? "Partage impossible", variant: "destructive" });
     } finally {
       setSharing(false);
     }
   };
+
+  const copyPassword = async () => {
+    const pwd = shareInfo.share_password ?? "";
+    if (!pwd) return;
+    try {
+      await navigator.clipboard.writeText(pwd);
+      setPasswordCopied(true);
+      setTimeout(() => setPasswordCopied(false), 2000);
+      toast({ title: "Mot de passe copié" });
+    } catch {
+      /* noop */
+    }
+  };
+
+
+
 
   const copyShareUrl = async () => {
     if (!shareUrl) return;
@@ -372,7 +428,7 @@ export function DossierPreview({
         <div className="flex items-center gap-2">
           {!shareMode && (
             <>
-              <Button variant="ghost" size="sm" onClick={handleShare} disabled={sharing || loading} className="text-white hover:bg-white/10">
+              <Button variant="ghost" size="sm" onClick={openShareDialog} disabled={sharing || loading} className="text-white hover:bg-white/10">
                 {sharing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Share2 className="mr-1 h-4 w-4" />}
                 Partager
               </Button>
@@ -407,15 +463,91 @@ export function DossierPreview({
       </div>
 
       {shareUrl && !shareMode && (
-        <div className="dossier-toolbar flex flex-shrink-0 items-center gap-2 border-b border-white/10 bg-black/40 px-4 py-2 text-xs text-white">
-          <span className="text-white/60">Lien public :</span>
-          <code className="flex-1 truncate rounded bg-white/10 px-2 py-1 font-mono">{shareUrl}</code>
-          <Button variant="ghost" size="sm" onClick={copyShareUrl} className="text-white hover:bg-white/10">
+        <div className="dossier-toolbar flex flex-shrink-0 flex-wrap items-center gap-2 border-b border-white/10 bg-black/40 px-4 py-2 text-xs text-white">
+          <span className="text-white/60">
+            {shareInfo.share_visibility === "password" ? "Lien protégé :" : "Lien public :"}
+          </span>
+          <code className="min-w-0 flex-1 truncate rounded bg-white/10 px-2 py-1 font-mono">{shareUrl}</code>
+          <Button variant="ghost" size="sm" onClick={copyShareUrl} className="text-white hover:bg-white/10" title="Copier le lien">
             {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
           </Button>
           <a href={shareUrl} target="_blank" rel="noreferrer" className="text-white/80 underline hover:text-white">Ouvrir</a>
+          <Button variant="ghost" size="sm" onClick={openShareDialog} className="text-white hover:bg-white/10">
+            Modifier
+          </Button>
+          {shareInfo.share_visibility === "password" && shareInfo.share_password ? (
+            <div className="flex w-full items-center gap-2 border-t border-white/10 pt-2 sm:w-auto sm:border-none sm:pt-0">
+              <Lock className="h-3 w-3 text-white/60" />
+              <span className="text-white/60">Mot de passe à transmettre :</span>
+              <code className="rounded bg-white/10 px-2 py-1 font-mono">
+                {showPassword ? shareInfo.share_password : "•".repeat(Math.min(12, shareInfo.share_password.length))}
+              </code>
+              <Button variant="ghost" size="sm" onClick={() => setShowPassword((v) => !v)} className="text-white hover:bg-white/10" title={showPassword ? "Masquer" : "Afficher"}>
+                {showPassword ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={copyPassword} className="text-white hover:bg-white/10" title="Copier le mot de passe">
+                {passwordCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+              </Button>
+            </div>
+          ) : null}
         </div>
       )}
+
+      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Partager le dossier</DialogTitle>
+            <DialogDescription>
+              Choisis comment ce dossier est accessible via le lien /d/{shareInfo.share_slug ?? "…"}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <RadioGroup value={dialogVisibility} onValueChange={(v) => setDialogVisibility(v as "public" | "password")}>
+              <div className="flex items-start gap-3 rounded-md border border-border p-3">
+                <RadioGroupItem value="public" id="vis-public" className="mt-1" />
+                <Label htmlFor="vis-public" className="flex-1 cursor-pointer">
+                  <div className="font-medium">Public</div>
+                  <div className="text-xs text-muted-foreground">Toute personne ayant le lien peut consulter le dossier.</div>
+                </Label>
+              </div>
+              <div className="flex items-start gap-3 rounded-md border border-border p-3">
+                <RadioGroupItem value="password" id="vis-password" className="mt-1" />
+                <Label htmlFor="vis-password" className="flex-1 cursor-pointer">
+                  <div className="font-medium">Protégé par mot de passe</div>
+                  <div className="text-xs text-muted-foreground">Le client devra saisir un mot de passe pour ouvrir le dossier.</div>
+                </Label>
+              </div>
+            </RadioGroup>
+            {dialogVisibility === "password" && (
+              <div className="space-y-2">
+                <Label htmlFor="share-pwd">Mot de passe</Label>
+                <Input
+                  id="share-pwd"
+                  type="text"
+                  autoComplete="off"
+                  value={dialogPassword}
+                  onChange={(e) => setDialogPassword(e.target.value)}
+                  placeholder="Ex : arcade2026"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Ce mot de passe s'affichera dans l'aperçu pour que tu puisses le transmettre au client.
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShareDialogOpen(false)} disabled={sharing}>
+              Annuler
+            </Button>
+            <Button onClick={submitShare} disabled={sharing}>
+              {sharing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Enregistrer et copier le lien
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
 
       {loading || !project ? (
         <div className="flex flex-1 items-center justify-center text-white">

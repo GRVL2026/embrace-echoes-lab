@@ -417,7 +417,7 @@ export function DossierPreview({
         <div className="flex items-center gap-2">
           {!shareMode && (
             <>
-              <Button variant="ghost" size="sm" onClick={handleShare} disabled={sharing || loading} className="text-white hover:bg-white/10">
+              <Button variant="ghost" size="sm" onClick={openShareDialog} disabled={sharing || loading} className="text-white hover:bg-white/10">
                 {sharing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Share2 className="mr-1 h-4 w-4" />}
                 Partager
               </Button>

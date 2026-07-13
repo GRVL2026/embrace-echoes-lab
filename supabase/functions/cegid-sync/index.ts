@@ -394,20 +394,11 @@ async function syncFeed(
       return true;
     });
 
-    // Full-refresh: DELETE all then INSERT
-    const del = await admin.from(mapper.table).delete().not('__none__', 'is', null);
-    // fallback: use neq on a column that always exists
-    if (del.error) {
-      // try alternative delete
-      const alt = await admin.from(mapper.table).delete().gte('ctid', '(0,0)' as any);
-      if (alt.error) {
-        // last-resort: delete without filter via rpc-style is unsupported → use `neq id -1`
-        const alt2 = mapper.pk
-          ? await admin.from(mapper.table).delete().neq(mapper.pk, '__nope__')
-          : await admin.from(mapper.table).delete().neq('id', -1);
-        if (alt2.error) throw new Error(`DELETE ${mapper.table}: ${alt2.error.message}`);
-      }
-    }
+    // Full-refresh: DELETE all then INSERT (PostgREST requires a filter)
+    const del = mapper.pk
+      ? await admin.from(mapper.table).delete().neq(mapper.pk, '__never_matches__')
+      : await admin.from(mapper.table).delete().gte('id', 0);
+    if (del.error) throw new Error(`DELETE ${mapper.table}: ${del.error.message}`);
 
     for (let i = 0; i < rows.length; i += INSERT_BATCH) {
       const batch = rows.slice(i, i + INSERT_BATCH);

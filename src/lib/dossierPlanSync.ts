@@ -105,14 +105,14 @@ export function buildInitialQuantities(
 }
 
 /**
- * À l'ENREGISTREMENT du plan : merge des jeux placés dans selected_products.
+ * À l'ENREGISTREMENT du plan : synchronise selected_products avec le plan.
  *
- *  - Les articles non plaçables du dossier sont conservés tels quels.
- *  - Les jeux plaçables déjà présents dans le dossier mais absents du plan sont
- *    conservés tels quels (dossier ⊇ plan).
- *  - Les jeux placés voient leur qty remplacée par le nombre réel d'instances
- *    (et sont ajoutés au dossier s'ils n'y étaient pas, prix unitaire repris du
- *    catalogue selon l'offre).
+ *  - Les articles NON plaçables du dossier sont conservés tels quels.
+ *  - Pour les JEUX PLAÇABLES, le PLAN fait foi : selected_products contient
+ *    exactement les machines placées (qty = nb d'instances). Les jeux plaçables
+ *    présents dans le dossier mais absents du plan sont RETIRÉS.
+ *  - Prix unitaire repris du catalogue selon l'offre (sauf si la ligne existait
+ *    déjà : on conserve alors le prix historique).
  */
 export function mergeSelectedProductsFromPlan(
   current: SelectedProduct[] | null | undefined,
@@ -120,7 +120,6 @@ export function mergeSelectedProductsFromPlan(
   catalogRows: CatalogRow[],
   offer: string | null | undefined,
 ): SelectedProduct[] {
-  // shopify_id → CatalogRow, et catalog_products.id → CatalogRow
   const byShopify = new Map<string, CatalogRow>();
   const byUuid = new Map<string, CatalogRow>();
   for (const r of catalogRows) {
@@ -135,45 +134,49 @@ export function mergeSelectedProductsFromPlan(
     placedCounts.set(pe.equipmentId, (placedCounts.get(pe.equipmentId) ?? 0) + 1);
   }
 
-  // Ensembles pratiques
-  const nextByProductId = new Map<string, SelectedProduct>();
-
-  // 1. On repart des articles actuels du dossier.
-  for (const p of current ?? []) {
-    nextByProductId.set(p.product_id, { ...p });
-  }
-
-  // 2. Pour chaque jeu placé, on met à jour ou on crée la ligne correspondante.
+  // Lignes plaçables issues du plan (product_id = catalog_products.id)
+  const placedByProductId = new Map<string, SelectedProduct>();
   for (const [shopifyId, count] of placedCounts) {
     const row = byShopify.get(shopifyId);
-    if (!row) continue; // équipement inconnu du catalogue → on ne touche pas au dossier
-    if (!isPlaceableCategory(row.category)) continue; // sécurité : jamais toucher aux non-plaçables
-
-    const existing = nextByProductId.get(row.id);
-    if (existing) {
-      nextByProductId.set(row.id, { ...existing, qty: count });
-    } else {
-      nextByProductId.set(row.id, {
-        product_id: row.id,
-        name: row.name,
-        qty: count,
-        unit_price: unitPriceForOffer(row, offer),
-      });
-    }
+    if (!row) continue;
+    if (!isPlaceableCategory(row.category)) continue;
+    placedByProductId.set(row.id, {
+      product_id: row.id,
+      name: row.name,
+      qty: count,
+      unit_price: unitPriceForOffer(row, offer),
+    });
   }
 
-  // 3. On conserve l'ordre initial + on append les nouveaux à la fin.
-  const seen = new Set<string>();
   const result: SelectedProduct[] = [];
+  const seen = new Set<string>();
+
+  // 1. Parcours du dossier existant, en préservant l'ordre.
   for (const p of current ?? []) {
-    const merged = nextByProductId.get(p.product_id);
-    if (merged) {
-      result.push(merged);
+    const row = byUuid.get(p.product_id);
+    const placeable = row ? isPlaceableCategory(row.category) : true;
+
+    if (!placeable) {
+      // Non plaçable : on n'y touche jamais.
+      result.push({ ...p });
+      seen.add(p.product_id);
+      continue;
+    }
+
+    // Plaçable : le plan fait foi.
+    const placed = placedByProductId.get(p.product_id);
+    if (placed) {
+      // Encore dans le plan → maj qty, prix historique conservé.
+      result.push({ ...p, qty: placed.qty });
       seen.add(p.product_id);
     }
+    // Sinon : retiré du plan → exclu du dossier.
   }
-  for (const [pid, prod] of nextByProductId) {
+
+  // 2. Nouveaux jeux placés absents du dossier → append.
+  for (const [pid, prod] of placedByProductId) {
     if (!seen.has(pid)) result.push(prod);
   }
+
   return result;
 }

@@ -7,6 +7,7 @@ const corsHeaders = {
 };
 
 const TOKEN_URL = 'https://xrp-flex.cegid.cloud/avranches-automatic/identity/connect/token';
+const TIMEOUT_MS = 25000;
 
 const FEEDS: { name: string; url: string }[] = [
   { name: 'BD-Clients',    url: 'https://xrp-flex.cegid.cloud/avranches-automatic/ODATA/AVRANCHES/BD-Clients' },
@@ -23,26 +24,45 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
-async function fetchToken(): Promise<{ ok: boolean; status: number; token?: string; error?: string; preview?: string }> {
+type TokenStep = {
+  ok: boolean;
+  http_status?: number;
+  duration_ms: number;
+  error?: string;
+  preview?: string;
+  token?: string;
+};
+
+async function fetchToken(): Promise<TokenStep> {
+  const started = Date.now();
   const clientId = Deno.env.get('CEGID_CLIENT_ID');
   const clientSecret = Deno.env.get('CEGID_CLIENT_SECRET');
   const username = Deno.env.get('CEGID_USERNAME');
   const password = Deno.env.get('CEGID_PASSWORD');
 
-  if (!clientId || !clientSecret || !username || !password) {
-    return { ok: false, status: 0, error: 'Secrets CEGID_CLIENT_ID / CEGID_CLIENT_SECRET / CEGID_USERNAME / CEGID_PASSWORD non configurés.' };
+  const missing: string[] = [];
+  if (!clientId) missing.push('CEGID_CLIENT_ID');
+  if (!clientSecret) missing.push('CEGID_CLIENT_SECRET');
+  if (!username) missing.push('CEGID_USERNAME');
+  if (!password) missing.push('CEGID_PASSWORD');
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      duration_ms: Date.now() - started,
+      error: `Secrets manquants : ${missing.join(', ')}`,
+    };
   }
 
   const form = new URLSearchParams();
   form.set('grant_type', 'password');
-  form.set('client_id', clientId);
-  form.set('client_secret', clientSecret);
-  form.set('username', username);
-  form.set('password', password);
+  form.set('client_id', clientId!);
+  form.set('client_secret', clientSecret!);
+  form.set('username', username!);
+  form.set('password', password!);
   form.set('scope', 'api');
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20000);
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     const res = await fetch(TOKEN_URL, {
       method: 'POST',
@@ -53,32 +73,61 @@ async function fetchToken(): Promise<{ ok: boolean; status: number; token?: stri
       body: form.toString(),
       signal: controller.signal,
     });
-    const status = res.status;
-    const text = await res.text();
+    const http_status = res.status;
+    let text = '';
+    try { text = await res.text(); } catch (_e) { /* ignore */ }
+    const duration_ms = Date.now() - started;
+
     if (!res.ok) {
-      return { ok: false, status, error: `Échec ticket OAuth (HTTP ${status})`, preview: text.slice(0, 500) };
+      return {
+        ok: false,
+        http_status,
+        duration_ms,
+        error: `Échec ticket OAuth (HTTP ${http_status})`,
+        preview: text.slice(0, 500),
+      };
     }
     try {
       const json = JSON.parse(text);
       const token = json?.access_token;
       if (!token) {
-        return { ok: false, status, error: 'Réponse ticket sans access_token.', preview: text.slice(0, 500) };
+        return { ok: false, http_status, duration_ms, error: 'Réponse ticket sans access_token.', preview: text.slice(0, 500) };
       }
-      return { ok: true, status, token };
+      return { ok: true, http_status, duration_ms, token };
     } catch (_e) {
-      return { ok: false, status, error: 'Réponse ticket non JSON.', preview: text.slice(0, 500) };
+      return { ok: false, http_status, duration_ms, error: 'Réponse ticket non JSON.', preview: text.slice(0, 500) };
     }
   } catch (e: any) {
-    return { ok: false, status: 0, error: e?.name === 'AbortError' ? 'Timeout ticket (20s).' : (e?.message ?? String(e)) };
+    const duration_ms = Date.now() - started;
+    const isTimeout = e?.name === 'AbortError';
+    return {
+      ok: false,
+      duration_ms,
+      error: isTimeout ? `timeout (${TIMEOUT_MS / 1000}s dépassé)` : (e?.message ?? String(e)),
+    };
   } finally {
     clearTimeout(timeout);
   }
 }
 
-async function fetchFeed(name: string, url: string, token: string) {
+type FeedResult = {
+  name: string;
+  url: string;
+  ok: boolean;
+  http_status?: number;
+  duration_ms: number;
+  columns?: string[];
+  sample?: any[];
+  error?: string;
+  preview?: string;
+  format?: 'json' | 'xml' | 'text';
+};
+
+async function fetchFeed(name: string, url: string, token: string): Promise<FeedResult> {
+  const started = Date.now();
   const fullUrl = url + (url.includes('?') ? '&' : '?') + '$top=2';
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20000);
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     const res = await fetch(fullUrl, {
       method: 'GET',
@@ -88,17 +137,20 @@ async function fetchFeed(name: string, url: string, token: string) {
       },
       signal: controller.signal,
     });
-    const status = res.status;
+    const http_status = res.status;
     const contentType = res.headers.get('content-type') ?? '';
-    const text = await res.text();
+    let text = '';
+    try { text = await res.text(); } catch (_e) { /* ignore */ }
+    const duration_ms = Date.now() - started;
 
     if (!res.ok) {
       return {
         name,
         url: fullUrl,
-        status,
         ok: false,
-        error: status === 401 ? 'Non autorisé (401).' : `HTTP ${status}`,
+        http_status,
+        duration_ms,
+        error: http_status === 401 ? 'Non autorisé (401).' : `HTTP ${http_status}`,
         preview: text.slice(0, 500),
       };
     }
@@ -121,9 +173,10 @@ async function fetchFeed(name: string, url: string, token: string) {
         return {
           name,
           url: fullUrl,
-          status,
           ok: true,
-          format: 'json' as const,
+          http_status,
+          duration_ms,
+          format: 'json',
           columns,
           sample: records.slice(0, 2),
         };
@@ -131,9 +184,10 @@ async function fetchFeed(name: string, url: string, token: string) {
         return {
           name,
           url: fullUrl,
-          status,
           ok: true,
-          format: 'text' as const,
+          http_status,
+          duration_ms,
+          format: 'text',
           preview: text.slice(0, 1000),
         };
       }
@@ -142,18 +196,21 @@ async function fetchFeed(name: string, url: string, token: string) {
     return {
       name,
       url: fullUrl,
-      status,
       ok: true,
-      format: 'xml' as const,
+      http_status,
+      duration_ms,
+      format: 'xml',
       preview: text.slice(0, 1000),
     };
   } catch (e: any) {
+    const duration_ms = Date.now() - started;
+    const isTimeout = e?.name === 'AbortError';
     return {
       name,
       url: fullUrl,
-      status: 0,
       ok: false,
-      error: e?.name === 'AbortError' ? 'Timeout (20s dépassé).' : (e?.message ?? String(e)),
+      duration_ms,
+      error: isTimeout ? `timeout (${TIMEOUT_MS / 1000}s dépassé)` : (e?.message ?? String(e)),
     };
   } finally {
     clearTimeout(timeout);
@@ -177,8 +234,8 @@ Deno.serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const token = authHeader.replace('Bearer ', '');
-    const { data: userData, error: userErr } = await supabase.auth.getUser(token);
+    const jwt = authHeader.replace('Bearer ', '');
+    const { data: userData, error: userErr } = await supabase.auth.getUser(jwt);
     if (userErr || !userData?.user) {
       return jsonResponse({ error: 'Unauthorized' }, 401);
     }
@@ -200,24 +257,46 @@ Deno.serve(async (req) => {
     const action = body?.action;
 
     if (action !== 'discover') {
-      return jsonResponse({ error: `Unknown action: ${action}` }, 400);
-    }
-
-    const ticket = await fetchToken();
-    if (!ticket.ok || !ticket.token) {
       return jsonResponse({
-        ok: false,
-        ticket_status: ticket.status,
-        error: ticket.error ?? 'Échec authentification Cegid.',
-        preview: ticket.preview,
+        token_step: { ok: false, duration_ms: 0, error: `Unknown action: ${action}` },
+        feeds: [],
       }, 200);
     }
 
-    const results = await Promise.all(FEEDS.map((f) => fetchFeed(f.name, f.url, ticket.token!)));
+    // Étape 1 : ticket
+    let token_step: TokenStep;
+    try {
+      token_step = await fetchToken();
+    } catch (e: any) {
+      token_step = { ok: false, duration_ms: 0, error: e?.message ?? String(e) };
+    }
 
-    return jsonResponse({ ok: true, ticket_status: ticket.status, results });
+    if (!token_step.ok || !token_step.token) {
+      const { token: _t, ...safe } = token_step;
+      return jsonResponse({ token_step: safe, feeds: [] }, 200);
+    }
+
+    // Étape 2 : flux
+    let feeds: FeedResult[] = [];
+    try {
+      feeds = await Promise.all(FEEDS.map((f) => fetchFeed(f.name, f.url, token_step.token!)));
+    } catch (e: any) {
+      feeds = FEEDS.map((f) => ({
+        name: f.name,
+        url: f.url,
+        ok: false,
+        duration_ms: 0,
+        error: e?.message ?? String(e),
+      }));
+    }
+
+    const { token: _t, ...safeToken } = token_step;
+    return jsonResponse({ token_step: safeToken, feeds }, 200);
   } catch (e: any) {
     console.error('cegid-sync error', e);
-    return jsonResponse({ error: e?.message ?? String(e) }, 500);
+    return jsonResponse({
+      token_step: { ok: false, duration_ms: 0, error: e?.message ?? String(e) },
+      feeds: [],
+    }, 200);
   }
 });

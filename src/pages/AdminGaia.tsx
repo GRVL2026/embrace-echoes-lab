@@ -119,15 +119,6 @@ export default function AdminGaia() {
     }
   };
 
-  const FEEDS = [
-    "BD-Clients",
-    "BD-Ventes",
-    "BD-Historique",
-    "BD-Commandes",
-    "BD-Stock",
-  ] as const;
-
-  const [progress, setProgress] = useState<Record<string, SyncSummary & { status: "pending" | "running" | "done" }>>({});
 
   const runSync = async () => {
     setSyncing(true);

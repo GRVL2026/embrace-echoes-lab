@@ -500,8 +500,10 @@ export type Database = {
           scope: Json
           selected_modules: Json
           selected_products: Json
+          share_password: string | null
           share_slug: string | null
           share_token: string | null
+          share_visibility: string
           solution: Json
           status: string
           updated_at: string
@@ -524,8 +526,10 @@ export type Database = {
           scope?: Json
           selected_modules?: Json
           selected_products?: Json
+          share_password?: string | null
           share_slug?: string | null
           share_token?: string | null
+          share_visibility?: string
           solution?: Json
           status?: string
           updated_at?: string
@@ -548,8 +552,10 @@ export type Database = {
           scope?: Json
           selected_modules?: Json
           selected_products?: Json
+          share_password?: string | null
           share_slug?: string | null
           share_token?: string | null
+          share_visibility?: string
           solution?: Json
           status?: string
           updated_at?: string

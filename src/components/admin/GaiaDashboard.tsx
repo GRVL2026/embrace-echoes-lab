@@ -223,7 +223,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
               <YAxis
                 stroke="hsl(var(--muted-foreground))"
                 fontSize={12}
-                tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : String(v))}
+                tickFormatter={(v) => (v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)} M€` : v >= 1000 ? `${Math.round(v / 1000)} k€` : String(v))}
               />
               <Tooltip
                 contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}

@@ -280,29 +280,45 @@ const MAPPERS: Record<string, { table: string; map: Mapper; pk?: string }> = {
   },
   'BD-Commandes': {
     table: 'gaia_commandes',
-    map: (r) => ({
-      code_client: str(r.CodeClient),
-      type_cde: str(r.TypeCde),
-      n_cde: str(r.NCde),
-      code_article: trim(r.CodeArticle),
-      invoice_date: date(r.InvoiceDate),
-      qty: num(r.Qty),
-      unit_cost: num(r.UnitCost),
-      pu_rem: num(r.PURem),
-      montant_ht: num(r.MontantHTRemTot),
-      marge_brut: num(r.MargeBrut),
-      statut: str(r.Status),
-      date_liv: date(r['DateLivEstimée'] ?? r.DateLivEstimee ?? r.DateLivEstim_e),
-      completed: bool(r.Completed),
-      order_type: str(r.OrderType),
-      order_nbr: str(r.OrderNbr),
-      line_nbr: intNum(r.LineNbr),
-      classe_client: str(r.ClassID),
-      classe_article: str(r.ClassID_2),
-      branch: str(r.BranchID),
-      inventory_id: trim(r.InventoryID),
-      devise: str(r.CuryID),
-    }),
+    map: (r) => {
+      // Résilient aux clés à accents / variantes d'encodage OData
+      const pickKey = (obj: any, candidates: string[]): any => {
+        if (!obj || typeof obj !== 'object') return undefined;
+        for (const k of candidates) {
+          if (k in obj) return obj[k];
+        }
+        // fallback : recherche insensible aux accents/casse
+        const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        const target = candidates.map(norm);
+        for (const key of Object.keys(obj)) {
+          if (target.includes(norm(key))) return obj[key];
+        }
+        return undefined;
+      };
+      return {
+        code_client: str(r?.CodeClient),
+        type_cde: str(r?.TypeCde),
+        n_cde: str(r?.NCde),
+        code_article: trim(r?.CodeArticle),
+        invoice_date: date(r?.InvoiceDate),
+        qty: num(r?.Qty),
+        unit_cost: num(r?.UnitCost),
+        pu_rem: num(r?.PURem),
+        montant_ht: num(r?.MontantHTRemTot),
+        marge_brut: num(r?.MargeBrut),
+        statut: str(r?.Status),
+        date_liv: date(pickKey(r, ['DateLivEstimée', 'DateLivEstimee', 'DateLivEstim_e', 'DateLivEstimC3A9e'])),
+        completed: bool(r?.Completed),
+        order_type: str(r?.OrderType),
+        order_nbr: str(r?.OrderNbr),
+        line_nbr: intNum(r?.LineNbr),
+        classe_client: str(r?.ClassID),
+        classe_article: str(r?.ClassID_2),
+        branch: str(r?.BranchID),
+        inventory_id: trim(r?.InventoryID),
+        devise: str(r?.CuryID),
+      };
+    },
   },
   'BD-Stock': {
     table: 'gaia_stock',
@@ -506,10 +522,16 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  let currentFeed = '(unknown)';
   try {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return jsonResponse({ error: 'Unauthorized' }, 401);
+      return jsonResponse({
+        ok: false,
+        error: 'Unauthorized: header Authorization Bearer manquant',
+        token_step: { ok: false, duration_ms: 0, error: 'no auth header' },
+        feeds: [], summary: [],
+      }, 200);
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -522,7 +544,12 @@ Deno.serve(async (req) => {
     const jwt = authHeader.replace('Bearer ', '');
     const { data: userData, error: userErr } = await supabase.auth.getUser(jwt);
     if (userErr || !userData?.user) {
-      return jsonResponse({ error: 'Unauthorized' }, 401);
+      return jsonResponse({
+        ok: false,
+        error: `Unauthorized: ${userErr?.message ?? 'session invalide'}`,
+        token_step: { ok: false, duration_ms: 0, error: 'auth.getUser failed' },
+        feeds: [], summary: [],
+      }, 200);
     }
     const userId = userData.user.id;
 
@@ -533,8 +560,9 @@ Deno.serve(async (req) => {
       .eq('role', 'admin')
       .maybeSingle();
 
+    // Seule exception autorisée : le contrôle admin peut renvoyer 403.
     if (roleErr || !roleRow) {
-      return jsonResponse({ error: 'Forbidden: admin only' }, 403);
+      return jsonResponse({ ok: false, error: 'Forbidden: admin only' }, 403);
     }
 
     let body: any = {};
@@ -543,8 +571,10 @@ Deno.serve(async (req) => {
 
     if (action !== 'discover' && action !== 'sync') {
       return jsonResponse({
+        ok: false,
+        error: `Unknown action: ${action}`,
         token_step: { ok: false, duration_ms: 0, error: `Unknown action: ${action}` },
-        feeds: [],
+        feeds: [], summary: [],
       }, 200);
     }
 
@@ -553,12 +583,12 @@ Deno.serve(async (req) => {
     try {
       token_step = await fetchToken();
     } catch (e: any) {
-      token_step = { ok: false, duration_ms: 0, error: e?.message ?? String(e) };
+      token_step = { ok: false, duration_ms: 0, error: `${e?.message ?? String(e)}\n${e?.stack ?? ''}` };
     }
 
     if (!token_step.ok || !token_step.token) {
       const { token: _t, ...safe } = token_step;
-      return jsonResponse({ token_step: safe, feeds: [], summary: [] }, 200);
+      return jsonResponse({ ok: false, token_step: safe, feeds: [], summary: [] }, 200);
     }
 
     if (action === 'discover') {
@@ -568,11 +598,11 @@ Deno.serve(async (req) => {
       } catch (e: any) {
         feeds = FEEDS.map((f) => ({
           name: f.name, url: f.url, ok: false, duration_ms: 0,
-          error: e?.message ?? String(e),
+          error: `${e?.message ?? String(e)}\n${e?.stack ?? ''}`,
         }));
       }
       const { token: _t, ...safeToken } = token_step;
-      return jsonResponse({ token_step: safeToken, feeds }, 200);
+      return jsonResponse({ ok: true, token_step: safeToken, feeds }, 200);
     }
 
     // action === 'sync' — un seul flux par appel
@@ -581,6 +611,7 @@ Deno.serve(async (req) => {
 
     if (!requestedFeed) {
       return jsonResponse({
+        ok: false,
         token_step: safeToken,
         summary: [{
           feed: '(none)', rows: 0, ok: false,
@@ -589,9 +620,11 @@ Deno.serve(async (req) => {
         }],
       }, 200);
     }
+    currentFeed = requestedFeed;
     const target = FEEDS.find((f) => f.name === requestedFeed);
     if (!target) {
       return jsonResponse({
+        ok: false,
         token_step: safeToken,
         summary: [{
           feed: requestedFeed, rows: 0, ok: false,
@@ -604,17 +637,26 @@ Deno.serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceKey);
     let s: SyncSummary;
     try {
+      console.log(`[cegid-sync] début flux ${target.name}`);
       s = await syncFeedStreaming(admin, target.name, target.url, token_step.token!);
+      console.log(`[cegid-sync] fin flux ${target.name}: ok=${s.ok} rows=${s.rows}`);
     } catch (e: any) {
-      s = { feed: target.name, rows: 0, ok: false, error: e?.message ?? String(e), duration_ms: 0 };
+      const msg = `${e?.message ?? String(e)}\n${e?.stack ?? ''}`;
+      console.error(`[cegid-sync] crash flux ${target.name}:`, msg);
+      s = { feed: target.name, rows: 0, ok: false, error: msg, duration_ms: 0 };
     }
-    return jsonResponse({ token_step: safeToken, summary: [s] }, 200);
+    return jsonResponse({ ok: s.ok, token_step: safeToken, summary: [s] }, 200);
   } catch (e: any) {
-    console.error('cegid-sync error', e);
+    // Filet de sécurité global — TOUJOURS 200 sauf 403 admin (géré au-dessus).
+    const msg = `${e?.message ?? String(e)}\n${e?.stack ?? ''}`;
+    console.error('[cegid-sync] crash global:', msg);
     return jsonResponse({
-      token_step: { ok: false, duration_ms: 0, error: e?.message ?? String(e) },
+      ok: false,
+      error: msg,
+      feed: currentFeed,
+      token_step: { ok: false, duration_ms: 0, error: msg },
       feeds: [],
-      summary: [],
+      summary: [{ feed: currentFeed, rows: 0, ok: false, error: msg, duration_ms: 0 }],
     }, 200);
   }
 });

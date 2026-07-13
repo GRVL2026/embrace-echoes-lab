@@ -561,6 +561,21 @@ export type Database = {
         }
         Relationships: []
       }
+      gaia_config: {
+        Row: {
+          key: string
+          value: string | null
+        }
+        Insert: {
+          key: string
+          value?: string | null
+        }
+        Update: {
+          key?: string
+          value?: string | null
+        }
+        Relationships: []
+      }
       gaia_historique: {
         Row: {
           branch: string | null
@@ -996,7 +1011,74 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      v_gaia_ca_client: {
+        Row: {
+          annee: number | null
+          ca_ht: number | null
+          client: string | null
+          code_client: string | null
+        }
+        Relationships: []
+      }
+      v_gaia_ca_famille: {
+        Row: {
+          annee: number | null
+          ca_ht: number | null
+          famille: string | null
+        }
+        Relationships: []
+      }
+      v_gaia_ca_mensuel: {
+        Row: {
+          annee: number | null
+          ca_ht: number | null
+          lignes: number | null
+          mois: string | null
+        }
+        Relationships: []
+      }
+      v_gaia_commandes_etat: {
+        Row: {
+          etat: string | null
+          nb_commandes: number | null
+          total_ht: number | null
+        }
+        Relationships: []
+      }
+      v_gaia_ecotax_codes: {
+        Row: {
+          code: string | null
+        }
+        Relationships: []
+      }
+      v_gaia_ecotaxe_mensuel: {
+        Row: {
+          ecotaxe_ht: number | null
+          mois: string | null
+        }
+        Relationships: []
+      }
+      v_gaia_lignes: {
+        Row: {
+          classe_article: string | null
+          code_article: string | null
+          code_client: string | null
+          inventory_id: string | null
+          invoice_date: string | null
+          montant_ht: number | null
+          source: string | null
+        }
+        Relationships: []
+      }
+      v_gaia_stock_valeur: {
+        Row: {
+          depot: string | null
+          quantite: number | null
+          valeur_achat: number | null
+          valeur_vente: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       is_admin: { Args: never; Returns: boolean }

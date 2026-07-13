@@ -21,7 +21,7 @@ import { UserMenu } from "@/components/UserMenu";
 import {
   buildInitialQuantities,
   mergeSelectedProductsFromPlan,
-  computePricing,
+  
   type CatalogRow,
   type SelectedProduct,
 } from "@/lib/dossierPlanSync";
@@ -124,14 +124,14 @@ function SpacePlannerInner() {
       (catRows as CatalogRow[]) ?? [],
       offer,
     );
-    const mergedPricing = computePricing(mergedSelected, offer);
-
+    // On ne met à jour QUE plan_data + selected_products. Aucun autre champ
+    // (context, solution, scope, pricing, selected_modules, infos client) n'est
+    // touché.
     const { error } = await (supabase as any)
       .from("projects")
       .update({
         plan_data: payload,
         selected_products: mergedSelected,
-        pricing: mergedPricing,
       })
       .eq("id", dossierId);
     setSavingToDossier(false);

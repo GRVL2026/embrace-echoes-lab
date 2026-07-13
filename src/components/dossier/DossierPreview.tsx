@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Loader2, X, ChevronLeft, ChevronRight, Phone, Mail, Globe, MapPin, Download, Share2, Copy, Check } from "lucide-react";
+import { Loader2, X, ChevronLeft, ChevronRight, Phone, Mail, Globe, MapPin, Download, Share2, Copy, Check, Lock, Eye, EyeOff } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { renderPlan2D } from "@/lib/plan2DRender";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+
 
 type BrandContact = {
   phone?: string;

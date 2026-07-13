@@ -7,6 +7,7 @@ import SpacePlanner from "./pages/SpacePlanner";
 import DossiersList from "./pages/DossiersList";
 import DossierEdit from "./pages/DossierEdit";
 import AdminDossiers from "./pages/AdminDossiers";
+import AdminGaia from "./pages/AdminGaia";
 import NotFound from "./pages/NotFound";
 import PublicDossier from "./pages/PublicDossier";
 import Login from "./pages/Login";
@@ -36,6 +37,7 @@ const App = () => (
             <Route path="/dossiers" element={<ProtectedRoute><DossiersList /></ProtectedRoute>} />
             <Route path="/dossiers/:id" element={<ProtectedRoute><DossierEdit /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute><AdminDossiers /></ProtectedRoute>} />
+            <Route path="/admin/gaia" element={<ProtectedRoute><AdminGaia /></ProtectedRoute>} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>

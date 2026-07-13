@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.generate-dossier]
 verify_jwt = false
+
+[functions.cegid-sync]
+verify_jwt = true

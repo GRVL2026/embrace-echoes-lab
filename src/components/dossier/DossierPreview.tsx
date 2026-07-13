@@ -306,11 +306,18 @@ export function DossierPreview({
     }, 100);
   };
 
+  const shareInfo = {
+    share_slug: shareOverlay?.share_slug ?? project?.share_slug ?? null,
+    is_shared: shareOverlay?.is_shared ?? project?.is_shared ?? false,
+    share_visibility: shareOverlay?.share_visibility ?? project?.share_visibility ?? "public",
+    share_password: shareOverlay?.share_password ?? project?.share_password ?? null,
+  };
+
   const openShareDialog = () => {
     if (!project) return;
-    const vis = (project.share_visibility === "password" ? "password" : "public") as "public" | "password";
+    const vis = (shareInfo.share_visibility === "password" ? "password" : "public") as "public" | "password";
     setDialogVisibility(vis);
-    setDialogPassword(project.share_password ?? "");
+    setDialogPassword(shareInfo.share_password ?? "");
     setShareDialogOpen(true);
   };
 
@@ -322,7 +329,7 @@ export function DossierPreview({
     }
     setSharing(true);
     try {
-      let slug = project.share_slug;
+      let slug = shareInfo.share_slug;
       if (!slug) {
         const base = slugify(project.client_name || brand?.name || "dossier");
         for (let attempt = 0; attempt < 5; attempt++) {
@@ -352,6 +359,7 @@ export function DossierPreview({
       if (error) throw error;
       const url = `${window.location.origin}/d/${slug}`;
       setShareUrl(url);
+      setShareOverlay(payload);
       setFetchedProject((prev) => (prev ? { ...prev, ...payload } : prev));
       try {
         await navigator.clipboard.writeText(url);
@@ -370,7 +378,7 @@ export function DossierPreview({
   };
 
   const copyPassword = async () => {
-    const pwd = project?.share_password ?? "";
+    const pwd = shareInfo.share_password ?? "";
     if (!pwd) return;
     try {
       await navigator.clipboard.writeText(pwd);
@@ -381,6 +389,8 @@ export function DossierPreview({
       /* noop */
     }
   };
+
+
 
 
   const copyShareUrl = async () => {

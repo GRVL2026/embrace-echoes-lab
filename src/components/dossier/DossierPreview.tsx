@@ -303,6 +303,15 @@ export function DossierPreview({
   };
 
   const handlePrint = () => {
+    // Auto-mark as sent on first export from the sales UI
+    if (!shareMode && project?.id) {
+      markSentIfDraft(project.id, project.status).then((next) => {
+        if (next !== project.status) {
+          setFetchedProject((prev) => (prev ? { ...prev, status: next } : prev));
+          onStatusChange?.(next);
+        }
+      });
+    }
     document.body.classList.add("dossier-printing");
     setTimeout(() => {
       window.print();

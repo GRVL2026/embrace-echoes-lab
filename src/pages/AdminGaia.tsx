@@ -277,6 +277,63 @@ export default function AdminGaia() {
           </div>
         )}
 
+        {/* Progression en direct */}
+        {(syncing || Object.keys(progress).length > 0) && (
+          <div className="mb-6 rounded-lg border border-border bg-card/40 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <Loader2 className={`h-4 w-4 text-primary ${syncing ? "animate-spin" : ""}`} />
+              <h3 className="font-display text-lg font-semibold">Progression</h3>
+            </div>
+            <div className="space-y-2">
+              {FEEDS.map((feed) => {
+                const p = progress[feed];
+                const status = p?.status ?? "pending";
+                return (
+                  <div
+                    key={feed}
+                    className="flex items-center justify-between rounded border border-border/60 bg-background/40 px-3 py-2 text-sm"
+                  >
+                    <div className="flex items-center gap-2">
+                      {status === "pending" && (
+                        <span className="h-4 w-4 rounded-full border border-muted-foreground/40" />
+                      )}
+                      {status === "running" && (
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      )}
+                      {status === "done" && p?.ok && (
+                        <CheckCircle2 className="h-4 w-4 text-secondary" />
+                      )}
+                      {status === "done" && p && !p.ok && (
+                        <XCircle className="h-4 w-4 text-destructive" />
+                      )}
+                      <span className="font-medium">{feed}</span>
+                      {status === "done" && p && (
+                        <Badge variant="outline">{p.duration_ms} ms</Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs">
+                      {status === "pending" && (
+                        <span className="text-muted-foreground">En attente…</span>
+                      )}
+                      {status === "running" && (
+                        <span className="text-primary">Synchronisation en cours…</span>
+                      )}
+                      {status === "done" && p?.ok && (
+                        <span className="text-secondary">OK · {p.rows} lignes</span>
+                      )}
+                      {status === "done" && p && !p.ok && (
+                        <span className="max-w-md truncate text-destructive" title={p.error}>
+                          {p.error ?? "Erreur"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Résumé de la synchro qui vient de tourner */}
         {summary && summary.length > 0 && (
           <div className="mb-6 rounded-lg border border-border bg-card/40 p-4">

@@ -92,34 +92,48 @@ function PageFrame({ eyebrow, title, children }: { eyebrow?: string; title: stri
   );
 }
 
+export type PreloadedDossier = {
+  project: Project;
+  brand: Brand | null;
+  modules: BrandModule[];
+  catalog: Record<string, CatalogInfo>;
+};
+
 export function DossierPreview({
   projectId,
   onClose,
   shareMode = false,
   embedded = false,
   liveProject,
+  preloaded,
 }: {
-  projectId: string;
+  projectId?: string;
   onClose?: () => void;
   shareMode?: boolean;
   embedded?: boolean;
   liveProject?: Project | null;
+  preloaded?: PreloadedDossier | null;
 }) {
-  const useLive = liveProject !== undefined;
-  const [loading, setLoading] = useState(!useLive);
-  const [fetchedProject, setFetchedProject] = useState<Project | null>(null);
-  const project: Project | null = useLive ? (liveProject ?? null) : fetchedProject;
-  const [brand, setBrand] = useState<Brand | null>(null);
-  const [modules, setModules] = useState<BrandModule[]>([]);
-  const [catalogMap, setCatalogMap] = useState<Record<string, CatalogInfo>>({});
+  const usePreloaded = !!preloaded;
+  const useLive = !usePreloaded && liveProject !== undefined;
+  const [loading, setLoading] = useState(!useLive && !usePreloaded);
+  const [fetchedProject, setFetchedProject] = useState<Project | null>(preloaded?.project ?? null);
+  const project: Project | null = usePreloaded
+    ? preloaded!.project
+    : useLive
+    ? (liveProject ?? null)
+    : fetchedProject;
+  const [brand, setBrand] = useState<Brand | null>(preloaded?.brand ?? null);
+  const [modules, setModules] = useState<BrandModule[]>(preloaded?.modules ?? []);
+  const [catalogMap, setCatalogMap] = useState<Record<string, CatalogInfo>>(preloaded?.catalog ?? {});
   const [current, setCurrent] = useState(0);
   const [sharing, setSharing] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Fetch the project when not driven by live form state.
+  // Fetch the project when not driven by live form state or preloaded bundle.
   useEffect(() => {
-    if (useLive) return;
+    if (useLive || usePreloaded || !projectId) return;
     (async () => {
       setLoading(true);
       const { data: p } = await (supabase as any)
@@ -136,7 +150,7 @@ export function DossierPreview({
       }
       setLoading(false);
     })();
-  }, [projectId, useLive]);
+  }, [projectId, useLive, usePreloaded]);
 
   // Track share url from live project when available.
   useEffect(() => {
@@ -148,6 +162,7 @@ export function DossierPreview({
   // Fetch brand when brand_id changes.
   const brandId = project?.brand_id ?? null;
   useEffect(() => {
+    if (usePreloaded) return;
     if (!brandId) { setBrand(null); return; }
     let cancelled = false;
     (async () => {
@@ -159,11 +174,12 @@ export function DossierPreview({
       if (!cancelled) setBrand((b as Brand | null) ?? null);
     })();
     return () => { cancelled = true; };
-  }, [brandId]);
+  }, [brandId, usePreloaded]);
 
   // Fetch modules when selection changes (keyed on id list).
   const moduleIdsKey = (project?.selected_modules ?? []).join(",");
   useEffect(() => {
+    if (usePreloaded) return;
     const ids = moduleIdsKey ? moduleIdsKey.split(",").filter(Boolean) : [];
     if (ids.length === 0) { setModules([]); return; }
     let cancelled = false;
@@ -177,13 +193,14 @@ export function DossierPreview({
       setModules(ids.map((id) => map.get(id)).filter(Boolean) as BrandModule[]);
     })();
     return () => { cancelled = true; };
-  }, [moduleIdsKey]);
+  }, [moduleIdsKey, usePreloaded]);
 
   // Fetch catalog metadata when product ids change.
   const productIdsKey = Array.from(
     new Set((project?.selected_products ?? []).map((x) => x.product_id).filter((x): x is string => !!x)),
   ).sort().join(",");
   useEffect(() => {
+    if (usePreloaded) return;
     const pids = productIdsKey ? productIdsKey.split(",").filter(Boolean) : [];
     if (pids.length === 0) { setCatalogMap({}); return; }
     let cancelled = false;
@@ -198,7 +215,7 @@ export function DossierPreview({
       setCatalogMap(cmap);
     })();
     return () => { cancelled = true; };
-  }, [productIdsKey]);
+  }, [productIdsKey, usePreloaded]);
 
   const slidePages = useMemo(() => modules.filter((m) => !!m.image_url), [modules]);
 

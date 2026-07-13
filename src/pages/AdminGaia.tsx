@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +44,8 @@ type SyncSummary = {
   ok: boolean;
   error?: string;
   duration_ms: number;
+  http_status?: number;
+  response_body?: string;
 };
 
 type SyncLogRow = {
@@ -70,6 +73,62 @@ export default function AdminGaia() {
     "BD-Commandes",
     "BD-Stock",
   ] as const;
+
+  type FeedName = (typeof FEEDS)[number];
+
+  const readFunctionError = async (error: unknown): Promise<Pick<SyncSummary, "error" | "http_status" | "response_body">> => {
+    if (error instanceof FunctionsHttpError) {
+      const response = error.context;
+      let body = "";
+      try {
+        const json = await response.clone().json();
+        body = JSON.stringify(json, null, 2);
+      } catch {
+        try {
+          body = await response.text();
+        } catch {
+          body = "Corps de réponse illisible";
+        }
+      }
+      return {
+        http_status: response.status,
+        response_body: body,
+        error: `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`,
+      };
+    }
+    return { error: error instanceof Error ? error.message : String(error) };
+  };
+
+  const syncOneFeed = async (feed: FeedName): Promise<SyncSummary> => {
+    const started = Date.now();
+    try {
+      const { data, error } = await supabase.functions.invoke("cegid-sync", {
+        body: { action: "sync", feed },
+      });
+      if (error) throw error;
+      const d = data as { token_step?: TokenStep; summary?: SyncSummary[]; error?: string };
+      if (d?.token_step && !d.token_step.ok) {
+        return {
+          feed,
+          rows: 0,
+          ok: false,
+          error: d.token_step.error ?? "Échec ticket OAuth",
+          duration_ms: d.token_step.duration_ms ?? Date.now() - started,
+        };
+      }
+      return d?.summary?.[0] ?? {
+        feed,
+        rows: 0,
+        ok: false,
+        error: d?.error ?? "Réponse vide",
+        response_body: d ? JSON.stringify(d, null, 2) : undefined,
+        duration_ms: Date.now() - started,
+      };
+    } catch (error: unknown) {
+      const detail = await readFunctionError(error);
+      return { feed, rows: 0, ok: false, duration_ms: Date.now() - started, ...detail };
+    }
+  };
 
   const loadLogs = async () => {
     const { data } = await (supabase as any)
@@ -135,28 +194,9 @@ export default function AdminGaia() {
     const results: SyncSummary[] = [];
     for (const feed of FEEDS) {
       setProgress((p) => ({ ...p, [feed]: { ...p[feed], status: "running" } }));
-      try {
-        const { data, error } = await supabase.functions.invoke("cegid-sync", {
-          body: { action: "sync", feed },
-        });
-        if (error) throw error;
-        const d = data as { token_step?: TokenStep; summary?: SyncSummary[]; error?: string };
-        if (d?.token_step && !d.token_step.ok) {
-          const err = d.token_step.error ?? "Échec ticket OAuth";
-          const s: SyncSummary = { feed, rows: 0, ok: false, error: err, duration_ms: d.token_step.duration_ms ?? 0 };
-          results.push(s);
-          setProgress((p) => ({ ...p, [feed]: { ...s, status: "done" } }));
-          continue;
-        }
-        const s = d?.summary?.[0] ?? { feed, rows: 0, ok: false, error: "Réponse vide", duration_ms: 0 };
-        results.push(s);
-        setProgress((p) => ({ ...p, [feed]: { ...s, status: "done" } }));
-      } catch (e: any) {
-        const msg = e?.message ?? String(e);
-        const s: SyncSummary = { feed, rows: 0, ok: false, error: msg, duration_ms: 0 };
-        results.push(s);
-        setProgress((p) => ({ ...p, [feed]: { ...s, status: "done" } }));
-      }
+      const result = await syncOneFeed(feed);
+      results.push(result);
+      setProgress((p) => ({ ...p, [feed]: { ...result, status: "done" } }));
     }
 
     setSummary(results);
@@ -169,6 +209,28 @@ export default function AdminGaia() {
       variant: okCount === results.length ? "default" : "destructive",
     });
     setSyncing(false);
+  };
+
+  const retryFeed = async (feed: FeedName) => {
+    setProgress((p) => ({
+      ...p,
+      [feed]: { feed, rows: 0, ok: false, duration_ms: 0, status: "running" },
+    }));
+    const result = await syncOneFeed(feed);
+    setProgress((p) => ({ ...p, [feed]: { ...result, status: "done" } }));
+    setSummary((current) => {
+      const next = current ? [...current] : [];
+      const index = next.findIndex((item) => item.feed === feed);
+      if (index >= 0) next[index] = result;
+      else next.push(result);
+      return next;
+    });
+    await loadLogs();
+    toast({
+      title: result.ok ? `${feed} synchronisé` : `Échec de ${feed}`,
+      description: result.ok ? `${result.rows} lignes chargées.` : result.error,
+      variant: result.ok ? "default" : "destructive",
+    });
   };
 
 
@@ -314,42 +376,40 @@ export default function AdminGaia() {
                 return (
                   <div
                     key={feed}
-                    className="flex items-center justify-between rounded border border-border/60 bg-background/40 px-3 py-2 text-sm"
+                    className="rounded border border-border/60 bg-background/40 px-3 py-2 text-sm"
                   >
-                    <div className="flex items-center gap-2">
-                      {status === "pending" && (
-                        <span className="h-4 w-4 rounded-full border border-muted-foreground/40" />
-                      )}
-                      {status === "running" && (
-                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                      )}
-                      {status === "done" && p?.ok && (
-                        <CheckCircle2 className="h-4 w-4 text-secondary" />
-                      )}
-                      {status === "done" && p && !p.ok && (
-                        <XCircle className="h-4 w-4 text-destructive" />
-                      )}
-                      <span className="font-medium">{feed}</span>
-                      {status === "done" && p && (
-                        <Badge variant="outline">{p.duration_ms} ms</Badge>
-                      )}
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        {status === "pending" && <span className="h-4 w-4 rounded-full border border-muted-foreground/40" />}
+                        {status === "running" && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+                        {status === "done" && p?.ok && <CheckCircle2 className="h-4 w-4 text-secondary" />}
+                        {status === "done" && p && !p.ok && <XCircle className="h-4 w-4 text-destructive" />}
+                        <span className="font-medium">{feed}</span>
+                        {status === "done" && p && <Badge variant="outline">{p.duration_ms} ms</Badge>}
+                      </div>
+                      <div className="flex items-center gap-3 text-xs">
+                        {status === "pending" && <span className="text-muted-foreground">En attente…</span>}
+                        {status === "running" && <span className="text-primary">Synchronisation en cours…</span>}
+                        {status === "done" && p?.ok && <span className="text-secondary">OK · {p.rows} lignes</span>}
+                        {status === "done" && p && !p.ok && <span className="text-destructive">{p.error ?? "Erreur"}</span>}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => retryFeed(feed)}
+                          disabled={syncing || running || status === "running"}
+                        >
+                          <RefreshCw className="mr-1 h-3 w-3" /> Relancer
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 text-xs">
-                      {status === "pending" && (
-                        <span className="text-muted-foreground">En attente…</span>
-                      )}
-                      {status === "running" && (
-                        <span className="text-primary">Synchronisation en cours…</span>
-                      )}
-                      {status === "done" && p?.ok && (
-                        <span className="text-secondary">OK · {p.rows} lignes</span>
-                      )}
-                      {status === "done" && p && !p.ok && (
-                        <span className="max-w-md truncate text-destructive" title={p.error}>
-                          {p.error ?? "Erreur"}
-                        </span>
-                      )}
-                    </div>
+                    {status === "done" && p && !p.ok && (p.http_status || p.response_body) && (
+                      <div className="mt-3 rounded border border-destructive/40 bg-destructive/10 p-3 text-destructive">
+                        <div className="mb-2 font-semibold">Statut HTTP : {p.http_status ?? "indisponible"}</div>
+                        <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono text-xs">{p.response_body || "Corps de réponse vide"}</pre>
+                      </div>
+                    )}
                   </div>
                 );
               })}

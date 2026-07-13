@@ -523,7 +523,11 @@ Deno.serve(async (req) => {
   }
 
   let currentFeed = '(unknown)';
+  let body: any = {};
   try {
+    try { body = await req.json(); } catch (_e) { body = {}; }
+    console.log('[cegid-sync] payload reçu:', JSON.stringify(body));
+
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return jsonResponse({
@@ -565,8 +569,6 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, error: 'Forbidden: admin only' }, 403);
     }
 
-    let body: any = {};
-    try { body = await req.json(); } catch (_e) { body = {}; }
     const action = body?.action;
 
     if (action !== 'discover' && action !== 'sync') {
@@ -576,6 +578,26 @@ Deno.serve(async (req) => {
         token_step: { ok: false, duration_ms: 0, error: `Unknown action: ${action}` },
         feeds: [], summary: [],
       }, 200);
+    }
+
+    if (action === 'sync') {
+      const requestedFeed = body?.feed;
+      const acceptedFeeds = FEEDS.map((feed) => feed.name);
+      if (typeof requestedFeed !== 'string' || !acceptedFeeds.includes(requestedFeed)) {
+        const received = requestedFeed === undefined ? 'undefined' : String(requestedFeed);
+        return jsonResponse({
+          ok: false,
+          error: `feed inconnu: ${received}, attendus: ${acceptedFeeds.join(', ')}`,
+          summary: [{
+            feed: received,
+            rows: 0,
+            ok: false,
+            error: `feed inconnu: ${received}, attendus: ${acceptedFeeds.join(', ')}`,
+            duration_ms: 0,
+          }],
+        }, 200);
+      }
+      currentFeed = requestedFeed;
     }
 
     // Étape 1 : ticket
@@ -609,18 +631,6 @@ Deno.serve(async (req) => {
     const requestedFeed: string | undefined = body?.feed;
     const { token: _t, ...safeToken } = token_step;
 
-    if (!requestedFeed) {
-      return jsonResponse({
-        ok: false,
-        token_step: safeToken,
-        summary: [{
-          feed: '(none)', rows: 0, ok: false,
-          error: 'Paramètre "feed" manquant. Attendu : BD-Clients, BD-Ventes, BD-Historique, BD-Commandes ou BD-Stock.',
-          duration_ms: 0,
-        }],
-      }, 200);
-    }
-    currentFeed = requestedFeed;
     const target = FEEDS.find((f) => f.name === requestedFeed);
     if (!target) {
       return jsonResponse({
@@ -628,7 +638,7 @@ Deno.serve(async (req) => {
         token_step: safeToken,
         summary: [{
           feed: requestedFeed, rows: 0, ok: false,
-          error: `Flux inconnu : ${requestedFeed}`,
+          error: `feed inconnu: ${requestedFeed}, attendus: ${FEEDS.map((feed) => feed.name).join(', ')}`,
           duration_ms: 0,
         }],
       }, 200);

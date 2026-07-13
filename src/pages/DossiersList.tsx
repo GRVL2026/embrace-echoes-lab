@@ -86,9 +86,15 @@ export default function DossiersList() {
 
   const createDossier = async () => {
     setCreating(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setCreating(false);
+      toast({ title: "Non connecté", description: "Veuillez vous reconnecter.", variant: "destructive" });
+      return;
+    }
     const { data, error } = await (supabase as any)
       .from("projects")
-      .insert({ status: "draft", client_name: "" })
+      .insert({ status: "draft", client_name: "", owner_id: user.id })
       .select("id")
       .single();
     setCreating(false);

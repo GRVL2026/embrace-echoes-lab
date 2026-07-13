@@ -186,8 +186,28 @@ export function DossierPreview({
     }
   }, [project?.plan_data]);
   const hasPlan = !!planImage;
-  const customPages = 6 + (hasPlan ? 1 : 0);
-  const totalPages = slidePages.length + customPages;
+
+  const nonEmpty = (v: any) => typeof v === "string" && v.trim().length > 0;
+  const ctx = project?.context ?? {};
+  const sol = project?.solution ?? {};
+  const scp = project?.scope ?? {};
+  const prc = project?.pricing ?? {};
+  const hasContext = nonEmpty(ctx.contexte) || nonEmpty(ctx.objectif) || nonEmpty(ctx.enjeux) || nonEmpty(ctx.lecture);
+  const hasSolution = nonEmpty(sol.selection) || nonEmpty(sol.deploiement) || nonEmpty(sol.suivi);
+  const hasScope = nonEmpty(scp.fourniture) || nonEmpty(scp.livraison) || nonEmpty(scp.formation) || nonEmpty(scp.garantie);
+  const hasProducts = Array.isArray(project?.selected_products) && (project!.selected_products!.length > 0);
+  const hasPricing = (Array.isArray(prc.lines) && prc.lines.length > 0) || (prc.total_ht ?? 0) > 0 || (prc.monthly ?? 0) > 0;
+  const hasContact = !!brand;
+
+  const customPagesCount =
+    (hasContext ? 1 : 0) +
+    (hasSolution ? 1 : 0) +
+    (hasPlan ? 1 : 0) +
+    (hasProducts ? 1 : 0) +
+    (hasScope ? 1 : 0) +
+    (hasPricing ? 1 : 0) +
+    (hasContact ? 1 : 0);
+  const totalPages = slidePages.length + customPagesCount;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -351,242 +371,232 @@ export function DossierPreview({
               </div>
             ))}
 
-            {/* PARTIE B — pages reconstruites */}
+            {/* PARTIE B — pages reconstruites (uniquement les sections remplies) */}
             {(() => {
               const offset = slidePages.length;
-              const planShift = hasPlan ? 1 : 0;
-              return (
-                <>
-                  {/* 1. Contexte & besoin */}
-                  <div id={`dossier-page-${offset + 0}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
-                    <Page index={offset + 1} total={totalPages}>
-                      <PageFrame eyebrow="Contexte & besoin" title={`Le besoin de ${clientName}`}>
-                        <div className="grid h-full grid-cols-2 grid-rows-2 gap-5">
-                          {[
-                            { label: "Le contexte", value: context.contexte },
-                            { label: "L'objectif", value: context.objectif },
-                            { label: "Les enjeux", value: context.enjeux },
-                            { label: "Notre lecture", value: context.lecture },
-                          ].map((c) => (
-                            <div key={c.label} className="flex flex-col rounded-xl border p-5" style={{ borderColor: "rgba(0,0,0,0.08)", background: "rgba(255,255,255,0.55)" }}>
-                              <div className="mb-2 flex items-center gap-2">
-                                <span className="inline-block h-2 w-8 rounded-full" style={{ background: LIME }} />
-                                <span className="text-xs font-bold uppercase tracking-widest" style={{ color: PURPLE }}>
-                                  {c.label}
-                                </span>
-                              </div>
-                              <p className="whitespace-pre-wrap text-[15px] leading-relaxed" style={{ color: DARK }}>
-                                {c.value || "—"}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </PageFrame>
-                    </Page>
-                  </div>
+              const pages: React.ReactNode[] = [];
 
-                  {/* 2. Solution proposée */}
-                  <div id={`dossier-page-${offset + 1}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
-                    <Page index={offset + 2} total={totalPages}>
-                      <PageFrame eyebrow="Notre approche" title="Solution proposée">
-                        <div className="grid h-full grid-cols-3 gap-5">
-                          {[
-                            { n: "01", label: "Sélection", value: solution.selection },
-                            { n: "02", label: "Déploiement", value: solution.deploiement },
-                            { n: "03", label: "Suivi", value: solution.suivi },
-                          ].map((s) => (
-                            <div key={s.n} className="flex flex-col rounded-xl p-6" style={{ background: "rgba(255,255,255,0.6)", border: "1px solid rgba(0,0,0,0.08)" }}>
-                              <div className="mb-3 font-display text-5xl font-bold" style={{ color: PURPLE }}>{s.n}</div>
-                              <div className="mb-2 h-1 w-10 rounded-full" style={{ background: LIME }} />
-                              <div className="mb-3 text-lg font-bold" style={{ color: DARK }}>{s.label}</div>
-                              <p className="whitespace-pre-wrap text-[14px] leading-relaxed" style={{ color: DARK, opacity: 0.85 }}>
-                                {s.value || "—"}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </PageFrame>
-                    </Page>
-                  </div>
-
-                  {/* Plan de la salle (optionnel) */}
-                  {hasPlan && (
-                    <div id={`dossier-page-${offset + 2}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
-                      <Page index={offset + 3} total={totalPages}>
-                        <PageFrame eyebrow="Agencement" title="Plan de la salle">
-                          <div className="flex h-full w-full items-center justify-center rounded-xl border overflow-hidden" style={{ borderColor: "rgba(0,0,0,0.08)", background: DARK }}>
-                            <img src={planImage!} alt="Plan de la salle" className="max-h-full max-w-full object-contain" />
+              if (hasContext) {
+                pages.push(
+                  <PageFrame eyebrow="Contexte & besoin" title={`Le besoin de ${clientName}`}>
+                    <div className="grid h-full grid-cols-2 grid-rows-2 gap-5">
+                      {[
+                        { label: "Le contexte", value: context.contexte },
+                        { label: "L'objectif", value: context.objectif },
+                        { label: "Les enjeux", value: context.enjeux },
+                        { label: "Notre lecture", value: context.lecture },
+                      ].filter((c) => nonEmpty(c.value)).map((c) => (
+                        <div key={c.label} className="flex flex-col rounded-xl border p-5" style={{ borderColor: "rgba(0,0,0,0.08)", background: "rgba(255,255,255,0.55)" }}>
+                          <div className="mb-2 flex items-center gap-2">
+                            <span className="inline-block h-2 w-8 rounded-full" style={{ background: LIME }} />
+                            <span className="text-xs font-bold uppercase tracking-widest" style={{ color: PURPLE }}>{c.label}</span>
                           </div>
-                        </PageFrame>
-                      </Page>
+                          <p className="whitespace-pre-wrap text-[15px] leading-relaxed" style={{ color: DARK }}>{c.value}</p>
+                        </div>
+                      ))}
                     </div>
-                  )}
+                  </PageFrame>
+                );
+              }
 
-                  {/* 3. Sélection produits */}
-                  <div id={`dossier-page-${offset + 2 + planShift}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
-                    <Page index={offset + 3 + planShift} total={totalPages}>
-                      <PageFrame eyebrow="Équipements" title="Sélection produits">
-                        <div className="h-full overflow-auto rounded-xl border" style={{ borderColor: "rgba(0,0,0,0.08)", background: "rgba(255,255,255,0.55)" }}>
+              if (hasSolution) {
+                pages.push(
+                  <PageFrame eyebrow="Notre approche" title="Solution proposée">
+                    <div className="grid h-full grid-cols-3 gap-5">
+                      {[
+                        { n: "01", label: "Sélection", value: solution.selection },
+                        { n: "02", label: "Déploiement", value: solution.deploiement },
+                        { n: "03", label: "Suivi", value: solution.suivi },
+                      ].filter((s) => nonEmpty(s.value)).map((s) => (
+                        <div key={s.n} className="flex flex-col rounded-xl p-6" style={{ background: "rgba(255,255,255,0.6)", border: "1px solid rgba(0,0,0,0.08)" }}>
+                          <div className="mb-3 font-display text-5xl font-bold" style={{ color: PURPLE }}>{s.n}</div>
+                          <div className="mb-2 h-1 w-10 rounded-full" style={{ background: LIME }} />
+                          <div className="mb-3 text-lg font-bold" style={{ color: DARK }}>{s.label}</div>
+                          <p className="whitespace-pre-wrap text-[14px] leading-relaxed" style={{ color: DARK, opacity: 0.85 }}>{s.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </PageFrame>
+                );
+              }
+
+              if (hasPlan) {
+                pages.push(
+                  <PageFrame eyebrow="Agencement" title="Plan de la salle">
+                    <div className="flex h-full w-full items-center justify-center rounded-xl border overflow-hidden" style={{ borderColor: "rgba(0,0,0,0.08)", background: DARK }}>
+                      <img src={planImage!} alt="Plan de la salle" className="max-h-full max-w-full object-contain" />
+                    </div>
+                  </PageFrame>
+                );
+              }
+
+              if (hasProducts) {
+                pages.push(
+                  <PageFrame eyebrow="Équipements" title="Sélection produits">
+                    <div className="h-full overflow-auto rounded-xl border" style={{ borderColor: "rgba(0,0,0,0.08)", background: "rgba(255,255,255,0.55)" }}>
+                      <table className="w-full text-left text-sm">
+                        <thead>
+                          <tr style={{ background: PURPLE, color: "white" }}>
+                            <th className="px-4 py-3 w-24">Visuel</th>
+                            <th className="px-4 py-3">Produit</th>
+                            <th className="px-4 py-3 text-center">Quantité</th>
+                            <th className="px-4 py-3 text-right">PU {isRecurring ? "/ mois" : ""}</th>
+                            <th className="px-4 py-3 text-right">Sous-total {isRecurring ? "/ mois" : ""}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {products.map((p, i) => {
+                            const cat = p.product_id ? catalogMap[p.product_id] : undefined;
+                            const img = cat?.images?.[0] ?? null;
+                            const href = productFicheUrl(p.name, cat?.product_url);
+                            return (
+                              <tr key={i} style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
+                                <td className="px-4 py-3">
+                                  <a href={href} target="_blank" rel="noreferrer" className="block h-14 w-20 overflow-hidden rounded border" style={{ borderColor: "rgba(0,0,0,0.1)", background: "rgba(0,0,0,0.04)" }}>
+                                    {img ? (
+                                      <img src={img} alt={p.name} className="h-full w-full object-cover" loading="lazy" />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center text-[9px] leading-tight text-center px-1" style={{ color: DARK, opacity: 0.5 }}>
+                                        visuel indisponible
+                                      </div>
+                                    )}
+                                  </a>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <a href={href} target="_blank" rel="noreferrer" className="font-medium underline-offset-2 hover:underline" style={{ color: DARK }}>
+                                    {p.name}
+                                  </a>
+                                  <div className="dossier-pdf-link text-[10px] mt-0.5 break-all" style={{ color: PURPLE, display: "none" }}>
+                                    {href}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-center">{p.qty}</td>
+                                <td className="px-4 py-3 text-right tabular-nums">{fmtEUR(p.unit_price)}</td>
+                                <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmtEUR(p.qty * p.unit_price)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </PageFrame>
+                );
+              }
+
+              if (hasScope) {
+                pages.push(
+                  <PageFrame eyebrow="Notre engagement" title="Périmètre & livrables">
+                    <div className="grid h-full grid-cols-2 grid-rows-2 gap-5">
+                      {[
+                        { label: "Fourniture", value: scope.fourniture },
+                        { label: "Livraison", value: scope.livraison },
+                        { label: "Formation", value: scope.formation },
+                        { label: "Garantie", value: scope.garantie },
+                      ].filter((s) => nonEmpty(s.value)).map((s) => (
+                        <div key={s.label} className="flex items-start gap-4 rounded-xl p-5" style={{ background: "rgba(255,255,255,0.6)", border: "1px solid rgba(0,0,0,0.08)" }}>
+                          <div className="mt-1 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full" style={{ background: LIME, color: DARK }}>✓</div>
+                          <div>
+                            <div className="mb-1 text-xs font-bold uppercase tracking-widest" style={{ color: PURPLE }}>{s.label}</div>
+                            <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{s.value}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </PageFrame>
+                );
+              }
+
+              if (hasPricing) {
+                pages.push(
+                  <PageFrame eyebrow="Investissement" title="Tarifs & budget">
+                    <div className="flex h-full flex-col gap-4">
+                      {(pricing.lines ?? []).length > 0 && (
+                        <div className="flex-1 overflow-auto rounded-xl border" style={{ borderColor: "rgba(0,0,0,0.08)", background: "rgba(255,255,255,0.55)" }}>
                           <table className="w-full text-left text-sm">
                             <thead>
                               <tr style={{ background: PURPLE, color: "white" }}>
-                                <th className="px-4 py-3 w-24">Visuel</th>
-                                <th className="px-4 py-3">Produit</th>
-                                <th className="px-4 py-3 text-center">Quantité</th>
-                                <th className="px-4 py-3 text-right">PU {isRecurring ? "/ mois" : ""}</th>
-                                <th className="px-4 py-3 text-right">Sous-total {isRecurring ? "/ mois" : ""}</th>
+                                <th className="px-4 py-3">Ligne</th>
+                                <th className="px-4 py-3 text-center">Qté</th>
+                                <th className="px-4 py-3 text-right">Montant</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {products.length === 0 ? (
-                                <tr><td colSpan={5} className="px-4 py-6 text-center opacity-60">Aucun produit sélectionné</td></tr>
-                              ) : products.map((p, i) => {
-                                const cat = p.product_id ? catalogMap[p.product_id] : undefined;
-                                const img = cat?.images?.[0] ?? null;
-                                const href = productFicheUrl(p.name, cat?.product_url);
-                                return (
+                              {(pricing.lines ?? []).map((l, i) => (
                                 <tr key={i} style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
-                                  <td className="px-4 py-3">
-                                    <a href={href} target="_blank" rel="noreferrer" className="block h-14 w-20 overflow-hidden rounded border" style={{ borderColor: "rgba(0,0,0,0.1)", background: "rgba(0,0,0,0.04)" }}>
-                                      {img ? (
-                                        <img src={img} alt={p.name} className="h-full w-full object-cover" loading="lazy" />
-                                      ) : (
-                                        <div className="flex h-full w-full items-center justify-center text-[9px] leading-tight text-center px-1" style={{ color: DARK, opacity: 0.5 }}>
-                                          visuel indisponible
-                                        </div>
-                                      )}
-                                    </a>
-                                  </td>
-                                  <td className="px-4 py-3">
-                                    <a href={href} target="_blank" rel="noreferrer" className="font-medium underline-offset-2 hover:underline" style={{ color: DARK }}>
-                                      {p.name}
-                                    </a>
-                                    <div className="dossier-pdf-link text-[10px] mt-0.5 break-all" style={{ color: PURPLE, display: "none" }}>
-                                      {href}
-                                    </div>
-                                  </td>
-                                  <td className="px-4 py-3 text-center">{p.qty}</td>
-                                  <td className="px-4 py-3 text-right tabular-nums">{fmtEUR(p.unit_price)}</td>
-                                  <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmtEUR(p.qty * p.unit_price)}</td>
+                                  <td className="px-4 py-3">{l.label}</td>
+                                  <td className="px-4 py-3 text-center">{l.qty}</td>
+                                  <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmtEUR(l.amount)}</td>
                                 </tr>
-                              );})}
+                              ))}
                             </tbody>
                           </table>
                         </div>
-                      </PageFrame>
-                    </Page>
-                  </div>
+                      )}
+                      <div className="flex items-center justify-end gap-8 rounded-xl px-6 py-4" style={{ background: DARK, color: "white" }}>
+                        {(pricing.total_ht ?? 0) > 0 && (
+                          <div className="text-right">
+                            <div className="text-xs uppercase tracking-widest opacity-70">Total HT</div>
+                            <div className="font-display text-3xl font-bold" style={{ color: LIME }}>{fmtEUR(pricing.total_ht ?? 0)}</div>
+                          </div>
+                        )}
+                        {isRecurring && (pricing.monthly ?? 0) > 0 && (
+                          <div className="text-right">
+                            <div className="text-xs uppercase tracking-widest opacity-70">Mensualité</div>
+                            <div className="font-display text-3xl font-bold" style={{ color: LIME }}>{fmtEUR(pricing.monthly ?? 0)} <span className="text-base opacity-70">/ mois</span></div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </PageFrame>
+                );
+              }
 
-                  {/* 4. Périmètre & livrables */}
-                  <div id={`dossier-page-${offset + 3 + planShift}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
-                    <Page index={offset + 4 + planShift} total={totalPages}>
-                      <PageFrame eyebrow="Notre engagement" title="Périmètre & livrables">
-                        <div className="grid h-full grid-cols-2 grid-rows-2 gap-5">
-                          {[
-                            { label: "Fourniture", value: scope.fourniture },
-                            { label: "Livraison", value: scope.livraison },
-                            { label: "Formation", value: scope.formation },
-                            { label: "Garantie", value: scope.garantie },
-                          ].map((s) => (
-                            <div key={s.label} className="flex items-start gap-4 rounded-xl p-5" style={{ background: "rgba(255,255,255,0.6)", border: "1px solid rgba(0,0,0,0.08)" }}>
-                              <div className="mt-1 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full" style={{ background: LIME, color: DARK }}>
-                                ✓
-                              </div>
-                              <div>
-                                <div className="mb-1 text-xs font-bold uppercase tracking-widest" style={{ color: PURPLE }}>{s.label}</div>
-                                <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{s.value || "—"}</p>
-                              </div>
+              if (hasContact) {
+                pages.push(
+                  <PageFrame eyebrow="Contact" title="Passons à l'action">
+                    <div className="grid h-full grid-cols-2 gap-5">
+                      <div className="flex flex-col justify-center gap-4 rounded-xl p-8" style={{ background: DARK, color: "white" }}>
+                        <div className="text-xs uppercase tracking-widest" style={{ color: LIME }}>{brand?.name ?? "Notre équipe"}</div>
+                        <p className="font-display text-2xl font-bold leading-snug">
+                          Prêts à concrétiser <span style={{ color: LIME }}>{clientName}</span> ?
+                        </p>
+                        <p className="text-sm opacity-80">Contactez-nous pour la suite : validation, planning, installation.</p>
+                      </div>
+                      <div className="flex flex-col justify-center gap-4 rounded-xl p-8" style={{ background: "rgba(255,255,255,0.7)", border: "1px solid rgba(0,0,0,0.08)" }}>
+                        {contact.phone && (
+                          <div className="flex items-center gap-3"><Phone className="h-5 w-5" style={{ color: PURPLE }} /><span className="text-[15px]">{contact.phone}</span></div>
+                        )}
+                        {contact.email && (
+                          <div className="flex items-center gap-3"><Mail className="h-5 w-5" style={{ color: PURPLE }} /><span className="text-[15px]">{contact.email}</span></div>
+                        )}
+                        {contact.website && (
+                          <div className="flex items-center gap-3"><Globe className="h-5 w-5" style={{ color: PURPLE }} /><span className="text-[15px]">{contact.website}</span></div>
+                        )}
+                        {sites.length > 0 && (
+                          <div className="flex items-start gap-3">
+                            <MapPin className="mt-1 h-5 w-5 flex-shrink-0" style={{ color: PURPLE }} />
+                            <div className="flex flex-col gap-1">
+                              {sites.map((s, i) => <span key={i} className="text-[15px]">{s}</span>)}
                             </div>
-                          ))}
-                        </div>
-                      </PageFrame>
-                    </Page>
-                  </div>
+                          </div>
+                        )}
+                        {!contact.phone && !contact.email && !contact.website && sites.length === 0 && (
+                          <p className="text-sm opacity-60">Coordonnées non renseignées.</p>
+                        )}
+                      </div>
+                    </div>
+                  </PageFrame>
+                );
+              }
 
-                  {/* 5. Tarifs & budget */}
-                  <div id={`dossier-page-${offset + 4 + planShift}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
-                    <Page index={offset + 5 + planShift} total={totalPages}>
-                      <PageFrame eyebrow="Investissement" title="Tarifs & budget">
-                        <div className="flex h-full flex-col gap-4">
-                          <div className="flex-1 overflow-auto rounded-xl border" style={{ borderColor: "rgba(0,0,0,0.08)", background: "rgba(255,255,255,0.55)" }}>
-                            <table className="w-full text-left text-sm">
-                              <thead>
-                                <tr style={{ background: PURPLE, color: "white" }}>
-                                  <th className="px-4 py-3">Ligne</th>
-                                  <th className="px-4 py-3 text-center">Qté</th>
-                                  <th className="px-4 py-3 text-right">Montant</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {(pricing.lines ?? []).length === 0 ? (
-                                  <tr><td colSpan={3} className="px-4 py-6 text-center opacity-60">Aucune ligne tarifaire</td></tr>
-                                ) : (pricing.lines ?? []).map((l, i) => (
-                                  <tr key={i} style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
-                                    <td className="px-4 py-3">{l.label}</td>
-                                    <td className="px-4 py-3 text-center">{l.qty}</td>
-                                    <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmtEUR(l.amount)}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                          <div className="flex items-center justify-end gap-8 rounded-xl px-6 py-4" style={{ background: DARK, color: "white" }}>
-                            <div className="text-right">
-                              <div className="text-xs uppercase tracking-widest opacity-70">Total HT</div>
-                              <div className="font-display text-3xl font-bold" style={{ color: LIME }}>{fmtEUR(pricing.total_ht ?? 0)}</div>
-                            </div>
-                            {isRecurring && (
-                              <div className="text-right">
-                                <div className="text-xs uppercase tracking-widest opacity-70">Mensualité</div>
-                                <div className="font-display text-3xl font-bold" style={{ color: LIME }}>{fmtEUR(pricing.monthly ?? 0)} <span className="text-base opacity-70">/ mois</span></div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </PageFrame>
-                    </Page>
+              return pages.map((node, i) => {
+                const pageIdx = offset + i;
+                return (
+                  <div id={`dossier-page-${pageIdx}`} key={`custom-${i}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
+                    <Page index={pageIdx + 1} total={totalPages}>{node}</Page>
                   </div>
-
-                  {/* 6. Passons à l'action */}
-                  <div id={`dossier-page-${offset + 5 + planShift}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
-                    <Page index={offset + 6 + planShift} total={totalPages}>
-                      <PageFrame eyebrow="Contact" title="Passons à l'action">
-                        <div className="grid h-full grid-cols-2 gap-5">
-                          <div className="flex flex-col justify-center gap-4 rounded-xl p-8" style={{ background: DARK, color: "white" }}>
-                            <div className="text-xs uppercase tracking-widest" style={{ color: LIME }}>{brand?.name ?? "Notre équipe"}</div>
-                            <p className="font-display text-2xl font-bold leading-snug">
-                              Prêts à concrétiser <span style={{ color: LIME }}>{clientName}</span> ?
-                            </p>
-                            <p className="text-sm opacity-80">Contactez-nous pour la suite : validation, planning, installation.</p>
-                          </div>
-                          <div className="flex flex-col justify-center gap-4 rounded-xl p-8" style={{ background: "rgba(255,255,255,0.7)", border: "1px solid rgba(0,0,0,0.08)" }}>
-                            {contact.phone && (
-                              <div className="flex items-center gap-3"><Phone className="h-5 w-5" style={{ color: PURPLE }} /><span className="text-[15px]">{contact.phone}</span></div>
-                            )}
-                            {contact.email && (
-                              <div className="flex items-center gap-3"><Mail className="h-5 w-5" style={{ color: PURPLE }} /><span className="text-[15px]">{contact.email}</span></div>
-                            )}
-                            {contact.website && (
-                              <div className="flex items-center gap-3"><Globe className="h-5 w-5" style={{ color: PURPLE }} /><span className="text-[15px]">{contact.website}</span></div>
-                            )}
-                            {sites.length > 0 && (
-                              <div className="flex items-start gap-3">
-                                <MapPin className="mt-1 h-5 w-5 flex-shrink-0" style={{ color: PURPLE }} />
-                                <div className="flex flex-col gap-1">
-                                  {sites.map((s, i) => <span key={i} className="text-[15px]">{s}</span>)}
-                                </div>
-                              </div>
-                            )}
-                            {!contact.phone && !contact.email && !contact.website && sites.length === 0 && (
-                              <p className="text-sm opacity-60">Coordonnées non renseignées.</p>
-                            )}
-                          </div>
-                        </div>
-                      </PageFrame>
-                    </Page>
-                  </div>
-                </>
-              );
+                );
+              });
             })()}
           </div>
         </div>

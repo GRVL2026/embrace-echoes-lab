@@ -280,29 +280,45 @@ const MAPPERS: Record<string, { table: string; map: Mapper; pk?: string }> = {
   },
   'BD-Commandes': {
     table: 'gaia_commandes',
-    map: (r) => ({
-      code_client: str(r.CodeClient),
-      type_cde: str(r.TypeCde),
-      n_cde: str(r.NCde),
-      code_article: trim(r.CodeArticle),
-      invoice_date: date(r.InvoiceDate),
-      qty: num(r.Qty),
-      unit_cost: num(r.UnitCost),
-      pu_rem: num(r.PURem),
-      montant_ht: num(r.MontantHTRemTot),
-      marge_brut: num(r.MargeBrut),
-      statut: str(r.Status),
-      date_liv: date(r['DateLivEstimée'] ?? r.DateLivEstimee ?? r.DateLivEstim_e),
-      completed: bool(r.Completed),
-      order_type: str(r.OrderType),
-      order_nbr: str(r.OrderNbr),
-      line_nbr: intNum(r.LineNbr),
-      classe_client: str(r.ClassID),
-      classe_article: str(r.ClassID_2),
-      branch: str(r.BranchID),
-      inventory_id: trim(r.InventoryID),
-      devise: str(r.CuryID),
-    }),
+    map: (r) => {
+      // Résilient aux clés à accents / variantes d'encodage OData
+      const pickKey = (obj: any, candidates: string[]): any => {
+        if (!obj || typeof obj !== 'object') return undefined;
+        for (const k of candidates) {
+          if (k in obj) return obj[k];
+        }
+        // fallback : recherche insensible aux accents/casse
+        const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        const target = candidates.map(norm);
+        for (const key of Object.keys(obj)) {
+          if (target.includes(norm(key))) return obj[key];
+        }
+        return undefined;
+      };
+      return {
+        code_client: str(r?.CodeClient),
+        type_cde: str(r?.TypeCde),
+        n_cde: str(r?.NCde),
+        code_article: trim(r?.CodeArticle),
+        invoice_date: date(r?.InvoiceDate),
+        qty: num(r?.Qty),
+        unit_cost: num(r?.UnitCost),
+        pu_rem: num(r?.PURem),
+        montant_ht: num(r?.MontantHTRemTot),
+        marge_brut: num(r?.MargeBrut),
+        statut: str(r?.Status),
+        date_liv: date(pickKey(r, ['DateLivEstimée', 'DateLivEstimee', 'DateLivEstim_e', 'DateLivEstimC3A9e'])),
+        completed: bool(r?.Completed),
+        order_type: str(r?.OrderType),
+        order_nbr: str(r?.OrderNbr),
+        line_nbr: intNum(r?.LineNbr),
+        classe_client: str(r?.ClassID),
+        classe_article: str(r?.ClassID_2),
+        branch: str(r?.BranchID),
+        inventory_id: trim(r?.InventoryID),
+        devise: str(r?.CuryID),
+      };
+    },
   },
   'BD-Stock': {
     table: 'gaia_stock',

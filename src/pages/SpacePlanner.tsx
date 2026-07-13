@@ -379,6 +379,7 @@ function SpacePlannerInner() {
         />
       )}
     </div>
+    </PlannerBootstrapProvider>
   );
 }
 

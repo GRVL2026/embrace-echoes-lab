@@ -575,15 +575,40 @@ Deno.serve(async (req) => {
       return jsonResponse({ token_step: safeToken, feeds }, 200);
     }
 
-    // action === 'sync'
-    const admin = createClient(supabaseUrl, serviceKey);
-    const summary: SyncSummary[] = [];
-    for (const f of FEEDS) {
-      const s = await syncFeed(admin, f.name, f.url, token_step.token!);
-      summary.push(s);
-    }
+    // action === 'sync' — un seul flux par appel
+    const requestedFeed: string | undefined = body?.feed;
     const { token: _t, ...safeToken } = token_step;
-    return jsonResponse({ token_step: safeToken, summary }, 200);
+
+    if (!requestedFeed) {
+      return jsonResponse({
+        token_step: safeToken,
+        summary: [{
+          feed: '(none)', rows: 0, ok: false,
+          error: 'Paramètre "feed" manquant. Attendu : BD-Clients, BD-Ventes, BD-Historique, BD-Commandes ou BD-Stock.',
+          duration_ms: 0,
+        }],
+      }, 200);
+    }
+    const target = FEEDS.find((f) => f.name === requestedFeed);
+    if (!target) {
+      return jsonResponse({
+        token_step: safeToken,
+        summary: [{
+          feed: requestedFeed, rows: 0, ok: false,
+          error: `Flux inconnu : ${requestedFeed}`,
+          duration_ms: 0,
+        }],
+      }, 200);
+    }
+
+    const admin = createClient(supabaseUrl, serviceKey);
+    let s: SyncSummary;
+    try {
+      s = await syncFeedStreaming(admin, target.name, target.url, token_step.token!);
+    } catch (e: any) {
+      s = { feed: target.name, rows: 0, ok: false, error: e?.message ?? String(e), duration_ms: 0 };
+    }
+    return jsonResponse({ token_step: safeToken, summary: [s] }, 200);
   } catch (e: any) {
     console.error('cegid-sync error', e);
     return jsonResponse({

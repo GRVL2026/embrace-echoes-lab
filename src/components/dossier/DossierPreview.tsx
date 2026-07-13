@@ -23,6 +23,7 @@ type Project = {
   client_name: string | null;
   brand_id: string | null;
   offer: string | null;
+  status?: string | null;
   selected_modules: string[] | null;
   selected_products: { product_id?: string; name: string; qty: number; unit_price: number }[] | null;
   pricing: { lines?: { label: string; qty: number; amount: number }[]; total_ht?: number; monthly?: number } | null;

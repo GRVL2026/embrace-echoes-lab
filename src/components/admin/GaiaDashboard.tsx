@@ -183,7 +183,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
   const ecotaxeChart = ecotaxe
     .slice()
     .sort((a, b) => a.mois - b.mois)
-    .map((r) => ({ mois: MOIS[(r.mois - 1) % 12], value: Number(r.ecotaxe_ht || 0) }));
+    .map((r) => ({ mois: MOIS_CAL[(r.mois - 1) % 12], value: Number(r.ecotaxe_ht || 0) }));
 
   if (loading) {
     return (

@@ -101,6 +101,10 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
   const caCurrent = caPeMap.get(currentYear) ?? 0;
   const caPrev = caPeMap.get(currentYear - 1) ?? 0;
   const evolution = caPrev > 0 ? ((caCurrent - caPrev) / caPrev) * 100 : null;
+  const retroCurrent = useMemo(
+    () => retroSfa.filter((r) => Number(r.annee) === currentYear).reduce((n, r) => n + Number(r.montant_ht || 0), 0),
+    [retroSfa, currentYear]
+  );
 
   const signees = cmdEtat.find((r) => r.etat === "signee") ?? { nb_commandes: 0, total_ht: 0, etat: "signee" as const };
   const devis = cmdEtat.find((r) => r.etat === "devis") ?? { nb_commandes: 0, total_ht: 0, etat: "devis" as const };

@@ -120,7 +120,7 @@ export function GaiaCopilot() {
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={generateRevue} disabled={revueLoading}>
               {revueLoading ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Génération… (~20 s)</>
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Génération… (30 à 60 s)</>
               ) : (
                 <><Sparkles className="mr-2 h-4 w-4" /> Générer la revue du mois</>
               )}

@@ -53,7 +53,9 @@ function currentFiscalYear(d: Date = new Date()) {
 }
 
 export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [clientQuery, setClientQuery] = useState("");
   const [caMensuel, setCaMensuel] = useState<CaMensuel[]>([]);
   const [caClient, setCaClient] = useState<CaClient[]>([]);
   const [caFamille, setCaFamille] = useState<CaFamille[]>([]);

@@ -137,6 +137,7 @@ async function loadData(admin: any) {
     devisRelance,
     clientsDormants,
     stockDormant,
+    retroSfa,
   ] = await Promise.all([
     admin.from('v_gaia_ca_mensuel').select('*'),
     admin.from('v_gaia_ca_periode_egale').select('*'),
@@ -148,7 +149,35 @@ async function loadData(admin: any) {
     admin.from('v_gaia_devis_a_relancer').select('*').order('montant_ht', { ascending: false }).limit(20),
     admin.from('v_gaia_clients_dormants').select('*').order('ca_n1', { ascending: false }).limit(20),
     admin.from('v_gaia_stock_dormant').select('*').order('valeur_achat', { ascending: false }).limit(20),
+    admin.from('v_gaia_retrocession_sfa').select('*'),
   ]);
+
+  // Agrège la rétrocession SFA par exercice fiscal
+  const retroByYear = new Map<number, number>();
+  for (const r of (retroSfa.data ?? []) as any[]) {
+    const y = Number(r.annee);
+    retroByYear.set(y, (retroByYear.get(y) ?? 0) + Number(r.montant_ht || 0));
+  }
+  const retrocession_sfa = Array.from(retroByYear.entries())
+    .map(([annee, montant_ht]) => ({ annee, montant_ht }))
+    .sort((a, b) => b.annee - a.annee);
+
+  return {
+    annee_courante: currentYear,
+    annee_precedente: prevYear,
+    ca_mensuel: caMensuel.data ?? [],
+    ca_periode_egale: caPeriodeEgale.data ?? [],
+    ca_famille: caFamille.data ?? [],
+    top15_clients_annee_courante: caClientCurrent.data ?? [],
+    top15_clients_annee_precedente: caClientPrev.data ?? [],
+    commandes_etat: commandesEtat.data ?? [],
+    stock_valeur: stockValeur.data ?? [],
+    top20_devis_a_relancer: devisRelance.data ?? [],
+    top20_clients_dormants: clientsDormants.data ?? [],
+    top20_stock_dormant: stockDormant.data ?? [],
+    retrocession_sfa,
+  };
+}
 
   return {
     annee_courante: currentYear,

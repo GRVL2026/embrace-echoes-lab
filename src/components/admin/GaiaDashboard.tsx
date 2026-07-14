@@ -29,6 +29,7 @@ type CommandesEtat = { etat: "signee" | "devis"; nb_commandes: number; total_ht:
 type StockValeur = { depot: string; quantite: number; valeur_achat: number; valeur_vente: number };
 type EcotaxeMensuel = { mois: number; ecotaxe_ht: number };
 type CaPeriodeEgale = { annee: number; ca_ht: number | string };
+type RetrocessionSfa = { annee: number; mois?: number; montant_ht: number | string };
 
 const eur = (n: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);

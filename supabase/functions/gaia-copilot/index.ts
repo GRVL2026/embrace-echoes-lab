@@ -14,6 +14,110 @@ function jsonResponse(body: unknown, status = 200) {
 
 const SYSTEM_PROMPT = `Tu es le copilote stratégique de la direction commerciale d'Avranches Automatic (distributeur français de flippers — revendeur officiel Stern —, jeux d'arcade, grues et distributeurs automatiques). Tu reçois les données commerciales réelles agrégées (CA, clients, devis, stock). Tu raisonnes en dirigeant commercial : factuel, chiffré, direct. Chaque constat s'appuie sur un chiffre fourni ; chaque recommandation est actionnable (qui fait quoi, sur quel client/produit, pourquoi maintenant). Tu signales les limites des données quand c'est pertinent. Tu réponds en français, en Markdown clair. IMPORTANT : compare les années À PÉRIODE ÉGALE (v_gaia_ca_periode_egale), jamais année pleine vs année en cours.`;
 
+const REVUE_TOOL = {
+  name: 'build_revue',
+  description: "Construit la revue commerciale du mois sous forme structurée pour un tableau de bord visuel.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      sante: {
+        type: 'object',
+        properties: {
+          commentaire: { type: 'string', description: '2 phrases max sur la santé globale.' },
+          annees: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                annee: { type: 'number' },
+                ca_ht: { type: 'number' },
+                evolution_pct: { type: 'number', description: 'Évolution vs année précédente à période égale, en %. Peut être négatif.' },
+              },
+              required: ['annee', 'ca_ht'],
+            },
+          },
+          tendance_mensuelle: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                mois: { type: 'string', description: 'Ex: "janv.", "févr."…' },
+                evolution_pct: { type: 'number' },
+                commentaire: { type: 'string' },
+              },
+              required: ['mois', 'evolution_pct'],
+            },
+          },
+        },
+        required: ['commentaire', 'annees', 'tendance_mensuelle'],
+      },
+      mouvements: {
+        type: 'object',
+        properties: {
+          familles: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                nom: { type: 'string' },
+                sens: { type: 'string', enum: ['hausse', 'baisse'] },
+                detail: { type: 'string', description: '1 phrase max, chiffrée.' },
+              },
+              required: ['nom', 'sens', 'detail'],
+            },
+          },
+          clients_hausse: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: { client: { type: 'string' }, detail: { type: 'string' } },
+              required: ['client', 'detail'],
+            },
+          },
+          clients_baisse: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: { client: { type: 'string' }, detail: { type: 'string' } },
+              required: ['client', 'detail'],
+            },
+          },
+        },
+        required: ['familles', 'clients_hausse', 'clients_baisse'],
+      },
+      risques: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            titre: { type: 'string' },
+            gravite: { type: 'string', enum: ['haute', 'moyenne', 'basse'] },
+            detail: { type: 'string', description: '1-2 phrases max.' },
+          },
+          required: ['titre', 'gravite', 'detail'],
+        },
+      },
+      actions: {
+        type: 'array',
+        description: 'TOP 5 actions priorisées par impact en euros.',
+        items: {
+          type: 'object',
+          properties: {
+            rang: { type: 'number' },
+            titre: { type: 'string' },
+            qui: { type: 'string', description: 'Qui doit agir (ex: "Commercial X", "ADV").' },
+            cible: { type: 'string', description: 'Client, devis, article ou famille visé.' },
+            impact_eur: { type: 'number', description: 'Impact financier estimé en euros HT.' },
+            pourquoi: { type: 'string', description: '1 phrase max.' },
+          },
+          required: ['rang', 'titre', 'qui', 'cible', 'impact_eur', 'pourquoi'],
+        },
+      },
+    },
+    required: ['sante', 'mouvements', 'risques', 'actions'],
+  },
+};
+
 async function loadData(admin: any) {
   const currentYear = new Date().getFullYear();
   const prevYear = currentYear - 1;

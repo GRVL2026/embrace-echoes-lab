@@ -565,28 +565,29 @@ export default function DossierEdit() {
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground">
-      <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-6">
-        <div className="flex items-center gap-3">
-          <Link to="/" className="flex items-center gap-3">
-            <img src={logoImg} alt="Arcade Planner logo" className="h-7 w-auto object-contain" />
-            <h1 className="font-display text-xl font-bold tracking-tight">
+      <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-3 sm:px-6 gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <Link to="/" className="flex items-center gap-2 min-w-0">
+            <img src={logoImg} alt="Arcade Planner logo" className="h-7 w-auto object-contain flex-shrink-0" />
+            <h1 className="font-display text-base sm:text-xl font-bold tracking-tight truncate">
               <span className="text-primary text-glow-purple">Arcade</span>{" "}
               <span className="text-secondary text-glow-green">Planner</span>
             </h1>
           </Link>
-          <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+          <span className="hidden sm:inline-block rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
             Dossier
           </span>
         </div>
         <Button asChild variant="ghost" size="sm">
           <Link to="/dossiers">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Retour aux dossiers
+            <span className="hidden sm:inline">Retour aux dossiers</span>
+            <span className="sm:hidden">Retour</span>
           </Link>
         </Button>
       </header>
 
-      <main className="mx-auto max-w-[1800px] px-6 py-8">
+      <main className="mx-auto max-w-[1800px] px-3 sm:px-6 py-4 sm:py-8 pb-20 lg:pb-8">
         {loading || !form ? (
           <div className="flex items-center justify-center py-20 text-muted-foreground">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -596,16 +597,16 @@ export default function DossierEdit() {
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(520px,760px)]">
             <div className="min-w-0 space-y-6">
 
-            <div className="mb-6 flex items-center justify-between">
+            <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h2 className="font-display text-2xl font-bold">
+                <h2 className="font-display text-xl sm:text-2xl font-bold">
                   {form.client_name?.trim() || "Nouveau dossier"}
                 </h2>
                 <p className="text-sm text-muted-foreground">
                   Renseigne les informations du dossier client.
                 </p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2 lg:gap-3">
                 <StatusSelect
                   value={form.status}
                   onChange={async (next) => {
@@ -626,25 +627,30 @@ export default function DossierEdit() {
                 ) : null}
                 <Button
                   variant="outline"
+                  size="sm"
                   onClick={() => setPreviewOpen(true)}
                   disabled={generating || saving}
+                  className="min-h-10"
                 >
                   <Eye className="mr-2 h-4 w-4" />
                   Aperçu
                 </Button>
                 <Button
                   variant="outline"
+                  size="sm"
                   onClick={generateWithAI}
                   disabled={generating || saving}
+                  className="min-h-10"
                 >
                   {generating ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                     <Sparkles className="mr-2 h-4 w-4" />
                   )}
-                  Générer avec l'IA
+                  <span className="hidden sm:inline">Générer avec l'IA</span>
+                  <span className="sm:hidden">IA</span>
                 </Button>
-                <Button onClick={save} disabled={saving || !dirty}>
+                <Button size="sm" onClick={save} disabled={saving || !dirty} className="min-h-10">
                   {saving ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (

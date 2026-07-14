@@ -43,13 +43,13 @@ export default function Login() {
         <form onSubmit={onSubmit} className="space-y-4 rounded-lg border border-border bg-card/40 p-6">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+            <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" className="h-12 text-base" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Mot de passe</Label>
-            <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+            <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" className="h-12 text-base" />
           </div>
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button type="submit" className="w-full min-h-12" disabled={loading}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Se connecter
           </Button>

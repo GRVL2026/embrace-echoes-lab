@@ -36,6 +36,7 @@ const num = (n: number) => new Intl.NumberFormat("fr-FR").format(n || 0);
 
 // Mois du calendrier fiscal : sept (1) → août (12)
 const MOIS_FISCAL = ["Sept","Oct","Nov","Déc","Jan","Fév","Mar","Avr","Mai","Juin","Juil","Août"];
+const MOIS_CAL = ["Jan","Fév","Mar","Avr","Mai","Juin","Juil","Août","Sep","Oct","Nov","Déc"];
 const COLORS = ["#9B5CFF","#ADFF00","#5CC8FF","#FF6B9D","#FFB800","#00E5A0","#FF7A5C","#B08CFF","#5CFFB8","#FFD75C"];
 
 const exLong = (a: number) => `Exercice ${a} (sept. ${a - 1} → août ${a})`;

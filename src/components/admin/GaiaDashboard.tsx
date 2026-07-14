@@ -247,8 +247,8 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
         />
       </div>
 
-      {/* CA mensuel */}
-      <Panel title="CA mensuel — comparaison multi-années">
+      {/* CA mensuel — calendrier fiscal */}
+      <Panel title="CA mensuel — comparaison par exercice (sept. → août)">
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartMensuel}>
@@ -265,7 +265,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
               />
               <Legend />
               {years.map((y, i) => (
-                <Bar key={y} dataKey={String(y)} fill={COLORS[i % COLORS.length]} radius={[4, 4, 0, 0]} />
+                <Bar key={y} dataKey={exShort(y)} fill={COLORS[i % COLORS.length]} radius={[4, 4, 0, 0]} />
               ))}
             </BarChart>
           </ResponsiveContainer>

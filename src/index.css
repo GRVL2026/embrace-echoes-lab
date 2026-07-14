@@ -91,7 +91,6 @@
   .safe-bottom { padding-bottom: max(var(--safe-bottom), 0px); }
   .safe-top    { padding-top: max(var(--safe-top), 0px); }
   .safe-x { padding-left: var(--safe-left); padding-right: var(--safe-right); }
-  }
 
   * {
     @apply border-border;

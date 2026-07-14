@@ -352,6 +352,19 @@ export default function DossiersList() {
                     <div className="mt-1 text-[11px] text-muted-foreground">
                       {new Date(p.updated_at).toLocaleDateString("fr-FR")}
                     </div>
+                    {p.is_shared && viewStats[p.id] ? (
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                        <span>
+                          👁 {viewStats[p.id].count} vue{viewStats[p.id].count > 1 ? "s" : ""}
+                          {viewStats[p.id].last ? ` · il y a ${formatRelative(viewStats[p.id].last!)}` : ""}
+                        </span>
+                        {viewStats[p.id].hasNew && (
+                          <Badge className="h-5 bg-secondary text-secondary-foreground text-glow-green">
+                            Nouvelles vues
+                          </Badge>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="flex flex-col items-end gap-2">
                     <Badge variant="outline">{STATUS_LABEL[p.status ?? "draft"] ?? p.status}</Badge>

@@ -122,6 +122,17 @@ export function GaiaCopilot() {
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  const [history, setHistory] = useState<SavedRevue[]>([]);
+
+  const loadHistory = async () => {
+    const { data } = await (supabase as any)
+      .from("gaia_revues")
+      .select("id,titre,created_at")
+      .order("created_at", { ascending: false })
+      .limit(30);
+    setHistory((data as SavedRevue[]) ?? []);
+  };
+
   useEffect(() => {
     (async () => {
       setCardsLoading(true);
@@ -135,12 +146,34 @@ export function GaiaCopilot() {
       setDormants((dc.data as ClientDormant[]) ?? []);
       setStock((sd.data as StockDormant[]) ?? []);
       setCardsLoading(false);
+      loadHistory();
     })();
   }, []);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chat, chatLoading]);
+
+  const saveRevue = async (data: RevueData) => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const titre = `Revue commerciale — ${new Date().toLocaleDateString("fr-FR")}`;
+      const { error } = await (supabase as any).from("gaia_revues").insert({
+        titre,
+        data: data as any,
+        created_by: userData?.user?.id ?? null,
+      });
+      if (error) throw error;
+      await loadHistory();
+    } catch (e) {
+      console.error("save revue failed", e);
+      toast({
+        title: "Sauvegarde impossible",
+        description: e instanceof Error ? e.message : String(e),
+        variant: "destructive",
+      });
+    }
+  };
 
   const generateRevue = async () => {
     setRevueLoading(true);
@@ -151,6 +184,8 @@ export function GaiaCopilot() {
       const jsonBuffer = await streamRevue((buf) => setRevueProgress(buf.length));
       const parsed = JSON.parse(jsonBuffer) as RevueData;
       setRevueData(parsed);
+      await saveRevue(parsed);
+      toast({ title: "Revue enregistrée", description: "Consultable dans l'historique." });
     } catch (e: unknown) {
       const message = await formatFunctionError(e);
       setRevueError(message);
@@ -159,6 +194,7 @@ export function GaiaCopilot() {
       setRevueLoading(false);
     }
   };
+
 
   const copyRevue = async () => {
     if (!revueData) return;

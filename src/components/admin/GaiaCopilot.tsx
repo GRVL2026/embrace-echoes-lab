@@ -287,6 +287,35 @@ export function GaiaCopilot() {
         )}
       </div>
 
+      {/* Historique des revues */}
+      {history.length > 0 && (
+        <div className="rounded-lg border border-border bg-card/40 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <History className="h-4 w-4 text-primary" />
+            <h3 className="font-display text-lg font-semibold">Historique des revues</h3>
+            <span className="text-xs text-muted-foreground">({history.length})</span>
+          </div>
+          <ul className="divide-y divide-border/50">
+            {history.map((h) => (
+              <li key={h.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-medium">{h.titre ?? "Revue"}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {new Date(h.created_at).toLocaleString("fr-FR")}
+                  </div>
+                </div>
+                <Link
+                  to={`/admin/gaia/revue/${h.id}`}
+                  className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-xs hover:bg-muted/40"
+                >
+                  Ouvrir <ExternalLink className="h-3 w-3" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Actions rapides */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <QuickCard title="Devis à relancer" icon={<FileText className="h-4 w-4 text-primary" />} loading={cardsLoading} empty={devis.length === 0}>

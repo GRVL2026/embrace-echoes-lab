@@ -185,8 +185,9 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, error: `Unknown action: ${action}` }, 200);
     }
 
-    const markdown = await callAnthropic(SYSTEM_PROMPT, messages);
-    return jsonResponse({ ok: true, markdown });
+    const { markdown, stop_reason, input_chars } = await callAnthropic(SYSTEM_PROMPT, messages);
+    return jsonResponse({ ok: true, markdown, debug: { input_chars, stop_reason } });
+
   } catch (e: any) {
     return jsonResponse({ ok: false, error: e?.message ?? String(e) }, 200);
   }

@@ -44,7 +44,11 @@ type Project = {
   offer: string | null;
   status: string | null;
   updated_at: string;
+  is_shared?: boolean | null;
+  views_seen_at?: string | null;
 };
+
+type ViewStat = { count: number; last: string | null; hasNew: boolean };
 
 const OFFER_LABEL: Record<string, string> = {
   vente: "Vente",

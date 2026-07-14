@@ -131,13 +131,13 @@ export default function PublicDossier() {
               autoFocus
               value={passwordInput}
               onChange={(e) => setPasswordInput(e.target.value)}
-              className="bg-white/10 text-white placeholder:text-white/40"
+              className="h-12 text-base bg-white/10 text-white placeholder:text-white/40"
             />
             {passwordError ? (
               <p className="text-xs text-red-400">{passwordError}</p>
             ) : null}
           </div>
-          <Button type="submit" className="mt-4 w-full" disabled={submitting || !passwordInput.trim()}>
+          <Button type="submit" className="mt-4 w-full min-h-12" disabled={submitting || !passwordInput.trim()}>
             {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Accéder au dossier
           </Button>

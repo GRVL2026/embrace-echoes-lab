@@ -11,6 +11,7 @@ import { toast } from "@/hooks/use-toast";
 import { Loader2, Shield, Database, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { GaiaDashboard } from "@/components/admin/GaiaDashboard";
+import { MobileNav } from "@/components/MobileNav";
 
 type TokenStep = {
   ok: boolean;
@@ -298,48 +299,29 @@ export default function AdminGaia() {
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground">
-      <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-6">
-        <div className="flex items-center gap-3">
-          <Link to="/dossiers" className="flex items-center gap-3">
-            <img src={logoImg} alt="Arcade Planner logo" className="h-7 w-auto object-contain" />
-            <h1 className="font-display text-xl font-bold tracking-tight">
+      <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-3 sm:px-6 gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <MobileNav />
+          <Link to="/dossiers" className="flex items-center gap-2 min-w-0">
+            <img src={logoImg} alt="Arcade Planner logo" className="h-7 w-auto object-contain flex-shrink-0" />
+            <h1 className="font-display text-base sm:text-xl font-bold tracking-tight truncate">
               <span className="text-primary text-glow-purple">Arcade</span>{" "}
               <span className="text-secondary text-glow-green">Planner</span>
             </h1>
           </Link>
-          <nav className="ml-4 flex items-center gap-1">
-            <Link
-              to="/dossiers"
-              className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted"
-            >
-              Dossiers
-            </Link>
-            <Link
-              to="/planner"
-              className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted"
-            >
-              Arcade Planner
-            </Link>
-            <Link
-              to="/admin"
-              className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center gap-1"
-            >
-              <Shield className="h-3 w-3" /> Admin
-            </Link>
-            <Link
-              to="/admin/gaia"
-              className="rounded-md bg-primary/15 border border-primary/40 text-primary px-3 py-1 text-xs font-medium inline-flex items-center gap-1"
-            >
-              <Database className="h-3 w-3" /> Gaia
-            </Link>
+          <nav className="ml-4 hidden md:flex items-center gap-1">
+            <Link to="/dossiers" className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted">Dossiers</Link>
+            <Link to="/planner" className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted">Arcade Planner</Link>
+            <Link to="/admin" className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center gap-1"><Shield className="h-3 w-3" /> Admin</Link>
+            <Link to="/admin/gaia" className="rounded-md bg-primary/15 border border-primary/40 text-primary px-3 py-1 text-xs font-medium inline-flex items-center gap-1"><Database className="h-3 w-3" /> Gaia</Link>
           </nav>
         </div>
         <UserMenu />
       </header>
 
-      <main className="mx-auto max-w-7xl px-6 py-8">
+      <main className="mx-auto max-w-7xl px-4 sm:px-6 py-6 sm:py-8">
         <div className="mb-6">
-          <h2 className="font-display text-2xl font-bold">Dashboard Gaia — Avranches Automatic</h2>
+          <h2 className="font-display text-xl sm:text-2xl font-bold">Dashboard Gaia — Avranches Automatic</h2>
           <p className="text-sm text-muted-foreground">
             Pilotage financier et synchronisation des flux Cegid XRP Flex.
           </p>
@@ -359,14 +341,14 @@ export default function AdminGaia() {
           </TabsContent>
 
           <TabsContent value="sync">
-        <div className="mb-6 flex items-center justify-between gap-4">
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div>
             <h3 className="font-display text-xl font-bold">Synchronisation Cegid</h3>
             <p className="text-sm text-muted-foreground">
               Diagnostic de connexion aux flux OData Cegid XRP Flex.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={runDiscover} disabled={running || syncing}>
               {running ? (
                 <>

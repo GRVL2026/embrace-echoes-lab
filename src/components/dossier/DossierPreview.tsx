@@ -74,10 +74,10 @@ function randomSuffix(len = 6) {
 function Page({ children, index, total }: { children: React.ReactNode; index: number; total: number }) {
   return (
     <section
-      className="dossier-page relative flex w-full flex-shrink-0 snap-center items-center justify-center"
-      style={{ aspectRatio: "16 / 9", background: CREAM, color: DARK }}
+      className="dossier-page relative flex w-full flex-shrink-0 snap-center items-center justify-center min-h-[70vh] md:min-h-0 md:aspect-[16/9]"
+      style={{ background: CREAM, color: DARK }}
     >
-      <div className="absolute right-6 top-4 text-xs font-medium tracking-widest" style={{ color: DARK, opacity: 0.5 }}>
+      <div className="absolute right-4 top-3 text-[10px] md:text-xs font-medium tracking-widest" style={{ color: DARK, opacity: 0.5 }}>
         {String(index).padStart(2, "0")} / {String(total).padStart(2, "0")}
       </div>
       <div className="h-full w-full">{children}</div>
@@ -87,13 +87,13 @@ function Page({ children, index, total }: { children: React.ReactNode; index: nu
 
 function PageFrame({ eyebrow, title, children }: { eyebrow?: string; title: string; children: React.ReactNode }) {
   return (
-    <div className="flex h-full w-full flex-col px-[6%] py-[5%]">
+    <div className="flex h-full w-full flex-col px-5 py-6 md:px-[6%] md:py-[5%]">
       {eyebrow && (
-        <div className="mb-3 text-xs font-bold uppercase tracking-[0.25em]" style={{ color: PURPLE }}>
+        <div className="mb-3 text-[10px] md:text-xs font-bold uppercase tracking-[0.25em]" style={{ color: PURPLE }}>
           {eyebrow}
         </div>
       )}
-      <h2 className="mb-6 font-display text-4xl font-bold leading-tight md:text-5xl" style={{ color: DARK }}>
+      <h2 className="mb-4 md:mb-6 font-display text-2xl md:text-4xl lg:text-5xl font-bold leading-tight" style={{ color: DARK }}>
         {title}
       </h2>
       <div className="flex-1 min-h-0">{children}</div>
@@ -446,7 +446,7 @@ export function DossierPreview({
   return (
     <div className={rootClass}>
 
-      <div className="dossier-toolbar flex h-12 flex-shrink-0 items-center justify-between border-b border-white/10 bg-black/60 px-4 text-white backdrop-blur">
+      <div className="dossier-toolbar flex min-h-12 flex-shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-black/60 px-3 py-2 sm:px-4 text-white backdrop-blur">
         <div className="flex items-center gap-3 text-sm">
           <span className="font-display font-semibold">Aperçu du dossier</span>
           {brand && <span className="text-white/60">— {brand.name}</span>}
@@ -582,7 +582,7 @@ export function DossierPreview({
         </div>
       ) : (
         <div className="dossier-scroll flex-1 overflow-y-auto snap-y snap-mandatory">
-          <div className="dossier-print-root mx-auto flex w-full max-w-[1600px] flex-col gap-6 p-6">
+          <div className="dossier-print-root mx-auto flex w-full max-w-[1600px] flex-col gap-4 p-3 sm:gap-6 sm:p-6">
             {/* PARTIE A — slides images */}
             {slidePages.map((m, i) => (
               <div id={`dossier-page-${i}`} key={m.id} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
@@ -600,7 +600,7 @@ export function DossierPreview({
               if (hasContext) {
                 pages.push(
                   <PageFrame eyebrow="Contexte & besoin" title={`Le besoin de ${clientName}`}>
-                    <div className="grid h-full grid-cols-2 grid-rows-2 gap-5">
+                    <div className="grid h-full grid-cols-1 gap-4 md:grid-cols-2 md:grid-rows-2 md:gap-5">
                       {[
                         { label: "Le contexte", value: context.contexte },
                         { label: "L'objectif", value: context.objectif },
@@ -623,7 +623,7 @@ export function DossierPreview({
               if (hasSolution) {
                 pages.push(
                   <PageFrame eyebrow="Notre approche" title="Solution proposée">
-                    <div className="grid h-full grid-cols-3 gap-5">
+                    <div className="grid h-full grid-cols-1 gap-4 md:grid-cols-3 md:gap-5">
                       {[
                         { n: "01", label: "Sélection", value: solution.selection },
                         { n: "02", label: "Déploiement", value: solution.deploiement },
@@ -716,7 +716,7 @@ export function DossierPreview({
               if (hasScope) {
                 pages.push(
                   <PageFrame eyebrow="Notre engagement" title="Périmètre & livrables">
-                    <div className="grid h-full grid-cols-2 grid-rows-2 gap-5">
+                    <div className="grid h-full grid-cols-1 gap-4 md:grid-cols-2 md:grid-rows-2 md:gap-5">
                       {[
                         { label: "Fourniture", value: scope.fourniture },
                         { label: "Livraison", value: scope.livraison },
@@ -784,7 +784,7 @@ export function DossierPreview({
               if (hasContact) {
                 pages.push(
                   <PageFrame eyebrow="Contact" title="Passons à l'action">
-                    <div className="grid h-full grid-cols-2 gap-5">
+                    <div className="grid h-full grid-cols-1 gap-4 md:grid-cols-2 md:gap-5">
                       <div className="flex flex-col justify-center gap-4 rounded-xl p-8" style={{ background: DARK, color: "white" }}>
                         <div className="text-xs uppercase tracking-widest" style={{ color: LIME }}>{brand?.name ?? "Notre équipe"}</div>
                         <p className="font-display text-2xl font-bold leading-snug">

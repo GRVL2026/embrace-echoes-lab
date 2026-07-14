@@ -74,10 +74,10 @@ function randomSuffix(len = 6) {
 function Page({ children, index, total }: { children: React.ReactNode; index: number; total: number }) {
   return (
     <section
-      className="dossier-page relative flex w-full flex-shrink-0 snap-center items-center justify-center"
-      style={{ aspectRatio: "16 / 9", background: CREAM, color: DARK }}
+      className="dossier-page relative flex w-full flex-shrink-0 snap-center items-center justify-center min-h-[70vh] md:min-h-0 md:aspect-[16/9]"
+      style={{ background: CREAM, color: DARK }}
     >
-      <div className="absolute right-6 top-4 text-xs font-medium tracking-widest" style={{ color: DARK, opacity: 0.5 }}>
+      <div className="absolute right-4 top-3 text-[10px] md:text-xs font-medium tracking-widest" style={{ color: DARK, opacity: 0.5 }}>
         {String(index).padStart(2, "0")} / {String(total).padStart(2, "0")}
       </div>
       <div className="h-full w-full">{children}</div>
@@ -87,13 +87,13 @@ function Page({ children, index, total }: { children: React.ReactNode; index: nu
 
 function PageFrame({ eyebrow, title, children }: { eyebrow?: string; title: string; children: React.ReactNode }) {
   return (
-    <div className="flex h-full w-full flex-col px-[6%] py-[5%]">
+    <div className="flex h-full w-full flex-col px-5 py-6 md:px-[6%] md:py-[5%]">
       {eyebrow && (
-        <div className="mb-3 text-xs font-bold uppercase tracking-[0.25em]" style={{ color: PURPLE }}>
+        <div className="mb-3 text-[10px] md:text-xs font-bold uppercase tracking-[0.25em]" style={{ color: PURPLE }}>
           {eyebrow}
         </div>
       )}
-      <h2 className="mb-6 font-display text-4xl font-bold leading-tight md:text-5xl" style={{ color: DARK }}>
+      <h2 className="mb-4 md:mb-6 font-display text-2xl md:text-4xl lg:text-5xl font-bold leading-tight" style={{ color: DARK }}>
         {title}
       </h2>
       <div className="flex-1 min-h-0">{children}</div>

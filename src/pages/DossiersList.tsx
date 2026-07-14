@@ -122,12 +122,14 @@ export default function DossiersList() {
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground">
-      <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-3 sm:px-6 gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <MobileNav />
+      <header className="flex h-14 w-full max-w-full items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-3 sm:px-6 gap-2 overflow-hidden">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <div className="md:hidden flex-shrink-0">
+            <MobileNav />
+          </div>
           <Link to="/dossiers" className="flex items-center gap-2 min-w-0">
-            <img src={logoImg} alt="Arcade Planner logo" className="h-7 w-auto object-contain flex-shrink-0" />
-            <h1 className="font-display text-base sm:text-xl font-bold tracking-tight truncate">
+            <img src={logoImg} alt="Arcade Planner logo" className="h-6 sm:h-7 w-auto object-contain flex-shrink-0" />
+            <h1 className="font-display text-sm sm:text-xl font-bold tracking-tight whitespace-nowrap truncate">
               <span className="text-primary text-glow-purple">Arcade</span>{" "}
               <span className="text-secondary text-glow-green">Planner</span>
             </h1>
@@ -163,14 +165,16 @@ export default function DossiersList() {
             )}
           </nav>
         </div>
-        <div className="flex items-center gap-2">
-          <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex">
             <Link to="/planner">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Ouvrir le planner
             </Link>
           </Button>
-          <UserMenu />
+          <div className="hidden md:block">
+            <UserMenu />
+          </div>
         </div>
       </header>
 

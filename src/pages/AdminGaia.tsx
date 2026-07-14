@@ -348,7 +348,7 @@ export default function AdminGaia() {
               Diagnostic de connexion aux flux OData Cegid XRP Flex.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={runDiscover} disabled={running || syncing}>
               {running ? (
                 <>

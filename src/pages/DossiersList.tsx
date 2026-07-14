@@ -269,7 +269,22 @@ export default function DossiersList() {
                     onClick={() => navigate(`/dossiers/${p.id}`)}
                   >
                     <TableCell className="font-medium">
-                      {p.client_name?.trim() || <span className="text-muted-foreground">Sans nom</span>}
+                      <div>
+                        {p.client_name?.trim() || <span className="text-muted-foreground">Sans nom</span>}
+                      </div>
+                      {p.is_shared && viewStats[p.id] ? (
+                        <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground font-normal">
+                          <span>
+                            👁 {viewStats[p.id].count} vue{viewStats[p.id].count > 1 ? "s" : ""}
+                            {viewStats[p.id].last ? ` · dernière il y a ${formatRelative(viewStats[p.id].last!)}` : ""}
+                          </span>
+                          {viewStats[p.id].hasNew && (
+                            <Badge className="h-5 bg-secondary text-secondary-foreground text-glow-green">
+                              Nouvelles vues
+                            </Badge>
+                          )}
+                        </div>
+                      ) : null}
                     </TableCell>
                     <TableCell>{brandName(p.brand_id)}</TableCell>
                     <TableCell>{p.offer ? OFFER_LABEL[p.offer] ?? p.offer : "—"}</TableCell>

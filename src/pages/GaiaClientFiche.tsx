@@ -226,7 +226,7 @@ export default function GaiaClientFiche() {
   // Consommables : ventes des 12 derniers mois avec famille consommable
   const hasParc = parc.length > 0;
   const consoLast12 = ventes12m.some((v) => {
-    const fam = (v.famille || "").toLowerCase();
+    const fam = (v.classe_article || "").toLowerCase();
     return CONSO_KEYWORDS.some((k) => fam.includes(k));
   });
   const missingConso = hasParc && !consoLast12 && ventes12m.length > 0;

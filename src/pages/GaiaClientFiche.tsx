@@ -125,7 +125,7 @@ export default function GaiaClientFiche() {
             .limit(10),
           client
             .from("gaia_ventes")
-            .select("code_client,code_article,invoice_date,montant_ht")
+            .select("code_client,code_article,invoice_date,montant_ht,classe_article")
             .in("code_client", codes)
             .gte("invoice_date", sinceIso)
             .limit(2000),

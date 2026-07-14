@@ -67,6 +67,15 @@ async function callAnthropic(systemPrompt: string, messages: Array<{ role: 'user
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY manquant');
 
+  const payload = {
+    model: ANTHROPIC_MODEL,
+    max_tokens: 3500,
+    system: systemPrompt,
+    messages,
+  };
+  const payloadStr = JSON.stringify(payload);
+  const inputChars = payloadStr.length;
+
   const res = await fetch(ANTHROPIC_URL, {
     method: 'POST',
     headers: {
@@ -74,28 +83,38 @@ async function callAnthropic(systemPrompt: string, messages: Array<{ role: 'user
       'x-api-key': apiKey,
       'anthropic-version': ANTHROPIC_VERSION,
     },
-    body: JSON.stringify({
-      model: ANTHROPIC_MODEL,
-      max_tokens: 3500,
-      system: systemPrompt,
-      messages,
-    }),
+    body: payloadStr,
   });
 
   const text = await res.text();
   if (!res.ok) {
-    throw new Error(`Anthropic HTTP ${res.status}: ${text.slice(0, 500)}`);
+    throw new Error(`Anthropic HTTP ${res.status} ${res.statusText}. Body: ${text}`);
   }
-  const json = JSON.parse(text);
+
+  let json: any;
+  try {
+    json = JSON.parse(text);
+  } catch (e) {
+    throw new Error(`Anthropic 200 mais JSON invalide. Body: ${text.slice(0, 1500)}`);
+  }
+
   const parts = Array.isArray(json?.content) ? json.content : [];
   const markdown = parts
     .filter((p: any) => p?.type === 'text' && typeof p.text === 'string')
     .map((p: any) => p.text)
     .join('\n\n')
     .trim();
-  if (!markdown) throw new Error('Réponse Anthropic vide');
-  return markdown;
+
+  const stopReason = json?.stop_reason ?? null;
+
+  if (!markdown) {
+    const rawJson = JSON.stringify(json).slice(0, 1500);
+    throw new Error(`Anthropic 200 sans bloc texte. stop_reason=${stopReason}. JSON: ${rawJson}`);
+  }
+
+  return { markdown, stop_reason: stopReason, input_chars: inputChars };
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });

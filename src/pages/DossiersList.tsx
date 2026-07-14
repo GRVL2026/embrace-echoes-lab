@@ -25,7 +25,16 @@ import { UserMenu } from "@/components/UserMenu";
 import { toast } from "@/hooks/use-toast";
 import { ArrowLeft, Plus, Shield, Trash2, Database } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { MobileNav } from "@/components/MobileNav";
+import { Badge } from "@/components/ui/badge";
 import logoImg from "@/assets/logo.png";
+
+const STATUS_LABEL: Record<string, string> = {
+  draft: "Brouillon",
+  sent: "Envoyé",
+  won: "Gagné",
+  lost: "Perdu",
+};
 
 type Brand = { id: string; name: string; color?: string | null };
 type Project = {

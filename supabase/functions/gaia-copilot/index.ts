@@ -382,8 +382,7 @@ Deno.serve(async (req) => {
     let messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
 
     if (action === 'revue') {
-      const userMsg = `Voici les données commerciales agrégées (JSON) :\n\n\`\`\`json\n${dataJson}\n\`\`\`\n\nRédige la revue commerciale du mois :\n1) santé globale (CA à période égale vs N-1/N-2, tendance mensuelle) ;\n2) mouvements marquants (familles et clients qui montent/descendent) ;\n3) risques ;\n4) TOP 5 des actions recommandées, priorisées par impact en euros (relances de devis nominatives, clients dormants à réactiver, stock à écouler).`;
-      messages = [{ role: 'user', content: userMsg }];
+      // handled below via callAnthropicStream + tool
     } else if (action === 'chat') {
       const question = typeof body?.question === 'string' ? body.question.trim() : '';
       if (!question) {

@@ -19,6 +19,9 @@ import {
   Cell,
 } from "recharts";
 
+const FAMILY_COLORS = ["#9B5CFF", "#ADFF00", "#00D4FF", "#FF8A00", "#FF4FA3"];
+const OTHERS_COLOR = "#6B7280";
+
 type CaMensuel = { mois: string; annee: number; ca_ht: number | string; lignes: number };
 type CaClient = { annee: number; code_client: string; client: string; ca_ht: number };
 type CaFamille = { annee: number; famille: string; ca_ht: number };
@@ -140,10 +143,21 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
 
   const famillesData = useMemo(() => {
     const filtered = caFamille.filter((r) => r.annee === yearFamille);
-    return [...filtered]
-      .sort((a, b) => Number(b.ca_ht) - Number(a.ca_ht))
-      .map((r) => ({ name: r.famille || "—", value: Number(r.ca_ht || 0) }));
+    const sorted = [...filtered]
+      .map((r) => ({ name: r.famille || "—", value: Number(r.ca_ht || 0) }))
+      .sort((a, b) => b.value - a.value);
+    if (sorted.length <= 6) {
+      return sorted.map((r, i) => ({ ...r, color: i < 5 ? FAMILY_COLORS[i] : OTHERS_COLOR }));
+    }
+    const top = sorted.slice(0, 5).map((r, i) => ({ ...r, color: FAMILY_COLORS[i] }));
+    const othersValue = sorted.slice(5).reduce((n, r) => n + r.value, 0);
+    return [...top, { name: "Autres", value: othersValue, color: OTHERS_COLOR }];
   }, [caFamille, yearFamille]);
+
+  const famillesTotal = useMemo(
+    () => famillesData.reduce((n, r) => n + r.value, 0),
+    [famillesData]
+  );
 
   const ecotaxeTotal = ecotaxe.reduce((n, r) => n + Number(r.ecotaxe_ht || 0), 0);
   const ecotaxeChart = ecotaxe
@@ -310,37 +324,66 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
               />
             }
           >
-            <div className="h-80">
-              {famillesData.length === 0 ? (
-                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                  Aucune donnée pour {yearFamille}.
+            {famillesData.length === 0 ? (
+              <div className="flex h-80 items-center justify-center text-sm text-muted-foreground">
+                Aucune donnée pour {yearFamille}.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4 md:flex-row md:items-center">
+                <div className="h-72 w-full md:w-1/2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={famillesData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={110}
+                        paddingAngle={2}
+                        stroke="hsl(var(--background))"
+                        strokeWidth={2}
+                        labelLine={false}
+                        label={({ percent, cx, cy, midAngle, innerRadius, outerRadius }: any) => {
+                          if (!percent || percent < 0.08) return null;
+                          const RAD = Math.PI / 180;
+                          const r = innerRadius + (outerRadius - innerRadius) * 0.55;
+                          const x = cx + r * Math.cos(-midAngle * RAD);
+                          const y = cy + r * Math.sin(-midAngle * RAD);
+                          return (
+                            <text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight={600}>
+                              {`${Math.round(percent * 100)}%`}
+                            </text>
+                          );
+                        }}
+                      >
+                        {famillesData.map((r, i) => (
+                          <Cell key={i} fill={r.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+                        formatter={(v: number) => eur(Number(v))}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={famillesData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={70}
-                      outerRadius={120}
-                      paddingAngle={2}
-                    >
-                      {famillesData.map((_, i) => (
-                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
-                      formatter={(v: number) => eur(Number(v))}
-                    />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              )}
-            </div>
+                <ul className="w-full space-y-1.5 md:w-1/2">
+                  {famillesData.map((r) => {
+                    const pct = famillesTotal > 0 ? (r.value / famillesTotal) * 100 : 0;
+                    return (
+                      <li key={r.name} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/30">
+                        <span className="h-3 w-3 flex-shrink-0 rounded-sm" style={{ backgroundColor: r.color }} />
+                        <span className="flex-1 truncate">{r.name}</span>
+                        <span className="font-medium tabular-nums">{eur(r.value)}</span>
+                        <span className="w-12 text-right text-xs tabular-nums text-muted-foreground">{pct.toFixed(1)}%</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
           </Panel>
         </div>
         <div>

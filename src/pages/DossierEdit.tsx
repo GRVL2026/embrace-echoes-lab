@@ -1338,6 +1338,18 @@ export default function DossierEdit() {
           </div>
         )}
       </main>
+      {/* Floating "Aperçu" button on mobile/tablet */}
+      {!loading && form && !previewOpen && (
+        <button
+          type="button"
+          onClick={() => setPreviewOpen(true)}
+          className="fixed bottom-5 right-5 z-40 flex h-14 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-2xl active:scale-95 lg:hidden"
+          aria-label="Ouvrir l'aperçu"
+        >
+          <Eye className="h-5 w-5" />
+          Aperçu
+        </button>
+      )}
       {previewOpen && id && (
         <DossierPreview
           projectId={id}

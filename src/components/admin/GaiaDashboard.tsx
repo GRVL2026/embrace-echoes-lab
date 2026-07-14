@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, TrendingUp, TrendingDown, FileText, FileSignature, Package, Leaf, RefreshCw, ArrowRight, Search } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, FileText, FileSignature, Package, Leaf, RefreshCw, ArrowRight, Search, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -227,11 +227,16 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
     const caHt = margeFamilleYear.reduce((n, r) => n + Number(r.ca_ht || 0), 0);
     const caCout = margeFamilleYear.reduce((n, r) => n + Number(r.ca_avec_cout || 0), 0);
     const marge = margeFamilleYear.reduce((n, r) => n + Number(r.marge_estimee || 0), 0);
+    const cout = Math.max(0, caCout - marge);
     return {
       caHt,
       caCout,
+      cout,
       marge,
+      // Taux de marque = marge / prix de vente
       taux: caCout > 0 ? (marge / caCout) * 100 : 0,
+      // Taux de marge = marge / coût d'achat
+      tauxMarge: cout > 0 ? (marge / cout) * 100 : 0,
       couverture: caHt > 0 ? (caCout / caHt) * 100 : 0,
     };
   }, [margeFamilleYear]);
@@ -630,17 +635,28 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
           <div className="space-y-4">
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               <div className="rounded-lg border border-primary/40 bg-primary/5 p-4 lg:col-span-1">
-                <div className="mb-1 text-xs uppercase tracking-wider text-muted-foreground">
-                  Taux de marge global
+                <div className="mb-1 flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground">
+                  <span>Taux de marque global</span>
+                  <span
+                    title="Taux de marque = marge ÷ prix de vente. Le taux de marge (marge ÷ coût d'achat) est indiqué entre parenthèses."
+                    className="inline-flex cursor-help"
+                    aria-label="Définition taux de marque"
+                  >
+                    <Info className="h-3.5 w-3.5 text-muted-foreground/70" />
+                  </span>
                 </div>
                 <div className="font-display text-3xl font-bold text-primary text-glow-purple">
                   {margeGlobal.taux.toFixed(1)}%
                 </div>
-                <div className="mt-1 text-xs text-muted-foreground">
+                <div className="mt-0.5 text-xs text-muted-foreground">
+                  soit un taux de marge de{" "}
+                  <span className="text-foreground">{margeGlobal.tauxMarge.toFixed(1)}%</span>
+                </div>
+                <div className="mt-2 text-xs text-muted-foreground">
                   Marge estimée : <span className="text-foreground">{eur(margeGlobal.marge)}</span> sur{" "}
                   <span className="text-foreground">{eur(margeGlobal.caCout)}</span> de CA analysé
                 </div>
-                <div className="mt-2 text-[11px] text-muted-foreground">
+                <div className="mt-1 text-[11px] text-muted-foreground">
                   sur {margeGlobal.couverture.toFixed(0)}% du CA analysé ({eur(margeGlobal.caCout)} /{" "}
                   {eur(margeGlobal.caHt)})
                 </div>
@@ -740,7 +756,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
 
               <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
                 <div className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">
-                  Flop 5 — taux de marge le plus faible (CA &gt; 20 000 €)
+                  Flop 5 — taux de marque le plus faible (CA &gt; 20 000 €)
                 </div>
                 <div className="overflow-auto">
                   <table className="w-full text-sm">

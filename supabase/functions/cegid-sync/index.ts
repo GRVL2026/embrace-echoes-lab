@@ -550,14 +550,36 @@ async function authorize(req: Request): Promise<
 > {
   const cronHeader = req.headers.get('x-cron-secret');
   const cronSecret = Deno.env.get('CRON_SECRET');
-  if (cronHeader && cronSecret && cronHeader === cronSecret) {
-    return { ok: true, viaCron: true };
+  const authHeader = req.headers.get('Authorization');
+  const hasBearer = !!authHeader?.startsWith('Bearer ');
+
+  if (cronHeader !== null) {
+    if (!cronSecret) {
+      return { ok: false, status: 403, error: 'CRON_SECRET non configuré côté serveur' };
+    }
+    if (cronHeader === cronSecret) {
+      return { ok: true, viaCron: true };
+    }
+    if (!hasBearer) {
+      return {
+        ok: false,
+        status: 403,
+        error: `x-cron-secret invalide (reçu ${cronHeader.length} caractères, attendu ${cronSecret.length})`,
+      };
+    }
+    // sinon on tente l'auth JWT ci-dessous
   }
 
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return { ok: false, status: 200, error: 'Unauthorized: header Authorization Bearer manquant (ou x-cron-secret invalide)' };
+  if (!hasBearer) {
+    if (cronHeader === null && !cronSecret) {
+      return { ok: false, status: 403, error: 'en-tête x-cron-secret absent et CRON_SECRET non configuré côté serveur' };
+    }
+    if (cronHeader === null) {
+      return { ok: false, status: 403, error: 'en-tête x-cron-secret absent (et header Authorization Bearer manquant)' };
+    }
+    return { ok: false, status: 403, error: 'header Authorization Bearer manquant' };
   }
+
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
   const supabase = createClient(supabaseUrl, anonKey, {

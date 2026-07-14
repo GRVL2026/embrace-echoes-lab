@@ -151,3 +151,37 @@
   }
 }
 
+
+/* Chat markdown rendering (GaiaCopilot chat responses) */
+.chat-markdown { color: hsl(var(--foreground)); font-size: 0.875rem; line-height: 1.55; }
+.chat-markdown > *:first-child { margin-top: 0; }
+.chat-markdown > *:last-child { margin-bottom: 0; }
+.chat-markdown h1, .chat-markdown h2, .chat-markdown h3, .chat-markdown h4 {
+  font-family: var(--font-display, inherit);
+  font-weight: 600;
+  margin: 1em 0 0.4em;
+  line-height: 1.25;
+}
+.chat-markdown h1 { font-size: 1.15rem; }
+.chat-markdown h2 { font-size: 1.05rem; }
+.chat-markdown h3 { font-size: 0.98rem; color: hsl(var(--primary)); }
+.chat-markdown h4 { font-size: 0.92rem; text-transform: uppercase; letter-spacing: 0.04em; color: hsl(var(--muted-foreground)); }
+.chat-markdown p { margin: 0.5em 0; }
+.chat-markdown strong { color: hsl(var(--foreground)); font-weight: 600; }
+.chat-markdown em { color: hsl(var(--foreground) / 0.85); }
+.chat-markdown ul, .chat-markdown ol { margin: 0.5em 0; padding-left: 1.4em; }
+.chat-markdown ul { list-style: disc; }
+.chat-markdown ol { list-style: decimal; }
+.chat-markdown li { margin: 0.2em 0; }
+.chat-markdown li > p { margin: 0.15em 0; }
+.chat-markdown a { color: hsl(var(--primary)); text-decoration: underline; text-underline-offset: 2px; }
+.chat-markdown code { background: hsl(var(--muted) / 0.5); padding: 0.1em 0.35em; border-radius: 3px; font-size: 0.85em; }
+.chat-markdown pre { background: hsl(var(--muted) / 0.35); border: 1px solid hsl(var(--border) / 0.6); border-radius: 6px; padding: 0.75em; overflow-x: auto; margin: 0.75em 0; }
+.chat-markdown pre code { background: transparent; padding: 0; }
+.chat-markdown blockquote { border-left: 3px solid hsl(var(--primary) / 0.6); padding: 0.15em 0.75em; margin: 0.6em 0; color: hsl(var(--foreground) / 0.85); background: hsl(var(--muted) / 0.25); border-radius: 0 4px 4px 0; }
+.chat-markdown hr { border: none; border-top: 1px solid hsl(var(--border) / 0.6); margin: 1em 0; }
+.chat-markdown table { width: 100%; border-collapse: collapse; margin: 0.75em 0; font-size: 0.85rem; display: block; overflow-x: auto; }
+.chat-markdown thead { background: hsl(var(--muted) / 0.4); }
+.chat-markdown th, .chat-markdown td { border: 1px solid hsl(var(--border) / 0.6); padding: 0.4em 0.6em; text-align: left; vertical-align: top; }
+.chat-markdown th { font-weight: 600; }
+.chat-markdown tbody tr:nth-child(even) { background: hsl(var(--muted) / 0.15); }

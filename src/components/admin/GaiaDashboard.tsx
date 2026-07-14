@@ -227,11 +227,16 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
     const caHt = margeFamilleYear.reduce((n, r) => n + Number(r.ca_ht || 0), 0);
     const caCout = margeFamilleYear.reduce((n, r) => n + Number(r.ca_avec_cout || 0), 0);
     const marge = margeFamilleYear.reduce((n, r) => n + Number(r.marge_estimee || 0), 0);
+    const cout = Math.max(0, caCout - marge);
     return {
       caHt,
       caCout,
+      cout,
       marge,
+      // Taux de marque = marge / prix de vente
       taux: caCout > 0 ? (marge / caCout) * 100 : 0,
+      // Taux de marge = marge / coût d'achat
+      tauxMarge: cout > 0 ? (marge / cout) * 100 : 0,
       couverture: caHt > 0 ? (caCout / caHt) * 100 : 0,
     };
   }, [margeFamilleYear]);

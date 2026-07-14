@@ -124,6 +124,14 @@ Deno.serve(async (req) => {
       is_shared: project.is_shared,
     };
 
+    // Log a successful consultation (public view or valid password)
+    try {
+      const ua = req.headers.get("user-agent") ?? null;
+      await admin.from("dossier_vues").insert({ project_id: project.id, user_agent: ua });
+    } catch (_) {
+      // never block the response on logging failure
+    }
+
     return new Response(
       JSON.stringify({ project: safeProject, brand, modules, products }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },

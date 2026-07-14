@@ -44,7 +44,11 @@ type Project = {
   offer: string | null;
   status: string | null;
   updated_at: string;
+  is_shared?: boolean | null;
+  views_seen_at?: string | null;
 };
+
+type ViewStat = { count: number; last: string | null; hasNew: boolean };
 
 const OFFER_LABEL: Record<string, string> = {
   vente: "Vente",
@@ -52,11 +56,27 @@ const OFFER_LABEL: Record<string, string> = {
   leasing: "Leasing",
 };
 
+function formatRelative(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const s = Math.max(1, Math.round(diff / 1000));
+  if (s < 60) return `${s} s`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h} h`;
+  const d = Math.round(h / 24);
+  if (d < 30) return `${d} j`;
+  const mo = Math.round(d / 30);
+  if (mo < 12) return `${mo} mois`;
+  return `${Math.round(mo / 12)} an(s)`;
+}
+
 export default function DossiersList() {
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
+  const [viewStats, setViewStats] = useState<Record<string, ViewStat>>({});
   const [loading, setLoading] = useState(true);
   const [toDelete, setToDelete] = useState<Project | null>(null);
   const [creating, setCreating] = useState(false);
@@ -66,14 +86,37 @@ export default function DossiersList() {
     const [{ data: p, error: pe }, { data: b, error: be }] = await Promise.all([
       (supabase as any)
         .from("projects")
-        .select("id, brand_id, client_name, offer, status, updated_at")
+        .select("id, brand_id, client_name, offer, status, updated_at, is_shared, views_seen_at")
         .order("updated_at", { ascending: false }),
       (supabase as any).from("brands").select("id, name, color"),
     ]);
     if (pe) toast({ title: "Erreur", description: pe.message, variant: "destructive" });
     if (be) toast({ title: "Erreur", description: be.message, variant: "destructive" });
-    setProjects((p as Project[]) ?? []);
+    const projs = (p as Project[]) ?? [];
+    setProjects(projs);
     setBrands((b as Brand[]) ?? []);
+
+    // View stats for shared dossiers
+    const sharedIds = projs.filter((r) => r.is_shared).map((r) => r.id);
+    if (sharedIds.length > 0) {
+      const { data: v } = await (supabase as any)
+        .from("dossier_vues")
+        .select("project_id, viewed_at")
+        .in("project_id", sharedIds);
+      const stats: Record<string, ViewStat> = {};
+      const seenMap = new Map(projs.map((r) => [r.id, r.views_seen_at ?? null]));
+      for (const row of (v as any[]) ?? []) {
+        const s = stats[row.project_id] ?? { count: 0, last: null, hasNew: false };
+        s.count += 1;
+        if (!s.last || row.viewed_at > s.last) s.last = row.viewed_at;
+        const seen = seenMap.get(row.project_id) ?? null;
+        if (!seen || row.viewed_at > seen) s.hasNew = true;
+        stats[row.project_id] = s;
+      }
+      setViewStats(stats);
+    } else {
+      setViewStats({});
+    }
     setLoading(false);
   };
 
@@ -226,7 +269,22 @@ export default function DossiersList() {
                     onClick={() => navigate(`/dossiers/${p.id}`)}
                   >
                     <TableCell className="font-medium">
-                      {p.client_name?.trim() || <span className="text-muted-foreground">Sans nom</span>}
+                      <div>
+                        {p.client_name?.trim() || <span className="text-muted-foreground">Sans nom</span>}
+                      </div>
+                      {p.is_shared && viewStats[p.id] ? (
+                        <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground font-normal">
+                          <span>
+                            👁 {viewStats[p.id].count} vue{viewStats[p.id].count > 1 ? "s" : ""}
+                            {viewStats[p.id].last ? ` · dernière il y a ${formatRelative(viewStats[p.id].last!)}` : ""}
+                          </span>
+                          {viewStats[p.id].hasNew && (
+                            <Badge className="h-5 bg-secondary text-secondary-foreground text-glow-green">
+                              Nouvelles vues
+                            </Badge>
+                          )}
+                        </div>
+                      ) : null}
                     </TableCell>
                     <TableCell>{brandName(p.brand_id)}</TableCell>
                     <TableCell>{p.offer ? OFFER_LABEL[p.offer] ?? p.offer : "—"}</TableCell>
@@ -294,6 +352,19 @@ export default function DossiersList() {
                     <div className="mt-1 text-[11px] text-muted-foreground">
                       {new Date(p.updated_at).toLocaleDateString("fr-FR")}
                     </div>
+                    {p.is_shared && viewStats[p.id] ? (
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                        <span>
+                          👁 {viewStats[p.id].count} vue{viewStats[p.id].count > 1 ? "s" : ""}
+                          {viewStats[p.id].last ? ` · il y a ${formatRelative(viewStats[p.id].last!)}` : ""}
+                        </span>
+                        {viewStats[p.id].hasNew && (
+                          <Badge className="h-5 bg-secondary text-secondary-foreground text-glow-green">
+                            Nouvelles vues
+                          </Badge>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="flex flex-col items-end gap-2">
                     <Badge variant="outline">{STATUS_LABEL[p.status ?? "draft"] ?? p.status}</Badge>

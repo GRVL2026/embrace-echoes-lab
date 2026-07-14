@@ -124,6 +124,7 @@ export default function DossierEdit() {
   const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
   const [productQuery, setProductQuery] = useState("");
   const [form, setForm] = useState<Project | null>(null);
+  const [views, setViews] = useState<{ id: number; viewed_at: string; user_agent: string | null }[]>([]);
   const [previewSlide, setPreviewSlide] = useState<BrandModule | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -175,6 +176,19 @@ export default function DossierEdit() {
       setModules((m as BrandModule[]) ?? []);
       setCatalog((c as CatalogProduct[]) ?? []);
       setLoading(false);
+
+      // Consultations : charge l'historique et éteint le badge « Nouvelles vues »
+      (supabase as any)
+        .from("dossier_vues")
+        .select("id, viewed_at, user_agent")
+        .eq("project_id", id)
+        .order("viewed_at", { ascending: false })
+        .then(({ data }: any) => setViews((data as any[]) ?? []));
+      (supabase as any)
+        .from("projects")
+        .update({ views_seen_at: new Date().toISOString() })
+        .eq("id", id)
+        .then(() => {});
     })();
   }, [id, navigate]);
 
@@ -1324,6 +1338,53 @@ export default function DossierEdit() {
                 ))}
               </div>
             </section>
+
+            {/* SECTION Consultations */}
+            {form.is_shared && (
+              <section className="mt-6 space-y-4 rounded-lg border border-border bg-card/40 p-6">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h3 className="font-display text-lg font-semibold inline-flex items-center gap-2">
+                      <Eye className="h-4 w-4 text-primary" /> Consultations
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Historique des consultations du lien partagé.
+                    </p>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {views.length} vue{views.length > 1 ? "s" : ""} au total
+                  </div>
+                </div>
+                {views.length === 0 ? (
+                  <div className="rounded border border-dashed border-border/60 p-4 text-center text-sm text-muted-foreground">
+                    Aucune consultation pour le moment.
+                  </div>
+                ) : (
+                  <div className="max-h-64 overflow-auto rounded border border-border/60">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Date & heure</th>
+                          <th className="px-3 py-2 text-left">Navigateur</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {views.map((v) => (
+                          <tr key={v.id} className="border-t border-border/60">
+                            <td className="px-3 py-2 tabular-nums">
+                              {new Date(v.viewed_at).toLocaleString("fr-FR")}
+                            </td>
+                            <td className="px-3 py-2 text-xs text-muted-foreground truncate max-w-[420px]">
+                              {v.user_agent ?? "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+            )}
             </div>
             <aside className="hidden lg:block">
               <div className="sticky top-4 h-[calc(100vh-6rem)] overflow-hidden rounded-lg border border-border shadow-xl">

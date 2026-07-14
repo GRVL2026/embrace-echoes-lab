@@ -637,13 +637,13 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
               <div className="rounded-lg border border-primary/40 bg-primary/5 p-4 lg:col-span-1">
                 <div className="mb-1 flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground">
                   <span>Taux de marque global</span>
-                  <Info
-                    className="h-3.5 w-3.5 cursor-help text-muted-foreground/70"
+                  <span
+                    title="Taux de marque = marge ÷ prix de vente. Le taux de marge (marge ÷ coût d'achat) est indiqué entre parenthèses."
+                    className="inline-flex cursor-help"
                     aria-label="Définition taux de marque"
-                    title={
-                      "Taux de marque = marge ÷ prix de vente. Le taux de marge (marge ÷ coût d'achat) est indiqué entre parenthèses."
-                    }
-                  />
+                  >
+                    <Info className="h-3.5 w-3.5 text-muted-foreground/70" />
+                  </span>
                 </div>
                 <div className="font-display text-3xl font-bold text-primary text-glow-purple">
                   {margeGlobal.taux.toFixed(1)}%

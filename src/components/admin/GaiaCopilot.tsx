@@ -1,20 +1,40 @@
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, Sparkles, Copy, Send, FileText, UserX, Package } from "lucide-react";
+import {
+  Loader2, Sparkles, Copy, Send, FileText, UserX, Package,
+  TrendingUp, TrendingDown, AlertTriangle, Target,
+} from "lucide-react";
 
 type DevisRelance = { n_cde: string; code_client: string; client: string; date_devis: string; age_jours: number; montant_ht: number };
 type ClientDormant = { code_client: string; client: string; ca_annee_courante: number; ca_n1: number; ca_n2: number; derniere_facture: string | null };
 type StockDormant = { code_article: string; description: string; famille: string; quantite: number; valeur_achat: number };
-
 type ChatMsg = { role: "user" | "assistant"; content: string };
+
+type RevueData = {
+  sante: {
+    commentaire: string;
+    annees: { annee: number; ca_ht: number; evolution_pct?: number }[];
+    tendance_mensuelle: { mois: string; evolution_pct: number; commentaire?: string }[];
+  };
+  mouvements: {
+    familles: { nom: string; sens: "hausse" | "baisse"; detail: string }[];
+    clients_hausse: { client: string; detail: string }[];
+    clients_baisse: { client: string; detail: string }[];
+  };
+  risques: { titre: string; gravite: "haute" | "moyenne" | "basse"; detail: string }[];
+  actions: { rang: number; titre: string; qui: string; cible: string; impact_eur: number; pourquoi: string }[];
+};
 
 const eur = (n: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Number(n) || 0);
+
+const pct = (n: number) => `${n > 0 ? "+" : ""}${Math.round(n)}%`;
 
 const SUGGESTIONS = [
   "Quels clients relancer en priorité ?",
@@ -26,17 +46,13 @@ async function formatFunctionError(error: unknown) {
   if (error instanceof FunctionsHttpError) {
     const response = error.context as Response;
     let body = "";
-    try {
-      body = await response.clone().text();
-    } catch {
-      body = error.message;
-    }
+    try { body = await response.clone().text(); } catch { body = error.message; }
     return `HTTP ${response.status} ${response.statusText}\n${body}`;
   }
   return error instanceof Error ? error.message : String(error);
 }
 
-async function streamRevue(onText: (delta: string) => void) {
+async function streamRevue(onJsonBuffer: (buf: string) => void): Promise<string> {
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
   if (sessionError) throw sessionError;
   const token = sessionData.session?.access_token;
@@ -61,41 +77,32 @@ async function streamRevue(onText: (delta: string) => void) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  let receivedText = false;
+  let jsonBuffer = "";
   let debug: { input_chars?: number; stop_reason?: string | null } | null = null;
 
   const consumeEvent = (event: string) => {
-    const eventName = event
-      .split(/\r?\n/)
-      .find((line) => line.startsWith("event:"))
-      ?.slice(6)
-      .trim();
     const dataText = event
       .split(/\r?\n/)
       .filter((line) => line.startsWith("data:"))
       .map((line) => line.slice(5).trimStart())
       .join("\n");
     if (!dataText || dataText === "[DONE]") return;
+    const eventName = event
+      .split(/\r?\n/)
+      .find((line) => line.startsWith("event:"))
+      ?.slice(6)
+      .trim();
 
     let data: any;
-    try {
-      data = JSON.parse(dataText);
-    } catch {
-      return;
-    }
-    if (eventName === "gaia_debug") {
-      debug = data;
-      return;
-    }
-    if (eventName === "gaia_error") {
-      throw new Error(data?.error ? String(data.error) : dataText);
-    }
-    if (data?.type === "error") {
-      throw new Error(`Anthropic stream error: ${JSON.stringify(data)}`);
-    }
-    if (data?.type === "content_block_delta" && data?.delta?.type === "text_delta" && typeof data.delta.text === "string") {
-      receivedText = true;
-      onText(data.delta.text);
+    try { data = JSON.parse(dataText); } catch { return; }
+
+    if (eventName === "gaia_debug") { debug = data; return; }
+    if (eventName === "gaia_error") throw new Error(data?.error ? String(data.error) : dataText);
+    if (data?.type === "error") throw new Error(`Anthropic stream error: ${JSON.stringify(data)}`);
+
+    if (data?.type === "content_block_delta" && data?.delta?.type === "input_json_delta" && typeof data.delta.partial_json === "string") {
+      jsonBuffer += data.delta.partial_json;
+      onJsonBuffer(jsonBuffer);
     }
   };
 
@@ -108,17 +115,227 @@ async function streamRevue(onText: (delta: string) => void) {
     if (done) break;
   }
   if (buffer.trim()) consumeEvent(buffer);
-  if (!receivedText) {
-    throw new Error(
-      `HTTP 200 mais le flux ne contient aucun bloc de texte. debug=${JSON.stringify(debug ?? { stop_reason: "inconnu" })}`,
-    );
+
+  if (!jsonBuffer.trim()) {
+    throw new Error(`HTTP 200 mais aucune donnée structurée reçue. debug=${JSON.stringify(debug ?? { stop_reason: "inconnu" })}`);
   }
+  return jsonBuffer;
 }
+
+function revueToText(r: RevueData): string {
+  const lines: string[] = [];
+  lines.push(`# Revue commerciale du mois\n`);
+  lines.push(`## Santé`);
+  lines.push(r.sante.commentaire);
+  r.sante.annees.forEach((a) => lines.push(`- ${a.annee} : ${eur(a.ca_ht)}${a.evolution_pct != null ? ` (${pct(a.evolution_pct)})` : ""}`));
+  lines.push(`\n### Tendance mensuelle`);
+  r.sante.tendance_mensuelle.forEach((m) => lines.push(`- ${m.mois} : ${pct(m.evolution_pct)}${m.commentaire ? ` — ${m.commentaire}` : ""}`));
+  lines.push(`\n## Mouvements`);
+  lines.push(`### Familles`);
+  r.mouvements.familles.forEach((f) => lines.push(`- ${f.sens === "hausse" ? "↗" : "↘"} ${f.nom} — ${f.detail}`));
+  lines.push(`### Clients en hausse`);
+  r.mouvements.clients_hausse.forEach((c) => lines.push(`- ${c.client} — ${c.detail}`));
+  lines.push(`### Clients en baisse`);
+  r.mouvements.clients_baisse.forEach((c) => lines.push(`- ${c.client} — ${c.detail}`));
+  lines.push(`\n## Risques`);
+  r.risques.forEach((x) => lines.push(`- [${x.gravite.toUpperCase()}] ${x.titre} — ${x.detail}`));
+  lines.push(`\n## Actions prioritaires`);
+  r.actions.forEach((a) => lines.push(`${a.rang}. ${a.titre} (${eur(a.impact_eur)}) — ${a.qui} · ${a.cible} · ${a.pourquoi}`));
+  return lines.join("\n");
+}
+
+// ─────────── Sub-components ───────────
+
+function EvolBadge({ value }: { value?: number }) {
+  if (value == null || isNaN(value)) return null;
+  const positive = value >= 0;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-semibold ${
+        positive ? "bg-emerald-500/15 text-emerald-400" : "bg-rose-500/15 text-rose-400"
+      }`}
+    >
+      {positive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+      {pct(value)}
+    </span>
+  );
+}
+
+function MonthPill({ mois, evolution_pct, commentaire }: { mois: string; evolution_pct: number; commentaire?: string }) {
+  const clamp = Math.max(-30, Math.min(30, evolution_pct));
+  // Interpolate red (-30) → gray (0) → green (+30)
+  const bg =
+    clamp >= 0
+      ? `rgba(16,185,129,${0.15 + (clamp / 30) * 0.35})`
+      : `rgba(244,63,94,${0.15 + (-clamp / 30) * 0.35})`;
+  return (
+    <div
+      title={commentaire || ""}
+      className="flex min-w-[68px] flex-col items-center rounded border border-border/60 px-2 py-1.5 text-center"
+      style={{ backgroundColor: bg }}
+    >
+      <div className="text-[11px] font-medium capitalize text-foreground/80">{mois}</div>
+      <div className={`text-xs font-semibold tabular-nums ${evolution_pct >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+        {pct(evolution_pct)}
+      </div>
+    </div>
+  );
+}
+
+function RevueDashboard({ data }: { data: RevueData }) {
+  return (
+    <div className="space-y-5">
+      {/* Santé */}
+      <section>
+        <h4 className="mb-3 flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <Sparkles className="h-4 w-4 text-primary" /> Santé globale
+        </h4>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {data.sante.annees.map((a) => (
+            <div key={a.annee} className="rounded-lg border border-border/60 bg-background/40 p-3">
+              <div className="text-xs uppercase text-muted-foreground">{a.annee}</div>
+              <div className="mt-1 font-display text-2xl font-semibold tabular-nums">{eur(a.ca_ht)}</div>
+              <div className="mt-1"><EvolBadge value={a.evolution_pct} /></div>
+            </div>
+          ))}
+        </div>
+        {data.sante.commentaire && (
+          <p className="mt-3 text-sm text-foreground/90">{data.sante.commentaire}</p>
+        )}
+        {data.sante.tendance_mensuelle?.length > 0 && (
+          <>
+            <div className="mt-4 text-xs uppercase text-muted-foreground">Tendance mensuelle vs N-1</div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {data.sante.tendance_mensuelle.map((m, i) => <MonthPill key={i} {...m} />)}
+            </div>
+          </>
+        )}
+      </section>
+
+      {/* Mouvements */}
+      <section>
+        <h4 className="mb-3 flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <TrendingUp className="h-4 w-4 text-primary" /> Mouvements
+        </h4>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
+            <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-emerald-400">
+              <TrendingUp className="h-4 w-4" /> En hausse ↗
+            </div>
+            <ul className="divide-y divide-border/40">
+              {data.mouvements.familles.filter((f) => f.sens === "hausse").map((f, i) => (
+                <li key={`fh${i}`} className="py-1.5 text-sm">
+                  <span className="font-medium">{f.nom}</span>
+                  <span className="text-muted-foreground"> — {f.detail}</span>
+                </li>
+              ))}
+              {data.mouvements.clients_hausse.map((c, i) => (
+                <li key={`ch${i}`} className="py-1.5 text-sm">
+                  <span className="font-medium">{c.client}</span>
+                  <span className="text-muted-foreground"> — {c.detail}</span>
+                </li>
+              ))}
+              {data.mouvements.familles.filter((f) => f.sens === "hausse").length === 0 &&
+                data.mouvements.clients_hausse.length === 0 && (
+                  <li className="py-2 text-xs text-muted-foreground">Aucun mouvement à la hausse.</li>
+                )}
+            </ul>
+          </div>
+          <div className="rounded-lg border border-rose-500/30 bg-rose-500/5 p-3">
+            <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-rose-400">
+              <TrendingDown className="h-4 w-4" /> En baisse ↘
+            </div>
+            <ul className="divide-y divide-border/40">
+              {data.mouvements.familles.filter((f) => f.sens === "baisse").map((f, i) => (
+                <li key={`fb${i}`} className="py-1.5 text-sm">
+                  <span className="font-medium">{f.nom}</span>
+                  <span className="text-muted-foreground"> — {f.detail}</span>
+                </li>
+              ))}
+              {data.mouvements.clients_baisse.map((c, i) => (
+                <li key={`cb${i}`} className="py-1.5 text-sm">
+                  <span className="font-medium">{c.client}</span>
+                  <span className="text-muted-foreground"> — {c.detail}</span>
+                </li>
+              ))}
+              {data.mouvements.familles.filter((f) => f.sens === "baisse").length === 0 &&
+                data.mouvements.clients_baisse.length === 0 && (
+                  <li className="py-2 text-xs text-muted-foreground">Aucun mouvement à la baisse.</li>
+                )}
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      {/* Risques */}
+      {data.risques?.length > 0 && (
+        <section>
+          <h4 className="mb-3 flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            <AlertTriangle className="h-4 w-4 text-primary" /> Risques
+          </h4>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {data.risques.map((r, i) => {
+              const style =
+                r.gravite === "haute"
+                  ? "border-rose-500/50 bg-rose-500/10"
+                  : r.gravite === "moyenne"
+                  ? "border-amber-500/40 bg-amber-500/10"
+                  : "border-border/60 bg-background/40";
+              const badge =
+                r.gravite === "haute"
+                  ? "bg-rose-500/20 text-rose-300"
+                  : r.gravite === "moyenne"
+                  ? "bg-amber-500/20 text-amber-300"
+                  : "bg-muted text-muted-foreground";
+              return (
+                <div key={i} className={`rounded-lg border p-3 ${style}`}>
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <div className="font-medium">{r.titre}</div>
+                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${badge}`}>{r.gravite}</span>
+                  </div>
+                  <p className="text-sm text-foreground/80">{r.detail}</p>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Actions */}
+      {data.actions?.length > 0 && (
+        <section>
+          <h4 className="mb-3 flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            <Target className="h-4 w-4 text-primary" /> Actions prioritaires
+          </h4>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {[...data.actions].sort((a, b) => a.rang - b.rang).map((a) => (
+              <div key={a.rang} className="relative flex flex-col rounded-lg border border-primary/30 bg-primary/5 p-3">
+                <div className="absolute -top-2 -left-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary font-display text-xs font-bold text-primary-foreground">
+                  {a.rang}
+                </div>
+                <div className="mt-2 font-semibold leading-tight">{a.titre}</div>
+                <div className="mt-2 font-display text-xl font-bold tabular-nums text-primary">{eur(a.impact_eur)}</div>
+                <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+                  <div><span className="text-foreground/80">Qui :</span> {a.qui}</div>
+                  <div><span className="text-foreground/80">Cible :</span> {a.cible}</div>
+                  <div className="mt-1 text-foreground/70">{a.pourquoi}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+// ─────────── Main component ───────────
 
 export function GaiaCopilot() {
   const [revueLoading, setRevueLoading] = useState(false);
-  const [revue, setRevue] = useState<string | null>(null);
+  const [revueData, setRevueData] = useState<RevueData | null>(null);
   const [revueError, setRevueError] = useState<string | null>(null);
+  const [revueProgress, setRevueProgress] = useState(0);
 
   const [devis, setDevis] = useState<DevisRelance[]>([]);
   const [dormants, setDormants] = useState<ClientDormant[]>([]);
@@ -152,23 +369,26 @@ export function GaiaCopilot() {
 
   const generateRevue = async () => {
     setRevueLoading(true);
-    setRevue(null);
+    setRevueData(null);
     setRevueError(null);
+    setRevueProgress(0);
     try {
-      await streamRevue((delta) => setRevue((current) => `${current ?? ""}${delta}`));
+      const jsonBuffer = await streamRevue((buf) => setRevueProgress(buf.length));
+      const parsed = JSON.parse(jsonBuffer) as RevueData;
+      setRevueData(parsed);
     } catch (e: unknown) {
       const message = await formatFunctionError(e);
       setRevueError(message);
-      toast({ title: "Erreur de génération", description: message, variant: "destructive" });
+      toast({ title: "Erreur de génération", description: message.slice(0, 200), variant: "destructive" });
     } finally {
       setRevueLoading(false);
     }
   };
 
   const copyRevue = async () => {
-    if (!revue) return;
+    if (!revueData) return;
     try {
-      await navigator.clipboard.writeText(revue);
+      await navigator.clipboard.writeText(revueToText(revueData));
       toast({ title: "Copié", description: "La revue a été copiée dans le presse-papier." });
     } catch {
       toast({ title: "Erreur", description: "Impossible de copier.", variant: "destructive" });
@@ -183,7 +403,7 @@ export function GaiaCopilot() {
     setChatInput("");
     setChatLoading(true);
     try {
-      const history = nextChat.slice(-13, -1); // send prior turns (excluding the new question)
+      const history = nextChat.slice(-13, -1);
       const { data, error } = await supabase.functions.invoke("gaia-copilot", {
         body: { action: "chat", question: q, history },
       });
@@ -193,7 +413,7 @@ export function GaiaCopilot() {
       setChat((c) => [...c, { role: "assistant", content: d.markdown! }]);
     } catch (e: unknown) {
       const msg = await formatFunctionError(e);
-      toast({ title: "Erreur", description: msg, variant: "destructive" });
+      toast({ title: "Erreur", description: msg.slice(0, 200), variant: "destructive" });
       setChat((c) => [...c, { role: "assistant", content: `⚠️ ${msg}` }]);
     } finally {
       setChatLoading(false);
@@ -219,22 +439,29 @@ export function GaiaCopilot() {
                 <><Sparkles className="mr-2 h-4 w-4" /> Générer la revue du mois</>
               )}
             </Button>
-            {revue && (
+            {revueData && (
               <Button variant="outline" onClick={copyRevue}>
                 <Copy className="mr-2 h-4 w-4" /> Copier
               </Button>
             )}
           </div>
         </div>
-        {revueLoading && !revue && (
-          <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyse en cours… le modèle réfléchit avant d'écrire.
+        {revueLoading && !revueData && (
+          <div className="flex h-32 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Analyse en cours… le modèle réfléchit avant d'écrire.
+            </div>
+            {revueProgress > 0 && (
+              <div className="text-xs text-muted-foreground/70">
+                Assemblage des données ({revueProgress} caractères reçus)…
+              </div>
+            )}
           </div>
         )}
-        {revue && (
-          <div className="prose prose-sm prose-invert max-w-none rounded border border-border/60 bg-background/40 p-4">
-            <ReactMarkdown>{revue}</ReactMarkdown>
-            {revueLoading && <Loader2 className="mt-3 h-4 w-4 animate-spin text-muted-foreground" />}
+        {revueData && (
+          <div className="rounded border border-border/60 bg-background/40 p-4">
+            <RevueDashboard data={revueData} />
           </div>
         )}
         {revueError && (
@@ -242,7 +469,7 @@ export function GaiaCopilot() {
             {revueError}
           </pre>
         )}
-        {!revue && !revueLoading && !revueError && (
+        {!revueData && !revueLoading && !revueError && (
           <p className="text-sm text-muted-foreground">
             Le copilote analyse les vues Gaia et produit une revue chiffrée avec risques et actions prioritaires.
           </p>
@@ -326,14 +553,14 @@ export function GaiaCopilot() {
                 className={
                   m.role === "user"
                     ? "max-w-[85%] rounded-lg bg-primary/15 border border-primary/30 px-3 py-2 text-sm"
-                    : "max-w-[95%] rounded-lg bg-muted/40 border border-border/60 px-3 py-2 text-sm"
+                    : "max-w-[95%] rounded-lg bg-muted/40 border border-border/60 px-4 py-3 text-sm"
                 }
               >
                 {m.role === "user" ? (
                   <div className="whitespace-pre-wrap">{m.content}</div>
                 ) : (
-                  <div className="prose prose-sm prose-invert max-w-none">
-                    <ReactMarkdown>{m.content}</ReactMarkdown>
+                  <div className="chat-markdown">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
                   </div>
                 )}
               </div>
@@ -351,10 +578,7 @@ export function GaiaCopilot() {
 
         <form
           className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end"
-          onSubmit={(e) => {
-            e.preventDefault();
-            sendChat(chatInput);
-          }}
+          onSubmit={(e) => { e.preventDefault(); sendChat(chatInput); }}
         >
           <Textarea
             value={chatInput}

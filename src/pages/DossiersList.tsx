@@ -61,6 +61,7 @@ export default function DossiersList() {
   const { isAdmin } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
+  const [viewStats, setViewStats] = useState<Record<string, ViewStat>>({});
   const [loading, setLoading] = useState(true);
   const [toDelete, setToDelete] = useState<Project | null>(null);
   const [creating, setCreating] = useState(false);

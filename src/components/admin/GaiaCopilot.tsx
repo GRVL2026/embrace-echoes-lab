@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,9 +22,103 @@ const SUGGESTIONS = [
   "Que faire du stock dormant ?",
 ];
 
+async function formatFunctionError(error: unknown) {
+  if (error instanceof FunctionsHttpError) {
+    const response = error.context as Response;
+    let body = "";
+    try {
+      body = await response.clone().text();
+    } catch {
+      body = error.message;
+    }
+    return `HTTP ${response.status} ${response.statusText}\n${body}`;
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function streamRevue(onText: (delta: string) => void) {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw sessionError;
+  const token = sessionData.session?.access_token;
+  if (!token) throw new Error("Session expirée. Veuillez vous reconnecter.");
+
+  const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gaia-copilot`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ action: "revue" }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`HTTP ${response.status} ${response.statusText}\n${body}`);
+  }
+  if (!response.body) throw new Error("HTTP 200 sans flux de réponse");
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let receivedText = false;
+  let debug: { input_chars?: number; stop_reason?: string | null } | null = null;
+
+  const consumeEvent = (event: string) => {
+    const eventName = event
+      .split(/\r?\n/)
+      .find((line) => line.startsWith("event:"))
+      ?.slice(6)
+      .trim();
+    const dataText = event
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trimStart())
+      .join("\n");
+    if (!dataText || dataText === "[DONE]") return;
+
+    let data: any;
+    try {
+      data = JSON.parse(dataText);
+    } catch {
+      return;
+    }
+    if (eventName === "gaia_debug") {
+      debug = data;
+      return;
+    }
+    if (eventName === "gaia_error") {
+      throw new Error(data?.error ? String(data.error) : dataText);
+    }
+    if (data?.type === "error") {
+      throw new Error(`Anthropic stream error: ${JSON.stringify(data)}`);
+    }
+    if (data?.type === "content_block_delta" && data?.delta?.type === "text_delta" && typeof data.delta.text === "string") {
+      receivedText = true;
+      onText(data.delta.text);
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    const events = buffer.split(/\r?\n\r?\n/);
+    buffer = events.pop() ?? "";
+    events.forEach(consumeEvent);
+    if (done) break;
+  }
+  if (buffer.trim()) consumeEvent(buffer);
+  if (!receivedText) {
+    throw new Error(
+      `HTTP 200 mais le flux ne contient aucun bloc de texte. debug=${JSON.stringify(debug ?? { stop_reason: "inconnu" })}`,
+    );
+  }
+}
+
 export function GaiaCopilot() {
   const [revueLoading, setRevueLoading] = useState(false);
   const [revue, setRevue] = useState<string | null>(null);
+  const [revueError, setRevueError] = useState<string | null>(null);
 
   const [devis, setDevis] = useState<DevisRelance[]>([]);
   const [dormants, setDormants] = useState<ClientDormant[]>([]);
@@ -58,14 +153,13 @@ export function GaiaCopilot() {
   const generateRevue = async () => {
     setRevueLoading(true);
     setRevue(null);
+    setRevueError(null);
     try {
-      const { data, error } = await supabase.functions.invoke("gaia-copilot", { body: { action: "revue" } });
-      if (error) throw error;
-      const d = data as { ok?: boolean; markdown?: string; error?: string };
-      if (!d?.ok || !d.markdown) throw new Error(d?.error ?? "Réponse vide");
-      setRevue(d.markdown);
-    } catch (e: any) {
-      toast({ title: "Erreur", description: e?.message ?? String(e), variant: "destructive" });
+      await streamRevue((delta) => setRevue((current) => `${current ?? ""}${delta}`));
+    } catch (e: unknown) {
+      const message = await formatFunctionError(e);
+      setRevueError(message);
+      toast({ title: "Erreur de génération", description: message, variant: "destructive" });
     } finally {
       setRevueLoading(false);
     }
@@ -97,8 +191,8 @@ export function GaiaCopilot() {
       const d = data as { ok?: boolean; markdown?: string; error?: string };
       if (!d?.ok || !d.markdown) throw new Error(d?.error ?? "Réponse vide");
       setChat((c) => [...c, { role: "assistant", content: d.markdown! }]);
-    } catch (e: any) {
-      const msg = e?.message ?? String(e);
+    } catch (e: unknown) {
+      const msg = await formatFunctionError(e);
       toast({ title: "Erreur", description: msg, variant: "destructive" });
       setChat((c) => [...c, { role: "assistant", content: `⚠️ ${msg}` }]);
     } finally {
@@ -134,15 +228,21 @@ export function GaiaCopilot() {
         </div>
         {revueLoading && !revue && (
           <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyse en cours… le modèle réfléchit avant d'écrire (30 à 60 s).
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyse en cours… le modèle réfléchit avant d'écrire.
           </div>
         )}
         {revue && (
           <div className="prose prose-sm prose-invert max-w-none rounded border border-border/60 bg-background/40 p-4">
             <ReactMarkdown>{revue}</ReactMarkdown>
+            {revueLoading && <Loader2 className="mt-3 h-4 w-4 animate-spin text-muted-foreground" />}
           </div>
         )}
-        {!revue && !revueLoading && (
+        {revueError && (
+          <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+            {revueError}
+          </pre>
+        )}
+        {!revue && !revueLoading && !revueError && (
           <p className="text-sm text-muted-foreground">
             Le copilote analyse les vues Gaia et produit une revue chiffrée avec risques et actions prioritaires.
           </p>

@@ -1,10 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
@@ -115,6 +110,126 @@ async function callAnthropic(systemPrompt: string, messages: Array<{ role: 'user
   return { markdown, stop_reason: stopReason, input_chars: inputChars };
 }
 
+async function callAnthropicStream(
+  systemPrompt: string,
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+) {
+  const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY manquant');
+
+  const payload = {
+    model: ANTHROPIC_MODEL,
+    max_tokens: 16000,
+    stream: true,
+    system: systemPrompt,
+    messages,
+  };
+  const payloadStr = JSON.stringify(payload);
+  const inputChars = payloadStr.length;
+
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  let eventBuffer = '';
+  let stopReason: string | null = null;
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  let heartbeat: number | undefined;
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      controller.enqueue(encoder.encode(`event: gaia_start\ndata: ${JSON.stringify({ input_chars: inputChars })}\n\n`));
+      heartbeat = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(`: gaia-heartbeat ${Date.now()}\n\n`));
+        } catch {
+          if (heartbeat !== undefined) clearInterval(heartbeat);
+        }
+      }, 10_000);
+
+      try {
+        const upstream = await fetch(ANTHROPIC_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': ANTHROPIC_VERSION,
+          },
+          body: payloadStr,
+        });
+
+        if (!upstream.ok) {
+          const body = await upstream.text();
+          controller.enqueue(encoder.encode(`event: gaia_error\ndata: ${JSON.stringify({
+            error: `Anthropic HTTP ${upstream.status} ${upstream.statusText}. Body: ${body}`,
+            status: upstream.status,
+          })}\n\n`));
+          controller.close();
+          return;
+        }
+        if (!upstream.body) {
+          controller.enqueue(encoder.encode(`event: gaia_error\ndata: ${JSON.stringify({ error: 'Anthropic 200 sans flux de réponse' })}\n\n`));
+          controller.close();
+          return;
+        }
+
+        reader = upstream.body.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          controller.enqueue(value);
+          eventBuffer += decoder.decode(value, { stream: true });
+          const events = eventBuffer.split(/\r?\n\r?\n/);
+          eventBuffer = events.pop() ?? '';
+          inspectEvents(events.join('\n\n'));
+        }
+        eventBuffer += decoder.decode();
+        inspectEvents(eventBuffer);
+        controller.enqueue(encoder.encode(`\n\nevent: gaia_debug\ndata: ${JSON.stringify({ input_chars: inputChars, stop_reason: stopReason })}\n\n`));
+        controller.close();
+      } catch (error) {
+        controller.enqueue(encoder.encode(`event: gaia_error\ndata: ${JSON.stringify({
+          error: error instanceof Error ? error.message : String(error),
+        })}\n\n`));
+        controller.close();
+      } finally {
+        if (heartbeat !== undefined) clearInterval(heartbeat);
+      }
+    },
+    cancel() {
+      if (heartbeat !== undefined) clearInterval(heartbeat);
+      reader?.cancel();
+    },
+  });
+
+  function inspectEvents(raw: string) {
+    for (const event of raw.split(/\r?\n\r?\n/)) {
+      const data = event
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trimStart())
+        .join('\n');
+      if (!data || data === '[DONE]') continue;
+      try {
+        const parsed = JSON.parse(data);
+        if (parsed?.type === 'message_delta' && parsed?.delta?.stop_reason != null) {
+          stopReason = parsed.delta.stop_reason;
+        }
+      } catch {
+        // Le flux original est relayé tel quel ; seuls les événements JSON complets sont inspectés.
+      }
+    }
+  }
+
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      ...corsHeaders,
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'X-Accel-Buffering': 'no',
+    },
+  });
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -122,7 +237,7 @@ Deno.serve(async (req) => {
   try {
     const authHeader = req.headers.get('Authorization') ?? '';
     if (!authHeader.startsWith('Bearer ')) {
-      return jsonResponse({ ok: false, error: 'Unauthorized: missing bearer token' }, 200);
+      return jsonResponse({ ok: false, error: 'Unauthorized: missing bearer token' }, 401);
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -136,7 +251,7 @@ Deno.serve(async (req) => {
     const jwt = authHeader.replace('Bearer ', '');
     const { data: userData, error: userErr } = await supabase.auth.getUser(jwt);
     if (userErr || !userData?.user) {
-      return jsonResponse({ ok: false, error: `Unauthorized: ${userErr?.message ?? 'session invalide'}` }, 200);
+      return jsonResponse({ ok: false, error: `Unauthorized: ${userErr?.message ?? 'session invalide'}` }, 401);
     }
 
     const { data: roleRow, error: roleErr } = await supabase
@@ -166,7 +281,7 @@ Deno.serve(async (req) => {
     } else if (action === 'chat') {
       const question = typeof body?.question === 'string' ? body.question.trim() : '';
       if (!question) {
-        return jsonResponse({ ok: false, error: 'question manquante' }, 200);
+        return jsonResponse({ ok: false, error: 'question manquante' }, 400);
       }
       const history = Array.isArray(body?.history) ? body.history : [];
       const cleanHistory = history
@@ -182,13 +297,18 @@ Deno.serve(async (req) => {
         { role: 'user', content: question },
       ];
     } else {
-      return jsonResponse({ ok: false, error: `Unknown action: ${action}` }, 200);
+      return jsonResponse({ ok: false, error: `Unknown action: ${action}` }, 400);
+    }
+
+    if (action === 'revue') {
+      return await callAnthropicStream(SYSTEM_PROMPT, messages);
     }
 
     const { markdown, stop_reason, input_chars } = await callAnthropic(SYSTEM_PROMPT, messages);
     return jsonResponse({ ok: true, markdown, debug: { input_chars, stop_reason } });
 
   } catch (e: any) {
-    return jsonResponse({ ok: false, error: e?.message ?? String(e) }, 200);
+    const status = Number.isInteger(e?.status) && e.status >= 400 && e.status <= 599 ? e.status : 500;
+    return jsonResponse({ ok: false, error: e?.message ?? String(e) }, status);
   }
 });

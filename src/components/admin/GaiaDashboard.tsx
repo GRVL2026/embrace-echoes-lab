@@ -485,13 +485,13 @@ function Panel({ title, action, children }: { title: string; action?: React.Reac
 function YearSelect({ value, years, onChange }: { value: number; years: number[]; onChange: (y: number) => void }) {
   return (
     <Select value={String(value)} onValueChange={(v) => onChange(Number(v))}>
-      <SelectTrigger className="h-8 w-32">
+      <SelectTrigger className="h-8 w-40">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
         {years.map((y) => (
           <SelectItem key={y} value={String(y)}>
-            {y}
+            {exShort(y)}
           </SelectItem>
         ))}
       </SelectContent>

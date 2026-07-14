@@ -756,7 +756,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
 
               <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
                 <div className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">
-                  Flop 5 — taux de marge le plus faible (CA &gt; 20 000 €)
+                  Flop 5 — taux de marque le plus faible (CA &gt; 20 000 €)
                 </div>
                 <div className="overflow-auto">
                   <table className="w-full text-sm">

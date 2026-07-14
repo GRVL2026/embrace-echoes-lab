@@ -8,6 +8,7 @@ import DossiersList from "./pages/DossiersList";
 import DossierEdit from "./pages/DossierEdit";
 import AdminDossiers from "./pages/AdminDossiers";
 import AdminGaia from "./pages/AdminGaia";
+import GaiaClientFiche from "./pages/GaiaClientFiche";
 import GaiaRevueView from "./pages/GaiaRevueView";
 import NotFound from "./pages/NotFound";
 import PublicDossier from "./pages/PublicDossier";

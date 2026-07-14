@@ -383,10 +383,37 @@ function SpacePlannerInner() {
   );
 }
 
-const SpacePlanner = () => (
-  <EditorProvider>
-    <SpacePlannerInner />
-  </EditorProvider>
-);
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Monitor } from "lucide-react";
+
+const SpacePlanner = () => {
+  const isMobile = useIsMobile();
+  if (isMobile) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-foreground px-6">
+        <div className="max-w-sm text-center space-y-4">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/15 text-primary">
+            <Monitor className="h-8 w-8" />
+          </div>
+          <h1 className="font-display text-2xl font-bold">Le planner s'utilise sur ordinateur</h1>
+          <p className="text-sm text-muted-foreground">
+            L'édition 3D des salles n'est pas optimisée pour le tactile. Ouvre Arcade Planner sur un ordinateur pour concevoir tes plans.
+          </p>
+          <Button asChild variant="default" className="min-h-11">
+            <Link to="/dossiers">
+              <FolderKanban className="mr-2 h-4 w-4" />
+              Retour aux dossiers
+            </Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <EditorProvider>
+      <SpacePlannerInner />
+    </EditorProvider>
+  );
+};
 
 export default SpacePlanner;

@@ -143,10 +143,21 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
 
   const famillesData = useMemo(() => {
     const filtered = caFamille.filter((r) => r.annee === yearFamille);
-    return [...filtered]
-      .sort((a, b) => Number(b.ca_ht) - Number(a.ca_ht))
-      .map((r) => ({ name: r.famille || "—", value: Number(r.ca_ht || 0) }));
+    const sorted = [...filtered]
+      .map((r) => ({ name: r.famille || "—", value: Number(r.ca_ht || 0) }))
+      .sort((a, b) => b.value - a.value);
+    if (sorted.length <= 6) {
+      return sorted.map((r, i) => ({ ...r, color: i < 5 ? FAMILY_COLORS[i] : OTHERS_COLOR }));
+    }
+    const top = sorted.slice(0, 5).map((r, i) => ({ ...r, color: FAMILY_COLORS[i] }));
+    const othersValue = sorted.slice(5).reduce((n, r) => n + r.value, 0);
+    return [...top, { name: "Autres", value: othersValue, color: OTHERS_COLOR }];
   }, [caFamille, yearFamille]);
+
+  const famillesTotal = useMemo(
+    () => famillesData.reduce((n, r) => n + r.value, 0),
+    [famillesData]
+  );
 
   const ecotaxeTotal = ecotaxe.reduce((n, r) => n + Number(r.ecotaxe_ht || 0), 0);
   const ecotaxeChart = ecotaxe

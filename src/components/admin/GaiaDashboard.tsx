@@ -202,6 +202,93 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
     .sort((a, b) => a.mois - b.mois)
     .map((r) => ({ mois: MOIS_CAL[(r.mois - 1) % 12], value: Number(r.ecotaxe_ht || 0) }));
 
+  // ===== Marge (estimée) =====
+  const yearsMarge = useMemo(() => {
+    const set = new Set<number>();
+    margeFamille.forEach((r) => set.add(Number(r.annee)));
+    margeClient.forEach((r) => set.add(Number(r.annee)));
+    return Array.from(set).sort((a, b) => b - a);
+  }, [margeFamille, margeClient]);
+
+  const margeFamilleYear = useMemo(
+    () => margeFamille.filter((r) => Number(r.annee) === yearMarge),
+    [margeFamille, yearMarge]
+  );
+  const margeClientYear = useMemo(
+    () => margeClient.filter((r) => Number(r.annee) === yearMarge),
+    [margeClient, yearMarge]
+  );
+
+  const margeGlobal = useMemo(() => {
+    const caHt = margeFamilleYear.reduce((n, r) => n + Number(r.ca_ht || 0), 0);
+    const caCout = margeFamilleYear.reduce((n, r) => n + Number(r.ca_avec_cout || 0), 0);
+    const marge = margeFamilleYear.reduce((n, r) => n + Number(r.marge_estimee || 0), 0);
+    return {
+      caHt,
+      caCout,
+      marge,
+      taux: caCout > 0 ? (marge / caCout) * 100 : 0,
+      couverture: caHt > 0 ? (caCout / caHt) * 100 : 0,
+    };
+  }, [margeFamilleYear]);
+
+  const margeFamilleTable = useMemo(() => {
+    return [...margeFamilleYear]
+      .map((r) => {
+        const caCout = Number(r.ca_avec_cout || 0);
+        const marge = Number(r.marge_estimee || 0);
+        return {
+          famille: r.famille || "—",
+          ca: Number(r.ca_ht || 0),
+          caCout,
+          marge,
+          taux: caCout > 0 ? (marge / caCout) * 100 : 0,
+        };
+      })
+      .sort((a, b) => b.marge - a.marge);
+  }, [margeFamilleYear]);
+
+  const maxTauxFamille = useMemo(
+    () => margeFamilleTable.reduce((m, r) => (r.taux > m ? r.taux : m), 0),
+    [margeFamilleTable]
+  );
+
+  const topClientsMarge = useMemo(() => {
+    return [...margeClientYear]
+      .map((r) => {
+        const caCout = Number(r.ca_avec_cout || 0);
+        const marge = Number(r.marge_estimee || 0);
+        return {
+          client: r.client || "—",
+          ca: Number(r.ca_ht || 0),
+          caCout,
+          marge,
+          taux: caCout > 0 ? (marge / caCout) * 100 : 0,
+        };
+      })
+      .sort((a, b) => b.marge - a.marge)
+      .slice(0, 10);
+  }, [margeClientYear]);
+
+  const flopClientsMarge = useMemo(() => {
+    return [...margeClientYear]
+      .map((r) => {
+        const caCout = Number(r.ca_avec_cout || 0);
+        const marge = Number(r.marge_estimee || 0);
+        return {
+          client: r.client || "—",
+          ca: Number(r.ca_ht || 0),
+          caCout,
+          marge,
+          taux: caCout > 0 ? (marge / caCout) * 100 : 0,
+        };
+      })
+      .filter((r) => r.ca > 20_000 && r.caCout > 0)
+      .sort((a, b) => a.taux - b.taux)
+      .slice(0, 5);
+  }, [margeClientYear]);
+
+
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center text-muted-foreground">

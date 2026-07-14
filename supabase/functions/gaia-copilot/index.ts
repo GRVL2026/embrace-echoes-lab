@@ -113,6 +113,7 @@ async function callAnthropic(systemPrompt: string, messages: Array<{ role: 'user
 async function callAnthropicStream(
   systemPrompt: string,
   messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+  extraPayload: Record<string, unknown> = {},
 ) {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY manquant');
@@ -123,6 +124,7 @@ async function callAnthropicStream(
     stream: true,
     system: systemPrompt,
     messages,
+    ...extraPayload,
   };
   const payloadStr = JSON.stringify(payload);
   const inputChars = payloadStr.length;

@@ -67,10 +67,10 @@ export default function GaiaRevueView() {
         <div className="flex items-center gap-2 min-w-0">
           <MobileNav />
           <Link to="/dossiers" className="flex items-center gap-2 min-w-0">
-            <img src={logoImg} alt="Arcade Planner logo" className="h-7 w-auto object-contain flex-shrink-0" />
+            <img src={logoImg} alt="Arcade OS logo" className="h-7 w-auto object-contain flex-shrink-0" />
             <h1 className="font-display text-base sm:text-xl font-bold tracking-tight truncate">
               <span className="text-primary text-glow-purple">Arcade</span>{" "}
-              <span className="text-secondary text-glow-green">Planner</span>
+              <span className="text-secondary text-glow-green">OS</span>
             </h1>
           </Link>
         </div>

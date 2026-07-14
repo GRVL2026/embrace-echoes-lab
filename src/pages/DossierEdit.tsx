@@ -582,10 +582,10 @@ export default function DossierEdit() {
       <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-3 sm:px-6 gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <Link to="/" className="flex items-center gap-2 min-w-0">
-            <img src={logoImg} alt="Arcade Planner logo" className="h-7 w-auto object-contain flex-shrink-0" />
+            <img src={logoImg} alt="Arcade OS logo" className="h-7 w-auto object-contain flex-shrink-0" />
             <h1 className="font-display text-base sm:text-xl font-bold tracking-tight truncate">
               <span className="text-primary text-glow-purple">Arcade</span>{" "}
-              <span className="text-secondary text-glow-green">Planner</span>
+              <span className="text-secondary text-glow-green">OS</span>
             </h1>
           </Link>
           <span className="hidden sm:inline-block rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">

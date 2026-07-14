@@ -554,6 +554,175 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
           </Panel>
         </div>
       </div>
+
+      {/* ===== Marge (estimée) ===== */}
+      <Panel
+        title="Marge (estimée)"
+        action={
+          <YearSelect
+            value={yearMarge}
+            years={yearsMarge.length ? yearsMarge : [currentYear]}
+            onChange={setYearMarge}
+          />
+        }
+      >
+        {margeFamilleYear.length === 0 && margeClientYear.length === 0 ? (
+          <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+            Aucune donnée de marge pour {exShort(yearMarge)}.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <div className="rounded-lg border border-primary/40 bg-primary/5 p-4 lg:col-span-1">
+                <div className="mb-1 text-xs uppercase tracking-wider text-muted-foreground">
+                  Taux de marge global
+                </div>
+                <div className="font-display text-3xl font-bold text-primary text-glow-purple">
+                  {margeGlobal.taux.toFixed(1)}%
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Marge estimée : <span className="text-foreground">{eur(margeGlobal.marge)}</span> sur{" "}
+                  <span className="text-foreground">{eur(margeGlobal.caCout)}</span> de CA analysé
+                </div>
+                <div className="mt-2 text-[11px] text-muted-foreground">
+                  sur {margeGlobal.couverture.toFixed(0)}% du CA analysé ({eur(margeGlobal.caCout)} /{" "}
+                  {eur(margeGlobal.caHt)})
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border bg-card/40 p-4 lg:col-span-2">
+                <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Marge par famille</span>
+                  <span>Trié par marge estimée</span>
+                </div>
+                <div className="max-h-72 overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-xs uppercase text-muted-foreground">
+                      <tr className="border-b border-border">
+                        <th className="px-2 py-2 text-left">Famille</th>
+                        <th className="px-2 py-2 text-right">CA</th>
+                        <th className="px-2 py-2 text-right">Marge est.</th>
+                        <th className="px-2 py-2 text-left w-56">Taux</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {margeFamilleTable.map((r) => {
+                        const pct = maxTauxFamille > 0 ? (r.taux / maxTauxFamille) * 100 : 0;
+                        return (
+                          <tr key={r.famille} className="border-b border-border/40 hover:bg-muted/30">
+                            <td className="px-2 py-2 truncate max-w-[220px]">{r.famille}</td>
+                            <td className="px-2 py-2 text-right tabular-nums">{eur(r.ca)}</td>
+                            <td className="px-2 py-2 text-right tabular-nums font-medium">{eur(r.marge)}</td>
+                            <td className="px-2 py-2">
+                              <div className="flex items-center gap-2">
+                                <div className="h-2 flex-1 overflow-hidden rounded bg-muted/50">
+                                  <div
+                                    className="h-full rounded bg-primary"
+                                    style={{ width: `${Math.max(2, pct)}%` }}
+                                  />
+                                </div>
+                                <span className="w-12 text-right text-xs tabular-nums text-muted-foreground">
+                                  {r.taux.toFixed(1)}%
+                                </span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div className="rounded-lg border border-border bg-card/40 p-4">
+                <div className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">
+                  Top 10 clients — marge estimée
+                </div>
+                <div className="overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-xs uppercase text-muted-foreground">
+                      <tr className="border-b border-border">
+                        <th className="px-2 py-2 text-left">#</th>
+                        <th className="px-2 py-2 text-left">Client</th>
+                        <th className="px-2 py-2 text-right">CA</th>
+                        <th className="px-2 py-2 text-right">Marge</th>
+                        <th className="px-2 py-2 text-right">Taux</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {topClientsMarge.map((r, i) => (
+                        <tr key={r.client + i} className="border-b border-border/40 hover:bg-muted/30">
+                          <td className="px-2 py-2 font-mono text-xs text-muted-foreground">{i + 1}</td>
+                          <td className="px-2 py-2 truncate max-w-[180px]">{r.client}</td>
+                          <td className="px-2 py-2 text-right tabular-nums">{eur(r.ca)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums font-medium">{eur(r.marge)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                            {r.taux.toFixed(1)}%
+                          </td>
+                        </tr>
+                      ))}
+                      {topClientsMarge.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-2 py-6 text-center text-muted-foreground">
+                            Aucun client.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+                <div className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">
+                  Flop 5 — taux de marge le plus faible (CA &gt; 20 000 €)
+                </div>
+                <div className="overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-xs uppercase text-muted-foreground">
+                      <tr className="border-b border-border">
+                        <th className="px-2 py-2 text-left">#</th>
+                        <th className="px-2 py-2 text-left">Client</th>
+                        <th className="px-2 py-2 text-right">CA</th>
+                        <th className="px-2 py-2 text-right">Marge</th>
+                        <th className="px-2 py-2 text-right">Taux</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {flopClientsMarge.map((r, i) => (
+                        <tr key={r.client + i} className="border-b border-border/40 hover:bg-muted/30">
+                          <td className="px-2 py-2 font-mono text-xs text-muted-foreground">{i + 1}</td>
+                          <td className="px-2 py-2 truncate max-w-[180px]">{r.client}</td>
+                          <td className="px-2 py-2 text-right tabular-nums">{eur(r.ca)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums">{eur(r.marge)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums font-medium text-destructive">
+                            {r.taux.toFixed(1)}%
+                          </td>
+                        </tr>
+                      ))}
+                      {flopClientsMarge.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-2 py-6 text-center text-muted-foreground">
+                            Aucun client au-dessus de 20 000 € de CA.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded border border-border/60 bg-background/40 px-3 py-2 text-xs text-muted-foreground">
+              ⓘ Marge estimée sur la base du dernier coût d'achat connu. Elle ne
+              couvre que la part du CA pour laquelle un coût est disponible
+              ({margeGlobal.couverture.toFixed(0)}% du CA sur {exShort(yearMarge)}).
+            </div>
+          </div>
+        )}
+      </Panel>
     </div>
   );
 }

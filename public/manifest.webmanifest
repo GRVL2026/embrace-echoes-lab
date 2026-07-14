@@ -1,7 +1,7 @@
 {
-  "name": "Arcade Planner",
+  "name": "Arcade OS",
   "short_name": "Arcade",
-  "description": "Planificateur de salles d'arcade — dossiers commerciaux.",
+  "description": "Arcade OS — plateforme commerciale et éditeur de plans (Arcade Planner).",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

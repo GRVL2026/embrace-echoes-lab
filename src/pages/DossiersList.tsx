@@ -171,10 +171,10 @@ export default function DossiersList() {
             <MobileNav />
           </div>
           <Link to="/dossiers" className="flex items-center gap-2 min-w-0">
-            <img src={logoImg} alt="Arcade Planner logo" className="h-6 sm:h-7 w-auto object-contain flex-shrink-0" />
+            <img src={logoImg} alt="Arcade OS logo" className="h-6 sm:h-7 w-auto object-contain flex-shrink-0" />
             <h1 className="font-display text-sm sm:text-xl font-bold tracking-tight whitespace-nowrap truncate">
               <span className="text-primary text-glow-purple">Arcade</span>{" "}
-              <span className="text-secondary text-glow-green">Planner</span>
+              <span className="text-secondary text-glow-green">OS</span>
             </h1>
           </Link>
           <nav className="ml-4 hidden md:flex items-center gap-1">

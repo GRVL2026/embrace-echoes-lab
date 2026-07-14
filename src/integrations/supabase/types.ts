@@ -426,6 +426,35 @@ export type Database = {
           },
         ]
       }
+      dossier_vues: {
+        Row: {
+          id: number
+          project_id: string
+          user_agent: string | null
+          viewed_at: string
+        }
+        Insert: {
+          id?: never
+          project_id: string
+          user_agent?: string | null
+          viewed_at?: string
+        }
+        Update: {
+          id?: never
+          project_id?: string
+          user_agent?: string | null
+          viewed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dossier_vues_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       external_asset_sources: {
         Row: {
           created_at: string
@@ -896,6 +925,7 @@ export type Database = {
           solution: Json
           status: string
           updated_at: string
+          views_seen_at: string | null
         }
         Insert: {
           brand_id?: string | null
@@ -922,6 +952,7 @@ export type Database = {
           solution?: Json
           status?: string
           updated_at?: string
+          views_seen_at?: string | null
         }
         Update: {
           brand_id?: string | null
@@ -948,6 +979,7 @@ export type Database = {
           solution?: Json
           status?: string
           updated_at?: string
+          views_seen_at?: string | null
         }
         Relationships: [
           {
@@ -1104,6 +1136,14 @@ export type Database = {
         }
         Relationships: []
       }
+      v_gaia_cout_article: {
+        Row: {
+          code: string | null
+          cout_unitaire: number | null
+          famille: string | null
+        }
+        Relationships: []
+      }
       v_gaia_devis_a_relancer: {
         Row: {
           age_jours: number | null
@@ -1142,7 +1182,41 @@ export type Database = {
           inventory_id: string | null
           invoice_date: string | null
           montant_ht: number | null
+          qty: number | null
           source: string | null
+        }
+        Relationships: []
+      }
+      v_gaia_marge_client: {
+        Row: {
+          annee: number | null
+          ca_avec_cout: number | null
+          ca_ht: number | null
+          client: string | null
+          marge_estimee: number | null
+        }
+        Relationships: []
+      }
+      v_gaia_marge_famille: {
+        Row: {
+          annee: number | null
+          ca_avec_cout: number | null
+          ca_ht: number | null
+          cout_estime: number | null
+          famille: string | null
+          marge_estimee: number | null
+        }
+        Relationships: []
+      }
+      v_gaia_parc_client: {
+        Row: {
+          client: string | null
+          code_article: string | null
+          code_client: string | null
+          derniere_vente: string | null
+          description: string | null
+          famille: string | null
+          quantite: number | null
         }
         Relationships: []
       }

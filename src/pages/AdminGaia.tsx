@@ -341,7 +341,7 @@ export default function AdminGaia() {
           </TabsContent>
 
           <TabsContent value="sync">
-        <div className="mb-6 flex items-center justify-between gap-4">
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div>
             <h3 className="font-display text-xl font-bold">Synchronisation Cegid</h3>
             <p className="text-sm text-muted-foreground">

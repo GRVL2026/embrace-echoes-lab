@@ -71,14 +71,37 @@ export default function DossiersList() {
     const [{ data: p, error: pe }, { data: b, error: be }] = await Promise.all([
       (supabase as any)
         .from("projects")
-        .select("id, brand_id, client_name, offer, status, updated_at")
+        .select("id, brand_id, client_name, offer, status, updated_at, is_shared, views_seen_at")
         .order("updated_at", { ascending: false }),
       (supabase as any).from("brands").select("id, name, color"),
     ]);
     if (pe) toast({ title: "Erreur", description: pe.message, variant: "destructive" });
     if (be) toast({ title: "Erreur", description: be.message, variant: "destructive" });
-    setProjects((p as Project[]) ?? []);
+    const projs = (p as Project[]) ?? [];
+    setProjects(projs);
     setBrands((b as Brand[]) ?? []);
+
+    // View stats for shared dossiers
+    const sharedIds = projs.filter((r) => r.is_shared).map((r) => r.id);
+    if (sharedIds.length > 0) {
+      const { data: v } = await (supabase as any)
+        .from("dossier_vues")
+        .select("project_id, viewed_at")
+        .in("project_id", sharedIds);
+      const stats: Record<string, ViewStat> = {};
+      const seenMap = new Map(projs.map((r) => [r.id, r.views_seen_at ?? null]));
+      for (const row of (v as any[]) ?? []) {
+        const s = stats[row.project_id] ?? { count: 0, last: null, hasNew: false };
+        s.count += 1;
+        if (!s.last || row.viewed_at > s.last) s.last = row.viewed_at;
+        const seen = seenMap.get(row.project_id) ?? null;
+        if (!seen || row.viewed_at > seen) s.hasNew = true;
+        stats[row.project_id] = s;
+      }
+      setViewStats(stats);
+    } else {
+      setViewStats({});
+    }
     setLoading(false);
   };
 

@@ -19,6 +19,9 @@ import {
   Cell,
 } from "recharts";
 
+const FAMILY_COLORS = ["#9B5CFF", "#ADFF00", "#00D4FF", "#FF8A00", "#FF4FA3"];
+const OTHERS_COLOR = "#6B7280";
+
 type CaMensuel = { mois: string; annee: number; ca_ht: number | string; lignes: number };
 type CaClient = { annee: number; code_client: string; client: string; ca_ht: number };
 type CaFamille = { annee: number; famille: string; ca_ht: number };

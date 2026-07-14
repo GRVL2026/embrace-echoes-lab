@@ -73,7 +73,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
     (async () => {
       setLoading(true);
       const client: any = supabase;
-      const [m, c, f, e, s, ec, pe, sfa, sl] = await Promise.all([
+      const [m, c, f, e, s, ec, pe, sfa, mf, mc, sl] = await Promise.all([
         client.from("v_gaia_ca_mensuel").select("*"),
         client.from("v_gaia_ca_client").select("*"),
         client.from("v_gaia_ca_famille").select("*"),
@@ -82,6 +82,8 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
         client.from("v_gaia_ecotaxe_mensuel").select("*"),
         client.from("v_gaia_ca_periode_egale").select("*"),
         client.from("v_gaia_retrocession_sfa").select("*"),
+        client.from("v_gaia_marge_famille").select("*"),
+        client.from("v_gaia_marge_client").select("*"),
         client.from("gaia_sync_log").select("finished_at").order("finished_at", { ascending: false }).limit(1).maybeSingle(),
       ]);
       setCaMensuel((m.data as CaMensuel[]) ?? []);
@@ -92,6 +94,8 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
       setEcotaxe((ec.data as EcotaxeMensuel[]) ?? []);
       setCaPeriodeEgale((pe.data as CaPeriodeEgale[]) ?? []);
       setRetroSfa((sfa.data as RetrocessionSfa[]) ?? []);
+      setMargeFamille((mf.data as MargeFamille[]) ?? []);
+      setMargeClient((mc.data as MargeClient[]) ?? []);
       setLastSync(sl.data?.finished_at ?? null);
       setLoading(false);
     })();

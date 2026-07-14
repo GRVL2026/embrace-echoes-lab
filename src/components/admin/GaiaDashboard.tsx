@@ -30,6 +30,8 @@ type StockValeur = { depot: string; quantite: number; valeur_achat: number; vale
 type EcotaxeMensuel = { mois: number; ecotaxe_ht: number };
 type CaPeriodeEgale = { annee: number; ca_ht: number | string };
 type RetrocessionSfa = { annee: number; mois?: number; montant_ht: number | string };
+type MargeFamille = { annee: number; famille: string | null; ca_ht: number | string; ca_avec_cout: number | string; cout_estime: number | string; marge_estimee: number | string };
+type MargeClient = { annee: number; client: string | null; ca_ht: number | string; ca_avec_cout: number | string; marge_estimee: number | string };
 
 const eur = (n: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);
@@ -58,17 +60,20 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
   const [ecotaxe, setEcotaxe] = useState<EcotaxeMensuel[]>([]);
   const [caPeriodeEgale, setCaPeriodeEgale] = useState<CaPeriodeEgale[]>([]);
   const [retroSfa, setRetroSfa] = useState<RetrocessionSfa[]>([]);
+  const [margeFamille, setMargeFamille] = useState<MargeFamille[]>([]);
+  const [margeClient, setMargeClient] = useState<MargeClient[]>([]);
   const [lastSync, setLastSync] = useState<string | null>(null);
 
   const currentYear = currentFiscalYear();
   const [yearClient, setYearClient] = useState<number>(currentYear);
   const [yearFamille, setYearFamille] = useState<number>(currentYear);
+  const [yearMarge, setYearMarge] = useState<number>(currentYear);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       const client: any = supabase;
-      const [m, c, f, e, s, ec, pe, sfa, sl] = await Promise.all([
+      const [m, c, f, e, s, ec, pe, sfa, mf, mc, sl] = await Promise.all([
         client.from("v_gaia_ca_mensuel").select("*"),
         client.from("v_gaia_ca_client").select("*"),
         client.from("v_gaia_ca_famille").select("*"),
@@ -77,6 +82,8 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
         client.from("v_gaia_ecotaxe_mensuel").select("*"),
         client.from("v_gaia_ca_periode_egale").select("*"),
         client.from("v_gaia_retrocession_sfa").select("*"),
+        client.from("v_gaia_marge_famille").select("*"),
+        client.from("v_gaia_marge_client").select("*"),
         client.from("gaia_sync_log").select("finished_at").order("finished_at", { ascending: false }).limit(1).maybeSingle(),
       ]);
       setCaMensuel((m.data as CaMensuel[]) ?? []);
@@ -87,6 +94,8 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
       setEcotaxe((ec.data as EcotaxeMensuel[]) ?? []);
       setCaPeriodeEgale((pe.data as CaPeriodeEgale[]) ?? []);
       setRetroSfa((sfa.data as RetrocessionSfa[]) ?? []);
+      setMargeFamille((mf.data as MargeFamille[]) ?? []);
+      setMargeClient((mc.data as MargeClient[]) ?? []);
       setLastSync(sl.data?.finished_at ?? null);
       setLoading(false);
     })();
@@ -192,6 +201,93 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
     .slice()
     .sort((a, b) => a.mois - b.mois)
     .map((r) => ({ mois: MOIS_CAL[(r.mois - 1) % 12], value: Number(r.ecotaxe_ht || 0) }));
+
+  // ===== Marge (estimée) =====
+  const yearsMarge = useMemo(() => {
+    const set = new Set<number>();
+    margeFamille.forEach((r) => set.add(Number(r.annee)));
+    margeClient.forEach((r) => set.add(Number(r.annee)));
+    return Array.from(set).sort((a, b) => b - a);
+  }, [margeFamille, margeClient]);
+
+  const margeFamilleYear = useMemo(
+    () => margeFamille.filter((r) => Number(r.annee) === yearMarge),
+    [margeFamille, yearMarge]
+  );
+  const margeClientYear = useMemo(
+    () => margeClient.filter((r) => Number(r.annee) === yearMarge),
+    [margeClient, yearMarge]
+  );
+
+  const margeGlobal = useMemo(() => {
+    const caHt = margeFamilleYear.reduce((n, r) => n + Number(r.ca_ht || 0), 0);
+    const caCout = margeFamilleYear.reduce((n, r) => n + Number(r.ca_avec_cout || 0), 0);
+    const marge = margeFamilleYear.reduce((n, r) => n + Number(r.marge_estimee || 0), 0);
+    return {
+      caHt,
+      caCout,
+      marge,
+      taux: caCout > 0 ? (marge / caCout) * 100 : 0,
+      couverture: caHt > 0 ? (caCout / caHt) * 100 : 0,
+    };
+  }, [margeFamilleYear]);
+
+  const margeFamilleTable = useMemo(() => {
+    return [...margeFamilleYear]
+      .map((r) => {
+        const caCout = Number(r.ca_avec_cout || 0);
+        const marge = Number(r.marge_estimee || 0);
+        return {
+          famille: r.famille || "—",
+          ca: Number(r.ca_ht || 0),
+          caCout,
+          marge,
+          taux: caCout > 0 ? (marge / caCout) * 100 : 0,
+        };
+      })
+      .sort((a, b) => b.marge - a.marge);
+  }, [margeFamilleYear]);
+
+  const maxTauxFamille = useMemo(
+    () => margeFamilleTable.reduce((m, r) => (r.taux > m ? r.taux : m), 0),
+    [margeFamilleTable]
+  );
+
+  const topClientsMarge = useMemo(() => {
+    return [...margeClientYear]
+      .map((r) => {
+        const caCout = Number(r.ca_avec_cout || 0);
+        const marge = Number(r.marge_estimee || 0);
+        return {
+          client: r.client || "—",
+          ca: Number(r.ca_ht || 0),
+          caCout,
+          marge,
+          taux: caCout > 0 ? (marge / caCout) * 100 : 0,
+        };
+      })
+      .sort((a, b) => b.marge - a.marge)
+      .slice(0, 10);
+  }, [margeClientYear]);
+
+  const flopClientsMarge = useMemo(() => {
+    return [...margeClientYear]
+      .map((r) => {
+        const caCout = Number(r.ca_avec_cout || 0);
+        const marge = Number(r.marge_estimee || 0);
+        return {
+          client: r.client || "—",
+          ca: Number(r.ca_ht || 0),
+          caCout,
+          marge,
+          taux: caCout > 0 ? (marge / caCout) * 100 : 0,
+        };
+      })
+      .filter((r) => r.ca > 20_000 && r.caCout > 0)
+      .sort((a, b) => a.taux - b.taux)
+      .slice(0, 5);
+  }, [margeClientYear]);
+
 
   if (loading) {
     return (
@@ -458,6 +554,175 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
           </Panel>
         </div>
       </div>
+
+      {/* ===== Marge (estimée) ===== */}
+      <Panel
+        title="Marge (estimée)"
+        action={
+          <YearSelect
+            value={yearMarge}
+            years={yearsMarge.length ? yearsMarge : [currentYear]}
+            onChange={setYearMarge}
+          />
+        }
+      >
+        {margeFamilleYear.length === 0 && margeClientYear.length === 0 ? (
+          <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+            Aucune donnée de marge pour {exShort(yearMarge)}.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <div className="rounded-lg border border-primary/40 bg-primary/5 p-4 lg:col-span-1">
+                <div className="mb-1 text-xs uppercase tracking-wider text-muted-foreground">
+                  Taux de marge global
+                </div>
+                <div className="font-display text-3xl font-bold text-primary text-glow-purple">
+                  {margeGlobal.taux.toFixed(1)}%
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Marge estimée : <span className="text-foreground">{eur(margeGlobal.marge)}</span> sur{" "}
+                  <span className="text-foreground">{eur(margeGlobal.caCout)}</span> de CA analysé
+                </div>
+                <div className="mt-2 text-[11px] text-muted-foreground">
+                  sur {margeGlobal.couverture.toFixed(0)}% du CA analysé ({eur(margeGlobal.caCout)} /{" "}
+                  {eur(margeGlobal.caHt)})
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border bg-card/40 p-4 lg:col-span-2">
+                <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Marge par famille</span>
+                  <span>Trié par marge estimée</span>
+                </div>
+                <div className="max-h-72 overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-xs uppercase text-muted-foreground">
+                      <tr className="border-b border-border">
+                        <th className="px-2 py-2 text-left">Famille</th>
+                        <th className="px-2 py-2 text-right">CA</th>
+                        <th className="px-2 py-2 text-right">Marge est.</th>
+                        <th className="px-2 py-2 text-left w-56">Taux</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {margeFamilleTable.map((r) => {
+                        const pct = maxTauxFamille > 0 ? (r.taux / maxTauxFamille) * 100 : 0;
+                        return (
+                          <tr key={r.famille} className="border-b border-border/40 hover:bg-muted/30">
+                            <td className="px-2 py-2 truncate max-w-[220px]">{r.famille}</td>
+                            <td className="px-2 py-2 text-right tabular-nums">{eur(r.ca)}</td>
+                            <td className="px-2 py-2 text-right tabular-nums font-medium">{eur(r.marge)}</td>
+                            <td className="px-2 py-2">
+                              <div className="flex items-center gap-2">
+                                <div className="h-2 flex-1 overflow-hidden rounded bg-muted/50">
+                                  <div
+                                    className="h-full rounded bg-primary"
+                                    style={{ width: `${Math.max(2, pct)}%` }}
+                                  />
+                                </div>
+                                <span className="w-12 text-right text-xs tabular-nums text-muted-foreground">
+                                  {r.taux.toFixed(1)}%
+                                </span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div className="rounded-lg border border-border bg-card/40 p-4">
+                <div className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">
+                  Top 10 clients — marge estimée
+                </div>
+                <div className="overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-xs uppercase text-muted-foreground">
+                      <tr className="border-b border-border">
+                        <th className="px-2 py-2 text-left">#</th>
+                        <th className="px-2 py-2 text-left">Client</th>
+                        <th className="px-2 py-2 text-right">CA</th>
+                        <th className="px-2 py-2 text-right">Marge</th>
+                        <th className="px-2 py-2 text-right">Taux</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {topClientsMarge.map((r, i) => (
+                        <tr key={r.client + i} className="border-b border-border/40 hover:bg-muted/30">
+                          <td className="px-2 py-2 font-mono text-xs text-muted-foreground">{i + 1}</td>
+                          <td className="px-2 py-2 truncate max-w-[180px]">{r.client}</td>
+                          <td className="px-2 py-2 text-right tabular-nums">{eur(r.ca)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums font-medium">{eur(r.marge)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                            {r.taux.toFixed(1)}%
+                          </td>
+                        </tr>
+                      ))}
+                      {topClientsMarge.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-2 py-6 text-center text-muted-foreground">
+                            Aucun client.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+                <div className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">
+                  Flop 5 — taux de marge le plus faible (CA &gt; 20 000 €)
+                </div>
+                <div className="overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-xs uppercase text-muted-foreground">
+                      <tr className="border-b border-border">
+                        <th className="px-2 py-2 text-left">#</th>
+                        <th className="px-2 py-2 text-left">Client</th>
+                        <th className="px-2 py-2 text-right">CA</th>
+                        <th className="px-2 py-2 text-right">Marge</th>
+                        <th className="px-2 py-2 text-right">Taux</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {flopClientsMarge.map((r, i) => (
+                        <tr key={r.client + i} className="border-b border-border/40 hover:bg-muted/30">
+                          <td className="px-2 py-2 font-mono text-xs text-muted-foreground">{i + 1}</td>
+                          <td className="px-2 py-2 truncate max-w-[180px]">{r.client}</td>
+                          <td className="px-2 py-2 text-right tabular-nums">{eur(r.ca)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums">{eur(r.marge)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums font-medium text-destructive">
+                            {r.taux.toFixed(1)}%
+                          </td>
+                        </tr>
+                      ))}
+                      {flopClientsMarge.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-2 py-6 text-center text-muted-foreground">
+                            Aucun client au-dessus de 20 000 € de CA.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded border border-border/60 bg-background/40 px-3 py-2 text-xs text-muted-foreground">
+              ⓘ Marge estimée sur la base du dernier coût d'achat connu. Elle ne
+              couvre que la part du CA pour laquelle un coût est disponible
+              ({margeGlobal.couverture.toFixed(0)}% du CA sur {exShort(yearMarge)}).
+            </div>
+          </div>
+        )}
+      </Panel>
     </div>
   );
 }

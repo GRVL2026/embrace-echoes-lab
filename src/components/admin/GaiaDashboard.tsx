@@ -30,6 +30,8 @@ type StockValeur = { depot: string; quantite: number; valeur_achat: number; vale
 type EcotaxeMensuel = { mois: number; ecotaxe_ht: number };
 type CaPeriodeEgale = { annee: number; ca_ht: number | string };
 type RetrocessionSfa = { annee: number; mois?: number; montant_ht: number | string };
+type MargeFamille = { annee: number; famille: string | null; ca_ht: number | string; ca_avec_cout: number | string; cout_estime: number | string; marge_estimee: number | string };
+type MargeClient = { annee: number; client: string | null; ca_ht: number | string; ca_avec_cout: number | string; marge_estimee: number | string };
 
 const eur = (n: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);

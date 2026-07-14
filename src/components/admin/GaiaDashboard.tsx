@@ -55,9 +55,10 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
   const [cmdEtat, setCmdEtat] = useState<CommandesEtat[]>([]);
   const [stock, setStock] = useState<StockValeur[]>([]);
   const [ecotaxe, setEcotaxe] = useState<EcotaxeMensuel[]>([]);
+  const [caPeriodeEgale, setCaPeriodeEgale] = useState<CaPeriodeEgale[]>([]);
   const [lastSync, setLastSync] = useState<string | null>(null);
 
-  const currentYear = new Date().getFullYear();
+  const currentYear = currentFiscalYear();
   const [yearClient, setYearClient] = useState<number>(currentYear);
   const [yearFamille, setYearFamille] = useState<number>(currentYear);
 

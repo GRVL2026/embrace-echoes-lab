@@ -291,6 +291,20 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
       .sort((a, b) => a.taux - b.taux)
       .slice(0, 5);
   }, [margeClientYear]);
+  // Liste des noms de clients pour la recherche (nom regroupé)
+  const clientNames = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of caClient) if (r.client) set.add(r.client);
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [caClient]);
+
+  const clientMatches = useMemo(() => {
+    const q = clientQuery.trim().toLowerCase();
+    if (!q) return [] as string[];
+    return clientNames.filter((n) => n.toLowerCase().includes(q)).slice(0, 8);
+  }, [clientNames, clientQuery]);
+
+  const openClient = (name: string) => navigate(`/admin/gaia/client/${encodeURIComponent(name)}`);
 
 
   if (loading) {

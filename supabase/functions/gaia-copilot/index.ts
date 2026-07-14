@@ -69,7 +69,7 @@ async function callAnthropic(systemPrompt: string, messages: Array<{ role: 'user
 
   const payload = {
     model: ANTHROPIC_MODEL,
-    max_tokens: 3500,
+    max_tokens: 16000,
     system: systemPrompt,
     messages,
   };

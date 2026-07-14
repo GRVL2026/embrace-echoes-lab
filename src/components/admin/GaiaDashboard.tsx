@@ -212,16 +212,16 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
       {/* KPI cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
-          title={`CA ${currentYear}`}
+          title="CA exercice en cours"
           value={eur(caCurrent)}
           hint={
             evolution === null ? (
-              <span className="text-muted-foreground">Pas de N-1</span>
+              <span className="text-muted-foreground">{exShort(currentYear)} · pas de comparatif</span>
             ) : (
               <span className={evolution >= 0 ? "text-secondary" : "text-destructive"}>
                 {evolution >= 0 ? <TrendingUp className="mr-1 inline h-3 w-3" /> : <TrendingDown className="mr-1 inline h-3 w-3" />}
                 {evolution >= 0 ? "+" : ""}
-                {evolution.toFixed(1)}% vs {currentYear - 1} ({eur(caPrev)})
+                {evolution.toFixed(1)}% vs {exShort(currentYear - 1)} à période égale ({eur(caPrev)})
               </span>
             )
           }

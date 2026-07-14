@@ -465,6 +465,21 @@ export type Database = {
         }
         Relationships: []
       }
+      gaia_client_groupes: {
+        Row: {
+          code_client: string
+          groupe: string
+        }
+        Insert: {
+          code_client: string
+          groupe: string
+        }
+        Update: {
+          code_client?: string
+          groupe?: string
+        }
+        Relationships: []
+      }
       gaia_clients: {
         Row: {
           customer_id: string

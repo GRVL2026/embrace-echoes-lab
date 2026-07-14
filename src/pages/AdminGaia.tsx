@@ -329,10 +329,15 @@ export default function AdminGaia() {
         </div>
 
         <Tabs defaultValue="dashboard" className="w-full">
-          <TabsList className="mb-6">
+          <TabsList className="mb-6 flex-wrap">
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            <TabsTrigger value="copilot">Copilote</TabsTrigger>
             <TabsTrigger value="sync">Synchronisation</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="copilot">
+            <GaiaCopilot />
+          </TabsContent>
 
           <TabsContent value="dashboard">
             <GaiaDashboard onGoToSync={() => {

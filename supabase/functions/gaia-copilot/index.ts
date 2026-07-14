@@ -179,21 +179,6 @@ async function loadData(admin: any) {
   };
 }
 
-  return {
-    annee_courante: currentYear,
-    annee_precedente: prevYear,
-    ca_mensuel: caMensuel.data ?? [],
-    ca_periode_egale: caPeriodeEgale.data ?? [],
-    ca_famille: caFamille.data ?? [],
-    top15_clients_annee_courante: caClientCurrent.data ?? [],
-    top15_clients_annee_precedente: caClientPrev.data ?? [],
-    commandes_etat: commandesEtat.data ?? [],
-    stock_valeur: stockValeur.data ?? [],
-    top20_devis_a_relancer: devisRelance.data ?? [],
-    top20_clients_dormants: clientsDormants.data ?? [],
-    top20_stock_dormant: stockDormant.data ?? [],
-  };
-}
 
 async function callAnthropic(systemPrompt: string, messages: Array<{ role: 'user' | 'assistant'; content: string }>) {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');

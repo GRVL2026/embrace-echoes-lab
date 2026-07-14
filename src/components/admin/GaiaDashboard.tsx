@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, TrendingUp, TrendingDown, FileText, FileSignature, Package, Leaf, RefreshCw, ArrowRight } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, FileText, FileSignature, Package, Leaf, RefreshCw, ArrowRight, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ResponsiveContainer,
@@ -51,7 +53,9 @@ function currentFiscalYear(d: Date = new Date()) {
 }
 
 export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [clientQuery, setClientQuery] = useState("");
   const [caMensuel, setCaMensuel] = useState<CaMensuel[]>([]);
   const [caClient, setCaClient] = useState<CaClient[]>([]);
   const [caFamille, setCaFamille] = useState<CaFamille[]>([]);
@@ -287,6 +291,20 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
       .sort((a, b) => a.taux - b.taux)
       .slice(0, 5);
   }, [margeClientYear]);
+  // Liste des noms de clients pour la recherche (nom regroupé)
+  const clientNames = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of caClient) if (r.client) set.add(r.client);
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [caClient]);
+
+  const clientMatches = useMemo(() => {
+    const q = clientQuery.trim().toLowerCase();
+    if (!q) return [] as string[];
+    return clientNames.filter((n) => n.toLowerCase().includes(q)).slice(0, 8);
+  }, [clientNames, clientQuery]);
+
+  const openClient = (name: string) => navigate(`/admin/gaia/client/${encodeURIComponent(name)}`);
 
 
   if (loading) {
@@ -299,8 +317,8 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
 
   return (
     <div className="space-y-6">
-      {/* Header sync info */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card/40 px-4 py-3 text-sm">
+      {/* Header sync info + recherche client */}
+      <div className="flex flex-col gap-3 rounded-lg border border-border bg-card/40 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2 text-muted-foreground">
           <RefreshCw className="h-4 w-4" />
           Dernière synchronisation :{" "}
@@ -308,9 +326,40 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
             {lastSync ? new Date(lastSync).toLocaleString("fr-FR") : "jamais"}
           </span>
         </div>
-        <Button variant="outline" size="sm" onClick={onGoToSync}>
-          Aller à la synchronisation <ArrowRight className="ml-2 h-3 w-3" />
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={clientQuery}
+              onChange={(e) => setClientQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && clientMatches[0]) openClient(clientMatches[0]);
+              }}
+              placeholder="Rechercher un client…"
+              className="h-8 pl-8"
+            />
+            {clientQuery && clientMatches.length > 0 && (
+              <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-auto rounded-md border border-border bg-popover shadow-xl">
+                {clientMatches.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => {
+                      setClientQuery("");
+                      openClient(n);
+                    }}
+                    className="block w-full truncate px-3 py-2 text-left text-sm hover:bg-muted"
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <Button variant="outline" size="sm" onClick={onGoToSync}>
+            Aller à la synchronisation <ArrowRight className="ml-2 h-3 w-3" />
+          </Button>
+        </div>
       </div>
 
       {/* KPI cards */}
@@ -424,7 +473,14 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
                 {topClients.map((r) => (
                   <tr key={r.code} className="border-b border-border/40 hover:bg-muted/30">
                     <td className="px-2 py-2 font-mono text-xs text-muted-foreground">{r.rang}</td>
-                    <td className="px-2 py-2">{r.client}</td>
+                    <td className="px-2 py-2">
+                      <Link
+                        to={`/admin/gaia/client/${encodeURIComponent(r.client)}`}
+                        className="text-foreground hover:text-primary hover:underline"
+                      >
+                        {r.client}
+                      </Link>
+                    </td>
                     <td className="px-2 py-2 text-right font-medium">{eur(r.ca)}</td>
                     <td className="px-2 py-2 text-right text-muted-foreground">{r.part.toFixed(1)}%</td>
                   </tr>
@@ -655,7 +711,14 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
                       {topClientsMarge.map((r, i) => (
                         <tr key={r.client + i} className="border-b border-border/40 hover:bg-muted/30">
                           <td className="px-2 py-2 font-mono text-xs text-muted-foreground">{i + 1}</td>
-                          <td className="px-2 py-2 truncate max-w-[180px]">{r.client}</td>
+                          <td className="px-2 py-2 truncate max-w-[180px]">
+                            <Link
+                              to={`/admin/gaia/client/${encodeURIComponent(r.client)}`}
+                              className="text-foreground hover:text-primary hover:underline"
+                            >
+                              {r.client}
+                            </Link>
+                          </td>
                           <td className="px-2 py-2 text-right tabular-nums">{eur(r.ca)}</td>
                           <td className="px-2 py-2 text-right tabular-nums font-medium">{eur(r.marge)}</td>
                           <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
@@ -694,7 +757,14 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
                       {flopClientsMarge.map((r, i) => (
                         <tr key={r.client + i} className="border-b border-border/40 hover:bg-muted/30">
                           <td className="px-2 py-2 font-mono text-xs text-muted-foreground">{i + 1}</td>
-                          <td className="px-2 py-2 truncate max-w-[180px]">{r.client}</td>
+                          <td className="px-2 py-2 truncate max-w-[180px]">
+                            <Link
+                              to={`/admin/gaia/client/${encodeURIComponent(r.client)}`}
+                              className="text-foreground hover:text-primary hover:underline"
+                            >
+                              {r.client}
+                            </Link>
+                          </td>
                           <td className="px-2 py-2 text-right tabular-nums">{eur(r.ca)}</td>
                           <td className="px-2 py-2 text-right tabular-nums">{eur(r.marge)}</td>
                           <td className="px-2 py-2 text-right tabular-nums font-medium text-destructive">

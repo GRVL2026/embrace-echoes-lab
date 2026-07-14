@@ -8,6 +8,7 @@ import DossiersList from "./pages/DossiersList";
 import DossierEdit from "./pages/DossierEdit";
 import AdminDossiers from "./pages/AdminDossiers";
 import AdminGaia from "./pages/AdminGaia";
+import GaiaClientFiche from "./pages/GaiaClientFiche";
 import GaiaRevueView from "./pages/GaiaRevueView";
 import NotFound from "./pages/NotFound";
 import PublicDossier from "./pages/PublicDossier";
@@ -39,6 +40,7 @@ const App = () => (
             <Route path="/dossiers/:id" element={<ProtectedRoute><DossierEdit /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute><AdminDossiers /></ProtectedRoute>} />
             <Route path="/admin/gaia" element={<ProtectedRoute><AdminGaia /></ProtectedRoute>} />
+            <Route path="/admin/gaia/client/:nom" element={<ProtectedRoute><GaiaClientFiche /></ProtectedRoute>} />
             <Route path="/admin/gaia/revue/:id" element={<ProtectedRoute><GaiaRevueView /></ProtectedRoute>} />
 
             <Route path="*" element={<NotFound />} />

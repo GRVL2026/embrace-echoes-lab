@@ -317,8 +317,8 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
 
   return (
     <div className="space-y-6">
-      {/* Header sync info */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card/40 px-4 py-3 text-sm">
+      {/* Header sync info + recherche client */}
+      <div className="flex flex-col gap-3 rounded-lg border border-border bg-card/40 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2 text-muted-foreground">
           <RefreshCw className="h-4 w-4" />
           Dernière synchronisation :{" "}
@@ -326,9 +326,40 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
             {lastSync ? new Date(lastSync).toLocaleString("fr-FR") : "jamais"}
           </span>
         </div>
-        <Button variant="outline" size="sm" onClick={onGoToSync}>
-          Aller à la synchronisation <ArrowRight className="ml-2 h-3 w-3" />
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={clientQuery}
+              onChange={(e) => setClientQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && clientMatches[0]) openClient(clientMatches[0]);
+              }}
+              placeholder="Rechercher un client…"
+              className="h-8 pl-8"
+            />
+            {clientQuery && clientMatches.length > 0 && (
+              <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-auto rounded-md border border-border bg-popover shadow-xl">
+                {clientMatches.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => {
+                      setClientQuery("");
+                      openClient(n);
+                    }}
+                    className="block w-full truncate px-3 py-2 text-left text-sm hover:bg-muted"
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <Button variant="outline" size="sm" onClick={onGoToSync}>
+            Aller à la synchronisation <ArrowRight className="ml-2 h-3 w-3" />
+          </Button>
+        </div>
       </div>
 
       {/* KPI cards */}

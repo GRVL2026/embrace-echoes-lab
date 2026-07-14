@@ -346,7 +346,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
           >
             {famillesData.length === 0 ? (
               <div className="flex h-80 items-center justify-center text-sm text-muted-foreground">
-                Aucune donnée pour {yearFamille}.
+                Aucune donnée pour {exShort(yearFamille)}.
               </div>
             ) : (
               <div className="flex flex-col gap-4 md:flex-row md:items-center">

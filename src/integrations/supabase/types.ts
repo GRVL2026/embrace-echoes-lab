@@ -633,6 +633,30 @@ export type Database = {
         }
         Relationships: []
       }
+      gaia_revues: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          data: Json
+          id: string
+          titre: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          data: Json
+          id?: string
+          titre?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          data?: Json
+          id?: string
+          titre?: string | null
+        }
+        Relationships: []
+      }
       gaia_stock: {
         Row: {
           cout_stock: number | null
@@ -1034,6 +1058,8 @@ export type Database = {
           ca_ht: number | null
           lignes: number | null
           mois: string | null
+          mois_calendaire: number | null
+          mois_fiscal: number | null
         }
         Relationships: []
       }

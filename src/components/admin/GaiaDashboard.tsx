@@ -22,19 +22,30 @@ import {
 const FAMILY_COLORS = ["#9B5CFF", "#ADFF00", "#00D4FF", "#FF8A00", "#FF4FA3"];
 const OTHERS_COLOR = "#6B7280";
 
-type CaMensuel = { mois: string; annee: number; ca_ht: number | string; lignes: number };
+type CaMensuel = { mois: string; annee: number; mois_fiscal?: number; mois_calendaire?: number; ca_ht: number | string; lignes: number };
 type CaClient = { annee: number; code_client: string; client: string; ca_ht: number };
 type CaFamille = { annee: number; famille: string; ca_ht: number };
 type CommandesEtat = { etat: "signee" | "devis"; nb_commandes: number; total_ht: number };
 type StockValeur = { depot: string; quantite: number; valeur_achat: number; valeur_vente: number };
 type EcotaxeMensuel = { mois: number; ecotaxe_ht: number };
+type CaPeriodeEgale = { annee: number; ca_ht: number | string };
 
 const eur = (n: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);
 const num = (n: number) => new Intl.NumberFormat("fr-FR").format(n || 0);
 
-const MOIS = ["Jan","Fév","Mar","Avr","Mai","Juin","Juil","Août","Sep","Oct","Nov","Déc"];
+// Mois du calendrier fiscal : sept (1) → août (12)
+const MOIS_FISCAL = ["Sept","Oct","Nov","Déc","Jan","Fév","Mar","Avr","Mai","Juin","Juil","Août"];
+const MOIS_CAL = ["Jan","Fév","Mar","Avr","Mai","Juin","Juil","Août","Sep","Oct","Nov","Déc"];
 const COLORS = ["#9B5CFF","#ADFF00","#5CC8FF","#FF6B9D","#FFB800","#00E5A0","#FF7A5C","#B08CFF","#5CFFB8","#FFD75C"];
+
+const exLong = (a: number) => `Exercice ${a} (sept. ${a - 1} → août ${a})`;
+const exShort = (a: number) => `Ex. ${a}`;
+
+// L'exercice fiscal courant : si on est entre sept. et déc., on est dans FY (year+1)
+function currentFiscalYear(d: Date = new Date()) {
+  return d.getMonth() >= 8 ? d.getFullYear() + 1 : d.getFullYear();
+}
 
 export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
   const [loading, setLoading] = useState(true);
@@ -44,9 +55,10 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
   const [cmdEtat, setCmdEtat] = useState<CommandesEtat[]>([]);
   const [stock, setStock] = useState<StockValeur[]>([]);
   const [ecotaxe, setEcotaxe] = useState<EcotaxeMensuel[]>([]);
+  const [caPeriodeEgale, setCaPeriodeEgale] = useState<CaPeriodeEgale[]>([]);
   const [lastSync, setLastSync] = useState<string | null>(null);
 
-  const currentYear = new Date().getFullYear();
+  const currentYear = currentFiscalYear();
   const [yearClient, setYearClient] = useState<number>(currentYear);
   const [yearFamille, setYearFamille] = useState<number>(currentYear);
 
@@ -54,13 +66,14 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
     (async () => {
       setLoading(true);
       const client: any = supabase;
-      const [m, c, f, e, s, ec, sl] = await Promise.all([
+      const [m, c, f, e, s, ec, pe, sl] = await Promise.all([
         client.from("v_gaia_ca_mensuel").select("*"),
         client.from("v_gaia_ca_client").select("*"),
         client.from("v_gaia_ca_famille").select("*"),
         client.from("v_gaia_commandes_etat").select("*"),
         client.from("v_gaia_stock_valeur").select("*"),
         client.from("v_gaia_ecotaxe_mensuel").select("*"),
+        client.from("v_gaia_ca_periode_egale").select("*"),
         client.from("gaia_sync_log").select("finished_at").order("finished_at", { ascending: false }).limit(1).maybeSingle(),
       ]);
       setCaMensuel((m.data as CaMensuel[]) ?? []);
@@ -69,19 +82,20 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
       setCmdEtat((e.data as CommandesEtat[]) ?? []);
       setStock((s.data as StockValeur[]) ?? []);
       setEcotaxe((ec.data as EcotaxeMensuel[]) ?? []);
+      setCaPeriodeEgale((pe.data as CaPeriodeEgale[]) ?? []);
       setLastSync(sl.data?.finished_at ?? null);
       setLoading(false);
     })();
   }, []);
 
-  // KPI CA année en cours + N-1
-  const caY = useMemo(() => {
-    const acc = new Map<number, number>();
-    for (const r of caMensuel) acc.set(r.annee, (acc.get(r.annee) ?? 0) + Number(r.ca_ht || 0));
-    return acc;
-  }, [caMensuel]);
-  const caCurrent = caY.get(currentYear) ?? 0;
-  const caPrev = caY.get(currentYear - 1) ?? 0;
+  // KPI CA exercice en cours (comparaison à période égale)
+  const caPeMap = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const r of caPeriodeEgale) m.set(Number(r.annee), Number(r.ca_ht || 0));
+    return m;
+  }, [caPeriodeEgale]);
+  const caCurrent = caPeMap.get(currentYear) ?? 0;
+  const caPrev = caPeMap.get(currentYear - 1) ?? 0;
   const evolution = caPrev > 0 ? ((caCurrent - caPrev) / caPrev) * 100 : null;
 
   const signees = cmdEtat.find((r) => r.etat === "signee") ?? { nb_commandes: 0, total_ht: 0, etat: "signee" as const };
@@ -91,33 +105,39 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
     { achat: 0, vente: 0 }
   );
 
-  // Séries mensuelles multi-années
+  // Exercices disponibles (multi-années)
   const years = useMemo(() => {
     const set = new Set<number>();
     caMensuel.forEach((r) => set.add(Number(r.annee)));
     return Array.from(set).sort((a, b) => b - a).slice(0, 3);
   }, [caMensuel]);
 
+  // Séries mensuelles indexées par mois_fiscal (1=sept … 12=août)
   const chartMensuel = useMemo(() => {
-    // Index by year -> month(1-12) -> ca
     const idx = new Map<number, Map<number, number>>();
     for (const r of caMensuel) {
       const y = Number(r.annee);
-      const moisStr = typeof r.mois === "string" ? r.mois.slice(5, 7) : String(r.mois).padStart(2, "0");
-      const m = parseInt(moisStr, 10);
-      if (!m) continue;
+      let mf = Number(r.mois_fiscal);
+      if (!mf) {
+        // fallback : dériver du champ "mois" (date)
+        const cal = typeof r.mois === "string" ? parseInt(r.mois.slice(5, 7), 10) : 0;
+        if (cal >= 9) mf = cal - 8;
+        else if (cal >= 1) mf = cal + 4;
+      }
+      if (!mf) continue;
       const ca = Number(r.ca_ht) || 0;
       if (!idx.has(y)) idx.set(y, new Map());
-      idx.get(y)!.set(m, (idx.get(y)!.get(m) ?? 0) + ca);
+      idx.get(y)!.set(mf, (idx.get(y)!.get(mf) ?? 0) + ca);
     }
     return Array.from({ length: 12 }, (_, i) => {
-      const row: Record<string, any> = { mois: MOIS[i] };
+      const row: Record<string, any> = { mois: MOIS_FISCAL[i] };
       for (const y of years) {
-        row[String(y)] = idx.get(y)?.get(i + 1) ?? 0;
+        row[exShort(y)] = idx.get(y)?.get(i + 1) ?? 0;
       }
       return row;
     });
   }, [caMensuel, years]);
+
 
   const yearsClient = useMemo(
     () => Array.from(new Set(caClient.map((r) => r.annee))).sort((a, b) => b - a),
@@ -163,7 +183,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
   const ecotaxeChart = ecotaxe
     .slice()
     .sort((a, b) => a.mois - b.mois)
-    .map((r) => ({ mois: MOIS[(r.mois - 1) % 12], value: Number(r.ecotaxe_ht || 0) }));
+    .map((r) => ({ mois: MOIS_CAL[(r.mois - 1) % 12], value: Number(r.ecotaxe_ht || 0) }));
 
   if (loading) {
     return (
@@ -192,16 +212,16 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
       {/* KPI cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
-          title={`CA ${currentYear}`}
+          title="CA exercice en cours"
           value={eur(caCurrent)}
           hint={
             evolution === null ? (
-              <span className="text-muted-foreground">Pas de N-1</span>
+              <span className="text-muted-foreground">{exShort(currentYear)} · pas de comparatif</span>
             ) : (
               <span className={evolution >= 0 ? "text-secondary" : "text-destructive"}>
                 {evolution >= 0 ? <TrendingUp className="mr-1 inline h-3 w-3" /> : <TrendingDown className="mr-1 inline h-3 w-3" />}
                 {evolution >= 0 ? "+" : ""}
-                {evolution.toFixed(1)}% vs {currentYear - 1} ({eur(caPrev)})
+                {evolution.toFixed(1)}% vs {exShort(currentYear - 1)} à période égale ({eur(caPrev)})
               </span>
             )
           }
@@ -227,8 +247,8 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
         />
       </div>
 
-      {/* CA mensuel */}
-      <Panel title="CA mensuel — comparaison multi-années">
+      {/* CA mensuel — calendrier fiscal */}
+      <Panel title="CA mensuel — comparaison par exercice (sept. → août)">
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartMensuel}>
@@ -245,7 +265,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
               />
               <Legend />
               {years.map((y, i) => (
-                <Bar key={y} dataKey={String(y)} fill={COLORS[i % COLORS.length]} radius={[4, 4, 0, 0]} />
+                <Bar key={y} dataKey={exShort(y)} fill={COLORS[i % COLORS.length]} radius={[4, 4, 0, 0]} />
               ))}
             </BarChart>
           </ResponsiveContainer>
@@ -301,7 +321,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
                 {topClients.length === 0 && (
                   <tr>
                     <td colSpan={4} className="px-2 py-6 text-center text-muted-foreground">
-                      Aucune donnée pour {yearClient}.
+                      Aucune donnée pour {exShort(yearClient)}.
                     </td>
                   </tr>
                 )}
@@ -326,7 +346,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
           >
             {famillesData.length === 0 ? (
               <div className="flex h-80 items-center justify-center text-sm text-muted-foreground">
-                Aucune donnée pour {yearFamille}.
+                Aucune donnée pour {exShort(yearFamille)}.
               </div>
             ) : (
               <div className="flex flex-col gap-4 md:flex-row md:items-center">
@@ -465,13 +485,13 @@ function Panel({ title, action, children }: { title: string; action?: React.Reac
 function YearSelect({ value, years, onChange }: { value: number; years: number[]; onChange: (y: number) => void }) {
   return (
     <Select value={String(value)} onValueChange={(v) => onChange(Number(v))}>
-      <SelectTrigger className="h-8 w-32">
+      <SelectTrigger className="h-8 w-40">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
         {years.map((y) => (
           <SelectItem key={y} value={String(y)}>
-            {y}
+            {exShort(y)}
           </SelectItem>
         ))}
       </SelectContent>

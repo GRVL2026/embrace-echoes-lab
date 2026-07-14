@@ -757,7 +757,14 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
                       {flopClientsMarge.map((r, i) => (
                         <tr key={r.client + i} className="border-b border-border/40 hover:bg-muted/30">
                           <td className="px-2 py-2 font-mono text-xs text-muted-foreground">{i + 1}</td>
-                          <td className="px-2 py-2 truncate max-w-[180px]">{r.client}</td>
+                          <td className="px-2 py-2 truncate max-w-[180px]">
+                            <Link
+                              to={`/admin/gaia/client/${encodeURIComponent(r.client)}`}
+                              className="text-foreground hover:text-primary hover:underline"
+                            >
+                              {r.client}
+                            </Link>
+                          </td>
                           <td className="px-2 py-2 text-right tabular-nums">{eur(r.ca)}</td>
                           <td className="px-2 py-2 text-right tabular-nums">{eur(r.marge)}</td>
                           <td className="px-2 py-2 text-right tabular-nums font-medium text-destructive">

@@ -29,6 +29,7 @@ type CommandesEtat = { etat: "signee" | "devis"; nb_commandes: number; total_ht:
 type StockValeur = { depot: string; quantite: number; valeur_achat: number; valeur_vente: number };
 type EcotaxeMensuel = { mois: number; ecotaxe_ht: number };
 type CaPeriodeEgale = { annee: number; ca_ht: number | string };
+type RetrocessionSfa = { annee: number; mois?: number; montant_ht: number | string };
 
 const eur = (n: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);
@@ -56,6 +57,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
   const [stock, setStock] = useState<StockValeur[]>([]);
   const [ecotaxe, setEcotaxe] = useState<EcotaxeMensuel[]>([]);
   const [caPeriodeEgale, setCaPeriodeEgale] = useState<CaPeriodeEgale[]>([]);
+  const [retroSfa, setRetroSfa] = useState<RetrocessionSfa[]>([]);
   const [lastSync, setLastSync] = useState<string | null>(null);
 
   const currentYear = currentFiscalYear();
@@ -66,7 +68,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
     (async () => {
       setLoading(true);
       const client: any = supabase;
-      const [m, c, f, e, s, ec, pe, sl] = await Promise.all([
+      const [m, c, f, e, s, ec, pe, sfa, sl] = await Promise.all([
         client.from("v_gaia_ca_mensuel").select("*"),
         client.from("v_gaia_ca_client").select("*"),
         client.from("v_gaia_ca_famille").select("*"),
@@ -74,6 +76,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
         client.from("v_gaia_stock_valeur").select("*"),
         client.from("v_gaia_ecotaxe_mensuel").select("*"),
         client.from("v_gaia_ca_periode_egale").select("*"),
+        client.from("v_gaia_retrocession_sfa").select("*"),
         client.from("gaia_sync_log").select("finished_at").order("finished_at", { ascending: false }).limit(1).maybeSingle(),
       ]);
       setCaMensuel((m.data as CaMensuel[]) ?? []);
@@ -83,6 +86,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
       setStock((s.data as StockValeur[]) ?? []);
       setEcotaxe((ec.data as EcotaxeMensuel[]) ?? []);
       setCaPeriodeEgale((pe.data as CaPeriodeEgale[]) ?? []);
+      setRetroSfa((sfa.data as RetrocessionSfa[]) ?? []);
       setLastSync(sl.data?.finished_at ?? null);
       setLoading(false);
     })();
@@ -97,6 +101,10 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
   const caCurrent = caPeMap.get(currentYear) ?? 0;
   const caPrev = caPeMap.get(currentYear - 1) ?? 0;
   const evolution = caPrev > 0 ? ((caCurrent - caPrev) / caPrev) * 100 : null;
+  const retroCurrent = useMemo(
+    () => retroSfa.filter((r) => Number(r.annee) === currentYear).reduce((n, r) => n + Number(r.montant_ht || 0), 0),
+    [retroSfa, currentYear]
+  );
 
   const signees = cmdEtat.find((r) => r.etat === "signee") ?? { nb_commandes: 0, total_ht: 0, etat: "signee" as const };
   const devis = cmdEtat.find((r) => r.etat === "devis") ?? { nb_commandes: 0, total_ht: 0, etat: "devis" as const };
@@ -215,15 +223,22 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
           title="CA exercice en cours"
           value={eur(caCurrent)}
           hint={
-            evolution === null ? (
-              <span className="text-muted-foreground">{exShort(currentYear)} · pas de comparatif</span>
-            ) : (
-              <span className={evolution >= 0 ? "text-secondary" : "text-destructive"}>
-                {evolution >= 0 ? <TrendingUp className="mr-1 inline h-3 w-3" /> : <TrendingDown className="mr-1 inline h-3 w-3" />}
-                {evolution >= 0 ? "+" : ""}
-                {evolution.toFixed(1)}% vs {exShort(currentYear - 1)} à période égale ({eur(caPrev)})
-              </span>
-            )
+            <div className="space-y-1">
+              {evolution === null ? (
+                <span className="text-muted-foreground">{exShort(currentYear)} · pas de comparatif</span>
+              ) : (
+                <span className={evolution >= 0 ? "text-secondary" : "text-destructive"}>
+                  {evolution >= 0 ? <TrendingUp className="mr-1 inline h-3 w-3" /> : <TrendingDown className="mr-1 inline h-3 w-3" />}
+                  {evolution >= 0 ? "+" : ""}
+                  {evolution.toFixed(1)}% vs {exShort(currentYear - 1)} à période égale ({eur(caPrev)})
+                </span>
+              )}
+              {retroCurrent > 0 && (
+                <div className="text-[11px] text-muted-foreground/80">
+                  + rétrocession SFA : {eur(retroCurrent)} (hors CA)
+                </div>
+              )}
+            </div>
           }
           icon={<TrendingUp className="h-4 w-4 text-primary" />}
         />

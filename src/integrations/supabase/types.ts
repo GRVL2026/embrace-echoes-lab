@@ -1113,6 +1113,12 @@ export type Database = {
         }
         Relationships: []
       }
+      v_gaia_excluded_clients: {
+        Row: {
+          code: string | null
+        }
+        Relationships: []
+      }
       v_gaia_lignes: {
         Row: {
           classe_article: string | null
@@ -1122,6 +1128,14 @@ export type Database = {
           invoice_date: string | null
           montant_ht: number | null
           source: string | null
+        }
+        Relationships: []
+      }
+      v_gaia_retrocession_sfa: {
+        Row: {
+          annee: number | null
+          mois: string | null
+          montant_ht: number | null
         }
         Relationships: []
       }

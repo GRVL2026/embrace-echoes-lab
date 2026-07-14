@@ -223,15 +223,22 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
           title="CA exercice en cours"
           value={eur(caCurrent)}
           hint={
-            evolution === null ? (
-              <span className="text-muted-foreground">{exShort(currentYear)} · pas de comparatif</span>
-            ) : (
-              <span className={evolution >= 0 ? "text-secondary" : "text-destructive"}>
-                {evolution >= 0 ? <TrendingUp className="mr-1 inline h-3 w-3" /> : <TrendingDown className="mr-1 inline h-3 w-3" />}
-                {evolution >= 0 ? "+" : ""}
-                {evolution.toFixed(1)}% vs {exShort(currentYear - 1)} à période égale ({eur(caPrev)})
-              </span>
-            )
+            <div className="space-y-1">
+              {evolution === null ? (
+                <span className="text-muted-foreground">{exShort(currentYear)} · pas de comparatif</span>
+              ) : (
+                <span className={evolution >= 0 ? "text-secondary" : "text-destructive"}>
+                  {evolution >= 0 ? <TrendingUp className="mr-1 inline h-3 w-3" /> : <TrendingDown className="mr-1 inline h-3 w-3" />}
+                  {evolution >= 0 ? "+" : ""}
+                  {evolution.toFixed(1)}% vs {exShort(currentYear - 1)} à période égale ({eur(caPrev)})
+                </span>
+              )}
+              {retroCurrent > 0 && (
+                <div className="text-[11px] text-muted-foreground/80">
+                  + rétrocession SFA : {eur(retroCurrent)} (hors CA)
+                </div>
+              )}
+            </div>
           }
           icon={<TrendingUp className="h-4 w-4 text-primary" />}
         />

@@ -323,7 +323,12 @@ export function GaiaCopilot() {
             {devis.map((d) => (
               <li key={d.n_cde} className="flex items-start justify-between gap-2 py-2 text-sm">
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{d.client || d.code_client}</div>
+                  <Link
+                    to={`/admin/gaia/client/${encodeURIComponent(d.client || d.code_client)}`}
+                    className="block truncate font-medium hover:text-primary hover:underline"
+                  >
+                    {d.client || d.code_client}
+                  </Link>
                   <div className="text-xs text-muted-foreground">Devis {d.n_cde} · {d.age_jours} j</div>
                 </div>
                 <div className="text-right font-medium tabular-nums">{eur(Number(d.montant_ht))}</div>

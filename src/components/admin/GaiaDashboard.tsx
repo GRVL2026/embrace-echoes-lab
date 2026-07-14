@@ -22,19 +22,29 @@ import {
 const FAMILY_COLORS = ["#9B5CFF", "#ADFF00", "#00D4FF", "#FF8A00", "#FF4FA3"];
 const OTHERS_COLOR = "#6B7280";
 
-type CaMensuel = { mois: string; annee: number; ca_ht: number | string; lignes: number };
+type CaMensuel = { mois: string; annee: number; mois_fiscal?: number; mois_calendaire?: number; ca_ht: number | string; lignes: number };
 type CaClient = { annee: number; code_client: string; client: string; ca_ht: number };
 type CaFamille = { annee: number; famille: string; ca_ht: number };
 type CommandesEtat = { etat: "signee" | "devis"; nb_commandes: number; total_ht: number };
 type StockValeur = { depot: string; quantite: number; valeur_achat: number; valeur_vente: number };
 type EcotaxeMensuel = { mois: number; ecotaxe_ht: number };
+type CaPeriodeEgale = { annee: number; ca_ht: number | string };
 
 const eur = (n: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);
 const num = (n: number) => new Intl.NumberFormat("fr-FR").format(n || 0);
 
-const MOIS = ["Jan","Fév","Mar","Avr","Mai","Juin","Juil","Août","Sep","Oct","Nov","Déc"];
+// Mois du calendrier fiscal : sept (1) → août (12)
+const MOIS_FISCAL = ["Sept","Oct","Nov","Déc","Jan","Fév","Mar","Avr","Mai","Juin","Juil","Août"];
 const COLORS = ["#9B5CFF","#ADFF00","#5CC8FF","#FF6B9D","#FFB800","#00E5A0","#FF7A5C","#B08CFF","#5CFFB8","#FFD75C"];
+
+const exLong = (a: number) => `Exercice ${a} (sept. ${a - 1} → août ${a})`;
+const exShort = (a: number) => `Ex. ${a}`;
+
+// L'exercice fiscal courant : si on est entre sept. et déc., on est dans FY (year+1)
+function currentFiscalYear(d: Date = new Date()) {
+  return d.getMonth() >= 8 ? d.getFullYear() + 1 : d.getFullYear();
+}
 
 export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
   const [loading, setLoading] = useState(true);

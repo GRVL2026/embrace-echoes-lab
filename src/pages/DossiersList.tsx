@@ -56,6 +56,21 @@ const OFFER_LABEL: Record<string, string> = {
   leasing: "Leasing",
 };
 
+function formatRelative(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const s = Math.max(1, Math.round(diff / 1000));
+  if (s < 60) return `${s} s`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h} h`;
+  const d = Math.round(h / 24);
+  if (d < 30) return `${d} j`;
+  const mo = Math.round(d / 30);
+  if (mo < 12) return `${mo} mois`;
+  return `${Math.round(mo / 12)} an(s)`;
+}
+
 export default function DossiersList() {
   const navigate = useNavigate();
   const { isAdmin } = useAuth();

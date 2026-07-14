@@ -66,13 +66,14 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
     (async () => {
       setLoading(true);
       const client: any = supabase;
-      const [m, c, f, e, s, ec, sl] = await Promise.all([
+      const [m, c, f, e, s, ec, pe, sl] = await Promise.all([
         client.from("v_gaia_ca_mensuel").select("*"),
         client.from("v_gaia_ca_client").select("*"),
         client.from("v_gaia_ca_famille").select("*"),
         client.from("v_gaia_commandes_etat").select("*"),
         client.from("v_gaia_stock_valeur").select("*"),
         client.from("v_gaia_ecotaxe_mensuel").select("*"),
+        client.from("v_gaia_ca_periode_egale").select("*"),
         client.from("gaia_sync_log").select("finished_at").order("finished_at", { ascending: false }).limit(1).maybeSingle(),
       ]);
       setCaMensuel((m.data as CaMensuel[]) ?? []);
@@ -81,19 +82,20 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
       setCmdEtat((e.data as CommandesEtat[]) ?? []);
       setStock((s.data as StockValeur[]) ?? []);
       setEcotaxe((ec.data as EcotaxeMensuel[]) ?? []);
+      setCaPeriodeEgale((pe.data as CaPeriodeEgale[]) ?? []);
       setLastSync(sl.data?.finished_at ?? null);
       setLoading(false);
     })();
   }, []);
 
-  // KPI CA année en cours + N-1
-  const caY = useMemo(() => {
-    const acc = new Map<number, number>();
-    for (const r of caMensuel) acc.set(r.annee, (acc.get(r.annee) ?? 0) + Number(r.ca_ht || 0));
-    return acc;
-  }, [caMensuel]);
-  const caCurrent = caY.get(currentYear) ?? 0;
-  const caPrev = caY.get(currentYear - 1) ?? 0;
+  // KPI CA exercice en cours (comparaison à période égale)
+  const caPeMap = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const r of caPeriodeEgale) m.set(Number(r.annee), Number(r.ca_ht || 0));
+    return m;
+  }, [caPeriodeEgale]);
+  const caCurrent = caPeMap.get(currentYear) ?? 0;
+  const caPrev = caPeMap.get(currentYear - 1) ?? 0;
   const evolution = caPrev > 0 ? ((caCurrent - caPrev) / caPrev) * 100 : null;
 
   const signees = cmdEtat.find((r) => r.etat === "signee") ?? { nb_commandes: 0, total_ht: 0, etat: "signee" as const };
@@ -103,33 +105,39 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
     { achat: 0, vente: 0 }
   );
 
-  // Séries mensuelles multi-années
+  // Exercices disponibles (multi-années)
   const years = useMemo(() => {
     const set = new Set<number>();
     caMensuel.forEach((r) => set.add(Number(r.annee)));
     return Array.from(set).sort((a, b) => b - a).slice(0, 3);
   }, [caMensuel]);
 
+  // Séries mensuelles indexées par mois_fiscal (1=sept … 12=août)
   const chartMensuel = useMemo(() => {
-    // Index by year -> month(1-12) -> ca
     const idx = new Map<number, Map<number, number>>();
     for (const r of caMensuel) {
       const y = Number(r.annee);
-      const moisStr = typeof r.mois === "string" ? r.mois.slice(5, 7) : String(r.mois).padStart(2, "0");
-      const m = parseInt(moisStr, 10);
-      if (!m) continue;
+      let mf = Number(r.mois_fiscal);
+      if (!mf) {
+        // fallback : dériver du champ "mois" (date)
+        const cal = typeof r.mois === "string" ? parseInt(r.mois.slice(5, 7), 10) : 0;
+        if (cal >= 9) mf = cal - 8;
+        else if (cal >= 1) mf = cal + 4;
+      }
+      if (!mf) continue;
       const ca = Number(r.ca_ht) || 0;
       if (!idx.has(y)) idx.set(y, new Map());
-      idx.get(y)!.set(m, (idx.get(y)!.get(m) ?? 0) + ca);
+      idx.get(y)!.set(mf, (idx.get(y)!.get(mf) ?? 0) + ca);
     }
     return Array.from({ length: 12 }, (_, i) => {
-      const row: Record<string, any> = { mois: MOIS[i] };
+      const row: Record<string, any> = { mois: MOIS_FISCAL[i] };
       for (const y of years) {
-        row[String(y)] = idx.get(y)?.get(i + 1) ?? 0;
+        row[exShort(y)] = idx.get(y)?.get(i + 1) ?? 0;
       }
       return row;
     });
   }, [caMensuel, years]);
+
 
   const yearsClient = useMemo(
     () => Array.from(new Set(caClient.map((r) => r.annee))).sort((a, b) => b - a),

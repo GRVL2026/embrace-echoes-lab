@@ -473,7 +473,14 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
                 {topClients.map((r) => (
                   <tr key={r.code} className="border-b border-border/40 hover:bg-muted/30">
                     <td className="px-2 py-2 font-mono text-xs text-muted-foreground">{r.rang}</td>
-                    <td className="px-2 py-2">{r.client}</td>
+                    <td className="px-2 py-2">
+                      <Link
+                        to={`/admin/gaia/client/${encodeURIComponent(r.client)}`}
+                        className="text-foreground hover:text-primary hover:underline"
+                      >
+                        {r.client}
+                      </Link>
+                    </td>
                     <td className="px-2 py-2 text-right font-medium">{eur(r.ca)}</td>
                     <td className="px-2 py-2 text-right text-muted-foreground">{r.part.toFixed(1)}%</td>
                   </tr>

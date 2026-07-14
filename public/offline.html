@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hors ligne — Arcade Planner</title>
+    <meta name="theme-color" content="#060619" />
+    <style>
+      html, body { margin: 0; height: 100%; background: #060619; color: #eaeaf2; font-family: Inter, system-ui, sans-serif; }
+      main { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; }
+      h1 { font-family: "Exo 2", Inter, sans-serif; font-weight: 700; font-size: 1.6rem; margin: 0 0 12px; color: #9B5CFF; }
+      p { max-width: 320px; line-height: 1.5; color: #b8b8c8; margin: 0 0 24px; }
+      button { background: #9B5CFF; color: #fff; border: 0; border-radius: 10px; padding: 12px 20px; font-weight: 600; cursor: pointer; }
+      .dot { width: 10px; height: 10px; border-radius: 50%; background: #ADFF00; box-shadow: 0 0 12px #ADFF00; margin-bottom: 20px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="dot"></div>
+      <h1>Connexion nécessaire</h1>
+      <p>Cette application a besoin d'une connexion internet pour charger vos dossiers. Vérifiez votre réseau puis réessayez.</p>
+      <button onclick="location.reload()">Réessayer</button>
+    </main>
+  </body>
+</html>

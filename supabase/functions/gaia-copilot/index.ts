@@ -407,7 +407,15 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'revue') {
-      return await callAnthropicStream(SYSTEM_PROMPT, messages);
+      const revueMessages = [{
+        role: 'user' as const,
+        content: `Voici les données commerciales agrégées (JSON) :\n\n\`\`\`json\n${dataJson}\n\`\`\`\n\nProduis la revue commerciale du mois via l'outil build_revue.\n- santé globale : CA à période égale N/N-1/N-2 + évolution en % ; tendance mensuelle en % vs N-1 pour chaque mois disponible ; commentaire 2 phrases max.\n- mouvements : familles et clients qui montent/descendent (top mouvements chiffrés) ;\n- risques (marge, dépendance client, stock, cash, calendrier) avec gravité ;\n- TOP 5 actions priorisées par impact euros (relances devis nominatives, clients dormants à réactiver, stock à écouler). Chaque champ texte : 1-2 phrases max, ton direct.`,
+      }];
+      const revueSystem = `${SYSTEM_PROMPT}\n\nTu réponds UNIQUEMENT en appelant l'outil build_revue avec des données structurées. Aucun texte libre.`;
+      return await callAnthropicStream(revueSystem, revueMessages, {
+        tools: [REVUE_TOOL],
+        tool_choice: { type: 'tool', name: 'build_revue' },
+      });
     }
 
     const { markdown, stop_reason, input_chars } = await callAnthropic(SYSTEM_PROMPT, messages);

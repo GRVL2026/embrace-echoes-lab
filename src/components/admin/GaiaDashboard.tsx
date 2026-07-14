@@ -324,37 +324,66 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
               />
             }
           >
-            <div className="h-80">
-              {famillesData.length === 0 ? (
-                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                  Aucune donnée pour {yearFamille}.
+            {famillesData.length === 0 ? (
+              <div className="flex h-80 items-center justify-center text-sm text-muted-foreground">
+                Aucune donnée pour {yearFamille}.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4 md:flex-row md:items-center">
+                <div className="h-72 w-full md:w-1/2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={famillesData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={110}
+                        paddingAngle={2}
+                        stroke="hsl(var(--background))"
+                        strokeWidth={2}
+                        labelLine={false}
+                        label={({ percent, cx, cy, midAngle, innerRadius, outerRadius }: any) => {
+                          if (!percent || percent < 0.08) return null;
+                          const RAD = Math.PI / 180;
+                          const r = innerRadius + (outerRadius - innerRadius) * 0.55;
+                          const x = cx + r * Math.cos(-midAngle * RAD);
+                          const y = cy + r * Math.sin(-midAngle * RAD);
+                          return (
+                            <text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight={600}>
+                              {`${Math.round(percent * 100)}%`}
+                            </text>
+                          );
+                        }}
+                      >
+                        {famillesData.map((r, i) => (
+                          <Cell key={i} fill={r.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+                        formatter={(v: number) => eur(Number(v))}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={famillesData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={70}
-                      outerRadius={120}
-                      paddingAngle={2}
-                    >
-                      {famillesData.map((_, i) => (
-                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
-                      formatter={(v: number) => eur(Number(v))}
-                    />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              )}
-            </div>
+                <ul className="w-full space-y-1.5 md:w-1/2">
+                  {famillesData.map((r) => {
+                    const pct = famillesTotal > 0 ? (r.value / famillesTotal) * 100 : 0;
+                    return (
+                      <li key={r.name} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/30">
+                        <span className="h-3 w-3 flex-shrink-0 rounded-sm" style={{ backgroundColor: r.color }} />
+                        <span className="flex-1 truncate">{r.name}</span>
+                        <span className="font-medium tabular-nums">{eur(r.value)}</span>
+                        <span className="w-12 text-right text-xs tabular-nums text-muted-foreground">{pct.toFixed(1)}%</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
           </Panel>
         </div>
         <div>

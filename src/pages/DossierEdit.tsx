@@ -124,6 +124,7 @@ export default function DossierEdit() {
   const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
   const [productQuery, setProductQuery] = useState("");
   const [form, setForm] = useState<Project | null>(null);
+  const [views, setViews] = useState<{ id: number; viewed_at: string; user_agent: string | null }[]>([]);
   const [previewSlide, setPreviewSlide] = useState<BrandModule | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 

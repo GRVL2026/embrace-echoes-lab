@@ -1037,11 +1037,40 @@ export type Database = {
         }
         Relationships: []
       }
+      v_gaia_ca_periode_egale: {
+        Row: {
+          annee: number | null
+          ca_ht: number | null
+        }
+        Relationships: []
+      }
+      v_gaia_clients_dormants: {
+        Row: {
+          ca_annee_courante: number | null
+          ca_n1: number | null
+          ca_n2: number | null
+          client: string | null
+          code_client: string | null
+          derniere_facture: string | null
+        }
+        Relationships: []
+      }
       v_gaia_commandes_etat: {
         Row: {
           etat: string | null
           nb_commandes: number | null
           total_ht: number | null
+        }
+        Relationships: []
+      }
+      v_gaia_devis_a_relancer: {
+        Row: {
+          age_jours: number | null
+          client: string | null
+          code_client: string | null
+          date_devis: string | null
+          montant_ht: number | null
+          n_cde: string | null
         }
         Relationships: []
       }
@@ -1067,6 +1096,16 @@ export type Database = {
           invoice_date: string | null
           montant_ht: number | null
           source: string | null
+        }
+        Relationships: []
+      }
+      v_gaia_stock_dormant: {
+        Row: {
+          code_article: string | null
+          description: string | null
+          famille: string | null
+          quantite: number | null
+          valeur_achat: number | null
         }
         Relationships: []
       }

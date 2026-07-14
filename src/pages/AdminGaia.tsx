@@ -11,6 +11,7 @@ import { toast } from "@/hooks/use-toast";
 import { Loader2, Shield, Database, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { GaiaDashboard } from "@/components/admin/GaiaDashboard";
+import { GaiaCopilot } from "@/components/admin/GaiaCopilot";
 import { MobileNav } from "@/components/MobileNav";
 
 type TokenStep = {
@@ -328,10 +329,15 @@ export default function AdminGaia() {
         </div>
 
         <Tabs defaultValue="dashboard" className="w-full">
-          <TabsList className="mb-6">
+          <TabsList className="mb-6 flex-wrap">
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            <TabsTrigger value="copilot">Copilote</TabsTrigger>
             <TabsTrigger value="sync">Synchronisation</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="copilot">
+            <GaiaCopilot />
+          </TabsContent>
 
           <TabsContent value="dashboard">
             <GaiaDashboard onGoToSync={() => {

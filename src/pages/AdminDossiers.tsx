@@ -109,49 +109,30 @@ export default function AdminDossiers() {
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground">
-      <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-6">
-        <div className="flex items-center gap-3">
-          <Link to="/dossiers" className="flex items-center gap-3">
-            <img src={logoImg} alt="Arcade Planner logo" className="h-7 w-auto object-contain" />
-            <h1 className="font-display text-xl font-bold tracking-tight">
+      <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-3 sm:px-6 gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <MobileNav />
+          <Link to="/dossiers" className="flex items-center gap-2 min-w-0">
+            <img src={logoImg} alt="Arcade Planner logo" className="h-7 w-auto object-contain flex-shrink-0" />
+            <h1 className="font-display text-base sm:text-xl font-bold tracking-tight truncate">
               <span className="text-primary text-glow-purple">Arcade</span>{" "}
               <span className="text-secondary text-glow-green">Planner</span>
             </h1>
           </Link>
-          <nav className="ml-4 flex items-center gap-1">
-            <Link
-              to="/dossiers"
-              className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted"
-            >
-              Dossiers
-            </Link>
-            <Link
-              to="/planner"
-              className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted"
-            >
-              Arcade Planner
-            </Link>
-            <Link
-              to="/admin"
-              className="rounded-md bg-primary/15 border border-primary/40 text-primary px-3 py-1 text-xs font-medium inline-flex items-center gap-1"
-            >
-              <Shield className="h-3 w-3" /> Admin
-            </Link>
-            <Link
-              to="/admin/gaia"
-              className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center gap-1"
-            >
-              <Database className="h-3 w-3" /> Gaia
-            </Link>
+          <nav className="ml-4 hidden md:flex items-center gap-1">
+            <Link to="/dossiers" className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted">Dossiers</Link>
+            <Link to="/planner" className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted">Arcade Planner</Link>
+            <Link to="/admin" className="rounded-md bg-primary/15 border border-primary/40 text-primary px-3 py-1 text-xs font-medium inline-flex items-center gap-1"><Shield className="h-3 w-3" /> Admin</Link>
+            <Link to="/admin/gaia" className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center gap-1"><Database className="h-3 w-3" /> Gaia</Link>
           </nav>
         </div>
         <UserMenu />
       </header>
 
-      <main className="mx-auto max-w-6xl px-6 py-8">
-        <div className="mb-6 flex items-center justify-between gap-4">
+      <main className="mx-auto max-w-6xl px-4 sm:px-6 py-6 sm:py-8">
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div>
-            <h2 className="font-display text-2xl font-bold">Vue admin — Tous les dossiers</h2>
+            <h2 className="font-display text-xl sm:text-2xl font-bold">Vue admin — Tous les dossiers</h2>
             <p className="text-sm text-muted-foreground">
               Dossiers de l'ensemble des commerciaux, triés du plus récent au plus ancien.
             </p>
@@ -160,11 +141,11 @@ export default function AdminDossiers() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Rechercher client, commercial, marque…"
-            className="max-w-xs"
+            className="w-full sm:max-w-xs h-11"
           />
         </div>
 
-        <div className="rounded-lg border border-border bg-card/40">
+        <div className="hidden md:block rounded-lg border border-border bg-card/40">
           <Table>
             <TableHeader>
               <TableRow>
@@ -215,6 +196,39 @@ export default function AdminDossiers() {
               )}
             </TableBody>
           </Table>
+        </div>
+
+        {/* Mobile cards */}
+        <div className="md:hidden space-y-3">
+          {loading ? (
+            <div className="rounded-lg border border-border bg-card/40 p-6 text-center text-sm text-muted-foreground">Chargement…</div>
+          ) : filtered.length === 0 ? (
+            <div className="rounded-lg border border-border bg-card/40 p-6 text-center text-sm text-muted-foreground">Aucun dossier.</div>
+          ) : (
+            filtered.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => navigate(`/dossiers/${p.id}`)}
+                className="w-full text-left rounded-lg border border-border bg-card/40 p-4 active:bg-card/60"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium truncate">{p.client_name?.trim() || "Sans nom"}</div>
+                    <div className="mt-1 text-xs text-muted-foreground truncate">
+                      {ownerLabel(p.owner_id)} · {brandName(p.brand_id)}
+                    </div>
+                    <div className="mt-1 text-[11px] text-muted-foreground">
+                      {p.offer ? OFFER_LABEL[p.offer] ?? p.offer : "—"} · {new Date(p.updated_at).toLocaleDateString("fr-FR")}
+                    </div>
+                  </div>
+                  <Badge variant={STATUS_VARIANT[p.status ?? "draft"] ?? "outline"}>
+                    {STATUS_LABEL[p.status ?? "draft"] ?? p.status}
+                  </Badge>
+                </div>
+              </button>
+            ))
+          )}
         </div>
       </main>
     </div>

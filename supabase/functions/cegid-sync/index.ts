@@ -541,61 +541,85 @@ async function syncFeedChunk(
 
 // ---------- HTTP handler ----------
 
+const SELF_INVOKE_BUDGET_MS = 90_000;
+
+async function authorize(req: Request): Promise<
+  | { ok: true; viaCron: true }
+  | { ok: true; viaCron: false; userId: string }
+  | { ok: false; status: number; error: string }
+> {
+  const cronHeader = req.headers.get('x-cron-secret');
+  const cronSecret = Deno.env.get('CRON_SECRET');
+  if (cronHeader && cronSecret && cronHeader === cronSecret) {
+    return { ok: true, viaCron: true };
+  }
+
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return { ok: false, status: 200, error: 'Unauthorized: header Authorization Bearer manquant (ou x-cron-secret invalide)' };
+  }
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+  const supabase = createClient(supabaseUrl, anonKey, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const jwt = authHeader.replace('Bearer ', '');
+  const { data: userData, error: userErr } = await supabase.auth.getUser(jwt);
+  if (userErr || !userData?.user) {
+    return { ok: false, status: 200, error: `Unauthorized: ${userErr?.message ?? 'session invalide'}` };
+  }
+  const { data: roleRow, error: roleErr } = await supabase
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', userData.user.id)
+    .eq('role', 'admin')
+    .maybeSingle();
+  if (roleErr || !roleRow) {
+    return { ok: false, status: 403, error: 'Forbidden: admin only' };
+  }
+  return { ok: true, viaCron: false, userId: userData.user.id };
+}
+
+function selfInvoke(payload: Record<string, unknown>) {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const cronSecret = Deno.env.get('CRON_SECRET')!;
+  const url = `${supabaseUrl}/functions/v1/cegid-sync`;
+  // fire-and-forget
+  fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-cron-secret': cronSecret,
+    },
+    body: JSON.stringify(payload),
+  }).catch((e) => console.error('[cegid-sync] selfInvoke error:', e?.message ?? String(e)));
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  const globalStart = Date.now();
   let currentFeed = '(unknown)';
   let body: any = {};
   try {
     try { body = await req.json(); } catch (_e) { body = {}; }
     console.log('[cegid-sync] payload reçu:', JSON.stringify(body));
 
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
+    const auth = await authorize(req);
+    if (!auth.ok) {
       return jsonResponse({
         ok: false,
-        error: 'Unauthorized: header Authorization Bearer manquant',
-        token_step: { ok: false, duration_ms: 0, error: 'no auth header' },
+        error: auth.error,
+        token_step: { ok: false, duration_ms: 0, error: auth.error },
         feeds: [], summary: [],
-      }, 200);
-    }
-
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-
-    const jwt = authHeader.replace('Bearer ', '');
-    const { data: userData, error: userErr } = await supabase.auth.getUser(jwt);
-    if (userErr || !userData?.user) {
-      return jsonResponse({
-        ok: false,
-        error: `Unauthorized: ${userErr?.message ?? 'session invalide'}`,
-        token_step: { ok: false, duration_ms: 0, error: 'auth.getUser failed' },
-        feeds: [], summary: [],
-      }, 200);
-    }
-    const userId = userData.user.id;
-
-    const { data: roleRow, error: roleErr } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId)
-      .eq('role', 'admin')
-      .maybeSingle();
-
-    // Seule exception autorisée : le contrôle admin peut renvoyer 403.
-    if (roleErr || !roleRow) {
-      return jsonResponse({ ok: false, error: 'Forbidden: admin only' }, 403);
+      }, auth.status);
     }
 
     const action = body?.action;
 
-    if (action !== 'discover' && action !== 'sync') {
+    if (action !== 'discover' && action !== 'sync' && action !== 'sync-all') {
       return jsonResponse({
         ok: false,
         error: `Unknown action: ${action}`,
@@ -651,10 +675,77 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: true, token_step: safeToken, feeds }, 200);
     }
 
+    const { token: _t, ...safeToken } = token_step;
+    const admin = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    );
+
+    if (action === 'sync-all') {
+      // Enchaîne les flux jusqu'à épuisement du budget, puis s'auto-rappelle.
+      const feedNames = FEEDS.map((f) => f.name);
+      let feedName: string = typeof body?.feed === 'string' && feedNames.includes(body.feed)
+        ? body.feed : feedNames[0];
+      let skip = Number.isFinite(Number(body?.skip)) && Number(body.skip) >= 0
+        ? Math.trunc(Number(body.skip)) : 0;
+      let totalRows = Number.isFinite(Number(body?.total_rows)) && Number(body.total_rows) >= 0
+        ? Math.trunc(Number(body.total_rows)) : 0;
+      let startedAt: string | undefined = typeof body?.started_at === 'string' ? body.started_at : undefined;
+      const summary: SyncSummary[] = [];
+
+      while (true) {
+        const target = FEEDS.find((f) => f.name === feedName)!;
+        currentFeed = feedName;
+        const reset = skip === 0;
+        console.log(`[cegid-sync][sync-all] ${feedName} skip=${skip} reset=${reset}`);
+        const s = await syncFeedChunk(admin, target.name, target.url, token_step.token!, {
+          skip, reset, totalRows, startedAt,
+        });
+        summary.push(s);
+
+        if (!s.ok) {
+          // Stop la chaîne en cas d'erreur — logs déjà écrits dans gaia_sync_log.
+          return jsonResponse({ ok: false, token_step: safeToken, summary }, 200);
+        }
+
+        if (s.done) {
+          // Passe au flux suivant
+          const idx = feedNames.indexOf(feedName);
+          if (idx === feedNames.length - 1) {
+            return jsonResponse({ ok: true, token_step: safeToken, summary, done: true }, 200);
+          }
+          feedName = feedNames[idx + 1];
+          skip = 0;
+          totalRows = 0;
+          startedAt = undefined;
+        } else {
+          skip = s.next_skip ?? skip;
+          totalRows = s.total_rows ?? totalRows;
+          startedAt = s.started_at ?? startedAt;
+        }
+
+        // Budget temps — au-delà, on relance
+        if (Date.now() - globalStart >= SELF_INVOKE_BUDGET_MS) {
+          selfInvoke({
+            action: 'sync-all',
+            feed: feedName,
+            skip,
+            total_rows: totalRows,
+            started_at: startedAt,
+          });
+          return jsonResponse({
+            ok: true,
+            token_step: safeToken,
+            summary,
+            continued: true,
+            next: { feed: feedName, skip, total_rows: totalRows },
+          }, 200);
+        }
+      }
+    }
+
     // action === 'sync' — un seul flux par appel
     const requestedFeed: string | undefined = body?.feed;
-    const { token: _t, ...safeToken } = token_step;
-
     const target = FEEDS.find((f) => f.name === requestedFeed);
     if (!target) {
       return jsonResponse({
@@ -668,7 +759,6 @@ Deno.serve(async (req) => {
       }, 200);
     }
 
-    const admin = createClient(supabaseUrl, serviceKey);
     let s: SyncSummary;
     try {
       const requestedSkip = Number(body?.skip ?? 0);
@@ -705,3 +795,4 @@ Deno.serve(async (req) => {
     }, 200);
   }
 });
+

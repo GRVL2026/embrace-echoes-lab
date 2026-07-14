@@ -122,16 +122,17 @@ export default function DossiersList() {
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground">
-      <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-6">
-        <div className="flex items-center gap-3">
-          <Link to="/dossiers" className="flex items-center gap-3">
-            <img src={logoImg} alt="Arcade Planner logo" className="h-7 w-auto object-contain" />
-            <h1 className="font-display text-xl font-bold tracking-tight">
+      <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-3 sm:px-6 gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <MobileNav />
+          <Link to="/dossiers" className="flex items-center gap-2 min-w-0">
+            <img src={logoImg} alt="Arcade Planner logo" className="h-7 w-auto object-contain flex-shrink-0" />
+            <h1 className="font-display text-base sm:text-xl font-bold tracking-tight truncate">
               <span className="text-primary text-glow-purple">Arcade</span>{" "}
               <span className="text-secondary text-glow-green">Planner</span>
             </h1>
           </Link>
-          <nav className="ml-4 flex items-center gap-1">
+          <nav className="ml-4 hidden md:flex items-center gap-1">
             <Link
               to="/dossiers"
               className="rounded-md bg-primary/15 border border-primary/40 text-primary px-3 py-1 text-xs font-medium"
@@ -163,7 +164,7 @@ export default function DossiersList() {
           </nav>
         </div>
         <div className="flex items-center gap-2">
-          <Button asChild variant="ghost" size="sm">
+          <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
             <Link to="/planner">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Ouvrir le planner
@@ -173,21 +174,22 @@ export default function DossiersList() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-6 py-8">
-        <div className="mb-6 flex items-center justify-between">
+      <main className="mx-auto max-w-6xl px-4 sm:px-6 py-6 sm:py-8">
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h2 className="font-display text-2xl font-bold">Dossiers commerciaux</h2>
+            <h2 className="font-display text-xl sm:text-2xl font-bold">Dossiers commerciaux</h2>
             <p className="text-sm text-muted-foreground">
               Tous les dossiers clients, triés du plus récent au plus ancien.
             </p>
           </div>
-          <Button onClick={createDossier} disabled={creating}>
+          <Button onClick={createDossier} disabled={creating} className="w-full sm:w-auto min-h-11">
             <Plus className="mr-2 h-4 w-4" />
             Nouveau dossier
           </Button>
         </div>
 
-        <div className="rounded-lg border border-border bg-card/40">
+        {/* Desktop table */}
+        <div className="hidden md:block rounded-lg border border-border bg-card/40">
           <Table>
             <TableHeader>
               <TableRow>
@@ -257,6 +259,57 @@ export default function DossiersList() {
               )}
             </TableBody>
           </Table>
+        </div>
+
+        {/* Mobile card list */}
+        <div className="md:hidden space-y-3">
+          {loading ? (
+            <div className="rounded-lg border border-border bg-card/40 p-6 text-center text-sm text-muted-foreground">
+              Chargement…
+            </div>
+          ) : projects.length === 0 ? (
+            <div className="rounded-lg border border-border bg-card/40 p-6 text-center text-sm text-muted-foreground">
+              Aucun dossier pour le moment.
+            </div>
+          ) : (
+            projects.map((p) => (
+              <div
+                key={p.id}
+                className="rounded-lg border border-border bg-card/40 p-4 active:bg-card/60"
+                onClick={() => navigate(`/dossiers/${p.id}`)}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium truncate">
+                      {p.client_name?.trim() || <span className="text-muted-foreground">Sans nom</span>}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground truncate">
+                      {brandName(p.brand_id)}
+                      {p.offer ? ` · ${OFFER_LABEL[p.offer] ?? p.offer}` : ""}
+                    </div>
+                    <div className="mt-1 text-[11px] text-muted-foreground">
+                      {new Date(p.updated_at).toLocaleDateString("fr-FR")}
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    <Badge variant="outline">{STATUS_LABEL[p.status ?? "draft"] ?? p.status}</Badge>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-10 w-10 text-muted-foreground hover:text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setToDelete(p);
+                      }}
+                      aria-label="Supprimer"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </main>
 

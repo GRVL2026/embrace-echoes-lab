@@ -176,6 +176,19 @@ export default function DossierEdit() {
       setModules((m as BrandModule[]) ?? []);
       setCatalog((c as CatalogProduct[]) ?? []);
       setLoading(false);
+
+      // Consultations : charge l'historique et éteint le badge « Nouvelles vues »
+      (supabase as any)
+        .from("dossier_vues")
+        .select("id, viewed_at, user_agent")
+        .eq("project_id", id)
+        .order("viewed_at", { ascending: false })
+        .then(({ data }: any) => setViews((data as any[]) ?? []));
+      (supabase as any)
+        .from("projects")
+        .update({ views_seen_at: new Date().toISOString() })
+        .eq("id", id)
+        .then(() => {});
     })();
   }, [id, navigate]);
 

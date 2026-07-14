@@ -321,7 +321,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
                 {topClients.length === 0 && (
                   <tr>
                     <td colSpan={4} className="px-2 py-6 text-center text-muted-foreground">
-                      Aucune donnée pour {yearClient}.
+                      Aucune donnée pour {exShort(yearClient)}.
                     </td>
                   </tr>
                 )}

@@ -148,9 +148,14 @@ Deno.serve(async (req) => {
             url: `/dossiers/${project.id}`,
             tag: `dossier-view-${project.id}`,
           }),
-        }).catch(() => {
-          /* fire-and-forget */
-        });
+        })
+          .then(async (r) => {
+            const text = await r.text().catch(() => "");
+            console.log("[get-shared-dossier] send-push status:", r.status, "body:", text);
+          })
+          .catch((err) => {
+            console.error("[get-shared-dossier] send-push fetch failed:", (err as Error).message);
+          });
       }
     } catch (_) {
       // never block the response on logging failure

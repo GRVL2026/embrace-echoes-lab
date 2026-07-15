@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import SpacePlanner from "./pages/SpacePlanner";
 import Hub from "./pages/Hub";
+import Catalogue from "./pages/Catalogue";
 import DossiersList from "./pages/DossiersList";
 import DossierEdit from "./pages/DossierEdit";
 import AdminDossiers from "./pages/AdminDossiers";
@@ -39,6 +40,7 @@ const App = () => (
             <Route path="/planner" element={<ProtectedRoute><SpacePlanner /></ProtectedRoute>} />
             <Route path="/planner/dossier/:dossierId" element={<ProtectedRoute><SpacePlanner /></ProtectedRoute>} />
             <Route path="/dossiers" element={<ProtectedRoute><DossiersList /></ProtectedRoute>} />
+            <Route path="/catalogue" element={<ProtectedRoute><Catalogue /></ProtectedRoute>} />
             <Route path="/dossiers/:id" element={<ProtectedRoute><DossierEdit /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute><AdminDossiers /></ProtectedRoute>} />
             <Route path="/admin/catalog-erp" element={<ProtectedRoute><AdminCatalogErp /></ProtectedRoute>} />

@@ -190,6 +190,12 @@ export default function DossiersList() {
             >
               Arcade Planner
             </Link>
+            <Link
+              to="/catalogue"
+              className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted"
+            >
+              Catalogue
+            </Link>
             {canAccessGaia && (
               <Link
                 to="/admin/gaia"

@@ -668,39 +668,60 @@ export function DossierPreview({
                           {products.map((p, i) => {
                             const cat = p.product_id ? catalogMap[p.product_id] : undefined;
                             const img = cat?.images?.[0] ?? null;
-                            const href = productFicheUrl(p.name, cat?.product_url);
+                            const isErpOnly = !p.product_id;
+                            const href = isErpOnly ? null : productFicheUrl(p.name, cat?.product_url);
                             return (
                               <tr key={i} style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
                                 <td className="px-4 py-3">
-                                  <a href={href} target="_blank" rel="noreferrer" className="flex h-16 w-24 items-center justify-center overflow-hidden rounded border p-1" style={{ borderColor: "rgba(0,0,0,0.1)", background: "#ffffff" }}>
-                                    {img ? (
-                                      <img src={img} alt={p.name} className="max-h-full max-w-full object-contain" loading="lazy" />
-                                    ) : (
-                                      <div className="text-[9px] leading-tight text-center px-1" style={{ color: DARK, opacity: 0.5 }}>
-                                        visuel indisponible
+                                  {href ? (
+                                    <a href={href} target="_blank" rel="noreferrer" className="flex h-16 w-24 items-center justify-center overflow-hidden rounded border p-1" style={{ borderColor: "rgba(0,0,0,0.1)", background: "#ffffff" }}>
+                                      {img ? (
+                                        <img src={img} alt={p.name} className="max-h-full max-w-full object-contain" loading="lazy" />
+                                      ) : (
+                                        <div className="text-[9px] leading-tight text-center px-1" style={{ color: DARK, opacity: 0.5 }}>
+                                          visuel indisponible
+                                        </div>
+                                      )}
+                                    </a>
+                                  ) : (
+                                    <div className="flex h-16 w-24 items-center justify-center overflow-hidden rounded border p-1" style={{ borderColor: "rgba(0,0,0,0.1)", background: "rgba(0,0,0,0.03)" }}>
+                                      <div className="text-[9px] leading-tight text-center px-1" style={{ color: DARK, opacity: 0.55 }}>
+                                        Article ERP
                                       </div>
-                                    )}
-                                  </a>
+                                    </div>
+                                  )}
                                 </td>
                                 <td className="px-4 py-3">
-                                  <a href={href} target="_blank" rel="noreferrer" className="font-medium underline-offset-2 hover:underline" style={{ color: DARK }}>
-                                    {p.name}
-                                  </a>
-                                  <div className="dossier-pdf-link text-[10px] mt-0.5 break-all" style={{ color: PURPLE, display: "none" }}>
-                                    {href}
-                                  </div>
+                                  {href ? (
+                                    <a href={href} target="_blank" rel="noreferrer" className="font-medium underline-offset-2 hover:underline" style={{ color: DARK }}>
+                                      {p.name}
+                                    </a>
+                                  ) : (
+                                    <span className="font-medium" style={{ color: DARK }}>{p.name}</span>
+                                  )}
+                                  {href ? (
+                                    <div className="dossier-pdf-link text-[10px] mt-0.5 break-all" style={{ color: PURPLE, display: "none" }}>
+                                      {href}
+                                    </div>
+                                  ) : null}
                                 </td>
                                 <td className="px-4 py-3 text-center tabular-nums">{p.qty}</td>
                                 <td className="px-4 py-3 text-right">
-                                  <a
-                                    href={href}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold shadow-sm transition hover:opacity-90"
-                                    style={{ background: PURPLE, color: "white" }}
-                                  >
-                                    Voir la fiche produit →
-                                  </a>
+                                  {href ? (
+                                    <a
+                                      href={href}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold shadow-sm transition hover:opacity-90"
+                                      style={{ background: PURPLE, color: "white" }}
+                                    >
+                                      Voir la fiche produit →
+                                    </a>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-medium" style={{ background: "rgba(0,0,0,0.05)", color: DARK, opacity: 0.7 }}>
+                                      Pas de fiche site
+                                    </span>
+                                  )}
                                 </td>
                               </tr>
                             );

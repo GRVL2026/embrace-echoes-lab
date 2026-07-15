@@ -159,6 +159,8 @@ export type Database = {
           shopify_id: string | null
           specs: Json | null
           stock: string | null
+          stock_erp: number | null
+          stock_maj: string | null
           tags: string[] | null
           updated_at: string
           vendor: string | null
@@ -191,6 +193,8 @@ export type Database = {
           shopify_id?: string | null
           specs?: Json | null
           stock?: string | null
+          stock_erp?: number | null
+          stock_maj?: string | null
           tags?: string[] | null
           updated_at?: string
           vendor?: string | null
@@ -223,12 +227,41 @@ export type Database = {
           shopify_id?: string | null
           specs?: Json | null
           stock?: string | null
+          stock_erp?: number | null
+          stock_maj?: string | null
           tags?: string[] | null
           updated_at?: string
           vendor?: string | null
           video_url?: string | null
           warranty?: string | null
           width?: number
+        }
+        Relationships: []
+      }
+      catalogue_erp: {
+        Row: {
+          code: string
+          description: string | null
+          famille: string | null
+          maj: string | null
+          prix_ht: number | null
+          stock: number | null
+        }
+        Insert: {
+          code: string
+          description?: string | null
+          famille?: string | null
+          maj?: string | null
+          prix_ht?: number | null
+          stock?: number | null
+        }
+        Update: {
+          code?: string
+          description?: string | null
+          famille?: string | null
+          maj?: string | null
+          prix_ht?: number | null
+          stock?: number | null
         }
         Relationships: []
       }

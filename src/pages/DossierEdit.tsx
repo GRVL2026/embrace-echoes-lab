@@ -17,6 +17,7 @@ import { toast } from "@/hooks/use-toast";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   ArrowLeft,
+  Boxes,
   Check,
   Eye,
   GripVertical,
@@ -64,10 +65,17 @@ function productFicheUrl(p: { product_url?: string | null; name: string }): stri
   return `https://avranchesautomatic.com/search?q=${encodeURIComponent(p.name)}`;
 }
 type SelectedProduct = {
-  product_id: string;
+  product_id?: string;
+  cegid_code?: string;
   name: string;
   qty: number;
   unit_price: number;
+};
+type ErpArticle = {
+  code: string;
+  description: string | null;
+  famille: string | null;
+  prix_ht: number | null;
 };
 type PricingLine = { label: string; qty: number; amount: number };
 type Pricing = { lines: PricingLine[]; total_ht: number; monthly: number };
@@ -124,6 +132,7 @@ export default function DossierEdit() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [modules, setModules] = useState<BrandModule[]>([]);
   const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
+  const [erpCatalog, setErpCatalog] = useState<ErpArticle[]>([]);
   const [productQuery, setProductQuery] = useState("");
   const [form, setForm] = useState<Project | null>(null);
   const [views, setViews] = useState<{ id: number; viewed_at: string; user_agent: string | null }[]>([]);
@@ -139,6 +148,7 @@ export default function DossierEdit() {
         { data: b, error: be },
         { data: m, error: me },
         { data: c, error: ce },
+        { data: erp },
       ] = await Promise.all([
         (supabase as any)
           .from("projects")
@@ -160,6 +170,9 @@ export default function DossierEdit() {
           .select("id, name, category, price, price_monthly, price_erp_ht, cegid_code, vendor, images, product_url")
           .eq("active", true)
           .order("name"),
+        (supabase as any)
+          .from("catalogue_erp")
+          .select("code, description, famille, prix_ht"),
       ]);
       if (pe) toast({ title: "Erreur", description: pe.message, variant: "destructive" });
       if (be) toast({ title: "Erreur", description: be.message, variant: "destructive" });
@@ -177,6 +190,7 @@ export default function DossierEdit() {
       setBrands((b as Brand[]) ?? []);
       setModules((m as BrandModule[]) ?? []);
       setCatalog((c as CatalogProduct[]) ?? []);
+      setErpCatalog((erp as ErpArticle[]) ?? []);
       setLoading(false);
 
       // Consultations : charge l'historique et éteint le badge « Nouvelles vues »
@@ -536,14 +550,48 @@ export default function DossierEdit() {
 
   // --- Products helpers ---
   const selectedProducts = form?.selected_products ?? [];
-  const selectedProductIds = new Set(selectedProducts.map((p) => p.product_id));
-  const searchResults = useMemo(() => {
+  const selectedProductIds = new Set(
+    selectedProducts.map((p) => p.product_id).filter((x): x is string => !!x),
+  );
+  const selectedCegidCodes = new Set(
+    [
+      ...selectedProducts.map((p) => p.cegid_code ?? null),
+      ...catalog.filter((c) => selectedProductIds.has(c.id)).map((c) => c.cegid_code),
+    ].filter((x): x is string => !!x),
+  );
+  // ERP articles NOT linked to any site product (candidates for "ERP-only" selection)
+  const erpOnly = useMemo(() => {
+    const linked = new Set(
+      catalog.map((c) => (c.cegid_code ?? "").trim()).filter(Boolean),
+    );
+    return erpCatalog.filter((r) => r.code && !linked.has(r.code.trim()));
+  }, [catalog, erpCatalog]);
+
+  type SearchHit =
+    | { kind: "site"; item: CatalogProduct }
+    | { kind: "erp"; item: ErpArticle };
+
+  const searchResults = useMemo<SearchHit[]>(() => {
     const q = productQuery.trim().toLowerCase();
     if (!q) return [];
-    return catalog
+    const siteHits: SearchHit[] = catalog
       .filter((c) => !selectedProductIds.has(c.id) && c.name.toLowerCase().includes(q))
-      .slice(0, 8);
-  }, [productQuery, catalog, selectedProductIds]);
+      .slice(0, 8)
+      .map((item) => ({ kind: "site", item }));
+    const erpHits: SearchHit[] = erpOnly
+      .filter(
+        (r) =>
+          !selectedCegidCodes.has(r.code) &&
+          (
+            (r.description ?? "").toLowerCase().includes(q) ||
+            r.code.toLowerCase().includes(q) ||
+            (r.famille ?? "").toLowerCase().includes(q)
+          ),
+      )
+      .slice(0, 6)
+      .map((item) => ({ kind: "erp", item }));
+    return [...siteHits, ...erpHits];
+  }, [productQuery, catalog, erpOnly, selectedProductIds, selectedCegidCodes]);
 
   const addProduct = (p: CatalogProduct) => {
     const offer = form?.offer;
@@ -556,6 +604,18 @@ export default function DossierEdit() {
     onProductsChange([
       ...selectedProducts,
       { product_id: p.id, name: p.name, qty: 1, unit_price: unit },
+    ]);
+    setProductQuery("");
+  };
+  const addErpArticle = (e: ErpArticle) => {
+    onProductsChange([
+      ...selectedProducts,
+      {
+        cegid_code: e.code,
+        name: e.description || e.code,
+        qty: 1,
+        unit_price: Number(e.prix_ht) || 0,
+      },
     ]);
     setProductQuery("");
   };
@@ -1190,30 +1250,62 @@ export default function DossierEdit() {
                 />
                 {searchResults.length > 0 ? (
                   <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-md border border-border bg-popover shadow-lg">
-                    {searchResults.map((r) => (
-                      <button
-                        key={r.id}
-                        type="button"
-                        onClick={() => addProduct(r)}
-                        className="flex w-full items-center justify-between gap-3 border-b border-border/60 px-3 py-2 text-left text-sm hover:bg-accent last:border-b-0"
-                      >
-                        <div className="min-w-0">
-                          <div className="truncate font-medium">{r.name}</div>
-                          <div className="truncate text-xs text-muted-foreground">
-                            {[r.vendor, r.category].filter(Boolean).join(" · ") || "—"}
+                    {searchResults.map((hit) => {
+                      if (hit.kind === "site") {
+                        const r = hit.item;
+                        return (
+                          <button
+                            key={`site-${r.id}`}
+                            type="button"
+                            onClick={() => addProduct(r)}
+                            className="flex w-full items-center justify-between gap-3 border-b border-border/60 px-3 py-2 text-left text-sm hover:bg-accent last:border-b-0"
+                          >
+                            <div className="min-w-0">
+                              <div className="truncate font-medium">{r.name}</div>
+                              <div className="truncate text-xs text-muted-foreground">
+                                {[r.vendor, r.category].filter(Boolean).join(" · ") || "—"}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              {r.price_erp_ht != null ? (
+                                <span className="text-primary font-medium">{r.price_erp_ht} € HT (ERP)</span>
+                              ) : r.price != null ? (
+                                <span title="Prix site TTC — non vérifié ERP">{r.price} € TTC</span>
+                              ) : null}
+                              {r.price_monthly != null ? <span>· {r.price_monthly} €/mois</span> : null}
+                              <Plus className="h-4 w-4" />
+                            </div>
+                          </button>
+                        );
+                      }
+                      const r = hit.item;
+                      return (
+                        <button
+                          key={`erp-${r.code}`}
+                          type="button"
+                          onClick={() => addErpArticle(r)}
+                          className="flex w-full items-center justify-between gap-3 border-b border-border/60 px-3 py-2 text-left text-sm hover:bg-accent last:border-b-0"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 truncate">
+                              <span className="truncate font-medium">{r.description || r.code}</span>
+                              <span className="rounded border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                                ERP
+                              </span>
+                            </div>
+                            <div className="truncate text-xs text-muted-foreground font-mono">
+                              {r.code}{r.famille ? ` · ${r.famille}` : ""}
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          {r.price_erp_ht != null ? (
-                            <span className="text-primary font-medium">{r.price_erp_ht} € HT (ERP)</span>
-                          ) : r.price != null ? (
-                            <span title="Prix site TTC — non vérifié ERP">{r.price} € TTC</span>
-                          ) : null}
-                          {r.price_monthly != null ? <span>· {r.price_monthly} €/mois</span> : null}
-                          <Plus className="h-4 w-4" />
-                        </div>
-                      </button>
-                    ))}
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            {r.prix_ht != null ? (
+                              <span className="text-primary font-medium">{r.prix_ht} € HT</span>
+                            ) : null}
+                            <Plus className="h-4 w-4" />
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 ) : null}
               </div>
@@ -1239,43 +1331,71 @@ export default function DossierEdit() {
                     </thead>
                     <tbody>
                       {selectedProducts.map((p, i) => {
-                        const cat = catalog.find((c) => c.id === p.product_id);
+                        const cat = p.product_id ? catalog.find((c) => c.id === p.product_id) : undefined;
+                        const isErpOnly = !p.product_id;
                         const img = cat?.images?.[0] ?? null;
-                        const href = productFicheUrl({ product_url: cat?.product_url ?? null, name: p.name });
+                        const href = !isErpOnly
+                          ? productFicheUrl({ product_url: cat?.product_url ?? null, name: p.name })
+                          : null;
+                        const rowKey = (p.product_id ?? p.cegid_code ?? "line") + "-" + i;
                         return (
-                        <tr key={p.product_id + i} className="border-t border-border/60">
+                        <tr key={rowKey} className="border-t border-border/60">
                           <td className="px-3 py-2">
-                            <a
-                              href={href}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex h-14 w-20 items-center justify-center overflow-hidden rounded border border-border/60 bg-white p-1"
-                              aria-label={`Fiche ${p.name}`}
-                            >
-                              {img ? (
-                                <img src={img} alt={p.name} className="max-h-full max-w-full object-contain" loading="lazy" />
-                              ) : (
-                                <div className="text-[9px] leading-tight text-muted-foreground text-center px-1">
-                                  visuel indisponible
-                                </div>
-                              )}
-                            </a>
+                            {href ? (
+                              <a
+                                href={href}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex h-14 w-20 items-center justify-center overflow-hidden rounded border border-border/60 bg-white p-1"
+                                aria-label={`Fiche ${p.name}`}
+                              >
+                                {img ? (
+                                  <img src={img} alt={p.name} className="max-h-full max-w-full object-contain" loading="lazy" />
+                                ) : (
+                                  <div className="text-[9px] leading-tight text-muted-foreground text-center px-1">
+                                    visuel indisponible
+                                  </div>
+                                )}
+                              </a>
+                            ) : (
+                              <div
+                                className="flex h-14 w-20 items-center justify-center overflow-hidden rounded border border-dashed border-border/60 bg-muted/40"
+                                aria-label={p.name}
+                              >
+                                <Boxes className="h-6 w-6 text-muted-foreground/70" strokeWidth={1.3} />
+                              </div>
+                            )}
                           </td>
                           <td className="px-3 py-2">
-                            <a
-                              href={href}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="font-medium text-foreground underline-offset-2 hover:text-primary hover:underline"
-                            >
-                              {p.name}
-                            </a>
-                            {cat?.vendor || cat?.category ? (
+                            {href ? (
+                              <a
+                                href={href}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-medium text-foreground underline-offset-2 hover:text-primary hover:underline"
+                              >
+                                {p.name}
+                              </a>
+                            ) : (
+                              <span className="font-medium text-foreground">{p.name}</span>
+                            )}
+                            {isErpOnly ? (
+                              <div className="mt-0.5 flex items-center gap-1.5">
+                                <span className="inline-flex items-center rounded border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                                  ERP
+                                </span>
+                                {p.cegid_code ? (
+                                  <span className="font-mono text-[10px] text-muted-foreground">
+                                    {p.cegid_code}
+                                  </span>
+                                ) : null}
+                              </div>
+                            ) : cat?.vendor || cat?.category ? (
                               <div className="text-xs text-muted-foreground">
                                 {[cat?.vendor, cat?.category].filter(Boolean).join(" · ")}
                               </div>
                             ) : null}
-                            {!isRecurring ? (
+                            {!isRecurring && !isErpOnly ? (
                               cat?.price_erp_ht != null ? (
                                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
                                   <span className="inline-flex items-center rounded bg-primary/15 border border-primary/40 px-1.5 py-0.5 text-[10px] font-medium text-primary">

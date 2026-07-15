@@ -507,12 +507,13 @@ function ExpeditionDialog({
 
   const deleteRow = async () => {
     if (!initial?.id) return;
-    if (!confirm(`Supprimer définitivement la commande ${initial.numero_commande} ?`)) return;
     const { error } = await (supabase as any).from("logi_expeditions").delete().eq("id", initial.id);
     if (error) return toast({ title: "Erreur", description: error.message, variant: "destructive" });
     toast({ title: "Expédition supprimée" });
+    setConfirmDel(false);
     onSaved();
     onOpenChange(false);
+  };
   };
 
   return (

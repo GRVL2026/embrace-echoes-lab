@@ -187,7 +187,7 @@ export default function Logistique() {
           <StatCard icon={Package} label="En cours" value={stats.enCours} tone="blue" />
           <StatCard icon={CircleDot} label="À venir" value={stats.aVenir} tone="muted" />
           <StatCard icon={CheckCircle2} label="Livrées ce mois" value={stats.livreesMois} tone="emerald" />
-          <StatCard icon={Ship} label="Valeur EXW en cours" value={fmtMoney(stats.valeurEXW)} tone="primary" />
+          <StatCard icon={Ship} label="Valeur EXW en cours ($)" value={fmtMoney(stats.valeurEXW)} tone="primary" />
         </section>
 
         {/* Timeline */}

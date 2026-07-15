@@ -1,0 +1,2 @@
+ALTER TABLE public.logi_expeditions DROP CONSTRAINT IF EXISTS logi_expeditions_origine_check;
+ALTER TABLE public.logi_expeditions ADD CONSTRAINT logi_expeditions_origine_check CHECK (origine = ANY (ARRAY['ASIE'::text, 'US'::text, 'EUROPE'::text]));

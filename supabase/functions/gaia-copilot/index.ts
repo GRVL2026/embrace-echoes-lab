@@ -2,10 +2,60 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
-const ANTHROPIC_MODEL = 'claude-sonnet-5';
+const CHAT_MODEL = 'claude-sonnet-5';
+const REVUE_MODEL = 'claude-opus-4-8';
 const ANTHROPIC_VERSION = '2023-06-01';
 const MAX_TOOL_ROUNDS = 6;
 const MAX_TOKENS_PER_TURN = 8000;
+
+/** Convert system string to Anthropic content blocks with an ephemeral cache breakpoint on the last block. */
+function systemBlocks(system: string) {
+  return [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }];
+}
+
+/**
+ * Return a new messages array where cache_control markers are stripped from all blocks,
+ * then set on the last block of the last message. This keeps the cached prefix stable
+ * while marking the new tail on each turn (Anthropic supports up to 4 breakpoints).
+ */
+function withCacheOnLastMessage(
+  messages: Array<{ role: 'user' | 'assistant'; content: any }>,
+): Array<{ role: 'user' | 'assistant'; content: any }> {
+  if (!messages.length) return messages;
+  const stripBlock = (b: any) => {
+    if (b && typeof b === 'object' && 'cache_control' in b) {
+      const { cache_control: _drop, ...rest } = b;
+      return rest;
+    }
+    return b;
+  };
+  const stripped = messages.map((m) => {
+    if (typeof m.content === 'string') return { ...m };
+    if (Array.isArray(m.content)) return { ...m, content: m.content.map(stripBlock) };
+    return { ...m };
+  });
+  const lastIdx = stripped.length - 1;
+  const last = stripped[lastIdx];
+  if (typeof last.content === 'string') {
+    stripped[lastIdx] = {
+      ...last,
+      content: [{ type: 'text', text: last.content, cache_control: { type: 'ephemeral' } }],
+    };
+  } else if (Array.isArray(last.content) && last.content.length) {
+    const blocks = last.content.slice();
+    const idx = blocks.length - 1;
+    blocks[idx] = { ...blocks[idx], cache_control: { type: 'ephemeral' } };
+    stripped[lastIdx] = { ...last, content: blocks };
+  }
+  return stripped;
+}
+
+function logUsage(tag: string, usage: any) {
+  if (!usage) return;
+  console.log(
+    `[gaia-copilot] ${tag} usage input=${usage.input_tokens ?? '?'} output=${usage.output_tokens ?? '?'} cache_read=${usage.cache_read_input_tokens ?? 0} cache_creation=${usage.cache_creation_input_tokens ?? 0}`,
+  );
+}
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

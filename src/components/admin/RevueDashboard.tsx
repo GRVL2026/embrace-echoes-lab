@@ -1,5 +1,6 @@
+import { Link } from "react-router-dom";
 import {
-  Sparkles, TrendingUp, TrendingDown, AlertTriangle, Target,
+  Sparkles, TrendingUp, TrendingDown, AlertTriangle, AlertOctagon, Info, Target,
 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -334,30 +335,30 @@ export function RevueDashboard({ data }: { data: RevueData }) {
           <h4 className="mb-3 flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             <AlertTriangle className="h-4 w-4 text-primary" /> Risques
           </h4>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {data.risques.map((r, i) => {
-              const style =
-                r.gravite === "haute"
-                  ? "border-rose-500/50 bg-rose-500/10"
-                  : r.gravite === "moyenne"
-                  ? "border-amber-500/40 bg-amber-500/10"
-                  : "border-border/60 bg-background/40";
-              const badge =
-                r.gravite === "haute"
-                  ? "bg-rose-500/20 text-rose-300"
-                  : r.gravite === "moyenne"
-                  ? "bg-amber-500/20 text-amber-300"
-                  : "bg-muted text-muted-foreground";
-              return (
-                <div key={i} className={`rounded-lg border p-3 revue-card ${style}`}>
-                  <div className="mb-1 flex items-center justify-between gap-2">
-                    <div className="font-medium">{r.titre}</div>
-                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${badge}`}>{r.gravite}</span>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {[...data.risques]
+              .sort((a, b) => graviteOrder(a.gravite) - graviteOrder(b.gravite))
+              .map((r, i) => {
+                const cfg = risqueStyle(r.gravite);
+                const Icon = cfg.icon;
+                return (
+                  <div
+                    key={i}
+                    className={`flex h-full flex-col rounded-lg border border-border/60 bg-background/40 p-3 pl-4 revue-card ${cfg.border}`}
+                  >
+                    <div className="mb-1.5 flex items-start justify-between gap-2">
+                      <div className="flex min-w-0 items-start gap-2">
+                        <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${cfg.iconColor}`} />
+                        <div className={`font-semibold leading-snug line-clamp-2 ${cfg.title}`}>{r.titre}</div>
+                      </div>
+                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${cfg.badge}`}>
+                        {r.gravite}
+                      </span>
+                    </div>
+                    <p className="text-sm text-foreground/80">{emphasizeNumbers(r.detail)}</p>
                   </div>
-                  <p className="text-sm text-foreground/80">{r.detail}</p>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         </section>
       )}
@@ -368,24 +369,138 @@ export function RevueDashboard({ data }: { data: RevueData }) {
           <h4 className="mb-3 flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             <Target className="h-4 w-4 text-primary" /> Actions prioritaires
           </h4>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            {[...data.actions].sort((a, b) => a.rang - b.rang).map((a) => (
-              <div key={a.rang} className="relative flex flex-col rounded-lg border border-primary/30 bg-primary/5 p-3 revue-card">
-                <div className="absolute -top-2 -left-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary font-display text-xs font-bold text-primary-foreground">
-                  {a.rang}
-                </div>
-                <div className="mt-2 font-semibold leading-tight">{a.titre}</div>
-                <div className="mt-2 font-display text-xl font-bold tabular-nums text-primary">{eur(a.impact_eur)}</div>
-                <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
-                  <div><span className="text-foreground/80">Qui :</span> {a.qui}</div>
-                  <div><span className="text-foreground/80">Cible :</span> {a.cible}</div>
-                  <div className="mt-1 text-foreground/70">{a.pourquoi}</div>
-                </div>
-              </div>
-            ))}
+          <div className="flex flex-col gap-2">
+            {[...data.actions]
+              .sort((a, b) => a.rang - b.rang)
+              .map((a) => {
+                const highlight = a.rang === 1;
+                const knownClients = collectClients(data);
+                return (
+                  <div
+                    key={a.rang}
+                    className={`group flex flex-col gap-2 rounded-lg border p-3 transition-colors sm:flex-row sm:items-start sm:gap-4 revue-card ${
+                      highlight
+                        ? "border-primary/40 bg-primary/10 hover:bg-primary/15"
+                        : "border-border/60 bg-background/40 hover:bg-background/70"
+                    }`}
+                  >
+                    <div
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-display text-sm font-bold ${
+                        highlight
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-foreground"
+                      }`}
+                    >
+                      {a.rang}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+                        <div className={`font-semibold leading-snug break-words ${highlight ? "text-foreground" : "text-foreground/95"}`}>
+                          {a.titre}
+                        </div>
+                        <div
+                          className={`font-display text-lg font-bold tabular-nums sm:text-xl ${
+                            highlight ? "text-primary" : "text-foreground"
+                          }`}
+                        >
+                          {eur(a.impact_eur)}
+                        </div>
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        <span className="text-foreground/80">Qui :</span> {linkifyClients(a.qui, knownClients)}
+                        <span className="mx-1.5 text-border">·</span>
+                        <span className="text-foreground/80">Cible :</span> {linkifyClients(a.cible, knownClients)}
+                      </div>
+                      {a.pourquoi && (
+                        <div className="mt-1 text-xs text-foreground/70">{emphasizeNumbers(a.pourquoi)}</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
           </div>
         </section>
       )}
     </div>
+  );
+}
+
+const graviteOrder = (g: string) => (g === "haute" ? 0 : g === "moyenne" ? 1 : 2);
+
+function risqueStyle(g: string) {
+  if (g === "haute") {
+    return {
+      border: "border-l-4 border-l-rose-500",
+      badge: "bg-rose-500/20 text-rose-300",
+      icon: AlertOctagon,
+      iconColor: "text-rose-400",
+      title: "text-foreground",
+    };
+  }
+  if (g === "moyenne") {
+    return {
+      border: "border-l-4 border-l-amber-500",
+      badge: "bg-amber-500/20 text-amber-300",
+      icon: AlertTriangle,
+      iconColor: "text-amber-400",
+      title: "text-foreground",
+    };
+  }
+  return {
+    border: "border-l-4 border-l-muted-foreground/60",
+    badge: "bg-muted text-muted-foreground",
+    icon: Info,
+    iconColor: "text-muted-foreground",
+    title: "text-foreground",
+  };
+}
+
+// Bold numbers: montants (€, k€, M€), pourcentages, années 4 chiffres
+function emphasizeNumbers(text: string) {
+  if (!text) return text;
+  const regex = /(\d{1,3}(?:[ .]\d{3})+(?:[.,]\d+)?\s?(?:€|k€|M€|%)?|\d+(?:[.,]\d+)?\s?(?:€|k€|M€|%)|\b(?:19|20)\d{2}\b)/g;
+  const parts: (string | JSX.Element)[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let i = 0;
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    parts.push(<strong key={`n${i++}`} className="font-semibold text-foreground">{m[0]}</strong>);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return <>{parts}</>;
+}
+
+function collectClients(data: RevueData): string[] {
+  const set = new Set<string>();
+  data.mouvements?.clients_hausse?.forEach((c) => c.client && set.add(c.client));
+  data.mouvements?.clients_baisse?.forEach((c) => c.client && set.add(c.client));
+  return Array.from(set);
+}
+
+function linkifyClients(text: string, clients: string[]) {
+  if (!text) return text;
+  const sorted = [...clients].sort((a, b) => b.length - a.length).filter(Boolean);
+  if (sorted.length === 0) return text;
+  const escaped = sorted.map((c) => c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const regex = new RegExp(`(${escaped.join("|")})`, "g");
+  const parts = text.split(regex);
+  return (
+    <>
+      {parts.map((p, i) =>
+        sorted.includes(p) ? (
+          <Link
+            key={i}
+            to={`/admin/gaia/client/${encodeURIComponent(p)}`}
+            className="font-medium text-primary hover:underline"
+          >
+            {p}
+          </Link>
+        ) : (
+          <span key={i}>{p}</span>
+        )
+      )}
+    </>
   );
 }

@@ -194,6 +194,44 @@ const OUBLIER_TOOL = {
   },
 };
 
+const CHART_TOOL = {
+  name: 'afficher_graphique',
+  description: "Affiche un graphique dans la réponse du chat, à l'endroit de l'appel. À utiliser pour toute évolution temporelle ou comparaison de plus de 4 valeurs (à préférer à un long tableau). Le rendu est fait côté page — cet outil renvoie simplement 'ok'.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      type: { type: 'string', enum: ['ligne', 'barres', 'donut'], description: "Type de graphique : 'ligne' pour une évolution temporelle, 'barres' pour une comparaison, 'donut' pour une répartition." },
+      titre: { type: 'string', description: 'Titre court affiché au-dessus du graphique.' },
+      donnees: {
+        type: 'array',
+        description: 'Points du graphique (max 30). x = étiquette (mois, client, famille…), y = valeur numérique.',
+        items: {
+          type: 'object',
+          properties: {
+            x: { type: 'string', description: 'Étiquette du point (ex. "sept.", "Client Machin", "Flippers").' },
+            y: { type: 'number', description: 'Valeur numérique associée.' },
+          },
+          required: ['x', 'y'],
+        },
+      },
+      unite: { type: 'string', description: "Unité affichée (ex : '€', '€ HT', '%', 'unités'). Optionnel." },
+    },
+    required: ['type', 'titre', 'donnees'],
+  },
+};
+
+function summarizeSql(sql: string): string {
+  const s = (sql || '').replace(/\s+/g, ' ').trim();
+  const tables = Array.from(s.matchAll(/\b(?:from|join)\s+([a-z_0-9.]+)/gi)).map((m) => m[1]);
+  const uniq = Array.from(new Set(tables)).slice(0, 2);
+  const hasAgg = /\b(sum|count|avg|group by)\b/i.test(s);
+  const kind = hasAgg ? 'Agrégation' : 'Lecture';
+  const target = uniq.join(' + ') || 'base';
+  return `${kind} ${target}`.slice(0, 80);
+}
+
+
+
 
 const REVUE_TOOL = {
   name: 'build_revue',

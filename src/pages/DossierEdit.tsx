@@ -33,7 +33,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
-import { cn, stockErpBadge } from "@/lib/utils";
+import { cn, stockErpBadge, shopifyThumb } from "@/lib/utils";
 import { DossierPreview } from "@/components/dossier/DossierPreview";
 import { StatusSelect, updateProjectStatus, type DossierStatus } from "@/components/dossier/StatusSelect";
 import { renderPlan2D } from "@/lib/plan2DRender";

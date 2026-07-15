@@ -365,6 +365,77 @@ async function runGaiaQuery(admin: any, sql: string): Promise<unknown> {
   }
 }
 
+/** Charge les entrées actives de mémoire persistante (les plus récentes d'abord). */
+async function loadMemories(admin: any): Promise<Array<{ id: string; categorie: string; contenu: string; auteur: string | null; created_at: string }>> {
+  try {
+    const { data, error } = await admin
+      .from('copilote_memoire')
+      .select('id, categorie, contenu, auteur, created_at')
+      .eq('actif', true)
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (error) {
+      console.log(`[gaia-copilot] loadMemories error: ${error.message}`);
+      return [];
+    }
+    return (data as any[]) ?? [];
+  } catch (e: any) {
+    console.log(`[gaia-copilot] loadMemories fatal: ${e?.message ?? e}`);
+    return [];
+  }
+}
+
+/** Formate les mémoires pour injection dans le prompt système (bloc dynamique, non caché). */
+function formatMemories(memos: Array<{ id: string; categorie: string; contenu: string; created_at: string }>): string {
+  if (!memos.length) {
+    return `MÉMOIRE DU COPILOTE\n(vide) — utilise l'outil "memoriser" dès qu'une décision, un plan d'action ou un contexte durable est évoqué.`;
+  }
+  const byCat = new Map<string, string[]>();
+  for (const m of memos) {
+    const cat = (m.categorie || 'note').toLowerCase();
+    if (!byCat.has(cat)) byCat.set(cat, []);
+    const dt = new Date(m.created_at).toLocaleDateString('fr-FR');
+    byCat.get(cat)!.push(`  • [${m.id}] (${dt}) ${m.contenu}`);
+  }
+  const sections = Array.from(byCat.entries())
+    .map(([cat, lines]) => `▸ ${cat.toUpperCase()}\n${lines.join('\n')}`)
+    .join('\n');
+  return `MÉMOIRE DU COPILOTE (entrées actives, à prendre en compte dans chaque réponse — outils : "memoriser" pour ajouter, "oublier" pour désactiver via id)\n${sections}`;
+}
+
+async function memoriser(admin: any, categorie: string, contenu: string): Promise<unknown> {
+  try {
+    const cat = (categorie || 'note').toString().trim().slice(0, 40) || 'note';
+    const txt = (contenu || '').toString().trim().slice(0, 2000);
+    if (!txt) return { error: 'contenu vide' };
+    const { data, error } = await admin
+      .from('copilote_memoire')
+      .insert({ categorie: cat, contenu: txt, auteur: 'copilote', actif: true })
+      .select('id, categorie, contenu, created_at')
+      .single();
+    if (error) return { error: error.message };
+    return { ok: true, memoire: data };
+  } catch (e: any) {
+    return { error: e?.message ?? String(e) };
+  }
+}
+
+async function oublier(admin: any, id: string): Promise<unknown> {
+  try {
+    const cleanId = (id || '').toString().trim();
+    if (!cleanId) return { error: 'id manquant' };
+    const { error } = await admin
+      .from('copilote_memoire')
+      .update({ actif: false })
+      .eq('id', cleanId);
+    if (error) return { error: error.message };
+    return { ok: true, id: cleanId };
+  } catch (e: any) {
+    return { error: e?.message ?? String(e) };
+  }
+}
+
+
 async function anthropicCall(payload: Record<string, unknown>) {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY manquant');

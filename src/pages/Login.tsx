@@ -29,7 +29,7 @@ export default function Login() {
       toast({ title: "Connexion impossible", description: error.message, variant: "destructive" });
       return;
     }
-    navigate(location.state?.from ?? "/dossiers", { replace: true });
+    navigate(location.state?.from ?? "/", { replace: true });
   };
 
   return (

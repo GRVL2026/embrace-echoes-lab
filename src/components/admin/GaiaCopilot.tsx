@@ -9,14 +9,33 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import {
   Loader2, Sparkles, Copy, Send, FileText, UserX, Package, History, ExternalLink,
+  Search, ThumbsUp, ThumbsDown, BarChart3,
 } from "lucide-react";
 import { RevueDashboard, revueToText, eur, type RevueData } from "./RevueDashboard";
+import { CopilotChart, type ChartPayload } from "./CopilotChart";
 
 type DevisRelance = { n_cde: string; code_client: string; client: string; date_devis: string; age_jours: number; montant_ht: number };
 type ClientDormant = { code_client: string; client: string; ca_annee_courante: number; ca_n1: number; ca_n2: number; derniere_facture: string | null };
 type StockDormant = { code_article: string; description: string; famille: string; quantite: number; valeur_achat: number };
-type ChatMsg = { role: "user" | "assistant"; content: string };
 type SavedRevue = { id: string; titre: string | null; created_at: string };
+
+type ChatPart =
+  | { type: "text"; text: string }
+  | { type: "chart"; chart: ChartPayload };
+
+type ChatStep = { type: "sql"; summary: string; query: string };
+
+type ChatMsg =
+  | { role: "user"; content: string }
+  | {
+      role: "assistant";
+      parts: ChatPart[];
+      steps: ChatStep[];
+      streaming?: boolean;
+      question?: string;
+      sqlUsed?: string[];
+      feedback?: 1 | -1 | null;
+    };
 
 const SUGGESTIONS = [
   "Quels clients relancer en priorité ?",
@@ -33,6 +52,7 @@ async function formatFunctionError(error: unknown) {
   }
   return error instanceof Error ? error.message : String(error);
 }
+
 
 async function streamRevue(onJsonBuffer: (buf: string) => void): Promise<string> {
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession();

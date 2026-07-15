@@ -63,7 +63,7 @@ type SyncLogRow = {
 };
 
 export default function AdminGaia() {
-  const { isAdmin, loading: authLoading } = useAuth();
+  const { isAdmin, canAccessGaia, loading: authLoading } = useAuth();
   const [running, setRunning] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [diag, setDiag] = useState<Diagnostic | null>(null);
@@ -209,8 +209,8 @@ export default function AdminGaia() {
   };
 
   useEffect(() => {
-    if (isAdmin) loadLogs();
-  }, [isAdmin]);
+    if (canAccessGaia) loadLogs();
+  }, [canAccessGaia]);
 
   if (authLoading) {
     return (
@@ -219,7 +219,7 @@ export default function AdminGaia() {
       </div>
     );
   }
-  if (!isAdmin) return <Navigate to="/dossiers" replace />;
+  if (!canAccessGaia) return <Navigate to="/dossiers" replace />;
 
   const runDiscover = async () => {
     setRunning(true);
@@ -303,7 +303,7 @@ export default function AdminGaia() {
       <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-3 sm:px-6 gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <MobileNav />
-          <Link to="/dossiers" className="flex items-center gap-2 min-w-0">
+          <Link to={isAdmin ? "/" : "/dossiers"} className="flex items-center gap-2 min-w-0">
             <img src={logoImg} alt="Arcade OS logo" className="h-7 w-auto object-contain flex-shrink-0" />
             <h1 className="font-display text-base sm:text-xl font-bold tracking-tight truncate">
               <span className="text-primary text-glow-purple">Arcade</span>{" "}
@@ -313,8 +313,8 @@ export default function AdminGaia() {
           <nav className="ml-4 hidden md:flex items-center gap-1">
             <Link to="/dossiers" className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted">Dossiers</Link>
             <Link to="/planner" className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted">Arcade Planner</Link>
-            <Link to="/admin" className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center gap-1"><Shield className="h-3 w-3" /> Admin</Link>
             <Link to="/admin/gaia" className="rounded-md bg-primary/15 border border-primary/40 text-primary px-3 py-1 text-xs font-medium inline-flex items-center gap-1"><Database className="h-3 w-3" /> Gaia</Link>
+            {isAdmin && <Link to="/admin" className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center gap-1"><Shield className="h-3 w-3" /> Admin</Link>}
           </nav>
         </div>
         <UserMenu />

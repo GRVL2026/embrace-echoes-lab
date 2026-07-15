@@ -73,7 +73,7 @@ function formatRelative(iso: string): string {
 
 export default function DossiersList() {
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { isAdmin, canAccessGaia } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [viewStats, setViewStats] = useState<Record<string, ViewStat>>({});
@@ -170,7 +170,7 @@ export default function DossiersList() {
           <div className="md:hidden flex-shrink-0">
             <MobileNav />
           </div>
-          <Link to="/dossiers" className="flex items-center gap-2 min-w-0">
+          <Link to={isAdmin ? "/" : "/dossiers"} className="flex items-center gap-2 min-w-0">
             <img src={logoImg} alt="Arcade OS logo" className="h-6 sm:h-7 w-auto object-contain flex-shrink-0" />
             <h1 className="font-display text-sm sm:text-xl font-bold tracking-tight whitespace-nowrap truncate">
               <span className="text-primary text-glow-purple">Arcade</span>{" "}
@@ -190,21 +190,21 @@ export default function DossiersList() {
             >
               Arcade Planner
             </Link>
+            {canAccessGaia && (
+              <Link
+                to="/admin/gaia"
+                className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center gap-1"
+              >
+                <Database className="h-3 w-3" /> Gaia
+              </Link>
+            )}
             {isAdmin && (
-              <>
-                <Link
-                  to="/admin"
-                  className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center gap-1"
-                >
-                  <Shield className="h-3 w-3" /> Admin
-                </Link>
-                <Link
-                  to="/admin/gaia"
-                  className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center gap-1"
-                >
-                  <Database className="h-3 w-3" /> Gaia
-                </Link>
-              </>
+              <Link
+                to="/admin"
+                className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center gap-1"
+              >
+                <Shield className="h-3 w-3" /> Admin
+              </Link>
             )}
           </nav>
         </div>

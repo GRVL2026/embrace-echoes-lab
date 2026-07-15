@@ -174,7 +174,7 @@ export default function DossierEdit() {
           .order("name"),
         (supabase as any)
           .from("catalogue_erp")
-          .select("code, description, famille, prix_ht"),
+          .select("code, description, famille, prix_ht, stock"),
       ]);
       if (pe) toast({ title: "Erreur", description: pe.message, variant: "destructive" });
       if (be) toast({ title: "Erreur", description: be.message, variant: "destructive" });

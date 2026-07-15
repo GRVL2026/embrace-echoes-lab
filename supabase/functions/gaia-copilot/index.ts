@@ -8,9 +8,19 @@ const ANTHROPIC_VERSION = '2023-06-01';
 const MAX_TOOL_ROUNDS = 6;
 const MAX_TOKENS_PER_TURN = 8000;
 
-/** Convert system string to Anthropic content blocks with an ephemeral cache breakpoint on the last block. */
-function systemBlocks(system: string) {
-  return [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }];
+/**
+ * Convert the system prompt to Anthropic content blocks.
+ * `system` is the STABLE prefix (schema + charte) that stays cached across turns.
+ * `dynamicSuffix`, when provided, is appended as an UNCACHED block AFTER the cache
+ * breakpoint — this is where volatile content like the persistent memory lives,
+ * so the cached prefix stays byte-identical across calls.
+ */
+function systemBlocks(system: string, dynamicSuffix?: string) {
+  const blocks: any[] = [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }];
+  if (dynamicSuffix && dynamicSuffix.trim()) {
+    blocks.push({ type: 'text', text: dynamicSuffix });
+  }
+  return blocks;
 }
 
 /**

@@ -64,10 +64,17 @@ function productFicheUrl(p: { product_url?: string | null; name: string }): stri
   return `https://avranchesautomatic.com/search?q=${encodeURIComponent(p.name)}`;
 }
 type SelectedProduct = {
-  product_id: string;
+  product_id?: string;
+  cegid_code?: string;
   name: string;
   qty: number;
   unit_price: number;
+};
+type ErpArticle = {
+  code: string;
+  description: string | null;
+  famille: string | null;
+  prix_ht: number | null;
 };
 type PricingLine = { label: string; qty: number; amount: number };
 type Pricing = { lines: PricingLine[]; total_ht: number; monthly: number };

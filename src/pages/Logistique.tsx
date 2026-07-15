@@ -604,8 +604,8 @@ function ExpeditionDialog({
         {/* Coûts */}
         <Section title="Coûts">
           <Grid>
-            <Field label="Coût fret (€)"><Input type="number" step="0.01" value={form.cout_fret ?? ""} onChange={(e) => set("cout_fret", e.target.value as any)} /></Field>
-            <Field label="Coût EXW (€)"><Input type="number" step="0.01" value={form.cout_exw ?? ""} onChange={(e) => set("cout_exw", e.target.value as any)} /></Field>
+            <Field label="Coût fret ($)"><Input type="number" step="0.01" value={form.cout_fret ?? ""} onChange={(e) => set("cout_fret", e.target.value as any)} /></Field>
+            <Field label="Coût EXW ($)"><Input type="number" step="0.01" value={form.cout_exw ?? ""} onChange={(e) => set("cout_exw", e.target.value as any)} /></Field>
           </Grid>
         </Section>
 

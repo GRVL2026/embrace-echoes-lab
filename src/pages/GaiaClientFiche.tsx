@@ -60,7 +60,7 @@ const ageBadgeClass = (days: number) => {
 const yearOf = (d: string | null) => (d ? new Date(d).getFullYear() : null);
 
 export default function GaiaClientFiche() {
-  const { canAccessGaia: isAdmin, loading: authLoading } = useAuth();
+  const { isAdmin, canAccessGaia, loading: authLoading } = useAuth();
   const { nom } = useParams<{ nom: string }>();
   const clientName = useMemo(() => (nom ? decodeURIComponent(nom) : ""), [nom]);
 
@@ -263,14 +263,14 @@ export default function GaiaClientFiche() {
       </div>
     );
   }
-  if (!isAdmin) return <Navigate to="/dossiers" replace />;
+  if (!canAccessGaia) return <Navigate to="/dossiers" replace />;
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground">
       <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-3 sm:px-6 gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <MobileNav />
-          <Link to="/" className="flex items-center gap-2 min-w-0">
+          <Link to={isAdmin ? "/" : "/dossiers"} className="flex items-center gap-2 min-w-0">
             <img src={logoImg} alt="Arcade OS logo" className="h-7 w-auto object-contain flex-shrink-0" />
             <h1 className="font-display text-base sm:text-xl font-bold tracking-tight truncate">
               <span className="text-primary text-glow-purple">Arcade</span>{" "}

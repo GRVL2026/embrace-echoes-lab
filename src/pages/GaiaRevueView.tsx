@@ -13,14 +13,14 @@ import { RevueDashboard, revueToText, type RevueData } from "@/components/admin/
 type RevueRow = { id: string; titre: string | null; created_at: string; data: RevueData };
 
 export default function GaiaRevueView() {
-  const { canAccessGaia: isAdmin, loading: authLoading } = useAuth();
+  const { isAdmin, canAccessGaia, loading: authLoading } = useAuth();
   const { id } = useParams<{ id: string }>();
   const [row, setRow] = useState<RevueRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isAdmin || !id) return;
+    if (!canAccessGaia || !id) return;
     (async () => {
       setLoading(true);
       const { data, error } = await (supabase as any)
@@ -33,7 +33,7 @@ export default function GaiaRevueView() {
       else setRow(data as RevueRow);
       setLoading(false);
     })();
-  }, [id, isAdmin]);
+  }, [id, canAccessGaia]);
 
   if (authLoading) {
     return (
@@ -42,7 +42,7 @@ export default function GaiaRevueView() {
       </div>
     );
   }
-  if (!isAdmin) return <Navigate to="/dossiers" replace />;
+  if (!canAccessGaia) return <Navigate to="/dossiers" replace />;
 
   const copyLink = async () => {
     try {
@@ -66,7 +66,7 @@ export default function GaiaRevueView() {
       <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-3 sm:px-6 gap-2 print:hidden">
         <div className="flex items-center gap-2 min-w-0">
           <MobileNav />
-          <Link to="/" className="flex items-center gap-2 min-w-0">
+          <Link to={isAdmin ? "/" : "/dossiers"} className="flex items-center gap-2 min-w-0">
             <img src={logoImg} alt="Arcade OS logo" className="h-7 w-auto object-contain flex-shrink-0" />
             <h1 className="font-display text-base sm:text-xl font-bold tracking-tight truncate">
               <span className="text-primary text-glow-purple">Arcade</span>{" "}

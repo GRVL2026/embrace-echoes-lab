@@ -92,7 +92,7 @@ function stockBadge(stock: string | number | null | undefined) {
 }
 
 export default function Catalogue() {
-  const { isAdmin, canAccessGaia } = useAuth();
+  const { isAdmin, canAccessGaia, isLoading: authLoading } = useAuth();
   const [siteRows, setSiteRows] = useState<SiteProduct[]>([]);
   const [erpRows, setErpRows] = useState<ErpProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -170,7 +170,7 @@ export default function Catalogue() {
       <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-3 sm:px-6 gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <MobileNav />
-          <Link to="/" className="flex items-center gap-2 min-w-0">
+          <Link to={authLoading ? "/catalogue" : isAdmin ? "/" : "/dossiers"} className="flex items-center gap-2 min-w-0">
             <img src={logoImg} alt="Arcade OS logo" className="h-7 w-auto object-contain flex-shrink-0" />
             <h1 className="font-display text-base sm:text-xl font-bold tracking-tight truncate">
               <span className="text-primary text-glow-purple">Arcade</span>{" "}

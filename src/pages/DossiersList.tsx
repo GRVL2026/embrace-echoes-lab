@@ -73,7 +73,7 @@ function formatRelative(iso: string): string {
 
 export default function DossiersList() {
   const navigate = useNavigate();
-  const { isAdmin, canAccessGaia } = useAuth();
+  const { isAdmin, canAccessGaia, isLoading: authLoading } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [viewStats, setViewStats] = useState<Record<string, ViewStat>>({});
@@ -170,13 +170,18 @@ export default function DossiersList() {
           <div className="md:hidden flex-shrink-0">
             <MobileNav />
           </div>
-          <Link to={isAdmin ? "/" : "/dossiers"} className="flex items-center gap-2 min-w-0">
+          {authLoading ? (
+            <div className="flex items-center gap-2 min-w-0" aria-label="Chargement des accès">
+              <img src={logoImg} alt="Arcade OS logo" className="h-6 sm:h-7 w-auto object-contain flex-shrink-0" />
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : <Link to={isAdmin ? "/" : "/dossiers"} className="flex items-center gap-2 min-w-0">
             <img src={logoImg} alt="Arcade OS logo" className="h-6 sm:h-7 w-auto object-contain flex-shrink-0" />
             <h1 className="font-display text-sm sm:text-xl font-bold tracking-tight whitespace-nowrap truncate">
               <span className="text-primary text-glow-purple">Arcade</span>{" "}
               <span className="text-secondary text-glow-green">OS</span>
             </h1>
-          </Link>
+          </Link>}
           <nav className="ml-4 hidden md:flex items-center gap-1">
             <Link
               to="/dossiers"

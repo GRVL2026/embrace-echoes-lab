@@ -634,6 +634,7 @@ Deno.serve(async (req) => {
 
       const { messages: finalMessages, last, rounds, journal } = await toolLoop({
         admin,
+        model: CHAT_MODEL,
         system: SYSTEM_PROMPT,
         initialMessages,
       });

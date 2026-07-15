@@ -1249,30 +1249,62 @@ export default function DossierEdit() {
                 />
                 {searchResults.length > 0 ? (
                   <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-md border border-border bg-popover shadow-lg">
-                    {searchResults.map((r) => (
-                      <button
-                        key={r.id}
-                        type="button"
-                        onClick={() => addProduct(r)}
-                        className="flex w-full items-center justify-between gap-3 border-b border-border/60 px-3 py-2 text-left text-sm hover:bg-accent last:border-b-0"
-                      >
-                        <div className="min-w-0">
-                          <div className="truncate font-medium">{r.name}</div>
-                          <div className="truncate text-xs text-muted-foreground">
-                            {[r.vendor, r.category].filter(Boolean).join(" · ") || "—"}
+                    {searchResults.map((hit) => {
+                      if (hit.kind === "site") {
+                        const r = hit.item;
+                        return (
+                          <button
+                            key={`site-${r.id}`}
+                            type="button"
+                            onClick={() => addProduct(r)}
+                            className="flex w-full items-center justify-between gap-3 border-b border-border/60 px-3 py-2 text-left text-sm hover:bg-accent last:border-b-0"
+                          >
+                            <div className="min-w-0">
+                              <div className="truncate font-medium">{r.name}</div>
+                              <div className="truncate text-xs text-muted-foreground">
+                                {[r.vendor, r.category].filter(Boolean).join(" · ") || "—"}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              {r.price_erp_ht != null ? (
+                                <span className="text-primary font-medium">{r.price_erp_ht} € HT (ERP)</span>
+                              ) : r.price != null ? (
+                                <span title="Prix site TTC — non vérifié ERP">{r.price} € TTC</span>
+                              ) : null}
+                              {r.price_monthly != null ? <span>· {r.price_monthly} €/mois</span> : null}
+                              <Plus className="h-4 w-4" />
+                            </div>
+                          </button>
+                        );
+                      }
+                      const r = hit.item;
+                      return (
+                        <button
+                          key={`erp-${r.code}`}
+                          type="button"
+                          onClick={() => addErpArticle(r)}
+                          className="flex w-full items-center justify-between gap-3 border-b border-border/60 px-3 py-2 text-left text-sm hover:bg-accent last:border-b-0"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 truncate">
+                              <span className="truncate font-medium">{r.description || r.code}</span>
+                              <span className="rounded border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                                ERP
+                              </span>
+                            </div>
+                            <div className="truncate text-xs text-muted-foreground font-mono">
+                              {r.code}{r.famille ? ` · ${r.famille}` : ""}
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          {r.price_erp_ht != null ? (
-                            <span className="text-primary font-medium">{r.price_erp_ht} € HT (ERP)</span>
-                          ) : r.price != null ? (
-                            <span title="Prix site TTC — non vérifié ERP">{r.price} € TTC</span>
-                          ) : null}
-                          {r.price_monthly != null ? <span>· {r.price_monthly} €/mois</span> : null}
-                          <Plus className="h-4 w-4" />
-                        </div>
-                      </button>
-                    ))}
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            {r.prix_ht != null ? (
+                              <span className="text-primary font-medium">{r.prix_ht} € HT</span>
+                            ) : null}
+                            <Plus className="h-4 w-4" />
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 ) : null}
               </div>

@@ -17,6 +17,7 @@ import { toast } from "@/hooks/use-toast";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   ArrowLeft,
+  Boxes,
   Check,
   Eye,
   GripVertical,

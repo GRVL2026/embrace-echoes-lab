@@ -60,7 +60,7 @@ const ageBadgeClass = (days: number) => {
 const yearOf = (d: string | null) => (d ? new Date(d).getFullYear() : null);
 
 export default function GaiaClientFiche() {
-  const { isAdmin, loading: authLoading } = useAuth();
+  const { canAccessGaia: isAdmin, loading: authLoading } = useAuth();
   const { nom } = useParams<{ nom: string }>();
   const clientName = useMemo(() => (nom ? decodeURIComponent(nom) : ""), [nom]);
 

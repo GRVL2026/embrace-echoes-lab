@@ -13,7 +13,7 @@ import { RevueDashboard, revueToText, type RevueData } from "@/components/admin/
 type RevueRow = { id: string; titre: string | null; created_at: string; data: RevueData };
 
 export default function GaiaRevueView() {
-  const { isAdmin, loading: authLoading } = useAuth();
+  const { canAccessGaia: isAdmin, loading: authLoading } = useAuth();
   const { id } = useParams<{ id: string }>();
   const [row, setRow] = useState<RevueRow | null>(null);
   const [loading, setLoading] = useState(true);

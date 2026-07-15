@@ -2,11 +2,16 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
+export type AppRole = "admin" | "direction" | "commercial";
+
 type AuthContextValue = {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  roles: AppRole[];
   isAdmin: boolean;
+  isDirection: boolean;
+  canAccessGaia: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (
     email: string,
@@ -22,7 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [roles, setRoles] = useState<AppRole[]>([]);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
@@ -39,17 +44,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!user) {
-      setIsAdmin(false);
+      setRoles([]);
       return;
     }
     (supabase as any)
       .from("user_roles")
       .select("role")
       .eq("user_id", user.id)
-      .eq("role", "admin")
-      .maybeSingle()
-      .then(({ data }: any) => setIsAdmin(!!data));
+      .then(({ data }: any) => {
+        setRoles(((data ?? []) as { role: AppRole }[]).map((r) => r.role));
+      });
   }, [user]);
+
+  const isAdmin = roles.includes("admin");
+  const isDirection = roles.includes("direction");
+  const canAccessGaia = isAdmin || isDirection;
 
   const signIn: AuthContextValue["signIn"] = async (email, password) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -73,7 +82,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, isAdmin, signIn, signUp, signOut }}>
+    <AuthContext.Provider
+      value={{ user, session, loading, roles, isAdmin, isDirection, canAccessGaia, signIn, signUp, signOut }}
+    >
       {children}
     </AuthContext.Provider>
   );

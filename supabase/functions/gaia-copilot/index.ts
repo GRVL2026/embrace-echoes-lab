@@ -159,6 +159,32 @@ const SQL_TOOL = {
   },
 };
 
+const MEMORISE_TOOL = {
+  name: 'memoriser',
+  description: "Enregistre une note durable dans la mémoire du copilote (décisions, plans d'action, contextes, suivis). NE MÉMORISE JAMAIS de chiffres bruts (ils sont dans la base) — uniquement du contexte qualitatif qui devra être rappelé dans les prochaines conversations. Catégories usuelles : 'decision', 'plan', 'contexte', 'suivi', 'note'.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      categorie: { type: 'string', description: "Catégorie courte : 'decision' | 'plan' | 'contexte' | 'suivi' | 'note'." },
+      contenu: { type: 'string', description: 'Note à mémoriser, phrase complète, autonome (compréhensible sans le contexte de la conversation).' },
+    },
+    required: ['categorie', 'contenu'],
+  },
+};
+
+const OUBLIER_TOOL = {
+  name: 'oublier',
+  description: "Marque une entrée de mémoire comme obsolète (actif = false) à partir de son id. Utilise-le quand une décision est réalisée, annulée ou remplacée.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', description: 'UUID de l\'entrée mémoire à désactiver.' },
+    },
+    required: ['id'],
+  },
+};
+
+
 const REVUE_TOOL = {
   name: 'build_revue',
   description: "Construit la revue commerciale du mois sous forme structurée pour un tableau de bord visuel.",

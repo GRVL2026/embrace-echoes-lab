@@ -258,6 +258,12 @@ export default function Logistique() {
         initial={editing}
         onSaved={() => qc.invalidateQueries({ queryKey: ["logi_expeditions"] })}
       />
+      <ImportExcelDialog
+        open={openImport}
+        onOpenChange={setOpenImport}
+        existing={expeditions}
+        onDone={() => qc.invalidateQueries({ queryKey: ["logi_expeditions"] })}
+      />
     </div>
   );
 }

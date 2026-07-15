@@ -131,6 +131,7 @@ export default function DossierEdit() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [modules, setModules] = useState<BrandModule[]>([]);
   const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
+  const [erpCatalog, setErpCatalog] = useState<ErpArticle[]>([]);
   const [productQuery, setProductQuery] = useState("");
   const [form, setForm] = useState<Project | null>(null);
   const [views, setViews] = useState<{ id: number; viewed_at: string; user_agent: string | null }[]>([]);
@@ -146,6 +147,7 @@ export default function DossierEdit() {
         { data: b, error: be },
         { data: m, error: me },
         { data: c, error: ce },
+        { data: erp },
       ] = await Promise.all([
         (supabase as any)
           .from("projects")
@@ -167,6 +169,9 @@ export default function DossierEdit() {
           .select("id, name, category, price, price_monthly, price_erp_ht, cegid_code, vendor, images, product_url")
           .eq("active", true)
           .order("name"),
+        (supabase as any)
+          .from("catalogue_erp")
+          .select("code, description, famille, prix_ht"),
       ]);
       if (pe) toast({ title: "Erreur", description: pe.message, variant: "destructive" });
       if (be) toast({ title: "Erreur", description: be.message, variant: "destructive" });
@@ -184,6 +189,7 @@ export default function DossierEdit() {
       setBrands((b as Brand[]) ?? []);
       setModules((m as BrandModule[]) ?? []);
       setCatalog((c as CatalogProduct[]) ?? []);
+      setErpCatalog((erp as ErpArticle[]) ?? []);
       setLoading(false);
 
       // Consultations : charge l'historique et éteint le badge « Nouvelles vues »

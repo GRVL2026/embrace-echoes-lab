@@ -22,8 +22,11 @@ import {
   Database,
   Shield,
   ShoppingBag,
+  BadgeCheck,
+  AlertTriangle,
 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
+import { shopifyThumb, stockErpBadge, cn } from "@/lib/utils";
 
 type SiteProduct = {
   id: string;
@@ -36,6 +39,7 @@ type SiteProduct = {
   images: string[] | null;
   product_url: string | null;
   stock: string | null;
+  stock_erp: number | null;
 };
 
 type ErpProduct = {
@@ -102,7 +106,7 @@ export default function Catalogue() {
       const [{ data: site }, { data: erp }] = await Promise.all([
         (supabase as any)
           .from("catalog_products")
-          .select("id, name, category, vendor, price, price_erp_ht, cegid_code, images, product_url, stock")
+          .select("id, name, category, vendor, price, price_erp_ht, cegid_code, images, product_url, stock, stock_erp")
           .eq("active", true)
           .order("name"),
         (supabase as any)
@@ -247,8 +251,10 @@ export default function Catalogue() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredSite.map((p) => {
-              const img = p.images?.[0] ?? null;
-              const stock = stockBadge(p.stock);
+              const rawImg = p.images?.[0] ?? null;
+              const thumb = shopifyThumb(rawImg, 480);
+              const badge = stockErpBadge(p.stock_erp, p.cegid_code);
+              const priceVerified = p.price_erp_ht != null;
               const href = p.product_url && p.product_url.trim()
                 ? p.product_url
                 : `https://avranchesautomatic.com/search?q=${encodeURIComponent(p.name)}`;
@@ -258,50 +264,70 @@ export default function Catalogue() {
                   className="group flex flex-col overflow-hidden rounded-lg border border-border bg-card/40 transition hover:border-primary/50"
                 >
                   <div className="relative aspect-[4/3] w-full overflow-hidden bg-white">
-                    {img ? (
+                    {/* Skeleton placeholder (masqué une fois l'image chargée) */}
+                    <div className="absolute inset-0 animate-pulse bg-muted/40" aria-hidden />
+                    {thumb ? (
                       <img
-                        src={img}
+                        src={thumb}
                         alt={p.name}
                         loading="lazy"
-                        className="h-full w-full object-contain p-2 transition group-hover:scale-[1.02]"
+                        decoding="async"
+                        onLoad={(e) => {
+                          const prev = (e.currentTarget.previousElementSibling as HTMLElement | null);
+                          if (prev) prev.style.display = "none";
+                        }}
+                        className="relative h-full w-full object-contain p-2 transition group-hover:scale-[1.02]"
                       />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                      <div className="relative flex h-full w-full items-center justify-center text-xs text-muted-foreground">
                         Visuel indisponible
                       </div>
                     )}
+                    {/* Pastille stock — compact sur mobile, libellé dès sm */}
+                    <div
+                      className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-background/85 backdrop-blur-sm px-1.5 py-1 shadow-sm border border-border/60"
+                      title={badge.label}
+                      aria-label={badge.label}
+                    >
+                      <span className={cn("h-2 w-2 rounded-full", badge.color)} />
+                      <span className="hidden sm:inline text-[10px] font-medium leading-none">{badge.label}</span>
+                    </div>
                   </div>
                   <div className="flex flex-1 flex-col gap-2 p-3">
                     <div className="flex items-start justify-between gap-2">
                       <h3 className="text-sm font-semibold leading-tight line-clamp-2">{p.name}</h3>
-                      {stock ? (
-                        <Badge
-                          variant="outline"
-                          className={
-                            stock.tone === "destructive"
-                              ? "text-[10px] border-destructive/60 text-destructive"
-                              : stock.tone === "warning"
-                              ? "text-[10px] border-amber-500/60 text-amber-500"
-                              : "text-[10px] border-secondary/60 text-secondary"
-                          }
-                        >
-                          {stock.label}
-                        </Badge>
-                      ) : null}
                     </div>
                     <div className="text-[11px] text-muted-foreground">
                       {[p.vendor, p.category].filter(Boolean).join(" · ") || "—"}
                     </div>
                     <div className="mt-auto flex items-end justify-between gap-2 pt-2">
-                      <div className="text-sm">
-                        {p.price_erp_ht != null ? (
-                          <span className="font-semibold text-primary">
-                            {fmtEur(p.price_erp_ht)} <span className="text-[10px] font-normal text-muted-foreground">HT</span>
-                          </span>
+                      <div className="text-sm inline-flex items-center gap-1.5">
+                        {priceVerified ? (
+                          <>
+                            <span className="font-semibold text-primary">
+                              {fmtEur(p.price_erp_ht)} <span className="text-[10px] font-normal text-muted-foreground">HT</span>
+                            </span>
+                            <span
+                              title="Prix vérifié ERP"
+                              aria-label="Prix vérifié ERP"
+                              className="inline-flex items-center rounded-full bg-emerald-500/15 text-emerald-500 px-1 py-0.5"
+                            >
+                              <BadgeCheck className="h-3 w-3" />
+                            </span>
+                          </>
                         ) : p.price != null ? (
-                          <span className="font-semibold">
-                            {fmtEur(p.price)} <span className="text-[10px] font-normal text-muted-foreground">TTC</span>
-                          </span>
+                          <>
+                            <span className="font-semibold">
+                              {fmtEur(p.price)} <span className="text-[10px] font-normal text-muted-foreground">TTC</span>
+                            </span>
+                            <span
+                              title="Prix site TTC, non vérifié ERP"
+                              aria-label="Prix site TTC, non vérifié ERP"
+                              className="inline-flex items-center rounded-full bg-amber-500/15 text-amber-500 px-1 py-0.5"
+                            >
+                              <AlertTriangle className="h-3 w-3" />
+                            </span>
+                          </>
                         ) : (
                           <span className="text-xs text-muted-foreground">Prix non renseigné</span>
                         )}
@@ -320,9 +346,11 @@ export default function Catalogue() {
               );
             })}
 
+
             {filteredErp.map((p) => {
               const Icon = iconForFamille(p.famille);
-              const stock = stockBadge(p.stock);
+              const badge = stockErpBadge(p.stock, p.code);
+              const priceVerified = p.prix_ht != null;
               return (
                 <article
                   key={`erp-${p.code}`}
@@ -332,40 +360,41 @@ export default function Catalogue() {
                     <Icon className="h-14 w-14 text-muted-foreground/70" strokeWidth={1.2} />
                     <Badge
                       variant="outline"
-                      className="absolute right-2 top-2 text-[10px] border-primary/40 text-primary bg-background/80"
+                      className="absolute left-2 top-2 text-[10px] border-primary/40 text-primary bg-background/80"
                     >
                       ERP
                     </Badge>
+                    <div
+                      className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-background/85 backdrop-blur-sm px-1.5 py-1 shadow-sm border border-border/60"
+                      title={badge.label}
+                      aria-label={badge.label}
+                    >
+                      <span className={cn("h-2 w-2 rounded-full", badge.color)} />
+                      <span className="hidden sm:inline text-[10px] font-medium leading-none">{badge.label}</span>
+                    </div>
                   </div>
                   <div className="flex flex-1 flex-col gap-2 p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="text-sm font-semibold leading-tight line-clamp-2">
-                        {p.description || p.code}
-                      </h3>
-                      {stock ? (
-                        <Badge
-                          variant="outline"
-                          className={
-                            stock.tone === "destructive"
-                              ? "text-[10px] border-destructive/60 text-destructive"
-                              : stock.tone === "warning"
-                              ? "text-[10px] border-amber-500/60 text-amber-500"
-                              : "text-[10px] border-secondary/60 text-secondary"
-                          }
-                        >
-                          {stock.label}
-                        </Badge>
-                      ) : null}
-                    </div>
+                    <h3 className="text-sm font-semibold leading-tight line-clamp-2">
+                      {p.description || p.code}
+                    </h3>
                     <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                       <span className="font-mono">{p.code}</span>
                       {p.famille ? <span>· {p.famille}</span> : null}
                     </div>
-                    <div className="mt-auto pt-2 text-sm">
-                      {p.prix_ht != null ? (
-                        <span className="font-semibold text-primary">
-                          Tarif HT : {fmtEur(p.prix_ht)}
-                        </span>
+                    <div className="mt-auto pt-2 text-sm inline-flex items-center gap-1.5">
+                      {priceVerified ? (
+                        <>
+                          <span className="font-semibold text-primary">
+                            Tarif HT : {fmtEur(p.prix_ht)}
+                          </span>
+                          <span
+                            title="Prix vérifié ERP"
+                            aria-label="Prix vérifié ERP"
+                            className="inline-flex items-center rounded-full bg-emerald-500/15 text-emerald-500 px-1 py-0.5"
+                          >
+                            <BadgeCheck className="h-3 w-3" />
+                          </span>
+                        </>
                       ) : (
                         <span className="text-xs text-muted-foreground">Tarif non renseigné</span>
                       )}
@@ -374,6 +403,7 @@ export default function Catalogue() {
                 </article>
               );
             })}
+
           </div>
         )}
       </main>

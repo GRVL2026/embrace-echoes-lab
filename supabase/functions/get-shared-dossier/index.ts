@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
     const { data: project, error: pErr } = await admin
       .from("projects")
       .select(
-        "id, client_name, brand_id, offer, selected_modules, selected_products, pricing, context, solution, scope, plan_data, status, share_slug, is_shared, share_visibility, share_password",
+        "id, owner_id, client_name, brand_id, offer, selected_modules, selected_products, pricing, context, solution, scope, plan_data, status, share_slug, is_shared, share_visibility, share_password",
       )
       .eq("share_slug", slug)
       .eq("is_shared", true)
@@ -128,6 +128,30 @@ Deno.serve(async (req) => {
     try {
       const ua = req.headers.get("user-agent") ?? null;
       await admin.from("dossier_vues").insert({ project_id: project.id, user_agent: ua });
+
+      // Fire-and-forget push to the dossier owner. MUST NOT block or fail the response.
+      const ownerId = (project as { owner_id?: string }).owner_id;
+      const cronSecret = Deno.env.get("CRON_SECRET");
+      const supaUrl = Deno.env.get("SUPABASE_URL");
+      if (ownerId && cronSecret && supaUrl) {
+        const clientName = (project.client_name ?? "Un client").toString();
+        fetch(`${supaUrl}/functions/v1/send-push`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-internal-secret": cronSecret,
+          },
+          body: JSON.stringify({
+            user_id: ownerId,
+            title: "👀 Dossier consulté",
+            body: `${clientName} vient d'ouvrir votre dossier`,
+            url: `/dossiers/${project.id}`,
+            tag: `dossier-view-${project.id}`,
+          }),
+        }).catch(() => {
+          /* fire-and-forget */
+        });
+      }
     } catch (_) {
       // never block the response on logging failure
     }

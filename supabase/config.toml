@@ -23,3 +23,9 @@ verify_jwt = false
 
 [functions.cegid-sync]
 verify_jwt = false
+
+[functions.get-shared-dossier]
+verify_jwt = false
+
+[functions.send-push]
+verify_jwt = false

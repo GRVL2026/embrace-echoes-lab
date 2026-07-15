@@ -27,7 +27,11 @@ Schéma disponible (Postgres, schema public) :
   Ex. exercice 2026 = 1er sept. 2025 → 31 août 2026.
 
 - gaia_stock(inventory_id, description, famille2, prix_vente, dernier_cout, qty_available, item_status, …)
-  Description et famille des articles. Jointure avec v_gaia_lignes : trim(l.code_article) = trim(s.inventory_id).
+  ⚠️ CONTIENT PLUSIEURS LIGNES PAR ARTICLE (une par dépôt). NE JAMAIS joindre gaia_stock directement à des lignes de ventes (v_gaia_lignes, gaia_commandes, etc.) — cela MULTIPLIE les quantités et les montants et produit des chiffres FAUX.
+  Pour toute info article (description, famille, prix, stock), joindre à la place la vue v_gaia_articles(code, description, famille, prix_ht, stock) : UNE seule ligne par article, jointure : trim(l.code_article) = v_gaia_articles.code.
+  N'utilise gaia_stock directement QUE pour analyser le stock par dépôt.
+
+- v_gaia_articles(code, description, famille, prix_ht, stock) — référentiel article dédupliqué (une ligne par article). À utiliser pour toute jointure article ↔ ventes.
 
 - gaia_clients(customer_id, name, …) — référentiel clients (jointure : trim(l.code_client) = trim(c.customer_id)).
 - gaia_client_groupes(code_client, groupe) — regroupement de comptes clients par entité économique.
@@ -48,6 +52,8 @@ Règles :
   • Limite tes requêtes (LIMIT 50 par défaut, LIMIT 200 maximum).
   • Ne fais JAMAIS apparaître SFA (code_client = '9SFA00000') dans les palmarès/dormants/actions.
   • Raisonne toujours en exercice fiscal, jamais en année civile.
+  • AUTO-CONTRÔLE OBLIGATOIRE : avant d'affirmer un chiffre, vérifie sa vraisemblance (ordre de grandeur vs le CA total connu). En cas de doute sur une jointure (surtout avec gaia_stock ou toute table potentiellement non-unique), re-vérifie avec une requête de contrôle sans jointure (ex : SUM(montant_ht) directement sur v_gaia_lignes) et compare. Si les deux chiffres divergent, la jointure est fautive : corrige-la (utilise v_gaia_articles) avant de répondre.
+  • Mentionne toujours en une ligne la requête SQL utilisée pour chaque chiffre clé.
 `;
 
 const SYSTEM_PROMPT = `Tu es le copilote stratégique de la direction commerciale d'Avranches Automatic (distributeur français de flippers — revendeur officiel Stern —, jeux d'arcade, grues et distributeurs automatiques). Tu reçois les données commerciales réelles agrégées (CA, clients, devis, stock). Tu raisonnes en dirigeant commercial : factuel, chiffré, direct. Chaque constat s'appuie sur un chiffre fourni ; chaque recommandation est actionnable (qui fait quoi, sur quel client/produit, pourquoi maintenant). Tu signales les limites des données quand c'est pertinent. Tu réponds en français, en Markdown clair.

@@ -1151,6 +1151,16 @@ export type Database = {
       }
     }
     Views: {
+      v_gaia_articles: {
+        Row: {
+          code: string | null
+          description: string | null
+          famille: string | null
+          prix_ht: number | null
+          stock: number | null
+        }
+        Relationships: []
+      }
       v_gaia_ca_client: {
         Row: {
           annee: number | null

@@ -52,6 +52,8 @@ type CatalogProduct = {
   category: string | null;
   price: number | null;
   price_monthly: number | null;
+  price_erp_ht: number | null;
+  cegid_code: string | null;
   vendor: string | null;
   images: string[] | null;
   product_url: string | null;
@@ -155,7 +157,7 @@ export default function DossierEdit() {
           .order("position", { ascending: true }),
         (supabase as any)
           .from("catalog_products")
-          .select("id, name, category, price, price_monthly, vendor, images, product_url")
+          .select("id, name, category, price, price_monthly, price_erp_ht, cegid_code, vendor, images, product_url")
           .eq("active", true)
           .order("name"),
       ]);
@@ -222,7 +224,11 @@ export default function DossierEdit() {
         const cat = catalog.find((c) => c.id === p.product_id);
         if (!cat) return p;
         const newPrice =
-          v === "vente" ? cat.price ?? 0 : v === "location" || v === "leasing" ? cat.price_monthly ?? 0 : p.unit_price;
+          v === "vente"
+            ? cat.price_erp_ht ?? cat.price ?? 0
+            : v === "location" || v === "leasing"
+            ? cat.price_monthly ?? 0
+            : p.unit_price;
         return { ...p, unit_price: newPrice };
       });
       return { ...f, offer: v, selected_products: nextProducts, pricing: computePricing(nextProducts, v) };
@@ -541,7 +547,12 @@ export default function DossierEdit() {
 
   const addProduct = (p: CatalogProduct) => {
     const offer = form?.offer;
-    const unit = offer === "vente" ? p.price ?? 0 : offer === "location" || offer === "leasing" ? p.price_monthly ?? 0 : p.price ?? 0;
+    const unit =
+      offer === "vente"
+        ? p.price_erp_ht ?? p.price ?? 0
+        : offer === "location" || offer === "leasing"
+        ? p.price_monthly ?? 0
+        : p.price_erp_ht ?? p.price ?? 0;
     onProductsChange([
       ...selectedProducts,
       { product_id: p.id, name: p.name, qty: 1, unit_price: unit },
@@ -1193,7 +1204,11 @@ export default function DossierEdit() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          {r.price != null ? <span>{r.price} € HT</span> : null}
+                          {r.price_erp_ht != null ? (
+                            <span className="text-primary font-medium">{r.price_erp_ht} € HT (ERP)</span>
+                          ) : r.price != null ? (
+                            <span title="Prix site TTC — non vérifié ERP">{r.price} € TTC</span>
+                          ) : null}
                           {r.price_monthly != null ? <span>· {r.price_monthly} €/mois</span> : null}
                           <Plus className="h-4 w-4" />
                         </div>
@@ -1259,6 +1274,26 @@ export default function DossierEdit() {
                               <div className="text-xs text-muted-foreground">
                                 {[cat?.vendor, cat?.category].filter(Boolean).join(" · ")}
                               </div>
+                            ) : null}
+                            {!isRecurring ? (
+                              cat?.price_erp_ht != null ? (
+                                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                  <span className="inline-flex items-center rounded bg-primary/15 border border-primary/40 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                                    Tarif ERP HT
+                                  </span>
+                                  {cat.price != null ? (
+                                    <span className="text-[10px] text-muted-foreground">
+                                      Prix site (TTC) : {cat.price} €
+                                    </span>
+                                  ) : null}
+                                </div>
+                              ) : (
+                                <div className="mt-1">
+                                  <span className="inline-flex items-center rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground" title="Ce produit n'est pas encore lié à l'ERP Cegid.">
+                                    Prix non vérifié ERP
+                                  </span>
+                                </div>
+                              )
                             ) : null}
                           </td>
                           <td className="px-3 py-2 text-right">

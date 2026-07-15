@@ -731,6 +731,16 @@ Deno.serve(async (req) => {
         }
 
         if (s.done) {
+          // Après BD-Stock, rafraîchit les prix ERP du catalogue
+          if (feedName === 'BD-Stock') {
+            try {
+              const { data: refreshed, error: rerr } = await admin.rpc('refresh_erp_prices');
+              if (rerr) console.error('[cegid-sync] refresh_erp_prices error:', rerr.message);
+              else console.log(`[cegid-sync] refresh_erp_prices → ${refreshed} produits mis à jour`);
+            } catch (e: any) {
+              console.error('[cegid-sync] refresh_erp_prices crash:', e?.message ?? String(e));
+            }
+          }
           // Passe au flux suivant
           const idx = feedNames.indexOf(feedName);
           if (idx === feedNames.length - 1) {
@@ -797,6 +807,15 @@ Deno.serve(async (req) => {
         startedAt,
       });
       console.log(`[cegid-sync] fin morceau ${target.name}: ok=${s.ok} rows=${s.rows} total=${s.total_rows} done=${s.done}`);
+      if (s.ok && s.done && target.name === 'BD-Stock') {
+        try {
+          const { data: refreshed, error: rerr } = await admin.rpc('refresh_erp_prices');
+          if (rerr) console.error('[cegid-sync] refresh_erp_prices error:', rerr.message);
+          else console.log(`[cegid-sync] refresh_erp_prices → ${refreshed} produits mis à jour`);
+        } catch (e: any) {
+          console.error('[cegid-sync] refresh_erp_prices crash:', e?.message ?? String(e));
+        }
+      }
     } catch (e: any) {
       const msg = `${e?.message ?? String(e)}\n${e?.stack ?? ''}`;
       console.error(`[cegid-sync] crash flux ${target.name}:`, msg);

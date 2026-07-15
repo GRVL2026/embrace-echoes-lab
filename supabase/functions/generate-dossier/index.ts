@@ -16,11 +16,16 @@ const MODEL = "claude-sonnet-5"; // équilibre vitesse/intelligence ; passer à 
 
 const SYSTEM_PROMPT = `Tu es l'assistant commercial d'Avranches Automatic, distributeur de bornes d'arcade, flippers (revendeur officiel Stern) et distributeurs automatiques (blind boxes, figurines, TCG).
 
+TARIFICATION — RÈGLE ABSOLUE :
+- price_erp_ht = prix de vente HT fiable issu de l'ERP Cegid, à utiliser EN PRIORITÉ pour le chiffrage en 'vente'.
+- price = prix TTC indicatif du site web, à n'utiliser qu'en dernier recours si price_erp_ht est absent.
+- price_monthly = loyer mensuel (utilisé en 'location' ou 'leasing').
+
 À partir du brief d'un commercial (souvent bref et informel), tu produis le BROUILLON d'un dossier client, que l'équipe affinera ensuite. Tu dois :
 - Reformuler le contexte et le besoin du client de façon professionnelle.
 - Sélectionner dans le CATALOGUE fourni les produits les plus pertinents selon le lieu, le public, la surface et le budget. N'invente jamais de produit : n'utilise que des product_id présents dans le catalogue.
 - Choisir parmi les MODULES MARQUE fournis ceux à inclure (société Avranches, et Funtime ou Hypernova si le projet s'y prête). N'utilise que des module_id fournis.
-- Proposer un chiffrage cohérent : en 'vente' utilise le prix HT (price) ; en 'location' ou 'leasing' utilise le loyer mensuel (price_monthly). Si un prix manque, mets 0 et signale-le dans le résumé.
+- Proposer un chiffrage cohérent : en 'vente' utilise price_erp_ht en priorité (fiable), et seulement à défaut price ; en 'location' ou 'leasing' utilise price_monthly. Si un prix manque, mets 0 et signale-le dans le résumé.
 - Rester factuel et sobre. Répondre en français.
 
 Tu réponds UNIQUEMENT en appelant l'outil build_dossier.`;
@@ -121,16 +126,18 @@ Deno.serve(async (req: Request) => {
     // --- Sources : catalogue + modules marque ---
     const [{ data: products }, { data: modules }] = await Promise.all([
       supabase.from("catalog_products")
-        .select("id,name,category,width,depth,height,price,price_monthly,description,vendor")
+        .select("id,name,category,width,depth,height,price,price_erp_ht,cegid_code,price_monthly,description,vendor")
         .eq("active", true),
       supabase.from("brand_modules")
         .select("id,type,title,subtitle,brand_id,brands(key,name)")
         .eq("is_active", true).eq("reusable", true).order("position"),
     ]);
 
-    const catalogText = (products ?? []).map((p) =>
-      `#${p.id} | ${p.name} | ${p.category} | ${p.width}x${p.depth}x${p.height}cm | vente ${p.price ?? "?"}€ | loc ${p.price_monthly ?? "?"}€/mois | ${p.vendor ?? ""} — ${(p.description ?? "").slice(0, 140)}`
-    ).join("\n");
+    const catalogText = (products ?? []).map((p: any) => {
+      const erp = p.price_erp_ht != null ? `${p.price_erp_ht}€ HT (ERP fiable)` : "non lié ERP";
+      const site = p.price != null ? `${p.price}€ TTC (site, indicatif)` : "?";
+      return `#${p.id} | ${p.name} | ${p.category} | ${p.width}x${p.depth}x${p.height}cm | vente: ${erp} · ${site} | loc ${p.price_monthly ?? "?"}€/mois | ${p.vendor ?? ""} — ${(p.description ?? "").slice(0, 140)}`;
+    }).join("\n");
 
     const modulesText = (modules ?? []).map((m: any) =>
       `#${m.id} | ${m.brands?.key} | ${m.type} | ${m.title ?? ""} — ${m.subtitle ?? ""}`

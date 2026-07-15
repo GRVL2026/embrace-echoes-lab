@@ -137,6 +137,7 @@ export type Database = {
         Row: {
           active: boolean
           category: string
+          cegid_code: string | null
           center_placement: boolean | null
           color: string | null
           created_at: string
@@ -151,6 +152,7 @@ export type Database = {
           player_clearance: number | null
           pmr_accessible: boolean | null
           price: number | null
+          price_erp_ht: number | null
           price_monthly: number | null
           product_url: string | null
           safety_zone: number
@@ -167,6 +169,7 @@ export type Database = {
         Insert: {
           active?: boolean
           category?: string
+          cegid_code?: string | null
           center_placement?: boolean | null
           color?: string | null
           created_at?: string
@@ -181,6 +184,7 @@ export type Database = {
           player_clearance?: number | null
           pmr_accessible?: boolean | null
           price?: number | null
+          price_erp_ht?: number | null
           price_monthly?: number | null
           product_url?: string | null
           safety_zone?: number
@@ -197,6 +201,7 @@ export type Database = {
         Update: {
           active?: boolean
           category?: string
+          cegid_code?: string | null
           center_placement?: boolean | null
           color?: string | null
           created_at?: string
@@ -211,6 +216,7 @@ export type Database = {
           player_clearance?: number | null
           pmr_accessible?: boolean | null
           price?: number | null
+          price_erp_ht?: number | null
           price_monthly?: number | null
           product_url?: string | null
           safety_zone?: number
@@ -1250,6 +1256,8 @@ export type Database = {
     }
     Functions: {
       is_admin: { Args: never; Returns: boolean }
+      refresh_erp_prices: { Args: never; Returns: number }
+      unaccent: { Args: { "": string }; Returns: string }
     }
     Enums: {
       [_ in never]: never

@@ -120,3 +120,35 @@ export async function disablePush(): Promise<{ ok: boolean; error?: string }> {
   }
   return { ok: true };
 }
+
+export type PushTestResult = {
+  ok: boolean;
+  error?: string;
+  sent?: number;
+  removed?: number;
+  total?: number;
+  results?: Array<{ endpoint: string; status: number | null; error?: string }>;
+};
+
+export async function sendTestPush(): Promise<PushTestResult> {
+  const { data, error } = await supabase.functions.invoke<{
+    sent: number;
+    removed: number;
+    total: number;
+    results: Array<{ endpoint: string; status: number | null; error?: string }>;
+    error?: string;
+  }>("send-push", {
+    method: "POST",
+    body: { test: true },
+  });
+  if (error) return { ok: false, error: error.message };
+  if (data?.error) return { ok: false, error: data.error };
+  return {
+    ok: true,
+    sent: data?.sent ?? 0,
+    removed: data?.removed ?? 0,
+    total: data?.total ?? 0,
+    results: data?.results ?? [],
+  };
+}
+

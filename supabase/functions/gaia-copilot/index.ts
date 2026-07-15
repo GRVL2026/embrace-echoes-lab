@@ -4,6 +4,7 @@ import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
 const ANTHROPIC_VERSION = '2023-06-01';
+const MAX_TOOL_ROUNDS = 5;
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -12,11 +13,59 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
+const SCHEMA_DOC = `
+
+OUTIL executer_sql — accès direct à la base commerciale
+Tu disposes de l'outil executer_sql(sql_query) qui exécute une requête SQL SELECT en lecture seule (max 200 lignes, timeout 8 s) sur la base commerciale et renvoie les lignes au format JSON. Utilise-le CHAQUE FOIS qu'une question demande un détail absent des données agrégées fournies. Vérifie systématiquement tes résultats en croisant plusieurs requêtes si nécessaire, cite les chiffres exacts, et mentionne en une seule ligne la requête utilisée (ex : "Source : SELECT ... FROM v_gaia_ca_client WHERE annee=2026 …").
+
+Schéma disponible (Postgres, schema public) :
+
+- v_gaia_lignes(invoice_date, code_client, code_article, inventory_id, classe_article, montant_ht, source, qty)
+  TOUTES les lignes de vente. La rétrocession SFA (code_client = '9SFA00000') est DÉJÀ EXCLUE.
+  Exercice fiscal (sept→août) : extract(year from invoice_date + interval '4 months')::int
+  Ex. exercice 2026 = 1er sept. 2025 → 31 août 2026.
+
+- gaia_stock(inventory_id, description, famille2, prix_vente, dernier_cout, qty_available, item_status, …)
+  Description et famille des articles. Jointure avec v_gaia_lignes : trim(l.code_article) = trim(s.inventory_id).
+
+- gaia_clients(customer_id, name, …) — référentiel clients (jointure : trim(l.code_client) = trim(c.customer_id)).
+- gaia_client_groupes(code_client, groupe) — regroupement de comptes clients par entité économique.
+
+- gaia_commandes(...)
+  Statuts :
+    • 'Brouillon' = devis
+    • 'Ouvert', 'Expédition en cours', 'Reliquat' = commandes signées en cours
+    • 'Historique', 'Annulé' = À EXCLURE des analyses opérationnelles.
+
+Vues d'analyse déjà disponibles :
+  v_gaia_ca_mensuel, v_gaia_ca_client, v_gaia_ca_famille, v_gaia_ca_periode_egale,
+  v_gaia_devis_a_relancer, v_gaia_clients_dormants, v_gaia_stock_dormant,
+  v_gaia_marge_famille, v_gaia_marge_client (marge = taux de marque : (ca - cout) / ca).
+
+Règles :
+  • Uniquement des SELECT (WITH autorisé). Interdits : INSERT/UPDATE/DELETE/DROP/ALTER/CREATE/GRANT/TRUNCATE.
+  • Limite tes requêtes (LIMIT 50 par défaut, LIMIT 200 maximum).
+  • Ne fais JAMAIS apparaître SFA (code_client = '9SFA00000') dans les palmarès/dormants/actions.
+  • Raisonne toujours en exercice fiscal, jamais en année civile.
+`;
+
 const SYSTEM_PROMPT = `Tu es le copilote stratégique de la direction commerciale d'Avranches Automatic (distributeur français de flippers — revendeur officiel Stern —, jeux d'arcade, grues et distributeurs automatiques). Tu reçois les données commerciales réelles agrégées (CA, clients, devis, stock). Tu raisonnes en dirigeant commercial : factuel, chiffré, direct. Chaque constat s'appuie sur un chiffre fourni ; chaque recommandation est actionnable (qui fait quoi, sur quel client/produit, pourquoi maintenant). Tu signales les limites des données quand c'est pertinent. Tu réponds en français, en Markdown clair.
 
 IMPORTANT — EXERCICE FISCAL : L'exercice fiscal d'Avranches Automatic va du 1er septembre au 31 août (clôture 31/08). Les données "annee" fournies sont des exercices fiscaux (ex. 2026 = 1er sept. 2025 → 31 août 2026), pas des années civiles. Raisonne toujours en exercices, jamais en années civiles. Quand tu nommes une année, écris "exercice 2026" (ou "Ex. 2026 (sept. 2025 → août 2026)"). Compare toujours à période égale (v_gaia_ca_periode_egale), jamais exercice plein vs exercice en cours. Les mois du calendrier fiscal vont de septembre (mois_fiscal=1) à août (mois_fiscal=12).
 
-IMPORTANT — SFA : SFA (Société Française Automatique, code client 9SFA00000) est une société sœur du groupe Gaia : les ventes à SFA sont des rétrocessions intra-groupe sans marge, déjà exclues des données de CA que tu reçois. Ne traite JAMAIS SFA comme un client à développer ou à relancer, et ne la fais jamais apparaître dans les palmarès, dormants ou actions. Le CA analysé est le "vrai CA" d'Avranches Automatic. Le total annuel de rétrocession SFA t'est fourni séparément (retrocession_sfa) uniquement pour contexte.`;
+IMPORTANT — SFA : SFA (Société Française Automatique, code client 9SFA00000) est une société sœur du groupe Gaia : les ventes à SFA sont des rétrocessions intra-groupe sans marge, déjà exclues des données de CA que tu reçois. Ne traite JAMAIS SFA comme un client à développer ou à relancer, et ne la fais jamais apparaître dans les palmarès, dormants ou actions. Le CA analysé est le "vrai CA" d'Avranches Automatic. Le total annuel de rétrocession SFA t'est fourni séparément (retrocession_sfa) uniquement pour contexte.${SCHEMA_DOC}`;
+
+const SQL_TOOL = {
+  name: 'executer_sql',
+  description: "Exécute une requête SQL SELECT en lecture seule sur la base commerciale et renvoie les lignes (max 200). Utilise cet outil chaque fois qu'une question demande un détail absent des données déjà fournies.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      sql_query: { type: 'string', description: 'Requête SELECT / WITH Postgres. Aucun DML/DDL.' },
+    },
+    required: ['sql_query'],
+  },
+};
 
 const REVUE_TOOL = {
   name: 'build_revue',
@@ -152,7 +201,6 @@ async function loadData(admin: any) {
     admin.from('v_gaia_retrocession_sfa').select('*'),
   ]);
 
-  // Agrège la rétrocession SFA par exercice fiscal
   const retroByYear = new Map<number, number>();
   for (const r of (retroSfa.data ?? []) as any[]) {
     const y = Number(r.annee);
@@ -179,20 +227,19 @@ async function loadData(admin: any) {
   };
 }
 
+async function runGaiaQuery(admin: any, sql: string): Promise<unknown> {
+  try {
+    const { data, error } = await admin.rpc('gaia_query', { sql_query: sql });
+    if (error) return { error: error.message };
+    return data;
+  } catch (e: any) {
+    return { error: e?.message ?? String(e) };
+  }
+}
 
-async function callAnthropic(systemPrompt: string, messages: Array<{ role: 'user' | 'assistant'; content: string }>) {
+async function anthropicCall(payload: Record<string, unknown>) {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY manquant');
-
-  const payload = {
-    model: ANTHROPIC_MODEL,
-    max_tokens: 16000,
-    system: systemPrompt,
-    messages,
-  };
-  const payloadStr = JSON.stringify(payload);
-  const inputChars = payloadStr.length;
-
   const res = await fetch(ANTHROPIC_URL, {
     method: 'POST',
     headers: {
@@ -200,43 +247,76 @@ async function callAnthropic(systemPrompt: string, messages: Array<{ role: 'user
       'x-api-key': apiKey,
       'anthropic-version': ANTHROPIC_VERSION,
     },
-    body: payloadStr,
+    body: JSON.stringify(payload),
   });
-
   const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`Anthropic HTTP ${res.status} ${res.statusText}. Body: ${text}`);
-  }
-
-  let json: any;
-  try {
-    json = JSON.parse(text);
-  } catch (e) {
-    throw new Error(`Anthropic 200 mais JSON invalide. Body: ${text.slice(0, 1500)}`);
-  }
-
-  const parts = Array.isArray(json?.content) ? json.content : [];
-  const markdown = parts
-    .filter((p: any) => p?.type === 'text' && typeof p.text === 'string')
-    .map((p: any) => p.text)
-    .join('\n\n')
-    .trim();
-
-  const stopReason = json?.stop_reason ?? null;
-
-  if (!markdown) {
-    const rawJson = JSON.stringify(json).slice(0, 1500);
-    throw new Error(`Anthropic 200 sans bloc texte. stop_reason=${stopReason}. JSON: ${rawJson}`);
-  }
-
-  return { markdown, stop_reason: stopReason, input_chars: inputChars };
+  if (!res.ok) throw new Error(`Anthropic HTTP ${res.status} ${res.statusText}. Body: ${text}`);
+  try { return JSON.parse(text); }
+  catch { throw new Error(`Anthropic 200 mais JSON invalide. Body: ${text.slice(0, 1500)}`); }
 }
 
-async function callAnthropicStream(
-  systemPrompt: string,
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
-  extraPayload: Record<string, unknown> = {},
-) {
+/**
+ * Boucle agentique non-streamée : exécute les tool_use executer_sql jusqu'à MAX_TOOL_ROUNDS.
+ * Retourne l'historique des messages (avec assistant final) ainsi que la dernière réponse Anthropic.
+ * Le dernier assistant ne contient PLUS de tool_use executer_sql : soit du texte final, soit un autre tool_use (ex: build_revue) si extraTools force ce choix.
+ */
+async function toolLoop(params: {
+  admin: any;
+  system: string;
+  initialMessages: Array<{ role: 'user' | 'assistant'; content: any }>;
+  extraTools?: any[];
+  toolChoice?: any;
+}): Promise<{ messages: Array<{ role: 'user' | 'assistant'; content: any }>; last: any; rounds: number }> {
+  const { admin, system, initialMessages, extraTools = [], toolChoice } = params;
+  const tools = [SQL_TOOL, ...extraTools];
+  const messages = [...initialMessages];
+
+  for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+    // Sur le dernier tour possible, on interdit encore executer_sql pour forcer la réponse finale.
+    const isLastRound = round === MAX_TOOL_ROUNDS;
+    const payload: Record<string, unknown> = {
+      model: ANTHROPIC_MODEL,
+      max_tokens: 16000,
+      system: isLastRound
+        ? `${system}\n\nTu as atteint la limite de ${MAX_TOOL_ROUNDS} appels à executer_sql. Réponds maintenant avec les informations dont tu disposes.`
+        : system,
+      messages,
+      tools: isLastRound ? extraTools : tools,
+    };
+    if (toolChoice) payload.tool_choice = toolChoice;
+
+    const resp = await anthropicCall(payload);
+    const content = Array.isArray(resp?.content) ? resp.content : [];
+    const sqlCalls = content.filter((b: any) => b?.type === 'tool_use' && b?.name === 'executer_sql');
+
+    if (sqlCalls.length === 0 || isLastRound) {
+      messages.push({ role: 'assistant', content });
+      return { messages, last: resp, rounds: round };
+    }
+
+    // Exécute toutes les requêtes SQL demandées ce tour
+    const toolResults = await Promise.all(
+      sqlCalls.map(async (call: any) => {
+        const sql = String(call?.input?.sql_query ?? '');
+        const result = await runGaiaQuery(admin, sql);
+        return {
+          type: 'tool_result',
+          tool_use_id: call.id,
+          content: JSON.stringify(result).slice(0, 60000),
+        };
+      })
+    );
+
+    messages.push({ role: 'assistant', content });
+    messages.push({ role: 'user', content: toolResults });
+  }
+
+  // ne devrait pas être atteint
+  throw new Error('Boucle agentique inattendue');
+}
+
+/** Stream final Anthropic call (SSE passthrough) — utilisé pour la revue afin de conserver l'API SSE côté client. */
+async function streamFinalRevue(system: string, messages: Array<{ role: 'user' | 'assistant'; content: any }>) {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY manquant');
 
@@ -244,31 +324,25 @@ async function callAnthropicStream(
     model: ANTHROPIC_MODEL,
     max_tokens: 16000,
     stream: true,
-    system: systemPrompt,
+    system,
     messages,
-    ...extraPayload,
+    tools: [REVUE_TOOL],
+    tool_choice: { type: 'tool', name: 'build_revue' },
   };
   const payloadStr = JSON.stringify(payload);
   const inputChars = payloadStr.length;
 
-  const decoder = new TextDecoder();
   const encoder = new TextEncoder();
-  let eventBuffer = '';
-  let stopReason: string | null = null;
-  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   let heartbeat: number | undefined;
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       controller.enqueue(encoder.encode(`event: gaia_start\ndata: ${JSON.stringify({ input_chars: inputChars })}\n\n`));
       heartbeat = setInterval(() => {
-        try {
-          controller.enqueue(encoder.encode(`: gaia-heartbeat ${Date.now()}\n\n`));
-        } catch {
-          if (heartbeat !== undefined) clearInterval(heartbeat);
-        }
+        try { controller.enqueue(encoder.encode(`: gaia-heartbeat ${Date.now()}\n\n`)); }
+        catch { if (heartbeat !== undefined) clearInterval(heartbeat); }
       }, 10_000);
-
       try {
         const upstream = await fetch(ANTHROPIC_URL, {
           method: 'POST',
@@ -279,13 +353,9 @@ async function callAnthropicStream(
           },
           body: payloadStr,
         });
-
         if (!upstream.ok) {
           const body = await upstream.text();
-          controller.enqueue(encoder.encode(`event: gaia_error\ndata: ${JSON.stringify({
-            error: `Anthropic HTTP ${upstream.status} ${upstream.statusText}. Body: ${body}`,
-            status: upstream.status,
-          })}\n\n`));
+          controller.enqueue(encoder.encode(`event: gaia_error\ndata: ${JSON.stringify({ error: `Anthropic HTTP ${upstream.status} ${upstream.statusText}. Body: ${body}`, status: upstream.status })}\n\n`));
           controller.close();
           return;
         }
@@ -294,25 +364,16 @@ async function callAnthropicStream(
           controller.close();
           return;
         }
-
         reader = upstream.body.getReader();
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           controller.enqueue(value);
-          eventBuffer += decoder.decode(value, { stream: true });
-          const events = eventBuffer.split(/\r?\n\r?\n/);
-          eventBuffer = events.pop() ?? '';
-          inspectEvents(events.join('\n\n'));
         }
-        eventBuffer += decoder.decode();
-        inspectEvents(eventBuffer);
-        controller.enqueue(encoder.encode(`\n\nevent: gaia_debug\ndata: ${JSON.stringify({ input_chars: inputChars, stop_reason: stopReason })}\n\n`));
+        controller.enqueue(encoder.encode(`\n\nevent: gaia_debug\ndata: ${JSON.stringify({ input_chars: inputChars })}\n\n`));
         controller.close();
       } catch (error) {
-        controller.enqueue(encoder.encode(`event: gaia_error\ndata: ${JSON.stringify({
-          error: error instanceof Error ? error.message : String(error),
-        })}\n\n`));
+        controller.enqueue(encoder.encode(`event: gaia_error\ndata: ${JSON.stringify({ error: error instanceof Error ? error.message : String(error) })}\n\n`));
         controller.close();
       } finally {
         if (heartbeat !== undefined) clearInterval(heartbeat);
@@ -324,25 +385,6 @@ async function callAnthropicStream(
     },
   });
 
-  function inspectEvents(raw: string) {
-    for (const event of raw.split(/\r?\n\r?\n/)) {
-      const data = event
-        .split(/\r?\n/)
-        .filter((line) => line.startsWith('data:'))
-        .map((line) => line.slice(5).trimStart())
-        .join('\n');
-      if (!data || data === '[DONE]') continue;
-      try {
-        const parsed = JSON.parse(data);
-        if (parsed?.type === 'message_delta' && parsed?.delta?.stop_reason != null) {
-          stopReason = parsed.delta.stop_reason;
-        }
-      } catch {
-        // Le flux original est relayé tel quel ; seuls les événements JSON complets sont inspectés.
-      }
-    }
-  }
-
   return new Response(stream, {
     status: 200,
     headers: {
@@ -353,7 +395,6 @@ async function callAnthropicStream(
     },
   });
 }
-
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -396,11 +437,30 @@ Deno.serve(async (req) => {
     const data = await loadData(admin);
     const dataJson = JSON.stringify(data);
 
-    let messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
-
     if (action === 'revue') {
-      // handled below via callAnthropicStream + tool
-    } else if (action === 'chat') {
+      const initialMessages = [{
+        role: 'user' as const,
+        content: `Voici les données commerciales agrégées (JSON) :\n\n\`\`\`json\n${dataJson}\n\`\`\`\n\nProduis la revue commerciale du mois via l'outil build_revue.\n- santé globale : CA à période égale N/N-1/N-2 + évolution en % ; tendance mensuelle en % vs N-1 pour chaque mois disponible ; commentaire 2 phrases max.\n- mouvements : familles et clients qui montent/descendent (top mouvements chiffrés) ;\n- risques (marge, dépendance client, stock, cash, calendrier) avec gravité ;\n- TOP 5 actions priorisées par impact euros (relances devis nominatives, clients dormants à réactiver, stock à écouler). Chaque champ texte : 1-2 phrases max, ton direct.\n\nAvant d'appeler build_revue, utilise executer_sql autant de fois que nécessaire pour vérifier/enrichir tes chiffres.`,
+      }];
+      const revueSystem = `${SYSTEM_PROMPT}\n\nTu peux utiliser executer_sql pour vérifier des chiffres avant de construire la revue. Ta réponse FINALE doit être un unique appel à l'outil build_revue avec des données structurées, sans texte libre.`;
+
+      // Boucle SQL non-streamée (autorise seulement executer_sql à ce stade)
+      const { messages: agenticMessages } = await toolLoop({
+        admin,
+        system: revueSystem,
+        initialMessages,
+        extraTools: [],
+      });
+
+      // Retire le dernier assistant (produit après épuisement des SQL) pour que le dernier tour final relance proprement le modèle en le forçant sur build_revue.
+      // On garde tout l'historique tel quel : le modèle voit ses propres constats et les tool_result SQL.
+      return await streamFinalRevue(revueSystem, agenticMessages.concat([{
+        role: 'user',
+        content: 'Appelle maintenant l\'outil build_revue avec la revue finale structurée.',
+      }]));
+    }
+
+    if (action === 'chat') {
       const question = typeof body?.question === 'string' ? body.question.trim() : '';
       if (!question) {
         return jsonResponse({ ok: false, error: 'question manquante' }, 400);
@@ -409,33 +469,41 @@ Deno.serve(async (req) => {
       const cleanHistory = history
         .filter((m: any) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
         .slice(-6)
-        .map((m: any) => ({ role: m.role, content: m.content }));
+        .map((m: any) => ({ role: m.role as 'user' | 'assistant', content: m.content as any }));
 
       const contextMsg = `Voici les données commerciales agrégées (JSON) à utiliser pour répondre :\n\n\`\`\`json\n${dataJson}\n\`\`\``;
-      messages = [
+      const initialMessages: Array<{ role: 'user' | 'assistant'; content: any }> = [
         { role: 'user', content: contextMsg },
-        { role: 'assistant', content: 'Données reçues. Je réponds en m\'appuyant sur ces chiffres.' },
+        { role: 'assistant', content: 'Données reçues. Je réponds en m\'appuyant sur ces chiffres et j\'appellerai executer_sql si un détail me manque.' },
         ...cleanHistory,
         { role: 'user', content: question },
       ];
-    } else {
-      return jsonResponse({ ok: false, error: `Unknown action: ${action}` }, 400);
-    }
 
-    if (action === 'revue') {
-      const revueMessages = [{
-        role: 'user' as const,
-        content: `Voici les données commerciales agrégées (JSON) :\n\n\`\`\`json\n${dataJson}\n\`\`\`\n\nProduis la revue commerciale du mois via l'outil build_revue.\n- santé globale : CA à période égale N/N-1/N-2 + évolution en % ; tendance mensuelle en % vs N-1 pour chaque mois disponible ; commentaire 2 phrases max.\n- mouvements : familles et clients qui montent/descendent (top mouvements chiffrés) ;\n- risques (marge, dépendance client, stock, cash, calendrier) avec gravité ;\n- TOP 5 actions priorisées par impact euros (relances devis nominatives, clients dormants à réactiver, stock à écouler). Chaque champ texte : 1-2 phrases max, ton direct.`,
-      }];
-      const revueSystem = `${SYSTEM_PROMPT}\n\nTu réponds UNIQUEMENT en appelant l'outil build_revue avec des données structurées. Aucun texte libre.`;
-      return await callAnthropicStream(revueSystem, revueMessages, {
-        tools: [REVUE_TOOL],
-        tool_choice: { type: 'tool', name: 'build_revue' },
+      const { messages: finalMessages, last, rounds } = await toolLoop({
+        admin,
+        system: SYSTEM_PROMPT,
+        initialMessages,
+      });
+
+      const lastContent = Array.isArray(last?.content) ? last.content : [];
+      const markdown = lastContent
+        .filter((p: any) => p?.type === 'text' && typeof p.text === 'string')
+        .map((p: any) => p.text)
+        .join('\n\n')
+        .trim();
+
+      if (!markdown) {
+        return jsonResponse({ ok: false, error: `Réponse vide (stop_reason=${last?.stop_reason ?? '?'}, rounds=${rounds})` }, 500);
+      }
+
+      return jsonResponse({
+        ok: true,
+        markdown,
+        debug: { stop_reason: last?.stop_reason ?? null, tool_rounds: rounds },
       });
     }
 
-    const { markdown, stop_reason, input_chars } = await callAnthropic(SYSTEM_PROMPT, messages);
-    return jsonResponse({ ok: true, markdown, debug: { input_chars, stop_reason } });
+    return jsonResponse({ ok: false, error: `Unknown action: ${action}` }, 400);
 
   } catch (e: any) {
     const status = Number.isInteger(e?.status) && e.status >= 400 && e.status <= 599 ? e.status : 500;

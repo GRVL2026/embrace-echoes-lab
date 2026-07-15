@@ -126,16 +126,18 @@ Deno.serve(async (req: Request) => {
     // --- Sources : catalogue + modules marque ---
     const [{ data: products }, { data: modules }] = await Promise.all([
       supabase.from("catalog_products")
-        .select("id,name,category,width,depth,height,price,price_monthly,description,vendor")
+        .select("id,name,category,width,depth,height,price,price_erp_ht,cegid_code,price_monthly,description,vendor")
         .eq("active", true),
       supabase.from("brand_modules")
         .select("id,type,title,subtitle,brand_id,brands(key,name)")
         .eq("is_active", true).eq("reusable", true).order("position"),
     ]);
 
-    const catalogText = (products ?? []).map((p) =>
-      `#${p.id} | ${p.name} | ${p.category} | ${p.width}x${p.depth}x${p.height}cm | vente ${p.price ?? "?"}€ | loc ${p.price_monthly ?? "?"}€/mois | ${p.vendor ?? ""} — ${(p.description ?? "").slice(0, 140)}`
-    ).join("\n");
+    const catalogText = (products ?? []).map((p: any) => {
+      const erp = p.price_erp_ht != null ? `${p.price_erp_ht}€ HT (ERP fiable)` : "non lié ERP";
+      const site = p.price != null ? `${p.price}€ TTC (site, indicatif)` : "?";
+      return `#${p.id} | ${p.name} | ${p.category} | ${p.width}x${p.depth}x${p.height}cm | vente: ${erp} · ${site} | loc ${p.price_monthly ?? "?"}€/mois | ${p.vendor ?? ""} — ${(p.description ?? "").slice(0, 140)}`;
+    }).join("\n");
 
     const modulesText = (modules ?? []).map((m: any) =>
       `#${m.id} | ${m.brands?.key} | ${m.type} | ${m.title ?? ""} — ${m.subtitle ?? ""}`

@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { Link, useLocation, useNavigate, Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,15 +9,30 @@ import { Loader2 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 
 export default function Login() {
-  const { signIn, user, loading: authLoading } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation() as { state?: { from?: string } };
+  const { signIn, user, isAdmin, isLoading, roleError, refreshRoles } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  if (!authLoading && user) {
-    return <Navigate to={location.state?.from ?? "/"} replace />;
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-foreground">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Chargement…
+      </div>
+    );
+  }
+
+  if (user && roleError) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-6 text-center text-foreground">
+        <p className="text-sm text-muted-foreground">Impossible de charger vos accès.</p>
+        <Button onClick={refreshRoles}>Réessayer</Button>
+      </div>
+    );
+  }
+
+  if (user) {
+    return <Navigate to={isAdmin ? "/" : "/dossiers"} replace />;
   }
 
   const onSubmit = async (e: FormEvent) => {
@@ -29,7 +44,6 @@ export default function Login() {
       toast({ title: "Connexion impossible", description: error.message, variant: "destructive" });
       return;
     }
-    navigate(location.state?.from ?? "/", { replace: true });
   };
 
   return (

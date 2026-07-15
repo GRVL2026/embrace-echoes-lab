@@ -1318,6 +1318,7 @@ export type Database = {
       }
     }
     Functions: {
+      gaia_query: { Args: { sql_query: string }; Returns: Json }
       is_admin: { Args: never; Returns: boolean }
       is_direction: { Args: never; Returns: boolean }
       refresh_erp_prices: { Args: never; Returns: number }

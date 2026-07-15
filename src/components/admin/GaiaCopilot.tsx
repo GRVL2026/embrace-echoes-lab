@@ -226,28 +226,200 @@ export function GaiaCopilot() {
     }
   };
 
+  const appendText = (msgIdx: number, text: string) => {
+    setChat((c) => {
+      const next = c.slice();
+      const m = next[msgIdx];
+      if (!m || m.role !== "assistant") return c;
+      const parts = m.parts.slice();
+      const last = parts[parts.length - 1];
+      if (last && last.type === "text") {
+        parts[parts.length - 1] = { type: "text", text: last.text + text };
+      } else {
+        parts.push({ type: "text", text });
+      }
+      next[msgIdx] = { ...m, parts };
+      return next;
+    });
+  };
+
+  const appendChart = (msgIdx: number, chart: ChartPayload) => {
+    setChat((c) => {
+      const next = c.slice();
+      const m = next[msgIdx];
+      if (!m || m.role !== "assistant") return c;
+      next[msgIdx] = { ...m, parts: [...m.parts, { type: "chart", chart }] };
+      return next;
+    });
+  };
+
+  const appendStep = (msgIdx: number, step: ChatStep) => {
+    setChat((c) => {
+      const next = c.slice();
+      const m = next[msgIdx];
+      if (!m || m.role !== "assistant") return c;
+      next[msgIdx] = { ...m, steps: [...m.steps, step] };
+      return next;
+    });
+  };
+
+  const finalizeAssistant = (
+    msgIdx: number,
+    markdown: string,
+    sqlUsed: string[],
+  ) => {
+    setChat((c) => {
+      const next = c.slice();
+      const m = next[msgIdx];
+      if (!m || m.role !== "assistant") return c;
+      next[msgIdx] = {
+        ...m,
+        streaming: false,
+        parts: [...m.parts, { type: "text", text: markdown }],
+        sqlUsed,
+      };
+      return next;
+    });
+  };
+
   const sendChat = async (question: string) => {
     const q = question.trim();
     if (!q || chatLoading) return;
-    const nextChat: ChatMsg[] = [...chat, { role: "user", content: q }];
-    setChat(nextChat);
+
+    // 1. Ajout du message utilisateur + placeholder assistant
+    let assistantIdx = -1;
+    setChat((c) => {
+      const next: ChatMsg[] = [
+        ...c,
+        { role: "user", content: q },
+        { role: "assistant", parts: [], steps: [], streaming: true, question: q },
+      ];
+      assistantIdx = next.length - 1;
+      return next;
+    });
     setChatInput("");
     setChatLoading(true);
+
     try {
-      const history = nextChat.slice(-13, -1);
-      const { data, error } = await supabase.functions.invoke("gaia-copilot", {
-        body: { action: "chat", question: q, history },
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error("Session expirée. Veuillez vous reconnecter.");
+
+      // Historique = tout ce qui précède le placeholder assistant, sous forme string
+      const historyMsgs = chat.slice(-12).flatMap((m): { role: "user" | "assistant"; content: string }[] => {
+        if (m.role === "user") return [{ role: "user", content: m.content }];
+        const text = m.parts.filter((p) => p.type === "text").map((p: any) => p.text).join("\n\n");
+        return text ? [{ role: "assistant", content: text }] : [];
       });
-      if (error) throw error;
-      const d = data as { ok?: boolean; markdown?: string; error?: string };
-      if (!d?.ok || !d.markdown) throw new Error(d?.error ?? "Réponse vide");
-      setChat((c) => [...c, { role: "assistant", content: d.markdown! }]);
+
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gaia-copilot`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action: "chat", question: q, history: historyMsgs }),
+      });
+      if (!resp.ok) {
+        const body = await resp.text();
+        throw new Error(`HTTP ${resp.status} ${resp.statusText}\n${body}`);
+      }
+      if (!resp.body) throw new Error("HTTP 200 sans flux de réponse");
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finalMarkdown = "";
+      let sqlUsed: string[] = [];
+      let errorFromStream: string | null = null;
+
+      const consume = (event: string) => {
+        const dataText = event
+          .split(/\r?\n/)
+          .filter((l) => l.startsWith("data:"))
+          .map((l) => l.slice(5).trimStart())
+          .join("\n");
+        const evtName = event.split(/\r?\n/).find((l) => l.startsWith("event:"))?.slice(6).trim();
+        if (!dataText) return;
+        let data: any;
+        try { data = JSON.parse(dataText); } catch { return; }
+        if (evtName === "gaia_sql") {
+          appendStep(assistantIdx, { type: "sql", summary: data.summary ?? "Requête", query: data.query ?? "" });
+        } else if (evtName === "gaia_chart") {
+          appendChart(assistantIdx, data as ChartPayload);
+        } else if (evtName === "gaia_final") {
+          finalMarkdown = data.markdown ?? "";
+          sqlUsed = Array.isArray(data.sql_used) ? data.sql_used : [];
+        } else if (evtName === "gaia_error") {
+          errorFromStream = data.error ?? "Erreur inconnue";
+        }
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        buffer += decoder.decode(value, { stream: !done });
+        const events = buffer.split(/\r?\n\r?\n/);
+        buffer = events.pop() ?? "";
+        events.forEach(consume);
+        if (done) break;
+      }
+      if (buffer.trim()) consume(buffer);
+
+      if (errorFromStream) throw new Error(errorFromStream);
+      if (!finalMarkdown) throw new Error("Réponse vide");
+      finalizeAssistant(assistantIdx, finalMarkdown, sqlUsed);
     } catch (e: unknown) {
       const msg = await formatFunctionError(e);
       toast({ title: "Erreur", description: msg.slice(0, 200), variant: "destructive" });
-      setChat((c) => [...c, { role: "assistant", content: `⚠️ ${msg}` }]);
+      setChat((c) => {
+        const next = c.slice();
+        const m = next[assistantIdx];
+        if (m && m.role === "assistant") {
+          next[assistantIdx] = {
+            ...m,
+            streaming: false,
+            parts: [{ type: "text", text: `⚠️ ${msg}` }],
+          };
+        }
+        return next;
+      });
     } finally {
       setChatLoading(false);
+    }
+  };
+
+  const submitFeedback = async (msgIdx: number, note: 1 | -1, commentaire?: string) => {
+    const m = chat[msgIdx];
+    if (!m || m.role !== "assistant") return;
+    const answerText = m.parts.filter((p) => p.type === "text").map((p: any) => p.text).join("\n\n");
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id;
+      if (!userId) throw new Error("Session invalide");
+      const { error } = await (supabase as any).from("copilote_feedback").insert({
+        user_id: userId,
+        question: m.question ?? "",
+        reponse: answerText,
+        requetes_sql: m.sqlUsed ?? [],
+        note,
+        commentaire: commentaire ?? null,
+      });
+      if (error) throw error;
+      setChat((c) => {
+        const next = c.slice();
+        const cur = next[msgIdx];
+        if (cur && cur.role === "assistant") next[msgIdx] = { ...cur, feedback: note };
+        return next;
+      });
+      toast({ title: "Merci !", description: "Feedback enregistré." });
+    } catch (e) {
+      toast({
+        title: "Feedback impossible",
+        description: e instanceof Error ? e.message : String(e),
+        variant: "destructive",
+      });
     }
   };
 
@@ -272,40 +444,65 @@ export function GaiaCopilot() {
           </div>
         )}
 
-        <div className="max-h-[520px] space-y-3 overflow-y-auto rounded border border-border/60 bg-background/40 p-3">
+        <div className="max-h-[620px] space-y-3 overflow-y-auto rounded border border-border/60 bg-background/40 p-3">
           {chat.length === 0 && (
             <div className="py-8 text-center text-sm text-muted-foreground">
               Posez une question sur le CA, les clients, les devis ou le stock.
             </div>
           )}
-          {chat.map((m, i) => (
-            <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
-              <div
-                className={
-                  m.role === "user"
-                    ? "max-w-[85%] rounded-lg bg-primary/15 border border-primary/30 px-3 py-2 text-sm"
-                    : "max-w-[95%] rounded-lg bg-muted/40 border border-border/60 px-4 py-3 text-sm"
-                }
-              >
-                {m.role === "user" ? (
+          {chat.map((m, i) =>
+            m.role === "user" ? (
+              <div key={i} className="flex justify-end">
+                <div className="max-w-[85%] rounded-lg bg-primary/15 border border-primary/30 px-3 py-2 text-sm">
                   <div className="whitespace-pre-wrap">{m.content}</div>
-                ) : (
-                  <div className="chat-markdown">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
-                  </div>
-                )}
+                </div>
               </div>
-            </div>
-          ))}
-          {chatLoading && (
-            <div className="flex justify-start">
-              <div className="rounded-lg bg-muted/40 border border-border/60 px-3 py-2 text-sm text-muted-foreground">
-                <Loader2 className="mr-2 inline h-3 w-3 animate-spin" /> Réflexion…
+            ) : (
+              <div key={i} className="flex justify-start">
+                <div className="w-full max-w-[95%] rounded-lg bg-muted/40 border border-border/60 px-4 py-3 text-sm">
+                  {/* Étapes de progression (grisé, petit) */}
+                  {m.steps.length > 0 && (
+                    <ul className="mb-2 space-y-0.5 text-[11px] text-muted-foreground">
+                      {m.steps.map((s, j) => (
+                        <li key={j} title={s.query} className="flex items-center gap-1.5">
+                          <Search className="h-3 w-3 shrink-0 opacity-70" />
+                          <span className="truncate">Requête : {s.summary}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {/* Blocs de réponse : texte / graphique dans l'ordre */}
+                  {m.parts.map((part, j) =>
+                    part.type === "text" ? (
+                      <div key={j} className="chat-markdown">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{part.text}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      <CopilotChart key={j} payload={part.chart} />
+                    )
+                  )}
+
+                  {m.streaming && m.parts.length === 0 && (
+                    <div className="text-muted-foreground">
+                      <Loader2 className="mr-2 inline h-3 w-3 animate-spin" /> Réflexion…
+                    </div>
+                  )}
+
+                  {/* Feedback 👍 / 👎 */}
+                  {!m.streaming && m.parts.some((p) => p.type === "text") && (
+                    <FeedbackControls
+                      current={m.feedback ?? null}
+                      onSubmit={(note, commentaire) => submitFeedback(i, note, commentaire)}
+                    />
+                  )}
+                </div>
               </div>
-            </div>
+            )
           )}
           <div ref={chatEndRef} />
         </div>
+
 
         <form
           className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end"

@@ -1,19 +1,19 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Menu, Shield, Database, FolderKanban, LayoutGrid, LogOut } from "lucide-react";
+import { Menu, Shield, Database, FolderKanban, LayoutGrid, LogOut, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 
 export function MobileNav() {
-  const { isAdmin, user, signOut } = useAuth();
+  const { isAdmin, canAccessGaia, user, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
   const navigate = useNavigate();
 
   const item = (to: string, label: string, Icon: any) => {
-    const active = pathname === to || pathname.startsWith(to + "/");
+    const active = pathname === to || (to !== "/" && pathname.startsWith(to + "/"));
     return (
       <Link
         to={to}
@@ -49,10 +49,11 @@ export function MobileNav() {
           {user?.email && <div className="text-xs text-muted-foreground truncate">{user.email}</div>}
         </SheetHeader>
         <div className="flex-1 space-y-1 p-3">
+          {isAdmin && item("/", "Hub", Home)}
           {item("/dossiers", "Dossiers", FolderKanban)}
           {item("/planner", "Arcade Planner", LayoutGrid)}
+          {canAccessGaia && item("/admin/gaia", "Gaia", Database)}
           {isAdmin && item("/admin", "Admin", Shield)}
-          {isAdmin && item("/admin/gaia", "Gaia", Database)}
         </div>
         <div className="border-t border-border p-3">
           <Button variant="ghost" className="w-full justify-start gap-2" onClick={handleSignOut}>

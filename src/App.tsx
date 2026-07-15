@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import SpacePlanner from "./pages/SpacePlanner";
+import Hub from "./pages/Hub";
 import DossiersList from "./pages/DossiersList";
 import DossierEdit from "./pages/DossierEdit";
 import AdminDossiers from "./pages/AdminDossiers";
@@ -34,7 +35,7 @@ const App = () => (
             <Route path="/d/:slug" element={<PublicDossier />} />
 
             {/* Protected */}
-            <Route path="/" element={<Navigate to="/dossiers" replace />} />
+            <Route path="/" element={<ProtectedRoute><Hub /></ProtectedRoute>} />
             <Route path="/planner" element={<ProtectedRoute><SpacePlanner /></ProtectedRoute>} />
             <Route path="/planner/dossier/:dossierId" element={<ProtectedRoute><SpacePlanner /></ProtectedRoute>} />
             <Route path="/dossiers" element={<ProtectedRoute><DossiersList /></ProtectedRoute>} />

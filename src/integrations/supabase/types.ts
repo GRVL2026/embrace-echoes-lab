@@ -1256,6 +1256,7 @@ export type Database = {
     }
     Functions: {
       is_admin: { Args: never; Returns: boolean }
+      is_direction: { Args: never; Returns: boolean }
       refresh_erp_prices: { Args: never; Returns: number }
       unaccent: { Args: { "": string }; Returns: string }
     }

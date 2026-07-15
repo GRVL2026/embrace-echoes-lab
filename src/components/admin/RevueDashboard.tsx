@@ -2,7 +2,7 @@ import {
   Sparkles, TrendingUp, TrendingDown, AlertTriangle, Target,
 } from "lucide-react";
 import {
-  ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
 } from "recharts";
 
 export type RevueData = {

@@ -459,6 +459,8 @@ type TurnLog = {
   stop_reason: string | null;
   block_types: string[];
   sql_queries: string[];
+  memory_writes: string[];
+  memory_forgets: string[];
 };
 
 function extractText(content: any[]): string {
@@ -471,14 +473,15 @@ function extractText(content: any[]): string {
 }
 
 /**
- * Boucle agentique : exécute executer_sql jusqu'à MAX_TOOL_ROUNDS.
- * Retourne l'historique complet (assistant renvoyé TEL QUEL, thinking inclus),
- * la dernière réponse, le nombre de tours et le journal détaillé.
+ * Boucle agentique : dispatche les tool_use (executer_sql, memoriser, oublier, …)
+ * jusqu'à MAX_TOOL_ROUNDS. Retourne l'historique complet (assistant renvoyé TEL QUEL,
+ * thinking inclus), la dernière réponse, le nombre de tours et le journal détaillé.
  */
 async function toolLoop(params: {
   admin: any;
   model: string;
   system: string;
+  dynamicSuffix?: string;
   initialMessages: Array<{ role: 'user' | 'assistant'; content: any }>;
   extraTools?: any[];
   toolChoice?: any;
@@ -489,20 +492,20 @@ async function toolLoop(params: {
   rounds: number;
   journal: TurnLog[];
 }> {
-  const { admin, model, system, initialMessages, extraTools = [], toolChoice, extraPayload } = params;
-  const tools = [SQL_TOOL, ...extraTools];
+  const { admin, model, system, dynamicSuffix, initialMessages, extraTools = [], toolChoice, extraPayload } = params;
+  const tools = [SQL_TOOL, MEMORISE_TOOL, OUBLIER_TOOL, ...extraTools];
   const messages = [...initialMessages];
   const journal: TurnLog[] = [];
 
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
     const isLastRound = round === MAX_TOOL_ROUNDS;
     const sys = isLastRound
-      ? `${system}\n\nTu as atteint la limite de ${MAX_TOOL_ROUNDS} appels à executer_sql. Réponds maintenant avec les informations dont tu disposes.`
+      ? `${system}\n\nTu as atteint la limite de ${MAX_TOOL_ROUNDS} appels d'outils. Réponds maintenant avec les informations dont tu disposes.`
       : system;
     const payload: Record<string, unknown> = {
       model,
       max_tokens: MAX_TOKENS_PER_TURN,
-      system: systemBlocks(sys),
+      system: systemBlocks(sys, dynamicSuffix),
       messages: withCacheOnLastMessage(messages),
       tools: isLastRound ? extraTools : tools,
       ...(extraPayload ?? {}),
@@ -512,29 +515,51 @@ async function toolLoop(params: {
     const resp = await anthropicCall(payload);
     logUsage(`round=${round}`, resp?.usage);
     const content = Array.isArray(resp?.content) ? resp.content : [];
-    const sqlCalls = content.filter((b: any) => b?.type === 'tool_use' && b?.name === 'executer_sql');
+    const toolCalls = content.filter((b: any) => b?.type === 'tool_use');
     const blockTypes = content.map((b: any) => b?.type ?? 'unknown');
-    const sqlQueries = sqlCalls.map((c: any) => String(c?.input?.sql_query ?? ''));
+    const sqlQueries = toolCalls
+      .filter((c: any) => c?.name === 'executer_sql')
+      .map((c: any) => String(c?.input?.sql_query ?? ''));
+    const memoryWrites = toolCalls
+      .filter((c: any) => c?.name === 'memoriser')
+      .map((c: any) => `${c?.input?.categorie ?? '?'}: ${String(c?.input?.contenu ?? '').slice(0, 80)}`);
+    const memoryForgets = toolCalls
+      .filter((c: any) => c?.name === 'oublier')
+      .map((c: any) => String(c?.input?.id ?? ''));
 
     const turn: TurnLog = {
       round,
       stop_reason: resp?.stop_reason ?? null,
       block_types: blockTypes,
       sql_queries: sqlQueries,
+      memory_writes: memoryWrites,
+      memory_forgets: memoryForgets,
     };
     journal.push(turn);
-    console.log(`[gaia-copilot] round=${round} stop_reason=${turn.stop_reason} blocks=${JSON.stringify(blockTypes)} sql=${JSON.stringify(sqlQueries)}`);
+    console.log(`[gaia-copilot] round=${round} stop_reason=${turn.stop_reason} blocks=${JSON.stringify(blockTypes)} sql=${JSON.stringify(sqlQueries)} memo+=${JSON.stringify(memoryWrites)} memo-=${JSON.stringify(memoryForgets)}`);
 
-    if (sqlCalls.length === 0 || isLastRound) {
+    if (toolCalls.length === 0 || isLastRound) {
       messages.push({ role: 'assistant', content });
       return { messages, last: resp, rounds: round, journal };
     }
 
-    // Exécute les requêtes SQL demandées
+    // Dispatche chaque tool_use vers son exécuteur
     const toolResults = await Promise.all(
-      sqlCalls.map(async (call: any) => {
-        const sql = String(call?.input?.sql_query ?? '');
-        const result = await runGaiaQuery(admin, sql);
+      toolCalls.map(async (call: any) => {
+        let result: unknown;
+        try {
+          if (call?.name === 'executer_sql') {
+            result = await runGaiaQuery(admin, String(call?.input?.sql_query ?? ''));
+          } else if (call?.name === 'memoriser') {
+            result = await memoriser(admin, String(call?.input?.categorie ?? ''), String(call?.input?.contenu ?? ''));
+          } else if (call?.name === 'oublier') {
+            result = await oublier(admin, String(call?.input?.id ?? ''));
+          } else {
+            result = { error: `Outil inconnu: ${call?.name}` };
+          }
+        } catch (e: any) {
+          result = { error: e?.message ?? String(e) };
+        }
         return {
           type: 'tool_result',
           tool_use_id: call.id,
@@ -550,6 +575,7 @@ async function toolLoop(params: {
 
   throw new Error('Boucle agentique inattendue');
 }
+
 
 /**
  * Dernier recours : appel Anthropic SANS outils pour forcer une réponse texte.

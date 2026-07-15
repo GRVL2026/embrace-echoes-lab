@@ -82,7 +82,7 @@ const fmtDateShort = (d: string | null) => {
 };
 const fmtMoney = (v: number | null) => {
   if (v == null) return "—";
-  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(v);
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(v);
 };
 
 /* ============================================================= */

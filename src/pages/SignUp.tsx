@@ -28,7 +28,7 @@ export default function SignUp() {
       return;
     }
     toast({ title: "Compte créé", description: "Vous pouvez maintenant vous connecter." });
-    navigate("/dossiers", { replace: true });
+    navigate("/", { replace: true });
   };
 
   return (

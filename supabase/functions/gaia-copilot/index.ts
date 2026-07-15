@@ -584,6 +584,7 @@ async function forceFinalText(
   model: string,
   system: string,
   messages: Array<{ role: 'user' | 'assistant'; content: any }>,
+  dynamicSuffix?: string,
 ): Promise<{ text: string; stop_reason: string | null; block_types: string[] }> {
   const forced = [...messages, {
     role: 'user' as const,
@@ -592,7 +593,7 @@ async function forceFinalText(
   const resp = await anthropicCall({
     model,
     max_tokens: MAX_TOKENS_PER_TURN,
-    system: systemBlocks(system),
+    system: systemBlocks(system, dynamicSuffix),
     messages: withCacheOnLastMessage(forced),
   });
   logUsage('forceFinalText', resp?.usage);
@@ -609,6 +610,7 @@ async function streamFinalRevue(
   system: string,
   messages: Array<{ role: 'user' | 'assistant'; content: any }>,
   extraPayload?: Record<string, unknown>,
+  dynamicSuffix?: string,
 ) {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY manquant');
@@ -617,7 +619,7 @@ async function streamFinalRevue(
     model,
     max_tokens: 16000,
     stream: true,
-    system: systemBlocks(system),
+    system: systemBlocks(system, dynamicSuffix),
     messages: withCacheOnLastMessage(messages),
     tools: [REVUE_TOOL],
     tool_choice: { type: 'tool', name: 'build_revue' },

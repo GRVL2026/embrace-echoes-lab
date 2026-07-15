@@ -1396,7 +1396,7 @@ export default function DossierEdit() {
                                 aria-label={`Fiche ${p.name}`}
                               >
                                 {img ? (
-                                  <img src={require ? (undefined as any) : undefined || ((): string => { return ""; })()} alt={p.name} />
+                                  <img src={shopifyThumb(img, 160) ?? img} alt={p.name} className="max-h-full max-w-full object-contain" loading="lazy" decoding="async" />
                                 ) : (
                                   <div className="text-[9px] leading-tight text-muted-foreground text-center px-1">
                                     visuel indisponible

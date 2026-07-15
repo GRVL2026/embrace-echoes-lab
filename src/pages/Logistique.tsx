@@ -639,7 +639,7 @@ function ExpeditionDialog({
 
         <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
           {initial && (
-            <Button variant="ghost" onClick={deleteRow} className="text-destructive hover:text-destructive gap-1">
+            <Button variant="ghost" onClick={() => setConfirmDel(true)} className="text-destructive hover:text-destructive gap-1">
               <Trash2 className="h-4 w-4" /> Supprimer
             </Button>
           )}
@@ -650,6 +650,25 @@ function ExpeditionDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <Dialog open={confirmDel} onOpenChange={setConfirmDel}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" /> Supprimer l'expédition ?
+            </DialogTitle>
+            <DialogDescription>
+              Cette action est irréversible. La commande <span className="font-semibold text-foreground">{initial?.numero_commande}</span> sera définitivement supprimée.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setConfirmDel(false)}>Annuler</Button>
+            <Button variant="destructive" onClick={deleteRow} className="gap-1">
+              <Trash2 className="h-4 w-4" /> Supprimer définitivement
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

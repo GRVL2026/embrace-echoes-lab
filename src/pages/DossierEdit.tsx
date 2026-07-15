@@ -77,6 +77,7 @@ type ErpArticle = {
   description: string | null;
   famille: string | null;
   prix_ht: number | null;
+  stock: number | null;
 };
 type PricingLine = { label: string; qty: number; amount: number };
 type Pricing = { lines: PricingLine[]; total_ht: number; monthly: number };

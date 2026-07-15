@@ -16,7 +16,7 @@ export default function SignUp() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  if (!authLoading && user) return <Navigate to="/dossiers" replace />;
+  if (!authLoading && user) return <Navigate to="/" replace />;
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();

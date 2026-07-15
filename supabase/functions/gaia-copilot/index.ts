@@ -4,7 +4,8 @@ import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
 const ANTHROPIC_VERSION = '2023-06-01';
-const MAX_TOOL_ROUNDS = 5;
+const MAX_TOOL_ROUNDS = 6;
+const MAX_TOKENS_PER_TURN = 8000;
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -255,10 +256,26 @@ async function anthropicCall(payload: Record<string, unknown>) {
   catch { throw new Error(`Anthropic 200 mais JSON invalide. Body: ${text.slice(0, 1500)}`); }
 }
 
+type TurnLog = {
+  round: number;
+  stop_reason: string | null;
+  block_types: string[];
+  sql_queries: string[];
+};
+
+function extractText(content: any[]): string {
+  if (!Array.isArray(content)) return '';
+  return content
+    .filter((p: any) => p?.type === 'text' && typeof p.text === 'string')
+    .map((p: any) => p.text)
+    .join('\n\n')
+    .trim();
+}
+
 /**
- * Boucle agentique non-streamée : exécute les tool_use executer_sql jusqu'à MAX_TOOL_ROUNDS.
- * Retourne l'historique des messages (avec assistant final) ainsi que la dernière réponse Anthropic.
- * Le dernier assistant ne contient PLUS de tool_use executer_sql : soit du texte final, soit un autre tool_use (ex: build_revue) si extraTools force ce choix.
+ * Boucle agentique : exécute executer_sql jusqu'à MAX_TOOL_ROUNDS.
+ * Retourne l'historique complet (assistant renvoyé TEL QUEL, thinking inclus),
+ * la dernière réponse, le nombre de tours et le journal détaillé.
  */
 async function toolLoop(params: {
   admin: any;
@@ -266,17 +283,22 @@ async function toolLoop(params: {
   initialMessages: Array<{ role: 'user' | 'assistant'; content: any }>;
   extraTools?: any[];
   toolChoice?: any;
-}): Promise<{ messages: Array<{ role: 'user' | 'assistant'; content: any }>; last: any; rounds: number }> {
+}): Promise<{
+  messages: Array<{ role: 'user' | 'assistant'; content: any }>;
+  last: any;
+  rounds: number;
+  journal: TurnLog[];
+}> {
   const { admin, system, initialMessages, extraTools = [], toolChoice } = params;
   const tools = [SQL_TOOL, ...extraTools];
   const messages = [...initialMessages];
+  const journal: TurnLog[] = [];
 
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
-    // Sur le dernier tour possible, on interdit encore executer_sql pour forcer la réponse finale.
     const isLastRound = round === MAX_TOOL_ROUNDS;
     const payload: Record<string, unknown> = {
       model: ANTHROPIC_MODEL,
-      max_tokens: 16000,
+      max_tokens: MAX_TOKENS_PER_TURN,
       system: isLastRound
         ? `${system}\n\nTu as atteint la limite de ${MAX_TOOL_ROUNDS} appels à executer_sql. Réponds maintenant avec les informations dont tu disposes.`
         : system,
@@ -288,13 +310,24 @@ async function toolLoop(params: {
     const resp = await anthropicCall(payload);
     const content = Array.isArray(resp?.content) ? resp.content : [];
     const sqlCalls = content.filter((b: any) => b?.type === 'tool_use' && b?.name === 'executer_sql');
+    const blockTypes = content.map((b: any) => b?.type ?? 'unknown');
+    const sqlQueries = sqlCalls.map((c: any) => String(c?.input?.sql_query ?? ''));
+
+    const turn: TurnLog = {
+      round,
+      stop_reason: resp?.stop_reason ?? null,
+      block_types: blockTypes,
+      sql_queries: sqlQueries,
+    };
+    journal.push(turn);
+    console.log(`[gaia-copilot] round=${round} stop_reason=${turn.stop_reason} blocks=${JSON.stringify(blockTypes)} sql=${JSON.stringify(sqlQueries)}`);
 
     if (sqlCalls.length === 0 || isLastRound) {
       messages.push({ role: 'assistant', content });
-      return { messages, last: resp, rounds: round };
+      return { messages, last: resp, rounds: round, journal };
     }
 
-    // Exécute toutes les requêtes SQL demandées ce tour
+    // Exécute les requêtes SQL demandées
     const toolResults = await Promise.all(
       sqlCalls.map(async (call: any) => {
         const sql = String(call?.input?.sql_query ?? '');
@@ -307,13 +340,37 @@ async function toolLoop(params: {
       })
     );
 
+    // Renvoie l'assistant TEL QUEL (thinking + tool_use inclus, requis par l'API)
     messages.push({ role: 'assistant', content });
     messages.push({ role: 'user', content: toolResults });
   }
 
-  // ne devrait pas être atteint
   throw new Error('Boucle agentique inattendue');
 }
+
+/**
+ * Dernier recours : appel Anthropic SANS outils pour forcer une réponse texte.
+ */
+async function forceFinalText(
+  system: string,
+  messages: Array<{ role: 'user' | 'assistant'; content: any }>,
+): Promise<{ text: string; stop_reason: string | null; block_types: string[] }> {
+  const forced = [...messages, {
+    role: 'user' as const,
+    content: 'Donne maintenant ta réponse finale à partir des résultats déjà obtenus.',
+  }];
+  const resp = await anthropicCall({
+    model: ANTHROPIC_MODEL,
+    max_tokens: MAX_TOKENS_PER_TURN,
+    system,
+    messages: forced,
+  });
+  const content = Array.isArray(resp?.content) ? resp.content : [];
+  const blockTypes = content.map((b: any) => b?.type ?? 'unknown');
+  console.log(`[gaia-copilot] forceFinalText stop_reason=${resp?.stop_reason} blocks=${JSON.stringify(blockTypes)}`);
+  return { text: extractText(content), stop_reason: resp?.stop_reason ?? null, block_types: blockTypes };
+}
+
 
 /** Stream final Anthropic call (SSE passthrough) — utilisé pour la revue afin de conserver l'API SSE côté client. */
 async function streamFinalRevue(system: string, messages: Array<{ role: 'user' | 'assistant'; content: any }>) {
@@ -479,34 +536,58 @@ Deno.serve(async (req) => {
         { role: 'user', content: question },
       ];
 
-      const { messages: finalMessages, last, rounds } = await toolLoop({
+      const { messages: finalMessages, last, rounds, journal } = await toolLoop({
         admin,
         system: SYSTEM_PROMPT,
         initialMessages,
       });
 
       const lastContent = Array.isArray(last?.content) ? last.content : [];
-      const markdown = lastContent
-        .filter((p: any) => p?.type === 'text' && typeof p.text === 'string')
-        .map((p: any) => p.text)
-        .join('\n\n')
-        .trim();
+      let markdown = extractText(lastContent);
+      let forcedDebug: any = null;
+
+      // Réponse finale garantie : si vide OU limite atteinte, on relance sans outils.
+      if (!markdown || rounds >= MAX_TOOL_ROUNDS) {
+        try {
+          const forced = await forceFinalText(SYSTEM_PROMPT, finalMessages);
+          if (forced.text) markdown = forced.text;
+          forcedDebug = { stop_reason: forced.stop_reason, block_types: forced.block_types };
+        } catch (e: any) {
+          console.log(`[gaia-copilot] forceFinalText error: ${e?.message ?? e}`);
+          forcedDebug = { error: e?.message ?? String(e) };
+        }
+      }
+
+      // Fallback ultime : dernier bloc "text" non vide de n'importe quel tour assistant.
+      if (!markdown) {
+        for (let i = finalMessages.length - 1; i >= 0 && !markdown; i--) {
+          const m = finalMessages[i];
+          if (m.role === 'assistant' && Array.isArray(m.content)) {
+            markdown = extractText(m.content);
+          }
+        }
+      }
 
       if (!markdown) {
-        return jsonResponse({ ok: false, error: `Réponse vide (stop_reason=${last?.stop_reason ?? '?'}, rounds=${rounds})` }, 500);
+        return jsonResponse({
+          ok: false,
+          error: `Réponse vide (stop_reason=${last?.stop_reason ?? '?'}, rounds=${rounds})`,
+          debug: { journal, forced: forcedDebug },
+        }, 200);
       }
 
       return jsonResponse({
         ok: true,
         markdown,
-        debug: { stop_reason: last?.stop_reason ?? null, tool_rounds: rounds },
+        debug: { stop_reason: last?.stop_reason ?? null, tool_rounds: rounds, journal, forced: forcedDebug },
       });
     }
+
 
     return jsonResponse({ ok: false, error: `Unknown action: ${action}` }, 400);
 
   } catch (e: any) {
-    const status = Number.isInteger(e?.status) && e.status >= 400 && e.status <= 599 ? e.status : 500;
-    return jsonResponse({ ok: false, error: e?.message ?? String(e) }, status);
+    console.log(`[gaia-copilot] fatal error: ${e?.message ?? e}`);
+    return jsonResponse({ ok: false, error: e?.message ?? String(e) }, 200);
   }
 });

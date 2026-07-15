@@ -9,6 +9,12 @@ interface Body {
   url?: string;
   icon?: string;
   tag?: string;
+  test?: boolean;
+}
+
+function truncate(s: string, n = 60): string {
+  if (!s) return "";
+  return s.length > n ? s.slice(0, n) + "…" : s;
 }
 
 Deno.serve(async (req) => {
@@ -25,18 +31,45 @@ Deno.serve(async (req) => {
   try {
     const internal = req.headers.get("x-internal-secret");
     const cronSecret = Deno.env.get("CRON_SECRET");
-    if (!cronSecret || internal !== cronSecret) {
+    const authHeader = req.headers.get("Authorization") ?? "";
+
+    const payload = (await req.json().catch(() => ({}))) as Body;
+    let title = typeof payload.title === "string" ? payload.title : "Notification";
+    let body = typeof payload.body === "string" ? payload.body : "";
+    const url = typeof payload.url === "string" ? payload.url : "/";
+
+    let userId = "";
+    const isInternal = !!(cronSecret && internal === cronSecret);
+
+    if (isInternal) {
+      userId = typeof payload.user_id === "string" ? payload.user_id : "";
+    } else if (authHeader.startsWith("Bearer ")) {
+      // Authenticated caller: user sends a notification to themselves.
+      const authClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } },
+      );
+      const token = authHeader.replace("Bearer ", "");
+      const { data, error } = await authClient.auth.getClaims(token);
+      if (error || !data?.claims?.sub) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      userId = data.claims.sub as string;
+      if (payload.test) {
+        title = "🔔 Test de notification";
+        body = "Si tu vois ceci, les notifications fonctionnent ✓";
+      }
+    } else {
       return new Response(JSON.stringify({ error: "Forbidden" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const payload = (await req.json().catch(() => ({}))) as Body;
-    const userId = typeof payload.user_id === "string" ? payload.user_id : "";
-    const title = typeof payload.title === "string" ? payload.title : "Notification";
-    const body = typeof payload.body === "string" ? payload.body : "";
-    const url = typeof payload.url === "string" ? payload.url : "/";
     if (!userId) {
       return new Response(JSON.stringify({ error: "user_id requis" }), {
         status: 400,
@@ -76,31 +109,34 @@ Deno.serve(async (req) => {
 
     let sent = 0;
     let removed = 0;
+    const results: Array<{ endpoint: string; status: number | null; error?: string }> = [];
+
     for (const s of subs ?? []) {
+      const endpointShort = truncate(s.endpoint, 60);
       try {
-        await webpush.sendNotification(
-          {
-            endpoint: s.endpoint,
-            keys: { p256dh: s.p256dh, auth: s.auth },
-          },
+        const res = await webpush.sendNotification(
+          { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
           notif,
         );
         sent++;
+        results.push({ endpoint: endpointShort, status: (res as { statusCode?: number }).statusCode ?? 201 });
       } catch (e) {
-        const status = (e as { statusCode?: number }).statusCode;
+        const status = (e as { statusCode?: number }).statusCode ?? null;
+        const msg = (e as Error).message ?? "unknown";
+        results.push({ endpoint: endpointShort, status, error: msg });
         if (status === 404 || status === 410) {
           await admin.from("push_subscriptions").delete().eq("endpoint", s.endpoint);
           removed++;
         } else {
-          console.error("push send failed", status, (e as Error).message);
+          console.error("push send failed", status, msg);
         }
       }
     }
 
-    return new Response(JSON.stringify({ sent, removed, total: (subs ?? []).length }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ sent, removed, total: (subs ?? []).length, results }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   } catch (e) {
     return new Response(JSON.stringify({ error: (e as Error).message ?? "Erreur serveur" }), {
       status: 500,

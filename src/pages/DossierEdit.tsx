@@ -29,8 +29,11 @@ import {
   Sparkles,
   Trash2,
   X,
+  BadgeCheck,
+  AlertTriangle,
 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
+import { cn, stockErpBadge } from "@/lib/utils";
 import { DossierPreview } from "@/components/dossier/DossierPreview";
 import { StatusSelect, updateProjectStatus, type DossierStatus } from "@/components/dossier/StatusSelect";
 import { renderPlan2D } from "@/lib/plan2DRender";

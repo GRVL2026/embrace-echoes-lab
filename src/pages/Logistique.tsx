@@ -436,6 +436,8 @@ function ExpeditionDialog({
   onSaved: () => void;
 }) {
   const [form, setForm] = useState<FormState>({ items: [], statut: "a_venir", docs_transmis: false });
+  const [confirmDel, setConfirmDel] = useState(false);
+
 
   useEffect(() => {
     if (open) {

@@ -39,6 +39,7 @@ type SiteProduct = {
   images: string[] | null;
   product_url: string | null;
   stock: string | null;
+  stock_erp: number | null;
 };
 
 type ErpProduct = {

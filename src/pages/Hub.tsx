@@ -41,9 +41,9 @@ const CARDS: EnvCard[] = [
 ];
 
 export default function Hub() {
-  const { isAdmin, loading } = useAuth();
+  const { isAdmin, isLoading } = useAuth();
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background text-foreground">
         <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Chargement…

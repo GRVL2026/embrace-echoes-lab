@@ -1258,6 +1258,7 @@ export default function DossierEdit() {
                     {searchResults.map((hit) => {
                       if (hit.kind === "site") {
                         const r = hit.item;
+                        const badge = stockErpBadge(r.stock_erp, r.cegid_code);
                         return (
                           <button
                             key={`site-${r.id}`}
@@ -1266,16 +1267,41 @@ export default function DossierEdit() {
                             className="flex w-full items-center justify-between gap-3 border-b border-border/60 px-3 py-2 text-left text-sm hover:bg-accent last:border-b-0"
                           >
                             <div className="min-w-0">
-                              <div className="truncate font-medium">{r.name}</div>
+                              <div className="flex items-center gap-2 truncate">
+                                <span
+                                  className={cn("h-2 w-2 rounded-full flex-shrink-0", badge.color)}
+                                  title={badge.label}
+                                  aria-label={badge.label}
+                                />
+                                <span className="truncate font-medium">{r.name}</span>
+                              </div>
                               <div className="truncate text-xs text-muted-foreground">
                                 {[r.vendor, r.category].filter(Boolean).join(" · ") || "—"}
                               </div>
                             </div>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                               {r.price_erp_ht != null ? (
-                                <span className="text-primary font-medium">{r.price_erp_ht} € HT (ERP)</span>
+                                <span className="inline-flex items-center gap-1 text-primary font-medium">
+                                  {r.price_erp_ht} € HT
+                                  <span
+                                    title="Prix vérifié ERP"
+                                    aria-label="Prix vérifié ERP"
+                                    className="inline-flex items-center rounded-full bg-emerald-500/15 text-emerald-500 px-1 py-0.5"
+                                  >
+                                    <BadgeCheck className="h-3 w-3" />
+                                  </span>
+                                </span>
                               ) : r.price != null ? (
-                                <span title="Prix site TTC — non vérifié ERP">{r.price} € TTC</span>
+                                <span className="inline-flex items-center gap-1">
+                                  {r.price} € TTC
+                                  <span
+                                    title="Prix site TTC, non vérifié ERP"
+                                    aria-label="Prix site TTC, non vérifié ERP"
+                                    className="inline-flex items-center rounded-full bg-amber-500/15 text-amber-500 px-1 py-0.5"
+                                  >
+                                    <AlertTriangle className="h-3 w-3" />
+                                  </span>
+                                </span>
                               ) : null}
                               {r.price_monthly != null ? <span>· {r.price_monthly} €/mois</span> : null}
                               <Plus className="h-4 w-4" />
@@ -1284,6 +1310,7 @@ export default function DossierEdit() {
                         );
                       }
                       const r = hit.item;
+                      const badge = stockErpBadge(r.stock, r.code);
                       return (
                         <button
                           key={`erp-${r.code}`}
@@ -1293,6 +1320,11 @@ export default function DossierEdit() {
                         >
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 truncate">
+                              <span
+                                className={cn("h-2 w-2 rounded-full flex-shrink-0", badge.color)}
+                                title={badge.label}
+                                aria-label={badge.label}
+                              />
                               <span className="truncate font-medium">{r.description || r.code}</span>
                               <span className="rounded border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
                                 ERP
@@ -1302,9 +1334,18 @@ export default function DossierEdit() {
                               {r.code}{r.famille ? ` · ${r.famille}` : ""}
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                             {r.prix_ht != null ? (
-                              <span className="text-primary font-medium">{r.prix_ht} € HT</span>
+                              <span className="inline-flex items-center gap-1 text-primary font-medium">
+                                {r.prix_ht} € HT
+                                <span
+                                  title="Prix vérifié ERP"
+                                  aria-label="Prix vérifié ERP"
+                                  className="inline-flex items-center rounded-full bg-emerald-500/15 text-emerald-500 px-1 py-0.5"
+                                >
+                                  <BadgeCheck className="h-3 w-3" />
+                                </span>
+                              </span>
                             ) : null}
                             <Plus className="h-4 w-4" />
                           </div>

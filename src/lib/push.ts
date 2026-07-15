@@ -1,8 +1,19 @@
 import { supabase } from "@/integrations/supabase/client";
 
-// VAPID public key (safe to expose; only the private key must stay server-side).
-export const VAPID_PUBLIC_KEY =
-  "BJ0mVW9OZK3Ijw3Zk3XxL7A5EOKe0hf67yaGkS8yiKQODP0-M6iMcuwPOWLR7-4jDe9YyIsehHtb3fLpBgP4Xxc";
+let cachedVapidKey: string | null = null;
+
+async function getVapidPublicKey(): Promise<string> {
+  if (cachedVapidKey) return cachedVapidKey;
+  const { data, error } = await supabase.functions.invoke<{ publicKey: string }>(
+    "send-push",
+    { method: "GET" },
+  );
+  if (error || !data?.publicKey) {
+    throw new Error("Clé VAPID publique indisponible.");
+  }
+  cachedVapidKey = data.publicKey;
+  return cachedVapidKey;
+}
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -66,9 +77,10 @@ export async function enablePush(): Promise<{ ok: boolean; error?: string }> {
   let sub = await reg.pushManager.getSubscription();
   if (!sub) {
     try {
+      const vapidKey = await getVapidPublicKey();
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY).buffer as ArrayBuffer,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey).buffer as ArrayBuffer,
       });
     } catch (e) {
       return { ok: false, error: (e as Error).message || "Souscription impossible." };

@@ -14,6 +14,14 @@ interface Body {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  // Public endpoint: expose only the VAPID public key so the browser can subscribe.
+  if (req.method === "GET") {
+    return new Response(
+      JSON.stringify({ publicKey: Deno.env.get("VAPID_PUBLIC_KEY") ?? "" }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
   try {
     const internal = req.headers.get("x-internal-secret");
     const cronSecret = Deno.env.get("CRON_SECRET");

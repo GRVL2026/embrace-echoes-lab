@@ -22,8 +22,11 @@ import {
   Database,
   Shield,
   ShoppingBag,
+  BadgeCheck,
+  AlertTriangle,
 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
+import { shopifyThumb, stockErpBadge, cn } from "@/lib/utils";
 
 type SiteProduct = {
   id: string;

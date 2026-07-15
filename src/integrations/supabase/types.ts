@@ -1194,6 +1194,148 @@ export type Database = {
           },
         ]
       }
+      shipment_documents: {
+        Row: {
+          created_at: string
+          file_path: string
+          id: string
+          kind: string | null
+          name: string
+          shipment_id: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_path: string
+          id?: string
+          kind?: string | null
+          name: string
+          shipment_id: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_path?: string
+          id?: string
+          kind?: string | null
+          name?: string
+          shipment_id?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shipment_documents_shipment_id_fkey"
+            columns: ["shipment_id"]
+            isOneToOne: false
+            referencedRelation: "shipments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shipment_items: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          product_name: string
+          quantity: number
+          shipment_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          product_name: string
+          quantity?: number
+          shipment_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          product_name?: string
+          quantity?: number
+          shipment_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shipment_items_shipment_id_fkey"
+            columns: ["shipment_id"]
+            isOneToOne: false
+            referencedRelation: "shipments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shipments: {
+        Row: {
+          amount_ht: number | null
+          arrival_date: string | null
+          carrier: string | null
+          created_at: string
+          created_by: string | null
+          currency: string | null
+          customs_fees: number | null
+          eta_date: string | null
+          factory_departure_date: string | null
+          id: string
+          incoterm: string | null
+          notes: string | null
+          order_date: string | null
+          origin_country: string | null
+          reference: string
+          status: Database["public"]["Enums"]["shipment_status"]
+          supplier: string
+          tracking_number: string | null
+          transport_fees: number | null
+          updated_at: string
+        }
+        Insert: {
+          amount_ht?: number | null
+          arrival_date?: string | null
+          carrier?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          customs_fees?: number | null
+          eta_date?: string | null
+          factory_departure_date?: string | null
+          id?: string
+          incoterm?: string | null
+          notes?: string | null
+          order_date?: string | null
+          origin_country?: string | null
+          reference: string
+          status?: Database["public"]["Enums"]["shipment_status"]
+          supplier: string
+          tracking_number?: string | null
+          transport_fees?: number | null
+          updated_at?: string
+        }
+        Update: {
+          amount_ht?: number | null
+          arrival_date?: string | null
+          carrier?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          customs_fees?: number | null
+          eta_date?: string | null
+          factory_departure_date?: string | null
+          id?: string
+          incoterm?: string | null
+          notes?: string | null
+          order_date?: string | null
+          origin_country?: string | null
+          reference?: string
+          status?: Database["public"]["Enums"]["shipment_status"]
+          supplier?: string
+          tracking_number?: string | null
+          transport_fees?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           role: string
@@ -1395,7 +1537,13 @@ export type Database = {
       unaccent: { Args: { "": string }; Returns: string }
     }
     Enums: {
-      [_ in never]: never
+      shipment_status:
+        | "a_venir"
+        | "dispo"
+        | "en_attente"
+        | "en_cours"
+        | "en_mer"
+        | "livre"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1522,6 +1670,15 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      shipment_status: [
+        "a_venir",
+        "dispo",
+        "en_attente",
+        "en_cours",
+        "en_mer",
+        "livre",
+      ],
+    },
   },
 } as const

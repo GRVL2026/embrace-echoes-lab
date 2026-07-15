@@ -852,60 +852,101 @@ Deno.serve(async (req) => {
       const contextMsg = `Voici les données commerciales agrégées (JSON) à utiliser pour répondre :\n\n\`\`\`json\n${dataJson}\n\`\`\``;
       const initialMessages: Array<{ role: 'user' | 'assistant'; content: any }> = [
         { role: 'user', content: contextMsg },
-        { role: 'assistant', content: 'Données reçues. Je réponds en m\'appuyant sur ces chiffres, sur ma mémoire persistante, et j\'appellerai executer_sql / memoriser / oublier au besoin.' },
+        { role: 'assistant', content: 'Données reçues. Je réponds en m\'appuyant sur ces chiffres, sur ma mémoire persistante, et j\'appellerai executer_sql / memoriser / oublier / afficher_graphique au besoin.' },
         ...cleanHistory,
         { role: 'user', content: question },
       ];
 
       const chatSystem = `${SYSTEM_PROMPT}\n\n${SUIVI_INSTRUCTION}`;
-      const { messages: finalMessages, last, rounds, journal } = await toolLoop({
-        admin,
-        model: CHAT_MODEL,
-        system: chatSystem,
-        dynamicSuffix: memorySuffix,
-        initialMessages,
+
+      const encoder = new TextEncoder();
+      let heartbeat: number | undefined;
+
+      const stream = new ReadableStream<Uint8Array>({
+        async start(controller) {
+          const send = (event: string, data: unknown) => {
+            try {
+              controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+            } catch { /* closed */ }
+          };
+          send('gaia_start', { question });
+          heartbeat = setInterval(() => {
+            try { controller.enqueue(encoder.encode(`: gaia-heartbeat ${Date.now()}\n\n`)); }
+            catch { if (heartbeat !== undefined) clearInterval(heartbeat); }
+          }, 10_000);
+
+          try {
+            const { messages: finalMessages, last, rounds, journal } = await toolLoop({
+              admin,
+              model: CHAT_MODEL,
+              system: chatSystem,
+              dynamicSuffix: memorySuffix,
+              initialMessages,
+              onEvent: (evt, data) => send(evt, data),
+            });
+
+            const lastContent = Array.isArray(last?.content) ? last.content : [];
+            let markdown = extractText(lastContent);
+            let forcedDebug: any = null;
+
+            if (!markdown || rounds >= MAX_TOOL_ROUNDS) {
+              try {
+                const forced = await forceFinalText(CHAT_MODEL, chatSystem, finalMessages, memorySuffix);
+                if (forced.text) markdown = forced.text;
+                forcedDebug = { stop_reason: forced.stop_reason, block_types: forced.block_types };
+              } catch (e: any) {
+                console.log(`[gaia-copilot] forceFinalText error: ${e?.message ?? e}`);
+                forcedDebug = { error: e?.message ?? String(e) };
+              }
+            }
+
+            if (!markdown) {
+              for (let i = finalMessages.length - 1; i >= 0 && !markdown; i--) {
+                const m = finalMessages[i];
+                if (m.role === 'assistant' && Array.isArray(m.content)) {
+                  markdown = extractText(m.content);
+                }
+              }
+            }
+
+            const sqlUsed = journal.flatMap((j) => j.sql_queries);
+
+            if (!markdown) {
+              send('gaia_error', {
+                error: `Réponse vide (stop_reason=${last?.stop_reason ?? '?'}, rounds=${rounds})`,
+                debug: { journal, forced: forcedDebug },
+              });
+            } else {
+              send('gaia_final', {
+                markdown,
+                debug: { stop_reason: last?.stop_reason ?? null, tool_rounds: rounds, journal, forced: forcedDebug },
+                sql_used: sqlUsed,
+              });
+            }
+          } catch (e: any) {
+            console.log(`[gaia-copilot] chat stream fatal: ${e?.message ?? e}`);
+            send('gaia_error', { error: e?.message ?? String(e) });
+          } finally {
+            if (heartbeat !== undefined) clearInterval(heartbeat);
+            try { controller.close(); } catch { /* already closed */ }
+          }
+        },
+        cancel() {
+          if (heartbeat !== undefined) clearInterval(heartbeat);
+        },
       });
 
-      const lastContent = Array.isArray(last?.content) ? last.content : [];
-      let markdown = extractText(lastContent);
-      let forcedDebug: any = null;
-
-      // Réponse finale garantie : si vide OU limite atteinte, on relance sans outils.
-      if (!markdown || rounds >= MAX_TOOL_ROUNDS) {
-        try {
-          const forced = await forceFinalText(CHAT_MODEL, chatSystem, finalMessages, memorySuffix);
-          if (forced.text) markdown = forced.text;
-          forcedDebug = { stop_reason: forced.stop_reason, block_types: forced.block_types };
-        } catch (e: any) {
-          console.log(`[gaia-copilot] forceFinalText error: ${e?.message ?? e}`);
-          forcedDebug = { error: e?.message ?? String(e) };
-        }
-      }
-
-      // Fallback ultime : dernier bloc "text" non vide de n'importe quel tour assistant.
-      if (!markdown) {
-        for (let i = finalMessages.length - 1; i >= 0 && !markdown; i--) {
-          const m = finalMessages[i];
-          if (m.role === 'assistant' && Array.isArray(m.content)) {
-            markdown = extractText(m.content);
-          }
-        }
-      }
-
-      if (!markdown) {
-        return jsonResponse({
-          ok: false,
-          error: `Réponse vide (stop_reason=${last?.stop_reason ?? '?'}, rounds=${rounds})`,
-          debug: { journal, forced: forcedDebug },
-        }, 200);
-      }
-
-      return jsonResponse({
-        ok: true,
-        markdown,
-        debug: { stop_reason: last?.stop_reason ?? null, tool_rounds: rounds, journal, forced: forcedDebug },
+      return new Response(stream, {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'text/event-stream; charset=utf-8',
+          'Cache-Control': 'no-cache, no-transform',
+          'X-Accel-Buffering': 'no',
+        },
       });
     }
+
 
 
     return jsonResponse({ ok: false, error: `Unknown action: ${action}` }, 400);

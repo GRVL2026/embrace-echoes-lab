@@ -646,7 +646,7 @@ Deno.serve(async (req) => {
       // Réponse finale garantie : si vide OU limite atteinte, on relance sans outils.
       if (!markdown || rounds >= MAX_TOOL_ROUNDS) {
         try {
-          const forced = await forceFinalText(SYSTEM_PROMPT, finalMessages);
+          const forced = await forceFinalText(CHAT_MODEL, SYSTEM_PROMPT, finalMessages);
           if (forced.text) markdown = forced.text;
           forcedDebug = { stop_reason: forced.stop_reason, block_types: forced.block_types };
         } catch (e: any) {

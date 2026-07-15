@@ -96,6 +96,7 @@ export default function Logistique() {
   const [fournisseurFilter, setFournisseurFilter] = useState<string>("all");
   const [openForm, setOpenForm] = useState(false);
   const [editing, setEditing] = useState<Expedition | null>(null);
+  const [openImport, setOpenImport] = useState(false);
 
   const { data: expeditions = [], isLoading: loadingList } = useQuery({
     queryKey: ["logi_expeditions"],

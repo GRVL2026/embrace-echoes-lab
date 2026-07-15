@@ -111,19 +111,30 @@ function SanteChart({ annees }: { annees: { annee: number; ca_ht: number; evolut
     isLast: a.annee === lastAnnee,
   }));
 
+  // Y domain with headroom for top value labels
+  const maxCa = Math.max(...data.map((d) => d.ca), 0);
+  const minCa = Math.min(...data.map((d) => d.ca), 0);
+  const yMax = maxCa * 1.18 || 1;
+  const yMin = minCa < 0 ? minCa * 1.1 : 0;
+
   const CustomDot = (props: any) => {
     const { cx, cy, payload } = props;
     if (cx == null || cy == null) return null;
     const isLast = payload?.isLast;
     return (
-      <circle
-        cx={cx}
-        cy={cy}
-        r={isLast ? 7 : 4.5}
-        fill={isLast ? "hsl(var(--primary))" : "hsl(var(--primary) / 0.6)"}
-        stroke={isLast ? "hsl(var(--primary))" : "hsl(var(--primary) / 0.7)"}
-        strokeWidth={isLast ? 3 : 1.5}
-      />
+      <g>
+        {isLast && (
+          <circle cx={cx} cy={cy} r={11} fill="hsl(var(--primary) / 0.18)" />
+        )}
+        <circle
+          cx={cx}
+          cy={cy}
+          r={isLast ? 6 : 4}
+          fill={isLast ? "hsl(var(--primary))" : "hsl(var(--background))"}
+          stroke="hsl(var(--primary))"
+          strokeWidth={isLast ? 2.5 : 2}
+        />
+      </g>
     );
   };
 
@@ -135,11 +146,11 @@ function SanteChart({ annees }: { annees: { annee: number; ca_ht: number; evolut
     return (
       <text
         x={x}
-        y={y - 14}
+        y={y - 18}
         textAnchor="middle"
         className="tabular-nums"
         fill={isLast ? "hsl(var(--primary))" : "hsl(var(--foreground))"}
-        fontSize={isLast ? 13 : 11}
+        fontSize={isLast ? 13 : 12}
         fontWeight={isLast ? 700 : 600}
       >
         {eurCompact(Number(value))}
@@ -156,11 +167,11 @@ function SanteChart({ annees }: { annees: { annee: number; ca_ht: number; evolut
     return (
       <text
         x={x}
-        y={y + 22}
+        y={y + 26}
         textAnchor="middle"
         fill={positive ? "rgb(52 211 153)" : "rgb(251 113 133)"}
         fontSize={11}
-        fontWeight={600}
+        fontWeight={700}
       >
         {pct(d.evo)}
       </text>
@@ -168,24 +179,34 @@ function SanteChart({ annees }: { annees: { annee: number; ca_ht: number; evolut
   };
 
   return (
-    <div className="h-56 w-full">
+    <div className="h-[300px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 28, right: 24, left: 8, bottom: 28 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.4)" vertical={false} />
+        <AreaChart data={data} margin={{ top: 36, right: 40, left: 24, bottom: 40 }}>
+          <defs>
+            <linearGradient id="santeCaFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.28} />
+              <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="2 4" stroke="hsl(var(--border) / 0.25)" vertical={false} />
           <XAxis
             dataKey="label"
             stroke="hsl(var(--muted-foreground))"
-            tick={{ fontSize: 12 }}
-            axisLine={{ stroke: "hsl(var(--border))" }}
+            tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+            axisLine={false}
             tickLine={false}
+            padding={{ left: 24, right: 24 }}
+            tickMargin={12}
           />
           <YAxis
             stroke="hsl(var(--muted-foreground))"
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
             tickFormatter={(v) => eurCompact(Number(v))}
             axisLine={false}
             tickLine={false}
-            width={60}
+            width={52}
+            tickCount={4}
+            domain={[yMin, yMax]}
           />
           <Tooltip
             contentStyle={{
@@ -202,13 +223,14 @@ function SanteChart({ annees }: { annees: { annee: number; ca_ht: number; evolut
               ];
             }}
           />
-          <Line
+          <Area
             type="monotone"
             dataKey="ca"
             stroke="hsl(var(--primary))"
-            strokeWidth={2.5}
+            strokeWidth={3}
+            fill="url(#santeCaFill)"
             dot={<CustomDot />}
-            activeDot={{ r: 8, fill: "hsl(var(--primary))" }}
+            activeDot={{ r: 7, fill: "hsl(var(--primary))" }}
             label={<ValueLabel />}
             isAnimationActive={false}
           />
@@ -221,7 +243,7 @@ function SanteChart({ annees }: { annees: { annee: number; ca_ht: number; evolut
             isAnimationActive={false}
             legendType="none"
           />
-        </LineChart>
+        </AreaChart>
       </ResponsiveContainer>
     </div>
   );

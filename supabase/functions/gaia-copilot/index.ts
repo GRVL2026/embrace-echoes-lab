@@ -8,9 +8,19 @@ const ANTHROPIC_VERSION = '2023-06-01';
 const MAX_TOOL_ROUNDS = 6;
 const MAX_TOKENS_PER_TURN = 8000;
 
-/** Convert system string to Anthropic content blocks with an ephemeral cache breakpoint on the last block. */
-function systemBlocks(system: string) {
-  return [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }];
+/**
+ * Convert the system prompt to Anthropic content blocks.
+ * `system` is the STABLE prefix (schema + charte) that stays cached across turns.
+ * `dynamicSuffix`, when provided, is appended as an UNCACHED block AFTER the cache
+ * breakpoint — this is where volatile content like the persistent memory lives,
+ * so the cached prefix stays byte-identical across calls.
+ */
+function systemBlocks(system: string, dynamicSuffix?: string) {
+  const blocks: any[] = [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }];
+  if (dynamicSuffix && dynamicSuffix.trim()) {
+    blocks.push({ type: 'text', text: dynamicSuffix });
+  }
+  return blocks;
 }
 
 /**
@@ -92,6 +102,17 @@ Schéma disponible (Postgres, schema public) :
     • 'Ouvert', 'Expédition en cours', 'Reliquat' = commandes signées en cours
     • 'Historique', 'Annulé' = À EXCLURE des analyses opérationnelles.
 
+OUTIL DOSSIERS COMMERCIAUX (activité de l'équipe) :
+- projects(id, client_name, status, owner_id, brand_id, offer, brief, selected_products, created_at, updated_at)
+  Dossiers commerciaux créés par les commerciaux. status ∈ ('draft','sent','won','lost').
+  owner_id = uuid du commercial (jointure profiles.id = projects.owner_id pour obtenir le nom).
+- profiles(id, email, full_name) — annuaire interne. Utilise full_name pour nommer un commercial dans tes réponses (jamais l'uuid).
+- dossier_vues(id, project_id, viewed_at) — journal des consultations d'un dossier par le client destinataire. Un dossier envoyé sans aucune vue = jamais consulté.
+- dossier_learning(project_id, owner_id, brand_id, offer, status, brief, products, updated_at) — snapshot des assortiments de dossiers envoyés/gagnés (pour analyser ce qui se vend).
+
+Consigne : tu peux analyser l'activité commerciale de l'équipe — dossiers créés/envoyés/gagnés par commercial, dossiers envoyés jamais consultés (LEFT JOIN dossier_vues), délais de conversion sent→won (updated_at - created_at), assortiments récurrents dans dossier_learning.
+
+
 Vues d'analyse déjà disponibles :
   v_gaia_ca_mensuel, v_gaia_ca_client, v_gaia_ca_famille, v_gaia_ca_periode_egale,
   v_gaia_devis_a_relancer, v_gaia_clients_dormants, v_gaia_stock_dormant,
@@ -147,6 +168,32 @@ const SQL_TOOL = {
     required: ['sql_query'],
   },
 };
+
+const MEMORISE_TOOL = {
+  name: 'memoriser',
+  description: "Enregistre une note durable dans la mémoire du copilote (décisions, plans d'action, contextes, suivis). NE MÉMORISE JAMAIS de chiffres bruts (ils sont dans la base) — uniquement du contexte qualitatif qui devra être rappelé dans les prochaines conversations. Catégories usuelles : 'decision', 'plan', 'contexte', 'suivi', 'note'.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      categorie: { type: 'string', description: "Catégorie courte : 'decision' | 'plan' | 'contexte' | 'suivi' | 'note'." },
+      contenu: { type: 'string', description: 'Note à mémoriser, phrase complète, autonome (compréhensible sans le contexte de la conversation).' },
+    },
+    required: ['categorie', 'contenu'],
+  },
+};
+
+const OUBLIER_TOOL = {
+  name: 'oublier',
+  description: "Marque une entrée de mémoire comme obsolète (actif = false) à partir de son id. Utilise-le quand une décision est réalisée, annulée ou remplacée.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', description: 'UUID de l\'entrée mémoire à désactiver.' },
+    },
+    required: ['id'],
+  },
+};
+
 
 const REVUE_TOOL = {
   name: 'build_revue',
@@ -318,6 +365,77 @@ async function runGaiaQuery(admin: any, sql: string): Promise<unknown> {
   }
 }
 
+/** Charge les entrées actives de mémoire persistante (les plus récentes d'abord). */
+async function loadMemories(admin: any): Promise<Array<{ id: string; categorie: string; contenu: string; auteur: string | null; created_at: string }>> {
+  try {
+    const { data, error } = await admin
+      .from('copilote_memoire')
+      .select('id, categorie, contenu, auteur, created_at')
+      .eq('actif', true)
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (error) {
+      console.log(`[gaia-copilot] loadMemories error: ${error.message}`);
+      return [];
+    }
+    return (data as any[]) ?? [];
+  } catch (e: any) {
+    console.log(`[gaia-copilot] loadMemories fatal: ${e?.message ?? e}`);
+    return [];
+  }
+}
+
+/** Formate les mémoires pour injection dans le prompt système (bloc dynamique, non caché). */
+function formatMemories(memos: Array<{ id: string; categorie: string; contenu: string; created_at: string }>): string {
+  if (!memos.length) {
+    return `MÉMOIRE DU COPILOTE\n(vide) — utilise l'outil "memoriser" dès qu'une décision, un plan d'action ou un contexte durable est évoqué.`;
+  }
+  const byCat = new Map<string, string[]>();
+  for (const m of memos) {
+    const cat = (m.categorie || 'note').toLowerCase();
+    if (!byCat.has(cat)) byCat.set(cat, []);
+    const dt = new Date(m.created_at).toLocaleDateString('fr-FR');
+    byCat.get(cat)!.push(`  • [${m.id}] (${dt}) ${m.contenu}`);
+  }
+  const sections = Array.from(byCat.entries())
+    .map(([cat, lines]) => `▸ ${cat.toUpperCase()}\n${lines.join('\n')}`)
+    .join('\n');
+  return `MÉMOIRE DU COPILOTE (entrées actives, à prendre en compte dans chaque réponse — outils : "memoriser" pour ajouter, "oublier" pour désactiver via id)\n${sections}`;
+}
+
+async function memoriser(admin: any, categorie: string, contenu: string): Promise<unknown> {
+  try {
+    const cat = (categorie || 'note').toString().trim().slice(0, 40) || 'note';
+    const txt = (contenu || '').toString().trim().slice(0, 2000);
+    if (!txt) return { error: 'contenu vide' };
+    const { data, error } = await admin
+      .from('copilote_memoire')
+      .insert({ categorie: cat, contenu: txt, auteur: 'copilote', actif: true })
+      .select('id, categorie, contenu, created_at')
+      .single();
+    if (error) return { error: error.message };
+    return { ok: true, memoire: data };
+  } catch (e: any) {
+    return { error: e?.message ?? String(e) };
+  }
+}
+
+async function oublier(admin: any, id: string): Promise<unknown> {
+  try {
+    const cleanId = (id || '').toString().trim();
+    if (!cleanId) return { error: 'id manquant' };
+    const { error } = await admin
+      .from('copilote_memoire')
+      .update({ actif: false })
+      .eq('id', cleanId);
+    if (error) return { error: error.message };
+    return { ok: true, id: cleanId };
+  } catch (e: any) {
+    return { error: e?.message ?? String(e) };
+  }
+}
+
+
 async function anthropicCall(payload: Record<string, unknown>) {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY manquant');
@@ -341,6 +459,8 @@ type TurnLog = {
   stop_reason: string | null;
   block_types: string[];
   sql_queries: string[];
+  memory_writes: string[];
+  memory_forgets: string[];
 };
 
 function extractText(content: any[]): string {
@@ -353,14 +473,15 @@ function extractText(content: any[]): string {
 }
 
 /**
- * Boucle agentique : exécute executer_sql jusqu'à MAX_TOOL_ROUNDS.
- * Retourne l'historique complet (assistant renvoyé TEL QUEL, thinking inclus),
- * la dernière réponse, le nombre de tours et le journal détaillé.
+ * Boucle agentique : dispatche les tool_use (executer_sql, memoriser, oublier, …)
+ * jusqu'à MAX_TOOL_ROUNDS. Retourne l'historique complet (assistant renvoyé TEL QUEL,
+ * thinking inclus), la dernière réponse, le nombre de tours et le journal détaillé.
  */
 async function toolLoop(params: {
   admin: any;
   model: string;
   system: string;
+  dynamicSuffix?: string;
   initialMessages: Array<{ role: 'user' | 'assistant'; content: any }>;
   extraTools?: any[];
   toolChoice?: any;
@@ -371,20 +492,20 @@ async function toolLoop(params: {
   rounds: number;
   journal: TurnLog[];
 }> {
-  const { admin, model, system, initialMessages, extraTools = [], toolChoice, extraPayload } = params;
-  const tools = [SQL_TOOL, ...extraTools];
+  const { admin, model, system, dynamicSuffix, initialMessages, extraTools = [], toolChoice, extraPayload } = params;
+  const tools = [SQL_TOOL, MEMORISE_TOOL, OUBLIER_TOOL, ...extraTools];
   const messages = [...initialMessages];
   const journal: TurnLog[] = [];
 
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
     const isLastRound = round === MAX_TOOL_ROUNDS;
     const sys = isLastRound
-      ? `${system}\n\nTu as atteint la limite de ${MAX_TOOL_ROUNDS} appels à executer_sql. Réponds maintenant avec les informations dont tu disposes.`
+      ? `${system}\n\nTu as atteint la limite de ${MAX_TOOL_ROUNDS} appels d'outils. Réponds maintenant avec les informations dont tu disposes.`
       : system;
     const payload: Record<string, unknown> = {
       model,
       max_tokens: MAX_TOKENS_PER_TURN,
-      system: systemBlocks(sys),
+      system: systemBlocks(sys, dynamicSuffix),
       messages: withCacheOnLastMessage(messages),
       tools: isLastRound ? extraTools : tools,
       ...(extraPayload ?? {}),
@@ -394,29 +515,51 @@ async function toolLoop(params: {
     const resp = await anthropicCall(payload);
     logUsage(`round=${round}`, resp?.usage);
     const content = Array.isArray(resp?.content) ? resp.content : [];
-    const sqlCalls = content.filter((b: any) => b?.type === 'tool_use' && b?.name === 'executer_sql');
+    const toolCalls = content.filter((b: any) => b?.type === 'tool_use');
     const blockTypes = content.map((b: any) => b?.type ?? 'unknown');
-    const sqlQueries = sqlCalls.map((c: any) => String(c?.input?.sql_query ?? ''));
+    const sqlQueries = toolCalls
+      .filter((c: any) => c?.name === 'executer_sql')
+      .map((c: any) => String(c?.input?.sql_query ?? ''));
+    const memoryWrites = toolCalls
+      .filter((c: any) => c?.name === 'memoriser')
+      .map((c: any) => `${c?.input?.categorie ?? '?'}: ${String(c?.input?.contenu ?? '').slice(0, 80)}`);
+    const memoryForgets = toolCalls
+      .filter((c: any) => c?.name === 'oublier')
+      .map((c: any) => String(c?.input?.id ?? ''));
 
     const turn: TurnLog = {
       round,
       stop_reason: resp?.stop_reason ?? null,
       block_types: blockTypes,
       sql_queries: sqlQueries,
+      memory_writes: memoryWrites,
+      memory_forgets: memoryForgets,
     };
     journal.push(turn);
-    console.log(`[gaia-copilot] round=${round} stop_reason=${turn.stop_reason} blocks=${JSON.stringify(blockTypes)} sql=${JSON.stringify(sqlQueries)}`);
+    console.log(`[gaia-copilot] round=${round} stop_reason=${turn.stop_reason} blocks=${JSON.stringify(blockTypes)} sql=${JSON.stringify(sqlQueries)} memo+=${JSON.stringify(memoryWrites)} memo-=${JSON.stringify(memoryForgets)}`);
 
-    if (sqlCalls.length === 0 || isLastRound) {
+    if (toolCalls.length === 0 || isLastRound) {
       messages.push({ role: 'assistant', content });
       return { messages, last: resp, rounds: round, journal };
     }
 
-    // Exécute les requêtes SQL demandées
+    // Dispatche chaque tool_use vers son exécuteur
     const toolResults = await Promise.all(
-      sqlCalls.map(async (call: any) => {
-        const sql = String(call?.input?.sql_query ?? '');
-        const result = await runGaiaQuery(admin, sql);
+      toolCalls.map(async (call: any) => {
+        let result: unknown;
+        try {
+          if (call?.name === 'executer_sql') {
+            result = await runGaiaQuery(admin, String(call?.input?.sql_query ?? ''));
+          } else if (call?.name === 'memoriser') {
+            result = await memoriser(admin, String(call?.input?.categorie ?? ''), String(call?.input?.contenu ?? ''));
+          } else if (call?.name === 'oublier') {
+            result = await oublier(admin, String(call?.input?.id ?? ''));
+          } else {
+            result = { error: `Outil inconnu: ${call?.name}` };
+          }
+        } catch (e: any) {
+          result = { error: e?.message ?? String(e) };
+        }
         return {
           type: 'tool_result',
           tool_use_id: call.id,
@@ -433,6 +576,7 @@ async function toolLoop(params: {
   throw new Error('Boucle agentique inattendue');
 }
 
+
 /**
  * Dernier recours : appel Anthropic SANS outils pour forcer une réponse texte.
  */
@@ -440,6 +584,7 @@ async function forceFinalText(
   model: string,
   system: string,
   messages: Array<{ role: 'user' | 'assistant'; content: any }>,
+  dynamicSuffix?: string,
 ): Promise<{ text: string; stop_reason: string | null; block_types: string[] }> {
   const forced = [...messages, {
     role: 'user' as const,
@@ -448,7 +593,7 @@ async function forceFinalText(
   const resp = await anthropicCall({
     model,
     max_tokens: MAX_TOKENS_PER_TURN,
-    system: systemBlocks(system),
+    system: systemBlocks(system, dynamicSuffix),
     messages: withCacheOnLastMessage(forced),
   });
   logUsage('forceFinalText', resp?.usage);
@@ -465,6 +610,7 @@ async function streamFinalRevue(
   system: string,
   messages: Array<{ role: 'user' | 'assistant'; content: any }>,
   extraPayload?: Record<string, unknown>,
+  dynamicSuffix?: string,
 ) {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY manquant');
@@ -473,7 +619,7 @@ async function streamFinalRevue(
     model,
     max_tokens: 16000,
     stream: true,
-    system: systemBlocks(system),
+    system: systemBlocks(system, dynamicSuffix),
     messages: withCacheOnLastMessage(messages),
     tools: [REVUE_TOOL],
     tool_choice: { type: 'tool', name: 'build_revue' },
@@ -587,30 +733,47 @@ Deno.serve(async (req) => {
     const data = await loadData(admin);
     const dataJson = JSON.stringify(data);
 
+    // Mémoire persistante — bloc dynamique (non caché) injecté après le préfixe stable.
+    const memos = await loadMemories(admin);
+    const memorySuffix = formatMemories(memos);
+    console.log(`[gaia-copilot] memoires actives=${memos.length}`);
+
+    const SUIVI_INSTRUCTION = `CONSIGNE DE SUIVI : quand une conversation aboutit à une action décidée (relance, plan client, décision), appelle immédiatement l'outil "memoriser" (catégorie 'suivi' ou 'plan') pour la consigner. Une action non mémorisée sera perdue.`;
+
     if (action === 'revue') {
+      const suivis = memos.filter((m) => m.categorie === 'suivi');
+      const suivisBlock = suivis.length
+        ? `\n\nSUIVIS EN MÉMOIRE À CONTRÔLER (${suivis.length}) :\n${suivis.map((s) => `  • [${s.id}] ${s.contenu}`).join('\n')}\n\nAvant de rédiger la revue, vérifie chacun de ces suivis via executer_sql (le devis a-t-il été relancé et vu ? le client dormant a-t-il repassé commande ? etc.) et signale explicitement dans la revue (section risques ou actions) ceux restés SANS EFFET visible dans les données. Pour ceux qui sont clairement clos ou obsolètes, appelle "oublier" avec leur id.`
+        : `\n\nAucun suivi actif en mémoire pour l'instant.`;
+
       const initialMessages = [{
         role: 'user' as const,
-        content: `Voici les données commerciales agrégées (JSON) :\n\n\`\`\`json\n${dataJson}\n\`\`\`\n\nProduis la revue commerciale du mois via l'outil build_revue.\n- santé globale : CA à période égale N/N-1/N-2 + évolution en % ; tendance mensuelle en % vs N-1 pour chaque mois disponible ; commentaire 2 phrases max.\n- mouvements : familles et clients qui montent/descendent (top mouvements chiffrés) ;\n- risques (marge, dépendance client, stock, cash, calendrier) avec gravité ;\n- TOP 5 actions priorisées par impact euros (relances devis nominatives, clients dormants à réactiver, stock à écouler). Chaque champ texte : 1-2 phrases max, ton direct.\n\nAvant d'appeler build_revue, utilise executer_sql autant de fois que nécessaire pour vérifier/enrichir tes chiffres.`,
+        content: `Voici les données commerciales agrégées (JSON) :\n\n\`\`\`json\n${dataJson}\n\`\`\`\n\nProduis la revue commerciale du mois via l'outil build_revue.\n- santé globale : CA à période égale N/N-1/N-2 + évolution en % ; tendance mensuelle en % vs N-1 pour chaque mois disponible ; commentaire 2 phrases max.\n- mouvements : familles et clients qui montent/descendent (top mouvements chiffrés) ;\n- risques (marge, dépendance client, stock, cash, calendrier) avec gravité ;\n- TOP 5 actions priorisées par impact euros (relances devis nominatives, clients dormants à réactiver, stock à écouler). Chaque champ texte : 1-2 phrases max, ton direct.${suivisBlock}\n\nAvant d'appeler build_revue, utilise executer_sql autant de fois que nécessaire pour vérifier/enrichir tes chiffres, et "memoriser" pour consigner les nouvelles décisions/plans que la revue implique.`,
       }];
-      const revueSystem = `${SYSTEM_PROMPT}\n\nTu peux utiliser executer_sql pour vérifier des chiffres avant de construire la revue. Ta réponse FINALE doit être un unique appel à l'outil build_revue avec des données structurées, sans texte libre.`;
+      const revueSystem = `${SYSTEM_PROMPT}\n\n${SUIVI_INSTRUCTION}\n\nTu peux utiliser executer_sql pour vérifier des chiffres, "memoriser"/"oublier" pour gérer la mémoire, avant de construire la revue. Ta réponse FINALE doit être un unique appel à l'outil build_revue avec des données structurées, sans texte libre.`;
 
-      // Boucle SQL non-streamée (autorise seulement executer_sql à ce stade)
+      // Boucle SQL non-streamée
       const revueExtra = { output_config: { effort: 'xhigh' } };
       const { messages: agenticMessages } = await toolLoop({
         admin,
         model: REVUE_MODEL,
         system: revueSystem,
+        dynamicSuffix: memorySuffix,
         initialMessages,
         extraTools: [],
         extraPayload: revueExtra,
       });
 
-      // Retire le dernier assistant (produit après épuisement des SQL) pour que le dernier tour final relance proprement le modèle en le forçant sur build_revue.
-      // On garde tout l'historique tel quel : le modèle voit ses propres constats et les tool_result SQL.
-      return await streamFinalRevue(REVUE_MODEL, revueSystem, agenticMessages.concat([{
-        role: 'user',
-        content: 'Appelle maintenant l\'outil build_revue avec la revue finale structurée.',
-      }]), revueExtra);
+      return await streamFinalRevue(
+        REVUE_MODEL,
+        revueSystem,
+        agenticMessages.concat([{
+          role: 'user',
+          content: 'Appelle maintenant l\'outil build_revue avec la revue finale structurée.',
+        }]),
+        revueExtra,
+        memorySuffix,
+      );
     }
 
     if (action === 'chat') {
@@ -627,15 +790,17 @@ Deno.serve(async (req) => {
       const contextMsg = `Voici les données commerciales agrégées (JSON) à utiliser pour répondre :\n\n\`\`\`json\n${dataJson}\n\`\`\``;
       const initialMessages: Array<{ role: 'user' | 'assistant'; content: any }> = [
         { role: 'user', content: contextMsg },
-        { role: 'assistant', content: 'Données reçues. Je réponds en m\'appuyant sur ces chiffres et j\'appellerai executer_sql si un détail me manque.' },
+        { role: 'assistant', content: 'Données reçues. Je réponds en m\'appuyant sur ces chiffres, sur ma mémoire persistante, et j\'appellerai executer_sql / memoriser / oublier au besoin.' },
         ...cleanHistory,
         { role: 'user', content: question },
       ];
 
+      const chatSystem = `${SYSTEM_PROMPT}\n\n${SUIVI_INSTRUCTION}`;
       const { messages: finalMessages, last, rounds, journal } = await toolLoop({
         admin,
         model: CHAT_MODEL,
-        system: SYSTEM_PROMPT,
+        system: chatSystem,
+        dynamicSuffix: memorySuffix,
         initialMessages,
       });
 
@@ -646,7 +811,7 @@ Deno.serve(async (req) => {
       // Réponse finale garantie : si vide OU limite atteinte, on relance sans outils.
       if (!markdown || rounds >= MAX_TOOL_ROUNDS) {
         try {
-          const forced = await forceFinalText(CHAT_MODEL, SYSTEM_PROMPT, finalMessages);
+          const forced = await forceFinalText(CHAT_MODEL, chatSystem, finalMessages, memorySuffix);
           if (forced.text) markdown = forced.text;
           forcedDebug = { stop_reason: forced.stop_reason, block_types: forced.block_types };
         } catch (e: any) {

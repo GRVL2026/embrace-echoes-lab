@@ -421,6 +421,33 @@ export type Database = {
         }
         Relationships: []
       }
+      copilote_memoire: {
+        Row: {
+          actif: boolean
+          auteur: string | null
+          categorie: string
+          contenu: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          actif?: boolean
+          auteur?: string | null
+          categorie?: string
+          contenu: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          actif?: boolean
+          auteur?: string | null
+          categorie?: string
+          contenu?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: []
+      }
       dossier_learning: {
         Row: {
           brand_id: string | null

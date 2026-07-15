@@ -9,8 +9,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import {
   Loader2, Sparkles, Copy, Send, FileText, UserX, Package, History, ExternalLink,
-  Search, ThumbsUp, ThumbsDown, BarChart3,
+  Search, ThumbsUp, ThumbsDown,
 } from "lucide-react";
+
 import { RevueDashboard, revueToText, eur, type RevueData } from "./RevueDashboard";
 import { CopilotChart, type ChartPayload } from "./CopilotChart";
 

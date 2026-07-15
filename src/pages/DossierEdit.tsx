@@ -168,7 +168,7 @@ export default function DossierEdit() {
           .order("position", { ascending: true }),
         (supabase as any)
           .from("catalog_products")
-          .select("id, name, category, price, price_monthly, price_erp_ht, cegid_code, vendor, images, product_url")
+          .select("id, name, category, price, price_monthly, price_erp_ht, cegid_code, vendor, images, product_url, stock_erp")
           .eq("active", true)
           .order("name"),
         (supabase as any)

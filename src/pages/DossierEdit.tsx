@@ -1396,7 +1396,7 @@ export default function DossierEdit() {
                                 aria-label={`Fiche ${p.name}`}
                               >
                                 {img ? (
-                                  <img src={img} alt={p.name} className="max-h-full max-w-full object-contain" loading="lazy" />
+                                  <img src={require ? (undefined as any) : undefined || ((): string => { return ""; })()} alt={p.name} />
                                 ) : (
                                   <div className="text-[9px] leading-tight text-muted-foreground text-center px-1">
                                     visuel indisponible

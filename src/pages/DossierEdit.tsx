@@ -549,14 +549,48 @@ export default function DossierEdit() {
 
   // --- Products helpers ---
   const selectedProducts = form?.selected_products ?? [];
-  const selectedProductIds = new Set(selectedProducts.map((p) => p.product_id));
-  const searchResults = useMemo(() => {
+  const selectedProductIds = new Set(
+    selectedProducts.map((p) => p.product_id).filter((x): x is string => !!x),
+  );
+  const selectedCegidCodes = new Set(
+    [
+      ...selectedProducts.map((p) => p.cegid_code ?? null),
+      ...catalog.filter((c) => selectedProductIds.has(c.id)).map((c) => c.cegid_code),
+    ].filter((x): x is string => !!x),
+  );
+  // ERP articles NOT linked to any site product (candidates for "ERP-only" selection)
+  const erpOnly = useMemo(() => {
+    const linked = new Set(
+      catalog.map((c) => (c.cegid_code ?? "").trim()).filter(Boolean),
+    );
+    return erpCatalog.filter((r) => r.code && !linked.has(r.code.trim()));
+  }, [catalog, erpCatalog]);
+
+  type SearchHit =
+    | { kind: "site"; item: CatalogProduct }
+    | { kind: "erp"; item: ErpArticle };
+
+  const searchResults = useMemo<SearchHit[]>(() => {
     const q = productQuery.trim().toLowerCase();
     if (!q) return [];
-    return catalog
+    const siteHits: SearchHit[] = catalog
       .filter((c) => !selectedProductIds.has(c.id) && c.name.toLowerCase().includes(q))
-      .slice(0, 8);
-  }, [productQuery, catalog, selectedProductIds]);
+      .slice(0, 8)
+      .map((item) => ({ kind: "site", item }));
+    const erpHits: SearchHit[] = erpOnly
+      .filter(
+        (r) =>
+          !selectedCegidCodes.has(r.code) &&
+          (
+            (r.description ?? "").toLowerCase().includes(q) ||
+            r.code.toLowerCase().includes(q) ||
+            (r.famille ?? "").toLowerCase().includes(q)
+          ),
+      )
+      .slice(0, 6)
+      .map((item) => ({ kind: "erp", item }));
+    return [...siteHits, ...erpHits];
+  }, [productQuery, catalog, erpOnly, selectedProductIds, selectedCegidCodes]);
 
   const addProduct = (p: CatalogProduct) => {
     const offer = form?.offer;
@@ -569,6 +603,18 @@ export default function DossierEdit() {
     onProductsChange([
       ...selectedProducts,
       { product_id: p.id, name: p.name, qty: 1, unit_price: unit },
+    ]);
+    setProductQuery("");
+  };
+  const addErpArticle = (e: ErpArticle) => {
+    onProductsChange([
+      ...selectedProducts,
+      {
+        cegid_code: e.code,
+        name: e.description || e.code,
+        qty: 1,
+        unit_price: Number(e.prix_ht) || 0,
+      },
     ]);
     setProductQuery("");
   };

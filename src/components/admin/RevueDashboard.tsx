@@ -1,5 +1,6 @@
+import { Link } from "react-router-dom";
 import {
-  Sparkles, TrendingUp, TrendingDown, AlertTriangle, Target,
+  Sparkles, TrendingUp, TrendingDown, AlertTriangle, AlertOctagon, Info, Target,
 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,

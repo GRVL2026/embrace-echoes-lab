@@ -4,7 +4,8 @@ import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
 const ANTHROPIC_VERSION = '2023-06-01';
-const MAX_TOOL_ROUNDS = 5;
+const MAX_TOOL_ROUNDS = 6;
+const MAX_TOKENS_PER_TURN = 8000;
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

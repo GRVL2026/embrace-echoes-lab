@@ -349,7 +349,8 @@ export default function Catalogue() {
 
             {filteredErp.map((p) => {
               const Icon = iconForFamille(p.famille);
-              const stock = stockBadge(p.stock);
+              const badge = stockErpBadge(p.stock, p.code);
+              const priceVerified = p.prix_ht != null;
               return (
                 <article
                   key={`erp-${p.code}`}
@@ -359,40 +360,41 @@ export default function Catalogue() {
                     <Icon className="h-14 w-14 text-muted-foreground/70" strokeWidth={1.2} />
                     <Badge
                       variant="outline"
-                      className="absolute right-2 top-2 text-[10px] border-primary/40 text-primary bg-background/80"
+                      className="absolute left-2 top-2 text-[10px] border-primary/40 text-primary bg-background/80"
                     >
                       ERP
                     </Badge>
+                    <div
+                      className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-background/85 backdrop-blur-sm px-1.5 py-1 shadow-sm border border-border/60"
+                      title={badge.label}
+                      aria-label={badge.label}
+                    >
+                      <span className={cn("h-2 w-2 rounded-full", badge.color)} />
+                      <span className="hidden sm:inline text-[10px] font-medium leading-none">{badge.label}</span>
+                    </div>
                   </div>
                   <div className="flex flex-1 flex-col gap-2 p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="text-sm font-semibold leading-tight line-clamp-2">
-                        {p.description || p.code}
-                      </h3>
-                      {stock ? (
-                        <Badge
-                          variant="outline"
-                          className={
-                            stock.tone === "destructive"
-                              ? "text-[10px] border-destructive/60 text-destructive"
-                              : stock.tone === "warning"
-                              ? "text-[10px] border-amber-500/60 text-amber-500"
-                              : "text-[10px] border-secondary/60 text-secondary"
-                          }
-                        >
-                          {stock.label}
-                        </Badge>
-                      ) : null}
-                    </div>
+                    <h3 className="text-sm font-semibold leading-tight line-clamp-2">
+                      {p.description || p.code}
+                    </h3>
                     <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                       <span className="font-mono">{p.code}</span>
                       {p.famille ? <span>· {p.famille}</span> : null}
                     </div>
-                    <div className="mt-auto pt-2 text-sm">
-                      {p.prix_ht != null ? (
-                        <span className="font-semibold text-primary">
-                          Tarif HT : {fmtEur(p.prix_ht)}
-                        </span>
+                    <div className="mt-auto pt-2 text-sm inline-flex items-center gap-1.5">
+                      {priceVerified ? (
+                        <>
+                          <span className="font-semibold text-primary">
+                            Tarif HT : {fmtEur(p.prix_ht)}
+                          </span>
+                          <span
+                            title="Prix vérifié ERP"
+                            aria-label="Prix vérifié ERP"
+                            className="inline-flex items-center rounded-full bg-emerald-500/15 text-emerald-500 px-1 py-0.5"
+                          >
+                            <BadgeCheck className="h-3 w-3" />
+                          </span>
+                        </>
                       ) : (
                         <span className="text-xs text-muted-foreground">Tarif non renseigné</span>
                       )}
@@ -401,6 +403,7 @@ export default function Catalogue() {
                 </article>
               );
             })}
+
           </div>
         )}
       </main>

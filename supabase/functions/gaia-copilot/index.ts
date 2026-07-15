@@ -378,15 +378,14 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, error: `Unauthorized: ${userErr?.message ?? 'session invalide'}` }, 401);
     }
 
-    const { data: roleRow, error: roleErr } = await supabase
+    const { data: roleRows, error: roleErr } = await supabase
       .from('user_roles')
       .select('role')
       .eq('user_id', userData.user.id)
-      .eq('role', 'admin')
-      .maybeSingle();
+      .in('role', ['admin', 'direction']);
 
-    if (roleErr || !roleRow) {
-      return jsonResponse({ ok: false, error: 'Forbidden: admin only' }, 403);
+    if (roleErr || !roleRows || roleRows.length === 0) {
+      return jsonResponse({ ok: false, error: 'Forbidden: admin or direction only' }, 403);
     }
 
     let body: any = {};

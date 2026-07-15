@@ -977,6 +977,87 @@ export type Database = {
         }
         Relationships: []
       }
+      logi_expeditions: {
+        Row: {
+          cout_exw: number | null
+          cout_fret: number | null
+          created_at: string
+          date_dispo_fournisseur: string | null
+          docs_transmis: boolean
+          eta_le_havre: string | null
+          etd: string | null
+          fournisseur: string
+          heure: string | null
+          id: string
+          items: Json
+          livraison_aa: string | null
+          monnayeurs: string | null
+          nom_navire: string | null
+          numero_commande: string
+          numero_conteneur: string | null
+          numero_dossier: string | null
+          origine: string | null
+          port_depart: string | null
+          remarques: string | null
+          statut: string
+          transitaire: string | null
+          type_conteneur: string | null
+          updated_at: string
+        }
+        Insert: {
+          cout_exw?: number | null
+          cout_fret?: number | null
+          created_at?: string
+          date_dispo_fournisseur?: string | null
+          docs_transmis?: boolean
+          eta_le_havre?: string | null
+          etd?: string | null
+          fournisseur: string
+          heure?: string | null
+          id?: string
+          items?: Json
+          livraison_aa?: string | null
+          monnayeurs?: string | null
+          nom_navire?: string | null
+          numero_commande: string
+          numero_conteneur?: string | null
+          numero_dossier?: string | null
+          origine?: string | null
+          port_depart?: string | null
+          remarques?: string | null
+          statut?: string
+          transitaire?: string | null
+          type_conteneur?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cout_exw?: number | null
+          cout_fret?: number | null
+          created_at?: string
+          date_dispo_fournisseur?: string | null
+          docs_transmis?: boolean
+          eta_le_havre?: string | null
+          etd?: string | null
+          fournisseur?: string
+          heure?: string | null
+          id?: string
+          items?: Json
+          livraison_aa?: string | null
+          monnayeurs?: string | null
+          nom_navire?: string | null
+          numero_commande?: string
+          numero_conteneur?: string | null
+          numero_dossier?: string | null
+          origine?: string | null
+          port_depart?: string | null
+          remarques?: string | null
+          statut?: string
+          transitaire?: string | null
+          type_conteneur?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -1194,148 +1275,6 @@ export type Database = {
           },
         ]
       }
-      shipment_documents: {
-        Row: {
-          created_at: string
-          file_path: string
-          id: string
-          kind: string | null
-          name: string
-          shipment_id: string
-          uploaded_by: string | null
-        }
-        Insert: {
-          created_at?: string
-          file_path: string
-          id?: string
-          kind?: string | null
-          name: string
-          shipment_id: string
-          uploaded_by?: string | null
-        }
-        Update: {
-          created_at?: string
-          file_path?: string
-          id?: string
-          kind?: string | null
-          name?: string
-          shipment_id?: string
-          uploaded_by?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "shipment_documents_shipment_id_fkey"
-            columns: ["shipment_id"]
-            isOneToOne: false
-            referencedRelation: "shipments"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      shipment_items: {
-        Row: {
-          created_at: string
-          id: string
-          notes: string | null
-          product_name: string
-          quantity: number
-          shipment_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          notes?: string | null
-          product_name: string
-          quantity?: number
-          shipment_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          notes?: string | null
-          product_name?: string
-          quantity?: number
-          shipment_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "shipment_items_shipment_id_fkey"
-            columns: ["shipment_id"]
-            isOneToOne: false
-            referencedRelation: "shipments"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      shipments: {
-        Row: {
-          amount_ht: number | null
-          arrival_date: string | null
-          carrier: string | null
-          created_at: string
-          created_by: string | null
-          currency: string | null
-          customs_fees: number | null
-          eta_date: string | null
-          factory_departure_date: string | null
-          id: string
-          incoterm: string | null
-          notes: string | null
-          order_date: string | null
-          origin_country: string | null
-          reference: string
-          status: Database["public"]["Enums"]["shipment_status"]
-          supplier: string
-          tracking_number: string | null
-          transport_fees: number | null
-          updated_at: string
-        }
-        Insert: {
-          amount_ht?: number | null
-          arrival_date?: string | null
-          carrier?: string | null
-          created_at?: string
-          created_by?: string | null
-          currency?: string | null
-          customs_fees?: number | null
-          eta_date?: string | null
-          factory_departure_date?: string | null
-          id?: string
-          incoterm?: string | null
-          notes?: string | null
-          order_date?: string | null
-          origin_country?: string | null
-          reference: string
-          status?: Database["public"]["Enums"]["shipment_status"]
-          supplier: string
-          tracking_number?: string | null
-          transport_fees?: number | null
-          updated_at?: string
-        }
-        Update: {
-          amount_ht?: number | null
-          arrival_date?: string | null
-          carrier?: string | null
-          created_at?: string
-          created_by?: string | null
-          currency?: string | null
-          customs_fees?: number | null
-          eta_date?: string | null
-          factory_departure_date?: string | null
-          id?: string
-          incoterm?: string | null
-          notes?: string | null
-          order_date?: string | null
-          origin_country?: string | null
-          reference?: string
-          status?: Database["public"]["Enums"]["shipment_status"]
-          supplier?: string
-          tracking_number?: string | null
-          transport_fees?: number | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
       user_roles: {
         Row: {
           role: string
@@ -1537,13 +1476,7 @@ export type Database = {
       unaccent: { Args: { "": string }; Returns: string }
     }
     Enums: {
-      shipment_status:
-        | "a_venir"
-        | "dispo"
-        | "en_attente"
-        | "en_cours"
-        | "en_mer"
-        | "livre"
+      [_ in never]: never
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1670,15 +1603,6 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {
-      shipment_status: [
-        "a_venir",
-        "dispo",
-        "en_attente",
-        "en_cours",
-        "en_mer",
-        "livre",
-      ],
-    },
+    Enums: {},
   },
 } as const

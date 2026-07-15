@@ -532,8 +532,8 @@ async function toolLoop(params: {
   rounds: number;
   journal: TurnLog[];
 }> {
-  const { admin, model, system, dynamicSuffix, initialMessages, extraTools = [], toolChoice, extraPayload } = params;
-  const tools = [SQL_TOOL, MEMORISE_TOOL, OUBLIER_TOOL, ...extraTools];
+  const { admin, model, system, dynamicSuffix, initialMessages, extraTools = [], toolChoice, extraPayload, onEvent } = params;
+  const tools = [SQL_TOOL, MEMORISE_TOOL, OUBLIER_TOOL, CHART_TOOL, ...extraTools];
   const messages = [...initialMessages];
   const journal: TurnLog[] = [];
 
@@ -583,7 +583,23 @@ async function toolLoop(params: {
       return { messages, last: resp, rounds: round, journal };
     }
 
-    // Dispatche chaque tool_use vers son exécuteur
+    // Notifie les événements de progression avant l'exécution (streaming côté page)
+    if (onEvent) {
+      for (const call of toolCalls) {
+        try {
+          if (call?.name === 'executer_sql') {
+            const q = String(call?.input?.sql_query ?? '');
+            onEvent('gaia_sql', { summary: summarizeSql(q), query: q });
+          } else if (call?.name === 'afficher_graphique') {
+            onEvent('gaia_chart', call?.input ?? {});
+          } else if (call?.name === 'memoriser') {
+            onEvent('gaia_memoire', { categorie: call?.input?.categorie, contenu: call?.input?.contenu });
+          }
+        } catch { /* ignore */ }
+      }
+    }
+
+    // Dispatche chaque tool_use vers son exécuteur — en parallèle (Promise.all)
     const toolResults = await Promise.all(
       toolCalls.map(async (call: any) => {
         let result: unknown;
@@ -594,6 +610,8 @@ async function toolLoop(params: {
             result = await memoriser(admin, String(call?.input?.categorie ?? ''), String(call?.input?.contenu ?? ''));
           } else if (call?.name === 'oublier') {
             result = await oublier(admin, String(call?.input?.id ?? ''));
+          } else if (call?.name === 'afficher_graphique') {
+            result = { ok: true, rendered: 'côté page' };
           } else {
             result = { error: `Outil inconnu: ${call?.name}` };
           }
@@ -615,6 +633,7 @@ async function toolLoop(params: {
 
   throw new Error('Boucle agentique inattendue');
 }
+
 
 
 /**

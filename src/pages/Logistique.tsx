@@ -533,6 +533,7 @@ function ExpeditionDialog({
                 <SelectContent>
                   <SelectItem value="ASIE">ASIE</SelectItem>
                   <SelectItem value="US">US</SelectItem>
+                  <SelectItem value="EUROPE">EUROPE</SelectItem>
                 </SelectContent>
               </Select>
             </Field>

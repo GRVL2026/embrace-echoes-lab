@@ -235,6 +235,82 @@ export function GaiaCopilot() {
 
   return (
     <div className="space-y-6">
+      {/* 1. Chat — priorité visuelle */}
+      <div className="rounded-lg border border-border bg-card/40 p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-secondary" />
+          <h3 className="font-display text-lg font-semibold">Discuter avec le copilote</h3>
+        </div>
+
+        {chat.length === 0 && (
+          <div className="mb-3 flex flex-wrap gap-2">
+            {SUGGESTIONS.map((s) => (
+              <Button key={s} type="button" variant="outline" size="sm" onClick={() => sendChat(s)} disabled={chatLoading}>
+                {s}
+              </Button>
+            ))}
+          </div>
+        )}
+
+        <div className="max-h-[520px] space-y-3 overflow-y-auto rounded border border-border/60 bg-background/40 p-3">
+          {chat.length === 0 && (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              Posez une question sur le CA, les clients, les devis ou le stock.
+            </div>
+          )}
+          {chat.map((m, i) => (
+            <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
+              <div
+                className={
+                  m.role === "user"
+                    ? "max-w-[85%] rounded-lg bg-primary/15 border border-primary/30 px-3 py-2 text-sm"
+                    : "max-w-[95%] rounded-lg bg-muted/40 border border-border/60 px-4 py-3 text-sm"
+                }
+              >
+                {m.role === "user" ? (
+                  <div className="whitespace-pre-wrap">{m.content}</div>
+                ) : (
+                  <div className="chat-markdown">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+          {chatLoading && (
+            <div className="flex justify-start">
+              <div className="rounded-lg bg-muted/40 border border-border/60 px-3 py-2 text-sm text-muted-foreground">
+                <Loader2 className="mr-2 inline h-3 w-3 animate-spin" /> Réflexion…
+              </div>
+            </div>
+          )}
+          <div ref={chatEndRef} />
+        </div>
+
+        <form
+          className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end"
+          onSubmit={(e) => { e.preventDefault(); sendChat(chatInput); }}
+        >
+          <Textarea
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendChat(chatInput);
+              }
+            }}
+            placeholder="Votre question…"
+            className="min-h-[52px] flex-1 resize-none"
+            disabled={chatLoading}
+          />
+          <Button type="submit" disabled={chatLoading || !chatInput.trim()} className="sm:self-stretch">
+            <Send className="mr-2 h-4 w-4" /> Envoyer
+          </Button>
+        </form>
+      </div>
+
+
       {/* Revue du mois */}
       <div className="rounded-lg border border-border bg-card/40 p-4">
         <div className="mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">

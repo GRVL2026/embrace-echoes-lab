@@ -363,36 +363,7 @@ export function GaiaCopilot() {
         )}
       </div>
 
-      {/* Historique des revues */}
-      {history.length > 0 && (
-        <div className="rounded-lg border border-border bg-card/40 p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <History className="h-4 w-4 text-primary" />
-            <h3 className="font-display text-lg font-semibold">Historique des revues</h3>
-            <span className="text-xs text-muted-foreground">({history.length})</span>
-          </div>
-          <ul className="divide-y divide-border/50">
-            {history.map((h) => (
-              <li key={h.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{h.titre ?? "Revue"}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {new Date(h.created_at).toLocaleString("fr-FR")}
-                  </div>
-                </div>
-                <Link
-                  to={`/admin/gaia/revue/${h.id}`}
-                  className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-xs hover:bg-muted/40"
-                >
-                  Ouvrir <ExternalLink className="h-3 w-3" />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Actions rapides */}
+      {/* 3. Actions rapides */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <QuickCard title="Devis à relancer" icon={<FileText className="h-4 w-4 text-primary" />} loading={cardsLoading} empty={devis.length === 0}>
           <ul className="divide-y divide-border/50">
@@ -450,80 +421,34 @@ export function GaiaCopilot() {
         </QuickCard>
       </div>
 
-      {/* Chat */}
-      <div className="rounded-lg border border-border bg-card/40 p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-secondary" />
-          <h3 className="font-display text-lg font-semibold">Discuter avec le copilote</h3>
-        </div>
-
-        {chat.length === 0 && (
-          <div className="mb-3 flex flex-wrap gap-2">
-            {SUGGESTIONS.map((s) => (
-              <Button key={s} type="button" variant="outline" size="sm" onClick={() => sendChat(s)} disabled={chatLoading}>
-                {s}
-              </Button>
-            ))}
+      {/* 4. Historique des revues */}
+      {history.length > 0 && (
+        <div className="rounded-lg border border-border bg-card/40 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <History className="h-4 w-4 text-primary" />
+            <h3 className="font-display text-lg font-semibold">Historique des revues</h3>
+            <span className="text-xs text-muted-foreground">({history.length})</span>
           </div>
-        )}
-
-        <div className="max-h-[520px] space-y-3 overflow-y-auto rounded border border-border/60 bg-background/40 p-3">
-          {chat.length === 0 && (
-            <div className="py-8 text-center text-sm text-muted-foreground">
-              Posez une question sur le CA, les clients, les devis ou le stock.
-            </div>
-          )}
-          {chat.map((m, i) => (
-            <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
-              <div
-                className={
-                  m.role === "user"
-                    ? "max-w-[85%] rounded-lg bg-primary/15 border border-primary/30 px-3 py-2 text-sm"
-                    : "max-w-[95%] rounded-lg bg-muted/40 border border-border/60 px-4 py-3 text-sm"
-                }
-              >
-                {m.role === "user" ? (
-                  <div className="whitespace-pre-wrap">{m.content}</div>
-                ) : (
-                  <div className="chat-markdown">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+          <ul className="divide-y divide-border/50">
+            {history.map((h) => (
+              <li key={h.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-medium">{h.titre ?? "Revue"}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {new Date(h.created_at).toLocaleString("fr-FR")}
                   </div>
-                )}
-              </div>
-            </div>
-          ))}
-          {chatLoading && (
-            <div className="flex justify-start">
-              <div className="rounded-lg bg-muted/40 border border-border/60 px-3 py-2 text-sm text-muted-foreground">
-                <Loader2 className="mr-2 inline h-3 w-3 animate-spin" /> Réflexion…
-              </div>
-            </div>
-          )}
-          <div ref={chatEndRef} />
+                </div>
+                <Link
+                  to={`/admin/gaia/revue/${h.id}`}
+                  className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-xs hover:bg-muted/40"
+                >
+                  Ouvrir <ExternalLink className="h-3 w-3" />
+                </Link>
+              </li>
+            ))}
+          </ul>
         </div>
-
-        <form
-          className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end"
-          onSubmit={(e) => { e.preventDefault(); sendChat(chatInput); }}
-        >
-          <Textarea
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                sendChat(chatInput);
-              }
-            }}
-            placeholder="Votre question…"
-            className="min-h-[52px] flex-1 resize-none"
-            disabled={chatLoading}
-          />
-          <Button type="submit" disabled={chatLoading || !chatInput.trim()} className="sm:self-stretch">
-            <Send className="mr-2 h-4 w-4" /> Envoyer
-          </Button>
-        </form>
-      </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,9 @@
 import {
   Sparkles, TrendingUp, TrendingDown, AlertTriangle, Target,
 } from "lucide-react";
+import {
+  ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+} from "recharts";
 
 export type RevueData = {
   sante: {
@@ -88,6 +91,142 @@ function MonthPill({ mois, evolution_pct, commentaire }: { mois: string; evoluti
   );
 }
 
+const eurCompact = (n: number) => {
+  const v = Number(n) || 0;
+  const abs = Math.abs(v);
+  if (abs >= 1_000_000) return `${(v / 1_000_000).toFixed(1).replace(".", ",")} M€`;
+  if (abs >= 1_000) return `${Math.round(v / 1_000)} k€`;
+  return `${v} €`;
+};
+
+function SanteChart({ annees }: { annees: { annee: number; ca_ht: number; evolution_pct?: number }[] }) {
+  const sorted = [...annees].sort((a, b) => a.annee - b.annee);
+  if (sorted.length === 0) return null;
+  const lastAnnee = sorted[sorted.length - 1].annee;
+  const data = sorted.map((a) => ({
+    label: `Ex. ${a.annee}`,
+    annee: a.annee,
+    ca: Number(a.ca_ht) || 0,
+    evo: a.evolution_pct,
+    isLast: a.annee === lastAnnee,
+  }));
+
+  const CustomDot = (props: any) => {
+    const { cx, cy, payload } = props;
+    if (cx == null || cy == null) return null;
+    const isLast = payload?.isLast;
+    return (
+      <circle
+        cx={cx}
+        cy={cy}
+        r={isLast ? 7 : 4.5}
+        fill={isLast ? "hsl(var(--primary))" : "hsl(var(--primary) / 0.6)"}
+        stroke={isLast ? "hsl(var(--primary))" : "hsl(var(--primary) / 0.7)"}
+        strokeWidth={isLast ? 3 : 1.5}
+      />
+    );
+  };
+
+  const ValueLabel = (props: any) => {
+    const { x, y, value, index } = props;
+    if (x == null || y == null || value == null) return null;
+    const d = data[index];
+    const isLast = d?.isLast;
+    return (
+      <text
+        x={x}
+        y={y - 14}
+        textAnchor="middle"
+        className="tabular-nums"
+        fill={isLast ? "hsl(var(--primary))" : "hsl(var(--foreground))"}
+        fontSize={isLast ? 13 : 11}
+        fontWeight={isLast ? 700 : 600}
+      >
+        {eurCompact(Number(value))}
+      </text>
+    );
+  };
+
+  const EvoLabel = (props: any) => {
+    const { x, y, index } = props;
+    if (x == null || y == null) return null;
+    const d = data[index];
+    if (d?.evo == null || isNaN(d.evo)) return null;
+    const positive = d.evo >= 0;
+    return (
+      <text
+        x={x}
+        y={y + 22}
+        textAnchor="middle"
+        fill={positive ? "rgb(52 211 153)" : "rgb(251 113 133)"}
+        fontSize={11}
+        fontWeight={600}
+      >
+        {pct(d.evo)}
+      </text>
+    );
+  };
+
+  return (
+    <div className="h-56 w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 28, right: 24, left: 8, bottom: 28 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.4)" vertical={false} />
+          <XAxis
+            dataKey="label"
+            stroke="hsl(var(--muted-foreground))"
+            tick={{ fontSize: 12 }}
+            axisLine={{ stroke: "hsl(var(--border))" }}
+            tickLine={false}
+          />
+          <YAxis
+            stroke="hsl(var(--muted-foreground))"
+            tick={{ fontSize: 11 }}
+            tickFormatter={(v) => eurCompact(Number(v))}
+            axisLine={false}
+            tickLine={false}
+            width={60}
+          />
+          <Tooltip
+            contentStyle={{
+              background: "hsl(var(--popover))",
+              border: "1px solid hsl(var(--border))",
+              borderRadius: 8,
+              fontSize: 12,
+            }}
+            formatter={(value: any, _n, item: any) => {
+              const evo = item?.payload?.evo;
+              return [
+                `${eurCompact(Number(value))}${evo != null ? ` (${pct(evo)})` : ""}`,
+                "CA à période égale",
+              ];
+            }}
+          />
+          <Line
+            type="monotone"
+            dataKey="ca"
+            stroke="hsl(var(--primary))"
+            strokeWidth={2.5}
+            dot={<CustomDot />}
+            activeDot={{ r: 8, fill: "hsl(var(--primary))" }}
+            label={<ValueLabel />}
+            isAnimationActive={false}
+          />
+          <Line
+            type="monotone"
+            dataKey="ca"
+            stroke="transparent"
+            dot={false}
+            label={<EvoLabel />}
+            isAnimationActive={false}
+            legendType="none"
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 export function RevueDashboard({ data }: { data: RevueData }) {
   return (
     <div className="space-y-5 revue-dashboard">
@@ -96,15 +235,8 @@ export function RevueDashboard({ data }: { data: RevueData }) {
         <h4 className="mb-3 flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           <Sparkles className="h-4 w-4 text-primary" /> Santé globale
         </h4>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {data.sante.annees.map((a) => (
-            <div key={a.annee} className="rounded-lg border border-border/60 bg-background/40 p-3 revue-card">
-              <div className="text-xs uppercase text-muted-foreground">{exerciceLabel(a.annee, true)}</div>
-              <div className="mt-1 font-display text-2xl font-semibold tabular-nums">{eur(a.ca_ht)}</div>
-              <div className="mt-1"><EvolBadge value={a.evolution_pct} /></div>
-              <div className="mt-1 text-[10px] text-muted-foreground/80">sept. {a.annee - 1} → août {a.annee}</div>
-            </div>
-          ))}
+        <div className="rounded-lg border border-border/60 bg-background/40 p-3 revue-card">
+          <SanteChart annees={data.sante.annees} />
         </div>
         {data.sante.commentaire && (
           <p className="mt-3 text-sm text-foreground/90">{data.sante.commentaire}</p>

@@ -692,3 +692,423 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </div>
   );
 }
+
+/* =============== IMPORT EXCEL =============== */
+
+type ParsedRow = {
+  action: "create" | "update" | "skip";
+  reason?: string;
+  payload: any;
+  existingId?: string;
+};
+
+const MOIS_FR: Record<string, number> = {
+  janv: 0, janvier: 0, "janv.": 0,
+  fevr: 1, "févr": 1, fevrier: 1, "février": 1, "févr.": 1, fev: 1, "fév": 1,
+  mars: 2,
+  avr: 3, avril: 3, "avr.": 3,
+  mai: 4,
+  juin: 5,
+  juil: 6, juillet: 6, "juil.": 6,
+  aout: 7, "août": 7,
+  sept: 8, septembre: 8, "sept.": 8,
+  oct: 9, octobre: 9, "oct.": 9,
+  nov: 10, novembre: 10, "nov.": 10,
+  dec: 11, "déc": 11, decembre: 11, "décembre": 11, "déc.": 11,
+};
+
+function excelSerialToISO(n: number): string | null {
+  if (!isFinite(n) || n <= 0) return null;
+  // Excel serial (assuming 1900 date system)
+  const utc = Math.round((n - 25569) * 86400 * 1000);
+  const d = new Date(utc);
+  if (!isValid(d)) return null;
+  return format(d, "yyyy-MM-dd");
+}
+
+function normStr(v: any): string {
+  return String(v ?? "").trim();
+}
+
+function stripAccents(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function parseDateCell(v: any): { iso: string | null; raw: string } {
+  if (v == null || v === "") return { iso: null, raw: "" };
+  if (v instanceof Date && isValid(v)) return { iso: format(v, "yyyy-MM-dd"), raw: "" };
+  if (typeof v === "number") {
+    const iso = excelSerialToISO(v);
+    return { iso, raw: iso ? "" : String(v) };
+  }
+  const raw = normStr(v);
+  if (!raw) return { iso: null, raw: "" };
+
+  // dd/mm/yyyy or dd/mm/yy or dd-mm-yyyy
+  const m1 = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+  if (m1) {
+    let [_, d, mo, y] = m1;
+    let year = parseInt(y);
+    if (year < 100) year += 2000;
+    const dt = new Date(year, parseInt(mo) - 1, parseInt(d));
+    if (isValid(dt)) return { iso: format(dt, "yyyy-MM-dd"), raw: "" };
+  }
+
+  // "25-mai" or "25 mai" or "25 mai 2026"
+  const m2 = stripAccents(raw).match(/^(\d{1,2})[\s\-]+([a-z\.]+)(?:[\s\-]+(\d{2,4}))?$/);
+  if (m2) {
+    const d = parseInt(m2[1]);
+    const moKey = m2[2].replace(/\.$/, "");
+    const mo = MOIS_FR[moKey];
+    if (mo != null) {
+      const year = m2[3] ? (parseInt(m2[3]) < 100 ? 2000 + parseInt(m2[3]) : parseInt(m2[3])) : new Date().getFullYear();
+      const dt = new Date(year, mo, d);
+      if (isValid(dt)) return { iso: format(dt, "yyyy-MM-dd"), raw: "" };
+    }
+  }
+
+  // "vendredi 17 juillet 2026" (with jour de semaine)
+  const m3 = stripAccents(raw).match(/(\d{1,2})\s+([a-z\.]+)\s+(\d{4})/);
+  if (m3) {
+    const d = parseInt(m3[1]);
+    const mo = MOIS_FR[m3[2].replace(/\.$/, "")];
+    const year = parseInt(m3[3]);
+    if (mo != null) {
+      const dt = new Date(year, mo, d);
+      if (isValid(dt)) return { iso: format(dt, "yyyy-MM-dd"), raw: "" };
+    }
+  }
+
+  return { iso: null, raw };
+}
+
+function parseMoney(v: any): number | null {
+  if (v == null || v === "") return null;
+  if (typeof v === "number") return isFinite(v) ? v : null;
+  const s = normStr(v).replace(/[\s$€]/g, "").replace(/,/g, ".");
+  if (!s) return null;
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+
+function parseItems(cell: any): Item[] {
+  const raw = normStr(cell);
+  if (!raw) return [];
+  return raw
+    .split(/\r?\n|;/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const m = line.match(/^(\d+)\s*[xX\-\.\)]?\s*(.+)$/);
+      if (m) return { produit: m[2].trim(), quantite: parseInt(m[1]) || 1 };
+      return { produit: line, quantite: 1 };
+    });
+}
+
+function normalizeOrigine(v: any): Origine | null {
+  const s = stripAccents(normStr(v));
+  if (!s) return null;
+  if (s.includes("europ")) return "EUROPE";
+  if (s === "us" || s.includes("usa") || s.includes("etats") || s.includes("united")) return "US";
+  if (s.includes("asie") || s.includes("asia") || s.includes("chine") || s.includes("china")) return "ASIE";
+  return null;
+}
+
+function findColIdx(headers: string[], ...needles: string[]): number {
+  const norm = headers.map((h) => stripAccents(h));
+  for (let i = 0; i < norm.length; i++) {
+    if (needles.every((n) => norm[i].includes(stripAccents(n)))) return i;
+  }
+  return -1;
+}
+
+function ImportExcelDialog({
+  open, onOpenChange, existing, onDone,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  existing: Expedition[];
+  onDone: () => void;
+}) {
+  const [parsing, setParsing] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [rows, setRows] = useState<ParsedRow[] | null>(null);
+  const [fileName, setFileName] = useState<string>("");
+
+  useEffect(() => {
+    if (!open) { setRows(null); setFileName(""); setParsing(false); setImporting(false); }
+  }, [open]);
+
+  const handleFile = async (file: File) => {
+    setParsing(true); setRows(null); setFileName(file.name);
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { cellDates: true });
+      const sheetName = wb.SheetNames.find((n) => stripAccents(n).includes("planning arrivees"));
+      if (!sheetName) throw new Error("Onglet 'PLANNING ARRIVEES' introuvable.");
+      const sheet = wb.Sheets[sheetName];
+      const matrix = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1, raw: true, defval: null, blankrows: false });
+
+      // find header row
+      let headerIdx = -1;
+      for (let i = 0; i < Math.min(matrix.length, 20); i++) {
+        const row = (matrix[i] ?? []).map((c) => stripAccents(normStr(c)));
+        if (row.some((c) => c.includes("fournisseur")) && row.some((c) => c.includes("cde"))) {
+          headerIdx = i; break;
+        }
+      }
+      if (headerIdx < 0) throw new Error("Ligne d'en-tête introuvable (attendu 'Fournisseur' et 'Cde').");
+
+      const headers = (matrix[headerIdx] ?? []).map((c) => normStr(c));
+      const col = {
+        origin:      findColIdx(headers, "origin"),
+        fournisseur: findColIdx(headers, "fournisseur"),
+        cde:         findColIdx(headers, "cde"),
+        materiel:    findColIdx(headers, "materiel"),
+        dispo:       findColIdx(headers, "dispo"),
+        port:        findColIdx(headers, "port"),
+        etd:         findColIdx(headers, "etd"),
+        eta:         findColIdx(headers, "eta"),
+        livraison:   findColIdx(headers, "livraison"),
+        heure:       findColIdx(headers, "heure"),
+        transitaire: findColIdx(headers, "transitaire"),
+        docs:        findColIdx(headers, "docs"),
+        typeCont:    findColIdx(headers, "type", "conteneur"),
+        numCont:     findColIdx(headers, "n", "conteneur"),
+        navire:      findColIdx(headers, "navire"),
+        monnayeurs:  findColIdx(headers, "monnayeur"),
+        remarques:   findColIdx(headers, "remarque"),
+        fret:        findColIdx(headers, "fret"),
+        exw:         findColIdx(headers, "exw"),
+      };
+
+      const existingByCmd = new Map<string, Expedition>();
+      for (const e of existing) existingByCmd.set(e.numero_commande.trim().toUpperCase(), e);
+
+      const parsed: ParsedRow[] = [];
+      for (let i = headerIdx + 1; i < matrix.length; i++) {
+        const row = matrix[i] ?? [];
+        const cdeCell = col.cde >= 0 ? row[col.cde] : null;
+        const cde = normStr(cdeCell).toUpperCase();
+        if (!cde) {
+          continue; // pas de numéro de commande → on ignore silencieusement les lignes vides
+        }
+
+        const remarquesExtra: string[] = [];
+        const grabDate = (idx: number, label: string): string | null => {
+          if (idx < 0) return null;
+          const { iso, raw } = parseDateCell(row[idx]);
+          if (!iso && raw) remarquesExtra.push(`${label}: ${raw}`);
+          return iso;
+        };
+
+        const fournisseur = col.fournisseur >= 0 ? normStr(row[col.fournisseur]) : "";
+        if (!fournisseur) {
+          parsed.push({ action: "skip", reason: "Fournisseur manquant", payload: { numero_commande: cde } });
+          continue;
+        }
+
+        const transitaireCell = col.transitaire >= 0 ? normStr(row[col.transitaire]) : "";
+        let transitaire: string | null = null;
+        let numero_dossier: string | null = null;
+        if (transitaireCell) {
+          const parts = transitaireCell.split(/[\s\/]+/).filter(Boolean);
+          transitaire = parts[0] ?? null;
+          numero_dossier = parts.slice(1).join(" ") || null;
+        }
+
+        const docsCell = col.docs >= 0 ? normStr(row[col.docs]) : "";
+        const docsLow = stripAccents(docsCell);
+        const docs_transmis = !!docsCell && (
+          ["x", "oui", "yes", "ok", "true", "1", "✓"].includes(docsLow) ||
+          docsLow.includes("ok")
+        );
+
+        const remarquesBase = col.remarques >= 0 ? normStr(row[col.remarques]) : "";
+
+        const payload: any = {
+          numero_commande: cde,
+          origine: col.origin >= 0 ? normalizeOrigine(row[col.origin]) : null,
+          fournisseur,
+          items: col.materiel >= 0 ? parseItems(row[col.materiel]) : [],
+          date_dispo_fournisseur: grabDate(col.dispo, "Date dispo"),
+          port_depart: col.port >= 0 ? normStr(row[col.port]) || null : null,
+          etd: grabDate(col.etd, "ETD"),
+          eta_le_havre: grabDate(col.eta, "ETA Le Havre"),
+          livraison_aa: grabDate(col.livraison, "Livraison AA"),
+          heure: col.heure >= 0 ? normStr(row[col.heure]) || null : null,
+          transitaire,
+          numero_dossier,
+          docs_transmis,
+          type_conteneur: col.typeCont >= 0 ? normStr(row[col.typeCont]) || null : null,
+          numero_conteneur: col.numCont >= 0 ? normStr(row[col.numCont]) || null : null,
+          nom_navire: col.navire >= 0 ? normStr(row[col.navire]) || null : null,
+          monnayeurs: col.monnayeurs >= 0 ? normStr(row[col.monnayeurs]) || null : null,
+          remarques: [remarquesBase, ...remarquesExtra].filter(Boolean).join(" · ") || null,
+          cout_fret: col.fret >= 0 ? parseMoney(row[col.fret]) : null,
+          cout_exw: col.exw >= 0 ? parseMoney(row[col.exw]) : null,
+        };
+
+        const found = existingByCmd.get(cde);
+        parsed.push({
+          action: found ? "update" : "create",
+          payload,
+          existingId: found?.id,
+        });
+      }
+
+      setRows(parsed);
+    } catch (e: any) {
+      toast({ title: "Import impossible", description: e.message, variant: "destructive" });
+    } finally {
+      setParsing(false);
+    }
+  };
+
+  const stats = useMemo(() => {
+    if (!rows) return { create: 0, update: 0, skip: 0 };
+    return rows.reduce((acc, r) => {
+      acc[r.action]++;
+      return acc;
+    }, { create: 0, update: 0, skip: 0 } as any);
+  }, [rows]);
+
+  const confirmImport = async () => {
+    if (!rows) return;
+    setImporting(true);
+    let created = 0, updated = 0, skipped = 0, failed = 0;
+    for (const r of rows) {
+      if (r.action === "skip") { skipped++; continue; }
+      try {
+        if (r.action === "update" && r.existingId) {
+          const { error } = await (supabase as any).from("logi_expeditions").update(r.payload).eq("id", r.existingId);
+          if (error) throw error;
+          updated++;
+        } else {
+          const { error } = await (supabase as any).from("logi_expeditions").insert(r.payload);
+          if (error) throw error;
+          created++;
+        }
+      } catch (e: any) {
+        failed++;
+        console.error("Import row failed", r.payload?.numero_commande, e);
+      }
+    }
+    setImporting(false);
+    toast({
+      title: "Import terminé",
+      description: `${created} créées · ${updated} mises à jour · ${skipped} ignorées${failed ? ` · ${failed} en erreur` : ""}`,
+    });
+    onDone();
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Upload className="h-5 w-5 text-primary" /> Importer depuis Excel
+          </DialogTitle>
+          <DialogDescription>
+            Fichier .xlsx ou .xlsm avec un onglet <span className="font-medium text-foreground">PLANNING ARRIVEES</span>. Les lignes sont fusionnées sur le numéro de commande.
+          </DialogDescription>
+        </DialogHeader>
+
+        {!rows && (
+          <div className="rounded-lg border border-dashed border-border bg-background/40 p-8 text-center space-y-3">
+            <Upload className="h-10 w-10 text-muted-foreground/50 mx-auto" />
+            <div>
+              <label className="inline-flex">
+                <input
+                  type="file"
+                  accept=".xlsx,.xlsm"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleFile(f);
+                    e.target.value = "";
+                  }}
+                />
+                <Button asChild disabled={parsing}>
+                  <span className="cursor-pointer gap-1 inline-flex items-center">
+                    {parsing ? <><Loader2 className="h-4 w-4 animate-spin" /> Analyse…</> : <><Upload className="h-4 w-4" /> Choisir un fichier</>}
+                  </span>
+                </Button>
+              </label>
+            </div>
+            <p className="text-xs text-muted-foreground">Formats acceptés : .xlsx, .xlsm</p>
+          </div>
+        )}
+
+        {rows && (
+          <div className="space-y-3">
+            <div className="text-xs text-muted-foreground truncate">Fichier : <span className="text-foreground">{fileName}</span></div>
+            <div className="grid grid-cols-3 gap-3">
+              <ImportStat label="À créer" value={stats.create} tone="emerald" />
+              <ImportStat label="À mettre à jour" value={stats.update} tone="blue" />
+              <ImportStat label="Ignorées" value={stats.skip} tone="muted" />
+            </div>
+
+            <div className="rounded-md border border-border overflow-hidden max-h-80 overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-muted/40 sticky top-0">
+                  <tr>
+                    <th className="text-left px-2 py-1.5 font-medium">Action</th>
+                    <th className="text-left px-2 py-1.5 font-medium">N° commande</th>
+                    <th className="text-left px-2 py-1.5 font-medium">Fournisseur</th>
+                    <th className="text-left px-2 py-1.5 font-medium">Origine</th>
+                    <th className="text-left px-2 py-1.5 font-medium">ETA</th>
+                    <th className="text-left px-2 py-1.5 font-medium">Détail</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {rows.map((r, i) => (
+                    <tr key={i} className="hover:bg-muted/20">
+                      <td className="px-2 py-1.5">
+                        <Badge variant="outline" className={
+                          r.action === "create" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300 text-[10px]" :
+                          r.action === "update" ? "border-blue-500/40 bg-blue-500/10 text-blue-300 text-[10px]" :
+                          "border-muted-foreground/30 bg-muted/40 text-muted-foreground text-[10px]"
+                        }>
+                          {r.action === "create" ? "Créer" : r.action === "update" ? "MàJ" : "Ignorer"}
+                        </Badge>
+                      </td>
+                      <td className="px-2 py-1.5 font-mono">{r.payload.numero_commande}</td>
+                      <td className="px-2 py-1.5 truncate max-w-[140px]">{r.payload.fournisseur ?? "—"}</td>
+                      <td className="px-2 py-1.5">{r.payload.origine ?? "—"}</td>
+                      <td className="px-2 py-1.5">{r.payload.eta_le_havre ?? "—"}</td>
+                      <td className="px-2 py-1.5 text-muted-foreground truncate max-w-[220px]">{r.reason ?? `${(r.payload.items ?? []).length} article(s)`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        <DialogFooter className="gap-2">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={importing}>Fermer</Button>
+          {rows && (
+            <Button onClick={confirmImport} disabled={importing || (stats.create + stats.update === 0)} className="gap-1">
+              {importing ? <><Loader2 className="h-4 w-4 animate-spin" /> Import…</> : <>Confirmer l'import</>}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ImportStat({ label, value, tone }: { label: string; value: number; tone: "emerald" | "blue" | "muted" }) {
+  const cls =
+    tone === "emerald" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" :
+    tone === "blue"    ? "border-blue-500/40 bg-blue-500/10 text-blue-300" :
+    "border-border bg-muted/40 text-muted-foreground";
+  return (
+    <div className={`rounded-md border p-3 ${cls}`}>
+      <div className="text-[10px] uppercase tracking-wider opacity-80">{label}</div>
+      <div className="font-display text-xl font-semibold">{value}</div>
+    </div>
+  );
+}

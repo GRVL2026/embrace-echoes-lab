@@ -9,14 +9,34 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import {
   Loader2, Sparkles, Copy, Send, FileText, UserX, Package, History, ExternalLink,
+  Search, ThumbsUp, ThumbsDown,
 } from "lucide-react";
+
 import { RevueDashboard, revueToText, eur, type RevueData } from "./RevueDashboard";
+import { CopilotChart, type ChartPayload } from "./CopilotChart";
 
 type DevisRelance = { n_cde: string; code_client: string; client: string; date_devis: string; age_jours: number; montant_ht: number };
 type ClientDormant = { code_client: string; client: string; ca_annee_courante: number; ca_n1: number; ca_n2: number; derniere_facture: string | null };
 type StockDormant = { code_article: string; description: string; famille: string; quantite: number; valeur_achat: number };
-type ChatMsg = { role: "user" | "assistant"; content: string };
 type SavedRevue = { id: string; titre: string | null; created_at: string };
+
+type ChatPart =
+  | { type: "text"; text: string }
+  | { type: "chart"; chart: ChartPayload };
+
+type ChatStep = { type: "sql"; summary: string; query: string };
+
+type ChatMsg =
+  | { role: "user"; content: string }
+  | {
+      role: "assistant";
+      parts: ChatPart[];
+      steps: ChatStep[];
+      streaming?: boolean;
+      question?: string;
+      sqlUsed?: string[];
+      feedback?: 1 | -1 | null;
+    };
 
 const SUGGESTIONS = [
   "Quels clients relancer en priorité ?",
@@ -33,6 +53,7 @@ async function formatFunctionError(error: unknown) {
   }
   return error instanceof Error ? error.message : String(error);
 }
+
 
 async function streamRevue(onJsonBuffer: (buf: string) => void): Promise<string> {
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
@@ -206,28 +227,200 @@ export function GaiaCopilot() {
     }
   };
 
+  const appendText = (msgIdx: number, text: string) => {
+    setChat((c) => {
+      const next = c.slice();
+      const m = next[msgIdx];
+      if (!m || m.role !== "assistant") return c;
+      const parts = m.parts.slice();
+      const last = parts[parts.length - 1];
+      if (last && last.type === "text") {
+        parts[parts.length - 1] = { type: "text", text: last.text + text };
+      } else {
+        parts.push({ type: "text", text });
+      }
+      next[msgIdx] = { ...m, parts };
+      return next;
+    });
+  };
+
+  const appendChart = (msgIdx: number, chart: ChartPayload) => {
+    setChat((c) => {
+      const next = c.slice();
+      const m = next[msgIdx];
+      if (!m || m.role !== "assistant") return c;
+      next[msgIdx] = { ...m, parts: [...m.parts, { type: "chart", chart }] };
+      return next;
+    });
+  };
+
+  const appendStep = (msgIdx: number, step: ChatStep) => {
+    setChat((c) => {
+      const next = c.slice();
+      const m = next[msgIdx];
+      if (!m || m.role !== "assistant") return c;
+      next[msgIdx] = { ...m, steps: [...m.steps, step] };
+      return next;
+    });
+  };
+
+  const finalizeAssistant = (
+    msgIdx: number,
+    markdown: string,
+    sqlUsed: string[],
+  ) => {
+    setChat((c) => {
+      const next = c.slice();
+      const m = next[msgIdx];
+      if (!m || m.role !== "assistant") return c;
+      next[msgIdx] = {
+        ...m,
+        streaming: false,
+        parts: [...m.parts, { type: "text", text: markdown }],
+        sqlUsed,
+      };
+      return next;
+    });
+  };
+
   const sendChat = async (question: string) => {
     const q = question.trim();
     if (!q || chatLoading) return;
-    const nextChat: ChatMsg[] = [...chat, { role: "user", content: q }];
-    setChat(nextChat);
+
+    // 1. Ajout du message utilisateur + placeholder assistant
+    let assistantIdx = -1;
+    setChat((c) => {
+      const next: ChatMsg[] = [
+        ...c,
+        { role: "user", content: q },
+        { role: "assistant", parts: [], steps: [], streaming: true, question: q },
+      ];
+      assistantIdx = next.length - 1;
+      return next;
+    });
     setChatInput("");
     setChatLoading(true);
+
     try {
-      const history = nextChat.slice(-13, -1);
-      const { data, error } = await supabase.functions.invoke("gaia-copilot", {
-        body: { action: "chat", question: q, history },
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error("Session expirée. Veuillez vous reconnecter.");
+
+      // Historique = tout ce qui précède le placeholder assistant, sous forme string
+      const historyMsgs = chat.slice(-12).flatMap((m): { role: "user" | "assistant"; content: string }[] => {
+        if (m.role === "user") return [{ role: "user", content: m.content }];
+        const text = m.parts.filter((p) => p.type === "text").map((p: any) => p.text).join("\n\n");
+        return text ? [{ role: "assistant", content: text }] : [];
       });
-      if (error) throw error;
-      const d = data as { ok?: boolean; markdown?: string; error?: string };
-      if (!d?.ok || !d.markdown) throw new Error(d?.error ?? "Réponse vide");
-      setChat((c) => [...c, { role: "assistant", content: d.markdown! }]);
+
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gaia-copilot`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action: "chat", question: q, history: historyMsgs }),
+      });
+      if (!resp.ok) {
+        const body = await resp.text();
+        throw new Error(`HTTP ${resp.status} ${resp.statusText}\n${body}`);
+      }
+      if (!resp.body) throw new Error("HTTP 200 sans flux de réponse");
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finalMarkdown = "";
+      let sqlUsed: string[] = [];
+      let errorFromStream: string | null = null;
+
+      const consume = (event: string) => {
+        const dataText = event
+          .split(/\r?\n/)
+          .filter((l) => l.startsWith("data:"))
+          .map((l) => l.slice(5).trimStart())
+          .join("\n");
+        const evtName = event.split(/\r?\n/).find((l) => l.startsWith("event:"))?.slice(6).trim();
+        if (!dataText) return;
+        let data: any;
+        try { data = JSON.parse(dataText); } catch { return; }
+        if (evtName === "gaia_sql") {
+          appendStep(assistantIdx, { type: "sql", summary: data.summary ?? "Requête", query: data.query ?? "" });
+        } else if (evtName === "gaia_chart") {
+          appendChart(assistantIdx, data as ChartPayload);
+        } else if (evtName === "gaia_final") {
+          finalMarkdown = data.markdown ?? "";
+          sqlUsed = Array.isArray(data.sql_used) ? data.sql_used : [];
+        } else if (evtName === "gaia_error") {
+          errorFromStream = data.error ?? "Erreur inconnue";
+        }
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        buffer += decoder.decode(value, { stream: !done });
+        const events = buffer.split(/\r?\n\r?\n/);
+        buffer = events.pop() ?? "";
+        events.forEach(consume);
+        if (done) break;
+      }
+      if (buffer.trim()) consume(buffer);
+
+      if (errorFromStream) throw new Error(errorFromStream);
+      if (!finalMarkdown) throw new Error("Réponse vide");
+      finalizeAssistant(assistantIdx, finalMarkdown, sqlUsed);
     } catch (e: unknown) {
       const msg = await formatFunctionError(e);
       toast({ title: "Erreur", description: msg.slice(0, 200), variant: "destructive" });
-      setChat((c) => [...c, { role: "assistant", content: `⚠️ ${msg}` }]);
+      setChat((c) => {
+        const next = c.slice();
+        const m = next[assistantIdx];
+        if (m && m.role === "assistant") {
+          next[assistantIdx] = {
+            ...m,
+            streaming: false,
+            parts: [{ type: "text", text: `⚠️ ${msg}` }],
+          };
+        }
+        return next;
+      });
     } finally {
       setChatLoading(false);
+    }
+  };
+
+  const submitFeedback = async (msgIdx: number, note: 1 | -1, commentaire?: string) => {
+    const m = chat[msgIdx];
+    if (!m || m.role !== "assistant") return;
+    const answerText = m.parts.filter((p) => p.type === "text").map((p: any) => p.text).join("\n\n");
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id;
+      if (!userId) throw new Error("Session invalide");
+      const { error } = await (supabase as any).from("copilote_feedback").insert({
+        user_id: userId,
+        question: m.question ?? "",
+        reponse: answerText,
+        requetes_sql: m.sqlUsed ?? [],
+        note,
+        commentaire: commentaire ?? null,
+      });
+      if (error) throw error;
+      setChat((c) => {
+        const next = c.slice();
+        const cur = next[msgIdx];
+        if (cur && cur.role === "assistant") next[msgIdx] = { ...cur, feedback: note };
+        return next;
+      });
+      toast({ title: "Merci !", description: "Feedback enregistré." });
+    } catch (e) {
+      toast({
+        title: "Feedback impossible",
+        description: e instanceof Error ? e.message : String(e),
+        variant: "destructive",
+      });
     }
   };
 
@@ -252,40 +445,65 @@ export function GaiaCopilot() {
           </div>
         )}
 
-        <div className="max-h-[520px] space-y-3 overflow-y-auto rounded border border-border/60 bg-background/40 p-3">
+        <div className="max-h-[620px] space-y-3 overflow-y-auto rounded border border-border/60 bg-background/40 p-3">
           {chat.length === 0 && (
             <div className="py-8 text-center text-sm text-muted-foreground">
               Posez une question sur le CA, les clients, les devis ou le stock.
             </div>
           )}
-          {chat.map((m, i) => (
-            <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
-              <div
-                className={
-                  m.role === "user"
-                    ? "max-w-[85%] rounded-lg bg-primary/15 border border-primary/30 px-3 py-2 text-sm"
-                    : "max-w-[95%] rounded-lg bg-muted/40 border border-border/60 px-4 py-3 text-sm"
-                }
-              >
-                {m.role === "user" ? (
+          {chat.map((m, i) =>
+            m.role === "user" ? (
+              <div key={i} className="flex justify-end">
+                <div className="max-w-[85%] rounded-lg bg-primary/15 border border-primary/30 px-3 py-2 text-sm">
                   <div className="whitespace-pre-wrap">{m.content}</div>
-                ) : (
-                  <div className="chat-markdown">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
-                  </div>
-                )}
+                </div>
               </div>
-            </div>
-          ))}
-          {chatLoading && (
-            <div className="flex justify-start">
-              <div className="rounded-lg bg-muted/40 border border-border/60 px-3 py-2 text-sm text-muted-foreground">
-                <Loader2 className="mr-2 inline h-3 w-3 animate-spin" /> Réflexion…
+            ) : (
+              <div key={i} className="flex justify-start">
+                <div className="w-full max-w-[95%] rounded-lg bg-muted/40 border border-border/60 px-4 py-3 text-sm">
+                  {/* Étapes de progression (grisé, petit) */}
+                  {m.steps.length > 0 && (
+                    <ul className="mb-2 space-y-0.5 text-[11px] text-muted-foreground">
+                      {m.steps.map((s, j) => (
+                        <li key={j} title={s.query} className="flex items-center gap-1.5">
+                          <Search className="h-3 w-3 shrink-0 opacity-70" />
+                          <span className="truncate">Requête : {s.summary}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {/* Blocs de réponse : texte / graphique dans l'ordre */}
+                  {m.parts.map((part, j) =>
+                    part.type === "text" ? (
+                      <div key={j} className="chat-markdown">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{part.text}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      <CopilotChart key={j} payload={part.chart} />
+                    )
+                  )}
+
+                  {m.streaming && m.parts.length === 0 && (
+                    <div className="text-muted-foreground">
+                      <Loader2 className="mr-2 inline h-3 w-3 animate-spin" /> Réflexion…
+                    </div>
+                  )}
+
+                  {/* Feedback 👍 / 👎 */}
+                  {!m.streaming && m.parts.some((p) => p.type === "text") && (
+                    <FeedbackControls
+                      current={m.feedback ?? null}
+                      onSubmit={(note, commentaire) => submitFeedback(i, note, commentaire)}
+                    />
+                  )}
+                </div>
               </div>
-            </div>
+            )
           )}
           <div ref={chatEndRef} />
         </div>
+
 
         <form
           className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end"
@@ -476,3 +694,76 @@ function QuickCard({
     </div>
   );
 }
+
+function FeedbackControls({
+  current,
+  onSubmit,
+}: {
+  current: 1 | -1 | null;
+  onSubmit: (note: 1 | -1, commentaire?: string) => void;
+}) {
+  const [showComment, setShowComment] = useState(false);
+  const [comment, setComment] = useState("");
+
+  if (current === 1) {
+    return (
+      <div className="mt-3 flex items-center gap-1 border-t border-border/40 pt-2 text-xs text-muted-foreground">
+        <ThumbsUp className="h-3 w-3 text-primary" /> Merci pour votre retour.
+      </div>
+    );
+  }
+  if (current === -1) {
+    return (
+      <div className="mt-3 flex items-center gap-1 border-t border-border/40 pt-2 text-xs text-muted-foreground">
+        <ThumbsDown className="h-3 w-3 text-destructive" /> Retour enregistré.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 space-y-2 border-t border-border/40 pt-2">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span>Cette réponse est-elle utile&nbsp;?</span>
+        <button
+          type="button"
+          onClick={() => onSubmit(1)}
+          className="rounded p-1 hover:bg-primary/10 hover:text-primary"
+          aria-label="Utile"
+        >
+          <ThumbsUp className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowComment(true)}
+          className="rounded p-1 hover:bg-destructive/10 hover:text-destructive"
+          aria-label="Pas utile"
+        >
+          <ThumbsDown className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      {showComment && (
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder="Qu'est-ce qui n'allait pas ?"
+            className="min-h-[52px] flex-1 resize-none text-xs"
+          />
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowComment(false)}
+            >
+              Annuler
+            </Button>
+            <Button size="sm" onClick={() => onSubmit(-1, comment.trim() || undefined)}>
+              Envoyer
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+

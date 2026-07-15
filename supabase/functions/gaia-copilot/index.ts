@@ -149,7 +149,10 @@ CHARTE DE L'ANALYSTE — règles SQL OBLIGATOIRES (aucune exception sans justifi
 8. EXERCICE EN COURS : toute comparaison entre un exercice plein (clos) et l'exercice en cours doit être faite "à période égale" (utiliser v_gaia_ca_periode_egale), ou explicitement signalée comme partielle ("exercice 2026 en cours, arrêté au JJ/MM").
 
 9. RAPPELS (déjà en place) : v_gaia_articles pour toute info article (JAMAIS gaia_stock en jointure ventes) ; auto-contrôle de vraisemblance avant d'affirmer ; citation en une ligne de la requête utilisée.
+
+10. GRAPHIQUES : pour toute évolution temporelle (CA mois par mois, tendance annuelle…) OU toute comparaison de plus de 4 valeurs (top clients, familles, articles…), appelle l'outil "afficher_graphique" plutôt que de dresser un long tableau Markdown. Choisis 'ligne' pour une évolution dans le temps, 'barres' pour une comparaison, 'donut' pour une répartition. Continue à commenter le graphique en texte juste après (1-2 phrases).
 `;
+
 
 const SYSTEM_PROMPT = `Tu es le copilote stratégique de la direction commerciale d'Avranches Automatic (distributeur français de flippers — revendeur officiel Stern —, jeux d'arcade, grues et distributeurs automatiques). Tu reçois les données commerciales réelles agrégées (CA, clients, devis, stock). Tu raisonnes en dirigeant commercial : factuel, chiffré, direct. Chaque constat s'appuie sur un chiffre fourni ; chaque recommandation est actionnable (qui fait quoi, sur quel client/produit, pourquoi maintenant). Tu signales les limites des données quand c'est pertinent. Tu réponds en français, en Markdown clair.
 
@@ -193,6 +196,44 @@ const OUBLIER_TOOL = {
     required: ['id'],
   },
 };
+
+const CHART_TOOL = {
+  name: 'afficher_graphique',
+  description: "Affiche un graphique dans la réponse du chat, à l'endroit de l'appel. À utiliser pour toute évolution temporelle ou comparaison de plus de 4 valeurs (à préférer à un long tableau). Le rendu est fait côté page — cet outil renvoie simplement 'ok'.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      type: { type: 'string', enum: ['ligne', 'barres', 'donut'], description: "Type de graphique : 'ligne' pour une évolution temporelle, 'barres' pour une comparaison, 'donut' pour une répartition." },
+      titre: { type: 'string', description: 'Titre court affiché au-dessus du graphique.' },
+      donnees: {
+        type: 'array',
+        description: 'Points du graphique (max 30). x = étiquette (mois, client, famille…), y = valeur numérique.',
+        items: {
+          type: 'object',
+          properties: {
+            x: { type: 'string', description: 'Étiquette du point (ex. "sept.", "Client Machin", "Flippers").' },
+            y: { type: 'number', description: 'Valeur numérique associée.' },
+          },
+          required: ['x', 'y'],
+        },
+      },
+      unite: { type: 'string', description: "Unité affichée (ex : '€', '€ HT', '%', 'unités'). Optionnel." },
+    },
+    required: ['type', 'titre', 'donnees'],
+  },
+};
+
+function summarizeSql(sql: string): string {
+  const s = (sql || '').replace(/\s+/g, ' ').trim();
+  const tables = Array.from(s.matchAll(/\b(?:from|join)\s+([a-z_0-9.]+)/gi)).map((m) => m[1]);
+  const uniq = Array.from(new Set(tables)).slice(0, 2);
+  const hasAgg = /\b(sum|count|avg|group by)\b/i.test(s);
+  const kind = hasAgg ? 'Agrégation' : 'Lecture';
+  const target = uniq.join(' + ') || 'base';
+  return `${kind} ${target}`.slice(0, 80);
+}
+
+
 
 
 const REVUE_TOOL = {
@@ -486,14 +527,16 @@ async function toolLoop(params: {
   extraTools?: any[];
   toolChoice?: any;
   extraPayload?: Record<string, unknown>;
+  onEvent?: (event: string, data: unknown) => void;
+
 }): Promise<{
   messages: Array<{ role: 'user' | 'assistant'; content: any }>;
   last: any;
   rounds: number;
   journal: TurnLog[];
 }> {
-  const { admin, model, system, dynamicSuffix, initialMessages, extraTools = [], toolChoice, extraPayload } = params;
-  const tools = [SQL_TOOL, MEMORISE_TOOL, OUBLIER_TOOL, ...extraTools];
+  const { admin, model, system, dynamicSuffix, initialMessages, extraTools = [], toolChoice, extraPayload, onEvent } = params;
+  const tools = [SQL_TOOL, MEMORISE_TOOL, OUBLIER_TOOL, CHART_TOOL, ...extraTools];
   const messages = [...initialMessages];
   const journal: TurnLog[] = [];
 
@@ -543,7 +586,23 @@ async function toolLoop(params: {
       return { messages, last: resp, rounds: round, journal };
     }
 
-    // Dispatche chaque tool_use vers son exécuteur
+    // Notifie les événements de progression avant l'exécution (streaming côté page)
+    if (onEvent) {
+      for (const call of toolCalls) {
+        try {
+          if (call?.name === 'executer_sql') {
+            const q = String(call?.input?.sql_query ?? '');
+            onEvent('gaia_sql', { summary: summarizeSql(q), query: q });
+          } else if (call?.name === 'afficher_graphique') {
+            onEvent('gaia_chart', call?.input ?? {});
+          } else if (call?.name === 'memoriser') {
+            onEvent('gaia_memoire', { categorie: call?.input?.categorie, contenu: call?.input?.contenu });
+          }
+        } catch { /* ignore */ }
+      }
+    }
+
+    // Dispatche chaque tool_use vers son exécuteur — en parallèle (Promise.all)
     const toolResults = await Promise.all(
       toolCalls.map(async (call: any) => {
         let result: unknown;
@@ -554,6 +613,8 @@ async function toolLoop(params: {
             result = await memoriser(admin, String(call?.input?.categorie ?? ''), String(call?.input?.contenu ?? ''));
           } else if (call?.name === 'oublier') {
             result = await oublier(admin, String(call?.input?.id ?? ''));
+          } else if (call?.name === 'afficher_graphique') {
+            result = { ok: true, rendered: 'côté page' };
           } else {
             result = { error: `Outil inconnu: ${call?.name}` };
           }
@@ -575,6 +636,7 @@ async function toolLoop(params: {
 
   throw new Error('Boucle agentique inattendue');
 }
+
 
 
 /**
@@ -790,60 +852,101 @@ Deno.serve(async (req) => {
       const contextMsg = `Voici les données commerciales agrégées (JSON) à utiliser pour répondre :\n\n\`\`\`json\n${dataJson}\n\`\`\``;
       const initialMessages: Array<{ role: 'user' | 'assistant'; content: any }> = [
         { role: 'user', content: contextMsg },
-        { role: 'assistant', content: 'Données reçues. Je réponds en m\'appuyant sur ces chiffres, sur ma mémoire persistante, et j\'appellerai executer_sql / memoriser / oublier au besoin.' },
+        { role: 'assistant', content: 'Données reçues. Je réponds en m\'appuyant sur ces chiffres, sur ma mémoire persistante, et j\'appellerai executer_sql / memoriser / oublier / afficher_graphique au besoin.' },
         ...cleanHistory,
         { role: 'user', content: question },
       ];
 
       const chatSystem = `${SYSTEM_PROMPT}\n\n${SUIVI_INSTRUCTION}`;
-      const { messages: finalMessages, last, rounds, journal } = await toolLoop({
-        admin,
-        model: CHAT_MODEL,
-        system: chatSystem,
-        dynamicSuffix: memorySuffix,
-        initialMessages,
+
+      const encoder = new TextEncoder();
+      let heartbeat: number | undefined;
+
+      const stream = new ReadableStream<Uint8Array>({
+        async start(controller) {
+          const send = (event: string, data: unknown) => {
+            try {
+              controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+            } catch { /* closed */ }
+          };
+          send('gaia_start', { question });
+          heartbeat = setInterval(() => {
+            try { controller.enqueue(encoder.encode(`: gaia-heartbeat ${Date.now()}\n\n`)); }
+            catch { if (heartbeat !== undefined) clearInterval(heartbeat); }
+          }, 10_000);
+
+          try {
+            const { messages: finalMessages, last, rounds, journal } = await toolLoop({
+              admin,
+              model: CHAT_MODEL,
+              system: chatSystem,
+              dynamicSuffix: memorySuffix,
+              initialMessages,
+              onEvent: (evt, data) => send(evt, data),
+            });
+
+            const lastContent = Array.isArray(last?.content) ? last.content : [];
+            let markdown = extractText(lastContent);
+            let forcedDebug: any = null;
+
+            if (!markdown || rounds >= MAX_TOOL_ROUNDS) {
+              try {
+                const forced = await forceFinalText(CHAT_MODEL, chatSystem, finalMessages, memorySuffix);
+                if (forced.text) markdown = forced.text;
+                forcedDebug = { stop_reason: forced.stop_reason, block_types: forced.block_types };
+              } catch (e: any) {
+                console.log(`[gaia-copilot] forceFinalText error: ${e?.message ?? e}`);
+                forcedDebug = { error: e?.message ?? String(e) };
+              }
+            }
+
+            if (!markdown) {
+              for (let i = finalMessages.length - 1; i >= 0 && !markdown; i--) {
+                const m = finalMessages[i];
+                if (m.role === 'assistant' && Array.isArray(m.content)) {
+                  markdown = extractText(m.content);
+                }
+              }
+            }
+
+            const sqlUsed = journal.flatMap((j) => j.sql_queries);
+
+            if (!markdown) {
+              send('gaia_error', {
+                error: `Réponse vide (stop_reason=${last?.stop_reason ?? '?'}, rounds=${rounds})`,
+                debug: { journal, forced: forcedDebug },
+              });
+            } else {
+              send('gaia_final', {
+                markdown,
+                debug: { stop_reason: last?.stop_reason ?? null, tool_rounds: rounds, journal, forced: forcedDebug },
+                sql_used: sqlUsed,
+              });
+            }
+          } catch (e: any) {
+            console.log(`[gaia-copilot] chat stream fatal: ${e?.message ?? e}`);
+            send('gaia_error', { error: e?.message ?? String(e) });
+          } finally {
+            if (heartbeat !== undefined) clearInterval(heartbeat);
+            try { controller.close(); } catch { /* already closed */ }
+          }
+        },
+        cancel() {
+          if (heartbeat !== undefined) clearInterval(heartbeat);
+        },
       });
 
-      const lastContent = Array.isArray(last?.content) ? last.content : [];
-      let markdown = extractText(lastContent);
-      let forcedDebug: any = null;
-
-      // Réponse finale garantie : si vide OU limite atteinte, on relance sans outils.
-      if (!markdown || rounds >= MAX_TOOL_ROUNDS) {
-        try {
-          const forced = await forceFinalText(CHAT_MODEL, chatSystem, finalMessages, memorySuffix);
-          if (forced.text) markdown = forced.text;
-          forcedDebug = { stop_reason: forced.stop_reason, block_types: forced.block_types };
-        } catch (e: any) {
-          console.log(`[gaia-copilot] forceFinalText error: ${e?.message ?? e}`);
-          forcedDebug = { error: e?.message ?? String(e) };
-        }
-      }
-
-      // Fallback ultime : dernier bloc "text" non vide de n'importe quel tour assistant.
-      if (!markdown) {
-        for (let i = finalMessages.length - 1; i >= 0 && !markdown; i--) {
-          const m = finalMessages[i];
-          if (m.role === 'assistant' && Array.isArray(m.content)) {
-            markdown = extractText(m.content);
-          }
-        }
-      }
-
-      if (!markdown) {
-        return jsonResponse({
-          ok: false,
-          error: `Réponse vide (stop_reason=${last?.stop_reason ?? '?'}, rounds=${rounds})`,
-          debug: { journal, forced: forcedDebug },
-        }, 200);
-      }
-
-      return jsonResponse({
-        ok: true,
-        markdown,
-        debug: { stop_reason: last?.stop_reason ?? null, tool_rounds: rounds, journal, forced: forcedDebug },
+      return new Response(stream, {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'text/event-stream; charset=utf-8',
+          'Cache-Control': 'no-cache, no-transform',
+          'X-Accel-Buffering': 'no',
+        },
       });
     }
+
 
 
     return jsonResponse({ ok: false, error: `Unknown action: ${action}` }, 400);

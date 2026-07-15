@@ -421,6 +421,39 @@ export type Database = {
         }
         Relationships: []
       }
+      copilote_feedback: {
+        Row: {
+          commentaire: string | null
+          created_at: string
+          id: string
+          note: number
+          question: string
+          reponse: string
+          requetes_sql: Json
+          user_id: string
+        }
+        Insert: {
+          commentaire?: string | null
+          created_at?: string
+          id?: string
+          note: number
+          question: string
+          reponse: string
+          requetes_sql?: Json
+          user_id: string
+        }
+        Update: {
+          commentaire?: string | null
+          created_at?: string
+          id?: string
+          note?: number
+          question?: string
+          reponse?: string
+          requetes_sql?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
       copilote_memoire: {
         Row: {
           actif: boolean

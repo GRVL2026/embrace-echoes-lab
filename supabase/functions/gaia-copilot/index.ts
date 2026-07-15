@@ -92,6 +92,17 @@ Schéma disponible (Postgres, schema public) :
     • 'Ouvert', 'Expédition en cours', 'Reliquat' = commandes signées en cours
     • 'Historique', 'Annulé' = À EXCLURE des analyses opérationnelles.
 
+OUTIL DOSSIERS COMMERCIAUX (activité de l'équipe) :
+- projects(id, client_name, status, owner_id, brand_id, offer, brief, selected_products, created_at, updated_at)
+  Dossiers commerciaux créés par les commerciaux. status ∈ ('draft','sent','won','lost').
+  owner_id = uuid du commercial (jointure profiles.id = projects.owner_id pour obtenir le nom).
+- profiles(id, email, full_name) — annuaire interne. Utilise full_name pour nommer un commercial dans tes réponses (jamais l'uuid).
+- dossier_vues(id, project_id, viewed_at) — journal des consultations d'un dossier par le client destinataire. Un dossier envoyé sans aucune vue = jamais consulté.
+- dossier_learning(project_id, owner_id, brand_id, offer, status, brief, products, updated_at) — snapshot des assortiments de dossiers envoyés/gagnés (pour analyser ce qui se vend).
+
+Consigne : tu peux analyser l'activité commerciale de l'équipe — dossiers créés/envoyés/gagnés par commercial, dossiers envoyés jamais consultés (LEFT JOIN dossier_vues), délais de conversion sent→won (updated_at - created_at), assortiments récurrents dans dossier_learning.
+
+
 Vues d'analyse déjà disponibles :
   v_gaia_ca_mensuel, v_gaia_ca_client, v_gaia_ca_famille, v_gaia_ca_periode_egale,
   v_gaia_devis_a_relancer, v_gaia_clients_dormants, v_gaia_stock_dormant,

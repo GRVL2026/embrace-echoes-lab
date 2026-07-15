@@ -227,6 +227,7 @@ export default function Logistique() {
               {fournisseurs.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Button variant="outline" onClick={() => setOpenImport(true)} className="gap-1"><Upload className="h-4 w-4" /> Importer Excel</Button>
           <Button onClick={openCreate} className="gap-1"><Plus className="h-4 w-4" /> Nouvelle</Button>
         </div>
 

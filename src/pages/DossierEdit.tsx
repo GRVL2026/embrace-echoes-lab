@@ -58,6 +58,7 @@ type CatalogProduct = {
   vendor: string | null;
   images: string[] | null;
   product_url: string | null;
+  stock_erp: number | null;
 };
 
 function productFicheUrl(p: { product_url?: string | null; name: string }): string {

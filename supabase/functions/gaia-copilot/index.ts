@@ -524,6 +524,8 @@ async function toolLoop(params: {
   extraTools?: any[];
   toolChoice?: any;
   extraPayload?: Record<string, unknown>;
+  onEvent?: (event: string, data: unknown) => void;
+
 }): Promise<{
   messages: Array<{ role: 'user' | 'assistant'; content: any }>;
   last: any;

@@ -6,7 +6,9 @@ import { fr } from "date-fns/locale";
 import {
   Truck, Plus, Search, Loader2, Ship, Ship as ShipIcon, Anchor, Package,
   Home, Trash2, Pencil, X, Calendar as CalendarIcon, CheckCircle2, CircleDot,
+  Upload, AlertTriangle,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserMenu } from "@/components/UserMenu";
@@ -27,7 +29,7 @@ import { toast } from "@/hooks/use-toast";
 import logoImg from "@/assets/logo.png";
 
 type Statut = "livre" | "en_cours" | "en_mer" | "a_venir" | "en_attente" | "dispo";
-type Origine = "ASIE" | "US";
+type Origine = "ASIE" | "US" | "EUROPE";
 type Item = { produit: string; quantite: number };
 
 const STATUTS: Statut[] = ["a_venir", "en_attente", "dispo", "en_cours", "en_mer", "livre"];

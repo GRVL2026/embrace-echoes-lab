@@ -595,19 +595,22 @@ Deno.serve(async (req) => {
       const revueSystem = `${SYSTEM_PROMPT}\n\nTu peux utiliser executer_sql pour vérifier des chiffres avant de construire la revue. Ta réponse FINALE doit être un unique appel à l'outil build_revue avec des données structurées, sans texte libre.`;
 
       // Boucle SQL non-streamée (autorise seulement executer_sql à ce stade)
+      const revueExtra = { output_config: { effort: 'xhigh' } };
       const { messages: agenticMessages } = await toolLoop({
         admin,
+        model: REVUE_MODEL,
         system: revueSystem,
         initialMessages,
         extraTools: [],
+        extraPayload: revueExtra,
       });
 
       // Retire le dernier assistant (produit après épuisement des SQL) pour que le dernier tour final relance proprement le modèle en le forçant sur build_revue.
       // On garde tout l'historique tel quel : le modèle voit ses propres constats et les tool_result SQL.
-      return await streamFinalRevue(revueSystem, agenticMessages.concat([{
+      return await streamFinalRevue(REVUE_MODEL, revueSystem, agenticMessages.concat([{
         role: 'user',
         content: 'Appelle maintenant l\'outil build_revue avec la revue finale structurée.',
-      }]));
+      }]), revueExtra);
     }
 
     if (action === 'chat') {

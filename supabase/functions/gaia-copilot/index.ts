@@ -536,29 +536,53 @@ Deno.serve(async (req) => {
         { role: 'user', content: question },
       ];
 
-      const { messages: finalMessages, last, rounds } = await toolLoop({
+      const { messages: finalMessages, last, rounds, journal } = await toolLoop({
         admin,
         system: SYSTEM_PROMPT,
         initialMessages,
       });
 
       const lastContent = Array.isArray(last?.content) ? last.content : [];
-      const markdown = lastContent
-        .filter((p: any) => p?.type === 'text' && typeof p.text === 'string')
-        .map((p: any) => p.text)
-        .join('\n\n')
-        .trim();
+      let markdown = extractText(lastContent);
+      let forcedDebug: any = null;
+
+      // Réponse finale garantie : si vide OU limite atteinte, on relance sans outils.
+      if (!markdown || rounds >= MAX_TOOL_ROUNDS) {
+        try {
+          const forced = await forceFinalText(SYSTEM_PROMPT, finalMessages);
+          if (forced.text) markdown = forced.text;
+          forcedDebug = { stop_reason: forced.stop_reason, block_types: forced.block_types };
+        } catch (e: any) {
+          console.log(`[gaia-copilot] forceFinalText error: ${e?.message ?? e}`);
+          forcedDebug = { error: e?.message ?? String(e) };
+        }
+      }
+
+      // Fallback ultime : dernier bloc "text" non vide de n'importe quel tour assistant.
+      if (!markdown) {
+        for (let i = finalMessages.length - 1; i >= 0 && !markdown; i--) {
+          const m = finalMessages[i];
+          if (m.role === 'assistant' && Array.isArray(m.content)) {
+            markdown = extractText(m.content);
+          }
+        }
+      }
 
       if (!markdown) {
-        return jsonResponse({ ok: false, error: `Réponse vide (stop_reason=${last?.stop_reason ?? '?'}, rounds=${rounds})` }, 500);
+        return jsonResponse({
+          ok: false,
+          error: `Réponse vide (stop_reason=${last?.stop_reason ?? '?'}, rounds=${rounds})`,
+          debug: { journal, forced: forcedDebug },
+        }, 200);
       }
 
       return jsonResponse({
         ok: true,
         markdown,
-        debug: { stop_reason: last?.stop_reason ?? null, tool_rounds: rounds },
+        debug: { stop_reason: last?.stop_reason ?? null, tool_rounds: rounds, journal, forced: forcedDebug },
       });
     }
+
 
     return jsonResponse({ ok: false, error: `Unknown action: ${action}` }, 400);
 

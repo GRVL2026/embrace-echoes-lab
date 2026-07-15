@@ -106,7 +106,7 @@ export default function Catalogue() {
       const [{ data: site }, { data: erp }] = await Promise.all([
         (supabase as any)
           .from("catalog_products")
-          .select("id, name, category, vendor, price, price_erp_ht, cegid_code, images, product_url, stock")
+          .select("id, name, category, vendor, price, price_erp_ht, cegid_code, images, product_url, stock, stock_erp")
           .eq("active", true)
           .order("name"),
         (supabase as any)

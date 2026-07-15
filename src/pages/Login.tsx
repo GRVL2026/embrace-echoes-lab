@@ -17,7 +17,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
 
   if (!authLoading && user) {
-    return <Navigate to={location.state?.from ?? "/dossiers"} replace />;
+    return <Navigate to={location.state?.from ?? "/"} replace />;
   }
 
   const onSubmit = async (e: FormEvent) => {
@@ -29,7 +29,7 @@ export default function Login() {
       toast({ title: "Connexion impossible", description: error.message, variant: "destructive" });
       return;
     }
-    navigate(location.state?.from ?? "/dossiers", { replace: true });
+    navigate(location.state?.from ?? "/", { replace: true });
   };
 
   return (

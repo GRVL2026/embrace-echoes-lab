@@ -2,10 +2,60 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
-const ANTHROPIC_MODEL = 'claude-sonnet-5';
+const CHAT_MODEL = 'claude-sonnet-5';
+const REVUE_MODEL = 'claude-opus-4-8';
 const ANTHROPIC_VERSION = '2023-06-01';
 const MAX_TOOL_ROUNDS = 6;
 const MAX_TOKENS_PER_TURN = 8000;
+
+/** Convert system string to Anthropic content blocks with an ephemeral cache breakpoint on the last block. */
+function systemBlocks(system: string) {
+  return [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }];
+}
+
+/**
+ * Return a new messages array where cache_control markers are stripped from all blocks,
+ * then set on the last block of the last message. This keeps the cached prefix stable
+ * while marking the new tail on each turn (Anthropic supports up to 4 breakpoints).
+ */
+function withCacheOnLastMessage(
+  messages: Array<{ role: 'user' | 'assistant'; content: any }>,
+): Array<{ role: 'user' | 'assistant'; content: any }> {
+  if (!messages.length) return messages;
+  const stripBlock = (b: any) => {
+    if (b && typeof b === 'object' && 'cache_control' in b) {
+      const { cache_control: _drop, ...rest } = b;
+      return rest;
+    }
+    return b;
+  };
+  const stripped = messages.map((m) => {
+    if (typeof m.content === 'string') return { ...m };
+    if (Array.isArray(m.content)) return { ...m, content: m.content.map(stripBlock) };
+    return { ...m };
+  });
+  const lastIdx = stripped.length - 1;
+  const last = stripped[lastIdx];
+  if (typeof last.content === 'string') {
+    stripped[lastIdx] = {
+      ...last,
+      content: [{ type: 'text', text: last.content, cache_control: { type: 'ephemeral' } }],
+    };
+  } else if (Array.isArray(last.content) && last.content.length) {
+    const blocks = last.content.slice();
+    const idx = blocks.length - 1;
+    blocks[idx] = { ...blocks[idx], cache_control: { type: 'ephemeral' } };
+    stripped[lastIdx] = { ...last, content: blocks };
+  }
+  return stripped;
+}
+
+function logUsage(tag: string, usage: any) {
+  if (!usage) return;
+  console.log(
+    `[gaia-copilot] ${tag} usage input=${usage.input_tokens ?? '?'} output=${usage.output_tokens ?? '?'} cache_read=${usage.cache_read_input_tokens ?? 0} cache_creation=${usage.cache_creation_input_tokens ?? 0}`,
+  );
+}
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -309,35 +359,40 @@ function extractText(content: any[]): string {
  */
 async function toolLoop(params: {
   admin: any;
+  model: string;
   system: string;
   initialMessages: Array<{ role: 'user' | 'assistant'; content: any }>;
   extraTools?: any[];
   toolChoice?: any;
+  extraPayload?: Record<string, unknown>;
 }): Promise<{
   messages: Array<{ role: 'user' | 'assistant'; content: any }>;
   last: any;
   rounds: number;
   journal: TurnLog[];
 }> {
-  const { admin, system, initialMessages, extraTools = [], toolChoice } = params;
+  const { admin, model, system, initialMessages, extraTools = [], toolChoice, extraPayload } = params;
   const tools = [SQL_TOOL, ...extraTools];
   const messages = [...initialMessages];
   const journal: TurnLog[] = [];
 
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
     const isLastRound = round === MAX_TOOL_ROUNDS;
+    const sys = isLastRound
+      ? `${system}\n\nTu as atteint la limite de ${MAX_TOOL_ROUNDS} appels à executer_sql. Réponds maintenant avec les informations dont tu disposes.`
+      : system;
     const payload: Record<string, unknown> = {
-      model: ANTHROPIC_MODEL,
+      model,
       max_tokens: MAX_TOKENS_PER_TURN,
-      system: isLastRound
-        ? `${system}\n\nTu as atteint la limite de ${MAX_TOOL_ROUNDS} appels à executer_sql. Réponds maintenant avec les informations dont tu disposes.`
-        : system,
-      messages,
+      system: systemBlocks(sys),
+      messages: withCacheOnLastMessage(messages),
       tools: isLastRound ? extraTools : tools,
+      ...(extraPayload ?? {}),
     };
     if (toolChoice) payload.tool_choice = toolChoice;
 
     const resp = await anthropicCall(payload);
+    logUsage(`round=${round}`, resp?.usage);
     const content = Array.isArray(resp?.content) ? resp.content : [];
     const sqlCalls = content.filter((b: any) => b?.type === 'tool_use' && b?.name === 'executer_sql');
     const blockTypes = content.map((b: any) => b?.type ?? 'unknown');
@@ -382,6 +437,7 @@ async function toolLoop(params: {
  * Dernier recours : appel Anthropic SANS outils pour forcer une réponse texte.
  */
 async function forceFinalText(
+  model: string,
   system: string,
   messages: Array<{ role: 'user' | 'assistant'; content: any }>,
 ): Promise<{ text: string; stop_reason: string | null; block_types: string[] }> {
@@ -390,11 +446,12 @@ async function forceFinalText(
     content: 'Donne maintenant ta réponse finale à partir des résultats déjà obtenus.',
   }];
   const resp = await anthropicCall({
-    model: ANTHROPIC_MODEL,
+    model,
     max_tokens: MAX_TOKENS_PER_TURN,
-    system,
-    messages: forced,
+    system: systemBlocks(system),
+    messages: withCacheOnLastMessage(forced),
   });
+  logUsage('forceFinalText', resp?.usage);
   const content = Array.isArray(resp?.content) ? resp.content : [];
   const blockTypes = content.map((b: any) => b?.type ?? 'unknown');
   console.log(`[gaia-copilot] forceFinalText stop_reason=${resp?.stop_reason} blocks=${JSON.stringify(blockTypes)}`);
@@ -403,18 +460,24 @@ async function forceFinalText(
 
 
 /** Stream final Anthropic call (SSE passthrough) — utilisé pour la revue afin de conserver l'API SSE côté client. */
-async function streamFinalRevue(system: string, messages: Array<{ role: 'user' | 'assistant'; content: any }>) {
+async function streamFinalRevue(
+  model: string,
+  system: string,
+  messages: Array<{ role: 'user' | 'assistant'; content: any }>,
+  extraPayload?: Record<string, unknown>,
+) {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY manquant');
 
   const payload = {
-    model: ANTHROPIC_MODEL,
+    model,
     max_tokens: 16000,
     stream: true,
-    system,
-    messages,
+    system: systemBlocks(system),
+    messages: withCacheOnLastMessage(messages),
     tools: [REVUE_TOOL],
     tool_choice: { type: 'tool', name: 'build_revue' },
+    ...(extraPayload ?? {}),
   };
   const payloadStr = JSON.stringify(payload);
   const inputChars = payloadStr.length;
@@ -532,19 +595,22 @@ Deno.serve(async (req) => {
       const revueSystem = `${SYSTEM_PROMPT}\n\nTu peux utiliser executer_sql pour vérifier des chiffres avant de construire la revue. Ta réponse FINALE doit être un unique appel à l'outil build_revue avec des données structurées, sans texte libre.`;
 
       // Boucle SQL non-streamée (autorise seulement executer_sql à ce stade)
+      const revueExtra = { output_config: { effort: 'xhigh' } };
       const { messages: agenticMessages } = await toolLoop({
         admin,
+        model: REVUE_MODEL,
         system: revueSystem,
         initialMessages,
         extraTools: [],
+        extraPayload: revueExtra,
       });
 
       // Retire le dernier assistant (produit après épuisement des SQL) pour que le dernier tour final relance proprement le modèle en le forçant sur build_revue.
       // On garde tout l'historique tel quel : le modèle voit ses propres constats et les tool_result SQL.
-      return await streamFinalRevue(revueSystem, agenticMessages.concat([{
+      return await streamFinalRevue(REVUE_MODEL, revueSystem, agenticMessages.concat([{
         role: 'user',
         content: 'Appelle maintenant l\'outil build_revue avec la revue finale structurée.',
-      }]));
+      }]), revueExtra);
     }
 
     if (action === 'chat') {
@@ -568,6 +634,7 @@ Deno.serve(async (req) => {
 
       const { messages: finalMessages, last, rounds, journal } = await toolLoop({
         admin,
+        model: CHAT_MODEL,
         system: SYSTEM_PROMPT,
         initialMessages,
       });
@@ -579,7 +646,7 @@ Deno.serve(async (req) => {
       // Réponse finale garantie : si vide OU limite atteinte, on relance sans outils.
       if (!markdown || rounds >= MAX_TOOL_ROUNDS) {
         try {
-          const forced = await forceFinalText(SYSTEM_PROMPT, finalMessages);
+          const forced = await forceFinalText(CHAT_MODEL, SYSTEM_PROMPT, finalMessages);
           if (forced.text) markdown = forced.text;
           forcedDebug = { stop_reason: forced.stop_reason, block_types: forced.block_types };
         } catch (e: any) {

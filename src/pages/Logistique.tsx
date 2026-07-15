@@ -217,6 +217,7 @@ export default function Logistique() {
               <SelectItem value="all">Origines</SelectItem>
               <SelectItem value="ASIE">ASIE</SelectItem>
               <SelectItem value="US">US</SelectItem>
+              <SelectItem value="EUROPE">EUROPE</SelectItem>
             </SelectContent>
           </Select>
           <Select value={fournisseurFilter} onValueChange={setFournisseurFilter}>

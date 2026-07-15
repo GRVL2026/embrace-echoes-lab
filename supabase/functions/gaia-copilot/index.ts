@@ -359,35 +359,40 @@ function extractText(content: any[]): string {
  */
 async function toolLoop(params: {
   admin: any;
+  model: string;
   system: string;
   initialMessages: Array<{ role: 'user' | 'assistant'; content: any }>;
   extraTools?: any[];
   toolChoice?: any;
+  extraPayload?: Record<string, unknown>;
 }): Promise<{
   messages: Array<{ role: 'user' | 'assistant'; content: any }>;
   last: any;
   rounds: number;
   journal: TurnLog[];
 }> {
-  const { admin, system, initialMessages, extraTools = [], toolChoice } = params;
+  const { admin, model, system, initialMessages, extraTools = [], toolChoice, extraPayload } = params;
   const tools = [SQL_TOOL, ...extraTools];
   const messages = [...initialMessages];
   const journal: TurnLog[] = [];
 
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
     const isLastRound = round === MAX_TOOL_ROUNDS;
+    const sys = isLastRound
+      ? `${system}\n\nTu as atteint la limite de ${MAX_TOOL_ROUNDS} appels à executer_sql. Réponds maintenant avec les informations dont tu disposes.`
+      : system;
     const payload: Record<string, unknown> = {
-      model: ANTHROPIC_MODEL,
+      model,
       max_tokens: MAX_TOKENS_PER_TURN,
-      system: isLastRound
-        ? `${system}\n\nTu as atteint la limite de ${MAX_TOOL_ROUNDS} appels à executer_sql. Réponds maintenant avec les informations dont tu disposes.`
-        : system,
-      messages,
+      system: systemBlocks(sys),
+      messages: withCacheOnLastMessage(messages),
       tools: isLastRound ? extraTools : tools,
+      ...(extraPayload ?? {}),
     };
     if (toolChoice) payload.tool_choice = toolChoice;
 
     const resp = await anthropicCall(payload);
+    logUsage(`round=${round}`, resp?.usage);
     const content = Array.isArray(resp?.content) ? resp.content : [];
     const sqlCalls = content.filter((b: any) => b?.type === 'tool_use' && b?.name === 'executer_sql');
     const blockTypes = content.map((b: any) => b?.type ?? 'unknown');
@@ -432,6 +437,7 @@ async function toolLoop(params: {
  * Dernier recours : appel Anthropic SANS outils pour forcer une réponse texte.
  */
 async function forceFinalText(
+  model: string,
   system: string,
   messages: Array<{ role: 'user' | 'assistant'; content: any }>,
 ): Promise<{ text: string; stop_reason: string | null; block_types: string[] }> {
@@ -440,11 +446,12 @@ async function forceFinalText(
     content: 'Donne maintenant ta réponse finale à partir des résultats déjà obtenus.',
   }];
   const resp = await anthropicCall({
-    model: ANTHROPIC_MODEL,
+    model,
     max_tokens: MAX_TOKENS_PER_TURN,
-    system,
-    messages: forced,
+    system: systemBlocks(system),
+    messages: withCacheOnLastMessage(forced),
   });
+  logUsage('forceFinalText', resp?.usage);
   const content = Array.isArray(resp?.content) ? resp.content : [];
   const blockTypes = content.map((b: any) => b?.type ?? 'unknown');
   console.log(`[gaia-copilot] forceFinalText stop_reason=${resp?.stop_reason} blocks=${JSON.stringify(blockTypes)}`);
@@ -453,18 +460,24 @@ async function forceFinalText(
 
 
 /** Stream final Anthropic call (SSE passthrough) — utilisé pour la revue afin de conserver l'API SSE côté client. */
-async function streamFinalRevue(system: string, messages: Array<{ role: 'user' | 'assistant'; content: any }>) {
+async function streamFinalRevue(
+  model: string,
+  system: string,
+  messages: Array<{ role: 'user' | 'assistant'; content: any }>,
+  extraPayload?: Record<string, unknown>,
+) {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY manquant');
 
   const payload = {
-    model: ANTHROPIC_MODEL,
+    model,
     max_tokens: 16000,
     stream: true,
-    system,
-    messages,
+    system: systemBlocks(system),
+    messages: withCacheOnLastMessage(messages),
     tools: [REVUE_TOOL],
     tool_choice: { type: 'tool', name: 'build_revue' },
+    ...(extraPayload ?? {}),
   };
   const payloadStr = JSON.stringify(payload);
   const inputChars = payloadStr.length;

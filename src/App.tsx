@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import SpacePlanner from "./pages/SpacePlanner";
 import Hub from "./pages/Hub";
+import Logistique from "./pages/Logistique";
 import Catalogue from "./pages/Catalogue";
 import DossiersList from "./pages/DossiersList";
 import DossierEdit from "./pages/DossierEdit";

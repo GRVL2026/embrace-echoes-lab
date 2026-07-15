@@ -1330,43 +1330,71 @@ export default function DossierEdit() {
                     </thead>
                     <tbody>
                       {selectedProducts.map((p, i) => {
-                        const cat = catalog.find((c) => c.id === p.product_id);
+                        const cat = p.product_id ? catalog.find((c) => c.id === p.product_id) : undefined;
+                        const isErpOnly = !p.product_id;
                         const img = cat?.images?.[0] ?? null;
-                        const href = productFicheUrl({ product_url: cat?.product_url ?? null, name: p.name });
+                        const href = !isErpOnly
+                          ? productFicheUrl({ product_url: cat?.product_url ?? null, name: p.name })
+                          : null;
+                        const rowKey = (p.product_id ?? p.cegid_code ?? "line") + "-" + i;
                         return (
-                        <tr key={p.product_id + i} className="border-t border-border/60">
+                        <tr key={rowKey} className="border-t border-border/60">
                           <td className="px-3 py-2">
-                            <a
-                              href={href}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex h-14 w-20 items-center justify-center overflow-hidden rounded border border-border/60 bg-white p-1"
-                              aria-label={`Fiche ${p.name}`}
-                            >
-                              {img ? (
-                                <img src={img} alt={p.name} className="max-h-full max-w-full object-contain" loading="lazy" />
-                              ) : (
-                                <div className="text-[9px] leading-tight text-muted-foreground text-center px-1">
-                                  visuel indisponible
-                                </div>
-                              )}
-                            </a>
+                            {href ? (
+                              <a
+                                href={href}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex h-14 w-20 items-center justify-center overflow-hidden rounded border border-border/60 bg-white p-1"
+                                aria-label={`Fiche ${p.name}`}
+                              >
+                                {img ? (
+                                  <img src={img} alt={p.name} className="max-h-full max-w-full object-contain" loading="lazy" />
+                                ) : (
+                                  <div className="text-[9px] leading-tight text-muted-foreground text-center px-1">
+                                    visuel indisponible
+                                  </div>
+                                )}
+                              </a>
+                            ) : (
+                              <div
+                                className="flex h-14 w-20 items-center justify-center overflow-hidden rounded border border-dashed border-border/60 bg-muted/40"
+                                aria-label={p.name}
+                              >
+                                <Boxes className="h-6 w-6 text-muted-foreground/70" strokeWidth={1.3} />
+                              </div>
+                            )}
                           </td>
                           <td className="px-3 py-2">
-                            <a
-                              href={href}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="font-medium text-foreground underline-offset-2 hover:text-primary hover:underline"
-                            >
-                              {p.name}
-                            </a>
-                            {cat?.vendor || cat?.category ? (
+                            {href ? (
+                              <a
+                                href={href}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-medium text-foreground underline-offset-2 hover:text-primary hover:underline"
+                              >
+                                {p.name}
+                              </a>
+                            ) : (
+                              <span className="font-medium text-foreground">{p.name}</span>
+                            )}
+                            {isErpOnly ? (
+                              <div className="mt-0.5 flex items-center gap-1.5">
+                                <span className="inline-flex items-center rounded border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                                  ERP
+                                </span>
+                                {p.cegid_code ? (
+                                  <span className="font-mono text-[10px] text-muted-foreground">
+                                    {p.cegid_code}
+                                  </span>
+                                ) : null}
+                              </div>
+                            ) : cat?.vendor || cat?.category ? (
                               <div className="text-xs text-muted-foreground">
                                 {[cat?.vendor, cat?.category].filter(Boolean).join(" · ")}
                               </div>
                             ) : null}
-                            {!isRecurring ? (
+                            {!isRecurring && !isErpOnly ? (
                               cat?.price_erp_ht != null ? (
                                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
                                   <span className="inline-flex items-center rounded bg-primary/15 border border-primary/40 px-1.5 py-0.5 text-[10px] font-medium text-primary">

@@ -587,7 +587,7 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: false, error: `Unknown action: ${action}` }, 400);
 
   } catch (e: any) {
-    const status = Number.isInteger(e?.status) && e.status >= 400 && e.status <= 599 ? e.status : 500;
-    return jsonResponse({ ok: false, error: e?.message ?? String(e) }, status);
+    console.log(`[gaia-copilot] fatal error: ${e?.message ?? e}`);
+    return jsonResponse({ ok: false, error: e?.message ?? String(e) }, 200);
   }
 });

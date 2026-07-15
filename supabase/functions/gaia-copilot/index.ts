@@ -733,30 +733,47 @@ Deno.serve(async (req) => {
     const data = await loadData(admin);
     const dataJson = JSON.stringify(data);
 
+    // Mémoire persistante — bloc dynamique (non caché) injecté après le préfixe stable.
+    const memos = await loadMemories(admin);
+    const memorySuffix = formatMemories(memos);
+    console.log(`[gaia-copilot] memoires actives=${memos.length}`);
+
+    const SUIVI_INSTRUCTION = `CONSIGNE DE SUIVI : quand une conversation aboutit à une action décidée (relance, plan client, décision), appelle immédiatement l'outil "memoriser" (catégorie 'suivi' ou 'plan') pour la consigner. Une action non mémorisée sera perdue.`;
+
     if (action === 'revue') {
+      const suivis = memos.filter((m) => m.categorie === 'suivi');
+      const suivisBlock = suivis.length
+        ? `\n\nSUIVIS EN MÉMOIRE À CONTRÔLER (${suivis.length}) :\n${suivis.map((s) => `  • [${s.id}] ${s.contenu}`).join('\n')}\n\nAvant de rédiger la revue, vérifie chacun de ces suivis via executer_sql (le devis a-t-il été relancé et vu ? le client dormant a-t-il repassé commande ? etc.) et signale explicitement dans la revue (section risques ou actions) ceux restés SANS EFFET visible dans les données. Pour ceux qui sont clairement clos ou obsolètes, appelle "oublier" avec leur id.`
+        : `\n\nAucun suivi actif en mémoire pour l'instant.`;
+
       const initialMessages = [{
         role: 'user' as const,
-        content: `Voici les données commerciales agrégées (JSON) :\n\n\`\`\`json\n${dataJson}\n\`\`\`\n\nProduis la revue commerciale du mois via l'outil build_revue.\n- santé globale : CA à période égale N/N-1/N-2 + évolution en % ; tendance mensuelle en % vs N-1 pour chaque mois disponible ; commentaire 2 phrases max.\n- mouvements : familles et clients qui montent/descendent (top mouvements chiffrés) ;\n- risques (marge, dépendance client, stock, cash, calendrier) avec gravité ;\n- TOP 5 actions priorisées par impact euros (relances devis nominatives, clients dormants à réactiver, stock à écouler). Chaque champ texte : 1-2 phrases max, ton direct.\n\nAvant d'appeler build_revue, utilise executer_sql autant de fois que nécessaire pour vérifier/enrichir tes chiffres.`,
+        content: `Voici les données commerciales agrégées (JSON) :\n\n\`\`\`json\n${dataJson}\n\`\`\`\n\nProduis la revue commerciale du mois via l'outil build_revue.\n- santé globale : CA à période égale N/N-1/N-2 + évolution en % ; tendance mensuelle en % vs N-1 pour chaque mois disponible ; commentaire 2 phrases max.\n- mouvements : familles et clients qui montent/descendent (top mouvements chiffrés) ;\n- risques (marge, dépendance client, stock, cash, calendrier) avec gravité ;\n- TOP 5 actions priorisées par impact euros (relances devis nominatives, clients dormants à réactiver, stock à écouler). Chaque champ texte : 1-2 phrases max, ton direct.${suivisBlock}\n\nAvant d'appeler build_revue, utilise executer_sql autant de fois que nécessaire pour vérifier/enrichir tes chiffres, et "memoriser" pour consigner les nouvelles décisions/plans que la revue implique.`,
       }];
-      const revueSystem = `${SYSTEM_PROMPT}\n\nTu peux utiliser executer_sql pour vérifier des chiffres avant de construire la revue. Ta réponse FINALE doit être un unique appel à l'outil build_revue avec des données structurées, sans texte libre.`;
+      const revueSystem = `${SYSTEM_PROMPT}\n\n${SUIVI_INSTRUCTION}\n\nTu peux utiliser executer_sql pour vérifier des chiffres, "memoriser"/"oublier" pour gérer la mémoire, avant de construire la revue. Ta réponse FINALE doit être un unique appel à l'outil build_revue avec des données structurées, sans texte libre.`;
 
-      // Boucle SQL non-streamée (autorise seulement executer_sql à ce stade)
+      // Boucle SQL non-streamée
       const revueExtra = { output_config: { effort: 'xhigh' } };
       const { messages: agenticMessages } = await toolLoop({
         admin,
         model: REVUE_MODEL,
         system: revueSystem,
+        dynamicSuffix: memorySuffix,
         initialMessages,
         extraTools: [],
         extraPayload: revueExtra,
       });
 
-      // Retire le dernier assistant (produit après épuisement des SQL) pour que le dernier tour final relance proprement le modèle en le forçant sur build_revue.
-      // On garde tout l'historique tel quel : le modèle voit ses propres constats et les tool_result SQL.
-      return await streamFinalRevue(REVUE_MODEL, revueSystem, agenticMessages.concat([{
-        role: 'user',
-        content: 'Appelle maintenant l\'outil build_revue avec la revue finale structurée.',
-      }]), revueExtra);
+      return await streamFinalRevue(
+        REVUE_MODEL,
+        revueSystem,
+        agenticMessages.concat([{
+          role: 'user',
+          content: 'Appelle maintenant l\'outil build_revue avec la revue finale structurée.',
+        }]),
+        revueExtra,
+        memorySuffix,
+      );
     }
 
     if (action === 'chat') {
@@ -773,15 +790,17 @@ Deno.serve(async (req) => {
       const contextMsg = `Voici les données commerciales agrégées (JSON) à utiliser pour répondre :\n\n\`\`\`json\n${dataJson}\n\`\`\``;
       const initialMessages: Array<{ role: 'user' | 'assistant'; content: any }> = [
         { role: 'user', content: contextMsg },
-        { role: 'assistant', content: 'Données reçues. Je réponds en m\'appuyant sur ces chiffres et j\'appellerai executer_sql si un détail me manque.' },
+        { role: 'assistant', content: 'Données reçues. Je réponds en m\'appuyant sur ces chiffres, sur ma mémoire persistante, et j\'appellerai executer_sql / memoriser / oublier au besoin.' },
         ...cleanHistory,
         { role: 'user', content: question },
       ];
 
+      const chatSystem = `${SYSTEM_PROMPT}\n\n${SUIVI_INSTRUCTION}`;
       const { messages: finalMessages, last, rounds, journal } = await toolLoop({
         admin,
         model: CHAT_MODEL,
-        system: SYSTEM_PROMPT,
+        system: chatSystem,
+        dynamicSuffix: memorySuffix,
         initialMessages,
       });
 
@@ -792,7 +811,7 @@ Deno.serve(async (req) => {
       // Réponse finale garantie : si vide OU limite atteinte, on relance sans outils.
       if (!markdown || rounds >= MAX_TOOL_ROUNDS) {
         try {
-          const forced = await forceFinalText(CHAT_MODEL, SYSTEM_PROMPT, finalMessages);
+          const forced = await forceFinalText(CHAT_MODEL, chatSystem, finalMessages, memorySuffix);
           if (forced.text) markdown = forced.text;
           forcedDebug = { stop_reason: forced.stop_reason, block_types: forced.block_types };
         } catch (e: any) {

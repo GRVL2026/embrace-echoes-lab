@@ -693,3 +693,76 @@ function QuickCard({
     </div>
   );
 }
+
+function FeedbackControls({
+  current,
+  onSubmit,
+}: {
+  current: 1 | -1 | null;
+  onSubmit: (note: 1 | -1, commentaire?: string) => void;
+}) {
+  const [showComment, setShowComment] = useState(false);
+  const [comment, setComment] = useState("");
+
+  if (current === 1) {
+    return (
+      <div className="mt-3 flex items-center gap-1 border-t border-border/40 pt-2 text-xs text-muted-foreground">
+        <ThumbsUp className="h-3 w-3 text-primary" /> Merci pour votre retour.
+      </div>
+    );
+  }
+  if (current === -1) {
+    return (
+      <div className="mt-3 flex items-center gap-1 border-t border-border/40 pt-2 text-xs text-muted-foreground">
+        <ThumbsDown className="h-3 w-3 text-destructive" /> Retour enregistré.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 space-y-2 border-t border-border/40 pt-2">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span>Cette réponse est-elle utile&nbsp;?</span>
+        <button
+          type="button"
+          onClick={() => onSubmit(1)}
+          className="rounded p-1 hover:bg-primary/10 hover:text-primary"
+          aria-label="Utile"
+        >
+          <ThumbsUp className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowComment(true)}
+          className="rounded p-1 hover:bg-destructive/10 hover:text-destructive"
+          aria-label="Pas utile"
+        >
+          <ThumbsDown className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      {showComment && (
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder="Qu'est-ce qui n'allait pas ?"
+            className="min-h-[52px] flex-1 resize-none text-xs"
+          />
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowComment(false)}
+            >
+              Annuler
+            </Button>
+            <Button size="sm" onClick={() => onSubmit(-1, comment.trim() || undefined)}>
+              Envoyer
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+

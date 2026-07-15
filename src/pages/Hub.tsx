@@ -27,9 +27,10 @@ const CARDS: EnvCard[] = [
   {
     key: "logistique",
     title: "Logistique",
-    description: "Suivi des flux, stocks et expéditions. Bientôt disponible.",
+    description: "Suivi des expéditions fournisseurs : flippers Stern (US), jeux Asie, dates, coûts, documents.",
     Icon: Truck,
-    available: false,
+    to: "/logistique",
+    available: true,
   },
   {
     key: "sav",

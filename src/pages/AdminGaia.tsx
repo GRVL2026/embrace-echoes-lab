@@ -354,28 +354,34 @@ export default function AdminGaia() {
               Diagnostic de connexion aux flux OData Cegid XRP Flex.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={runDiscover} disabled={running || syncing}>
-              {running ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Test en cours…
-                </>
-              ) : (
-                <>Tester la connexion Cegid</>
-              )}
-            </Button>
-            <Button onClick={runSync} disabled={running || syncing}>
-              {syncing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Synchronisation… (1-2 min)
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4" /> Synchroniser les données
-                </>
-              )}
-            </Button>
-          </div>
+          {isAdmin ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" onClick={runDiscover} disabled={running || syncing}>
+                {running ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Test en cours…
+                  </>
+                ) : (
+                  <>Tester la connexion Cegid</>
+                )}
+              </Button>
+              <Button onClick={runSync} disabled={running || syncing}>
+                {syncing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Synchronisation… (1-2 min)
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" /> Synchroniser les données
+                  </>
+                )}
+              </Button>
+            </div>
+          ) : (
+            <div className="text-xs text-muted-foreground italic">
+              Lecture seule — les synchronisations sont réservées aux administrateurs.
+            </div>
+          )}
         </div>
 
         {/* Résumé des dernières synchros par flux */}
@@ -441,16 +447,18 @@ export default function AdminGaia() {
                         {status === "running" && <span className="text-primary">Synchronisation en cours… {p?.rows ? `· ${p.rows} lignes` : ""}</span>}
                         {status === "done" && p?.ok && <span className="text-secondary">OK · {p.rows} lignes</span>}
                         {status === "done" && p && !p.ok && <span className="text-destructive">{p.error ?? "Erreur"}</span>}
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-7 px-2 text-xs"
-                          onClick={() => retryFeed(feed)}
-                          disabled={syncing || running || status === "running"}
-                        >
-                          <RefreshCw className="mr-1 h-3 w-3" /> Relancer
-                        </Button>
+                        {isAdmin && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => retryFeed(feed)}
+                            disabled={syncing || running || status === "running"}
+                          >
+                            <RefreshCw className="mr-1 h-3 w-3" /> Relancer
+                          </Button>
+                        )}
                       </div>
                     </div>
                     {status === "done" && p && !p.ok && (p.http_status || p.response_body) && (

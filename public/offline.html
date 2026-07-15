@@ -21,5 +21,12 @@
       <p>Cette application a besoin d'une connexion internet pour charger vos dossiers. Vérifiez votre réseau puis réessayez.</p>
       <button onclick="location.reload()">Réessayer</button>
     </main>
+    <script>
+      window.addEventListener("online", function () { location.reload(); });
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState === "visible" && navigator.onLine) location.reload();
+      });
+    </script>
   </body>
 </html>
+

@@ -354,6 +354,9 @@ async function buildStats(period: PeriodKey) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  const gate = await requireRole(req, ['admin', 'direction']);
+  if (!gate.ok) return gate.response;
+
   try {
     if (!SHOP || !CLIENT_ID || !CLIENT_SECRET) {
       return new Response(

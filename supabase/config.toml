@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.shopify-stats]
 verify_jwt = false
+
+[functions.zendesk-stats]
+verify_jwt = false

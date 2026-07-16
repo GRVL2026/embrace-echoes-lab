@@ -43,14 +43,16 @@ const CARDS: EnvCard[] = [
   {
     key: "sav",
     title: "SAV",
-    description: "Tickets, interventions et pièces détachées. Bientôt disponible.",
+    description: "Tickets, interventions et pièces détachées — piloté par Zendesk.",
     Icon: Wrench,
-    available: false,
+    to: "/sav",
+    available: true,
   },
 ];
 
 export default function Hub() {
-  const { isAdmin, isLoading } = useAuth();
+  const { isAdmin, canAccessGaia, isLoading } = useAuth();
+  const visibleCards = CARDS.filter((c) => c.key !== "sav" || canAccessGaia);
 
   if (isLoading) {
     return (

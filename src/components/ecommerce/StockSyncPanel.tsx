@@ -65,6 +65,7 @@ export default function StockSyncPanel() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [logs, setLogs] = useState<LogRow[]>([]);
   const [applyResult, setApplyResult] = useState<any[] | null>(null);
+  const [applyEnabled, setApplyEnabled] = useState<boolean>(false);
 
   const loadLogs = async () => {
     const { data } = await supabase
@@ -75,7 +76,17 @@ export default function StockSyncPanel() {
     setLogs((data as LogRow[]) || []);
   };
 
-  useEffect(() => { loadLogs(); }, []);
+  const loadApplyFlag = async () => {
+    const { data } = await supabase
+      .from("gaia_config")
+      .select("value")
+      .eq("key", "stock_sync_apply_enabled")
+      .maybeSingle();
+    setApplyEnabled(String((data as any)?.value ?? "false").toLowerCase() === "true");
+  };
+
+  useEffect(() => { loadLogs(); loadApplyFlag(); }, []);
+
 
   const analyze = async () => {
     setLoading(true);

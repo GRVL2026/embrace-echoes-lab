@@ -3,8 +3,7 @@ import { Trash2, Upload, Loader2, FileImage, FileText, FileUp, Home, Wallet } fr
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
-import { useRef, useState, useEffect, useMemo } from "react";
-import { useAutoSave, loadSession } from "@/hooks/useAutoSave";
+import { useRef, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { Door } from "@/types/editor";

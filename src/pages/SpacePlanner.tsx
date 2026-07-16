@@ -9,24 +9,24 @@ import { CopilotPanel } from "@/components/copilot/CopilotPanel";
 import { useCopilotActions } from "@/hooks/useCopilotActions";
 import type { RoomContext } from "@/lib/copilotApi";
 import { SAFETY_ZONE_CM } from "@/types/editor";
-import { PanelRightClose, PanelRightOpen, Box, LayoutGrid, Sparkles, FolderKanban, Save, Loader2 } from "lucide-react";
+import { PanelRightClose, PanelRightOpen, Box, LayoutGrid, Sparkles, Check, Loader2, CircleDot, FolderKanban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fitToView } from "@/lib/fitToView";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import logoImg from "@/assets/logo.png";
-import { UserMenu } from "@/components/UserMenu";
+import { AppHeader } from "@/components/AppHeader";
+import { useAutoSave, loadSession } from "@/hooks/useAutoSave";
+import { ProjectMenu } from "@/components/editor/ProjectMenu";
+import type { GameEquipment } from "@/types/equipment";
 import {
   buildInitialQuantities,
   mergeSelectedProductsFromPlan,
-  
   type CatalogRow,
   type SelectedProduct,
 } from "@/lib/dossierPlanSync";
 import { PlannerBootstrapProvider } from "@/contexts/PlannerBootstrap";
-
 
 function SpacePlannerInner() {
   const { dossierId } = useParams<{ dossierId?: string }>();
@@ -37,16 +37,51 @@ function SpacePlannerInner() {
   const [viewer3DSettings, setViewer3DSettings] = useState<Viewer3DSettings>(DEFAULT_3D_SETTINGS);
   const [savingToDossier, setSavingToDossier] = useState(false);
   const [initialQuantities, setInitialQuantities] = useState<Map<string, number> | null>(null);
+  const [dossierName, setDossierName] = useState<string | null>(null);
+  const [catalog, setCatalog] = useState<GameEquipment[]>([]);
+  const [dirty, setDirty] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const { state, dispatch } = useEditor();
 
-  // Load plan_data + dossier selection when opened for a specific dossier
+  // Autosave to localStorage (existing behavior).
+  useAutoSave(state, catalog);
+
+  // Restore local session on first mount (only when no dossier route).
   useEffect(() => {
-    if (!dossierId) return;
+    if (dossierId) return;
+    const session = loadSession();
+    if (!session) return;
+    dispatch({
+      type: "LOAD_STATE",
+      state: {
+        rooms: session.plan.rooms,
+        doors: session.plan.doors,
+        pillars: session.plan.pillars,
+        placedEquipments: session.plan.placedEquipments,
+        gridSize: session.plan.gridSize,
+        circulationPath: session.plan.circulationPath || [],
+      },
+    });
+    if (session.catalog.length > 0) setCatalog(session.catalog);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Track dirty state.
+  useEffect(() => {
+    setDirty(true);
+  }, [state.rooms, state.doors, state.pillars, state.placedEquipments, state.circulationPath]);
+
+  // Load plan_data + dossier name when opened for a specific dossier.
+  useEffect(() => {
+    if (!dossierId) {
+      setDossierName(null);
+      return;
+    }
     (async () => {
       const [{ data, error }, { data: catRows }] = await Promise.all([
         (supabase as any)
           .from("projects")
-          .select("plan_data, selected_products, offer")
+          .select("plan_data, selected_products, offer, client_name")
           .eq("id", dossierId)
           .maybeSingle(),
         (supabase as any)
@@ -58,6 +93,7 @@ function SpacePlannerInner() {
         toast({ title: "Impossible de charger le plan", description: error.message, variant: "destructive" });
         return;
       }
+      setDossierName((data?.client_name as string | null) ?? "Dossier sans nom");
       const pd = data?.plan_data;
       if (pd && typeof pd === "object") {
         dispatch({
@@ -72,8 +108,10 @@ function SpacePlannerInner() {
             planRotation: pd.planRotation ?? 0,
           },
         });
+        setLastSavedAt(new Date());
+        // Reset dirty after the LOAD dispatch is committed.
+        setTimeout(() => setDirty(false), 0);
       }
-      // Pré-charge la sélection catalogue avec les jeux plaçables du dossier.
       const selected = Array.isArray(data?.selected_products)
         ? (data!.selected_products as SelectedProduct[])
         : [];
@@ -95,10 +133,6 @@ function SpacePlannerInner() {
       gridSize: state.gridSize,
       planRotation: state.planRotation,
     };
-
-    // On récupère l'état actuel du dossier (selected_products + offer) pour
-    // faire un merge cohérent (le dossier est un sur-ensemble du plan et ne
-    // doit jamais perdre ses articles non plaçables).
     const { data: projRow, error: readErr } = await (supabase as any)
       .from("projects")
       .select("selected_products, offer")
@@ -124,41 +158,31 @@ function SpacePlannerInner() {
       (catRows as CatalogRow[]) ?? [],
       offer,
     );
-    // On ne met à jour QUE plan_data + selected_products. Aucun autre champ
-    // (context, solution, scope, pricing, selected_modules, infos client) n'est
-    // touché.
     const { error } = await (supabase as any)
       .from("projects")
-      .update({
-        plan_data: payload,
-        selected_products: mergedSelected,
-      })
+      .update({ plan_data: payload, selected_products: mergedSelected })
       .eq("id", dossierId);
     setSavingToDossier(false);
     if (error) {
       toast({ title: "Enregistrement impossible", description: error.message, variant: "destructive" });
       return;
     }
+    setDirty(false);
+    setLastSavedAt(new Date());
     toast({ title: "Plan enregistré dans le dossier" });
-    navigate(`/dossiers/${dossierId}`);
-  }, [dossierId, state, navigate]);
+  }, [dossierId, state]);
 
-
-  // Build room context for the copilot
   const roomContext = useMemo<RoomContext | undefined>(() => {
     const room = state.rooms[0];
     if (!room || room.points.length < 3) return undefined;
-
     const xs = room.points.map((p) => p.x);
     const ys = room.points.map((p) => p.y);
     const minX = Math.min(...xs), maxX = Math.max(...xs);
     const minY = Math.min(...ys), maxY = Math.max(...ys);
-
     const walls = room.points.map((p, i) => {
       const next = room.points[(i + 1) % room.points.length];
       return { start: { x: p.x, y: p.y }, end: { x: next.x, y: next.y } };
     });
-
     const doors = state.doors.map((d) => {
       const wall = walls[d.edgeIndex];
       if (!wall) return { position: { x: 0, y: 0 }, width: d.width, isMain: d.isMainDoor };
@@ -166,15 +190,10 @@ function SpacePlannerInner() {
       const py = wall.start.y + (wall.end.y - wall.start.y) * d.positionRatio;
       return { position: { x: px, y: py }, width: d.width, isMain: d.isMainDoor };
     });
-
     return {
       walls,
       doors,
-      pillars: state.pillars.map((p) => ({
-        position: p.position,
-        width: p.width,
-        depth: p.depth,
-      })),
+      pillars: state.pillars.map((p) => ({ position: p.position, width: p.width, depth: p.depth })),
       floor_points: room.points,
       room_width_cm: maxX - minX,
       room_depth_cm: maxY - minY,
@@ -192,19 +211,15 @@ function SpacePlannerInner() {
 
   const { executeActions } = useCopilotActions({
     currentAmbiance: viewer3DSettings.ambiance,
-    onAmbianceChange: (ambiance) =>
-      setViewer3DSettings((s) => ({ ...s, ambiance })),
-    onLightingChange: (preset) =>
-      setViewer3DSettings((s) => ({ ...s, lighting: preset })),
-    onAddEquipment: (equipment) =>
-      dispatch({ type: "ADD_PLACED_EQUIPMENT", equipment }),
+    onAmbianceChange: (ambiance) => setViewer3DSettings((s) => ({ ...s, ambiance })),
+    onLightingChange: (preset) => setViewer3DSettings((s) => ({ ...s, lighting: preset })),
+    onAddEquipment: (equipment) => dispatch({ type: "ADD_PLACED_EQUIPMENT", equipment }),
     roomContext,
   });
 
   const toggleSidebar = useCallback(() => {
     const nextOpen = !sidebarOpen;
     setSidebarOpen(nextOpen);
-    // Refit after DOM updates with new sidebar width
     requestAnimationFrame(() => {
       const sidebarWidth = nextOpen ? 288 : 0;
       const result = fitToView(state, sidebarWidth);
@@ -215,124 +230,81 @@ function SpacePlannerInner() {
     });
   }, [sidebarOpen, state, dispatch]);
 
+  const currentName = dossierId ? (dossierName ?? "Dossier") : "Plan sans dossier";
+  const savedLabel = dirty
+    ? "Modifications non enregistrées"
+    : lastSavedAt
+      ? `Enregistré à ${lastSavedAt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`
+      : "Non enregistré";
+
   return (
     <PlannerBootstrapProvider value={{ initialQuantities }}>
-    <div className="flex h-screen w-screen overflow-hidden bg-background">
-      {/* Left toolbar - switches based on view mode */}
-      <div className="relative z-20 flex flex-col items-center justify-center p-2">
-        {viewMode === "2d" ? (
-          <EditorToolbar />
-        ) : (
-          <Viewer3DToolbar
-            settings={viewer3DSettings}
-            onChange={setViewer3DSettings}
-            onAddEquipment={(eq) => dispatch({ type: "ADD_PLACED_EQUIPMENT", equipment: eq })}
-          />
-        )}
-      </div>
+      <div className="flex h-screen w-screen flex-col overflow-hidden bg-background">
+        <AppHeader />
 
-      {/* Canvas area */}
-      <div className="flex flex-1 flex-col">
-        {/* Top bar */}
-        <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-6">
-          <div className="flex items-center gap-3">
-            <img src={logoImg} alt="Arcade Planner logo" className="h-7 w-auto object-contain" />
-            <h1 className="font-display text-xl font-bold tracking-tight">
-              <span className="text-primary text-glow-purple">Arcade</span>{" "}
-              <span className="text-secondary text-glow-green">Planner</span>
-            </h1>
-            <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
-              Beta
-            </span>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground font-display">
-            <span>Avranches Automatic</span>
-            <span className="text-primary">•</span>
-            <span>Simulateur de salle</span>
-
+        {/* Planner-specific slim toolbar */}
+        <div className="flex h-11 items-center justify-between border-b border-border bg-card/40 backdrop-blur-sm px-3 gap-3 flex-shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
             {/* 2D / 3D toggle */}
-            <div className="flex items-center ml-3 rounded-md border border-border bg-muted/50 p-0.5">
-              <Tooltip delayDuration={200}>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={viewMode === "2d" ? "default" : "ghost"}
-                    size="sm"
-                    className="h-7 px-2 text-xs gap-1"
-                    onClick={() => setViewMode("2d")}
-                  >
-                    <LayoutGrid className="h-3.5 w-3.5" />
-                    2D
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Vue plan 2D</TooltipContent>
-              </Tooltip>
-              <Tooltip delayDuration={200}>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={viewMode === "3d" ? "default" : "ghost"}
-                    size="sm"
-                    className="h-7 px-2 text-xs gap-1"
-                    onClick={() => setViewMode("3d")}
-                  >
-                    <Box className="h-3.5 w-3.5" />
-                    3D
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Vue 3D immersive</TooltipContent>
-              </Tooltip>
+            <div className="flex items-center rounded-md border border-border bg-muted/50 p-0.5">
+              <Button
+                variant={viewMode === "2d" ? "default" : "ghost"}
+                size="sm"
+                className="h-7 px-2 text-xs gap-1"
+                onClick={() => setViewMode("2d")}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                2D
+              </Button>
+              <Button
+                variant={viewMode === "3d" ? "default" : "ghost"}
+                size="sm"
+                className="h-7 px-2 text-xs gap-1"
+                onClick={() => setViewMode("3d")}
+              >
+                <Box className="h-3.5 w-3.5" />
+                3D
+              </Button>
             </div>
 
-            {dossierId && (
-              <Button
-                variant="default"
-                size="sm"
-                className="h-8 ml-2 gap-1 text-xs"
-                onClick={saveToDossier}
-                disabled={savingToDossier}
-              >
-                {savingToDossier ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Save className="h-3.5 w-3.5" />
-                )}
-                Enregistrer dans le dossier
-              </Button>
-            )}
-
-            <Tooltip delayDuration={200}>
-              <TooltipTrigger asChild>
-                <Button asChild variant="ghost" size="sm" className="h-8 ml-2 gap-1 text-xs">
-                  <Link to="/dossiers">
-                    <FolderKanban className="h-3.5 w-3.5" />
-                    Dossiers
-                  </Link>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Dossiers commerciaux</TooltipContent>
-            </Tooltip>
-
-
-            <Tooltip delayDuration={200}>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 ml-2"
-                  onClick={toggleSidebar}
+            {/* Plan / dossier name + save state */}
+            <div className="flex items-center gap-2 min-w-0">
+              {dossierId ? (
+                <Link
+                  to={`/dossiers/${dossierId}`}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-primary truncate max-w-[240px]"
+                  title={currentName}
                 >
-                  {sidebarOpen ? (
-                    <PanelRightClose className="h-4 w-4" />
-                  ) : (
-                    <PanelRightOpen className="h-4 w-4" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {sidebarOpen ? "Masquer le panneau" : "Afficher le panneau"}
-              </TooltipContent>
-            </Tooltip>
+                  <FolderKanban className="h-3.5 w-3.5 text-primary shrink-0" />
+                  <span className="truncate">{currentName}</span>
+                </Link>
+              ) : (
+                <span className="text-sm text-muted-foreground truncate max-w-[240px]" title={currentName}>
+                  {currentName}
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                {savingToDossier ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : dirty ? (
+                  <CircleDot className="h-3 w-3 text-amber-500" />
+                ) : (
+                  <Check className="h-3 w-3 text-green-500" />
+                )}
+                {savingToDossier ? "Enregistrement…" : savedLabel}
+              </span>
+            </div>
+          </div>
 
-            {/* Copilot toggle */}
+          <div className="flex items-center gap-1">
+            <ProjectMenu
+              catalog={catalog}
+              onLoadCatalog={setCatalog}
+              currentName={currentName}
+              dossierId={dossierId}
+              savingToDossier={savingToDossier}
+              onSaveToDossier={saveToDossier}
+            />
             <Tooltip delayDuration={200}>
               <TooltipTrigger asChild>
                 <Button
@@ -348,37 +320,65 @@ function SpacePlannerInner() {
                 {copilotOpen ? "Fermer Copilot IA" : "Ouvrir Copilot IA"}
               </TooltipContent>
             </Tooltip>
-            <div className="ml-2 pl-2 border-l border-border">
-              <UserMenu />
-            </div>
+            <Tooltip delayDuration={200}>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleSidebar}>
+                  {sidebarOpen ? (
+                    <PanelRightClose className="h-4 w-4" />
+                  ) : (
+                    <PanelRightOpen className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {sidebarOpen ? "Masquer le panneau" : "Afficher le panneau"}
+              </TooltipContent>
+            </Tooltip>
           </div>
-        </header>
+        </div>
 
-        {/* Main view */}
-        {viewMode === "2d" ? (
-          <EditorCanvas />
-        ) : (
-          <Viewer3D
-            settings={viewer3DSettings}
-            onPresetApplied={() =>
-              setViewer3DSettings((s) => ({ ...s, presetView: null }))
-            }
-          />
-        )}
+        {/* Main planner area (fills remaining height) */}
+        <div className="flex flex-1 min-h-0 w-full overflow-hidden">
+          {/* Left tool rail */}
+          <div className="relative z-20 flex flex-col items-center justify-center p-2">
+            {viewMode === "2d" ? (
+              <EditorToolbar />
+            ) : (
+              <Viewer3DToolbar
+                settings={viewer3DSettings}
+                onChange={setViewer3DSettings}
+                onAddEquipment={(eq) => dispatch({ type: "ADD_PLACED_EQUIPMENT", equipment: eq })}
+              />
+            )}
+          </div>
+
+          {/* Canvas */}
+          <div className="flex flex-1 min-w-0 min-h-0 flex-col">
+            {viewMode === "2d" ? (
+              <EditorCanvas />
+            ) : (
+              <Viewer3D
+                settings={viewer3DSettings}
+                onPresetApplied={() => setViewer3DSettings((s) => ({ ...s, presetView: null }))}
+              />
+            )}
+          </div>
+
+          {/* Right sidebar */}
+          {sidebarOpen && !copilotOpen && (
+            <EditorSidebar catalog={catalog} setCatalog={setCatalog} />
+          )}
+
+          {/* Copilot */}
+          {copilotOpen && (
+            <CopilotPanel
+              onActionsReady={executeActions}
+              onClose={() => setCopilotOpen(false)}
+              roomContext={roomContext}
+            />
+          )}
+        </div>
       </div>
-
-      {/* Right sidebar */}
-      {sidebarOpen && !copilotOpen && <EditorSidebar />}
-
-      {/* Copilot panel */}
-      {copilotOpen && (
-        <CopilotPanel
-          onActionsReady={executeActions}
-          onClose={() => setCopilotOpen(false)}
-          roomContext={roomContext}
-        />
-      )}
-    </div>
     </PlannerBootstrapProvider>
   );
 }

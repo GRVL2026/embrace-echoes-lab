@@ -8,7 +8,7 @@ import { UserMenu } from "@/components/UserMenu";
 import { MobileNav } from "@/components/MobileNav";
 import { Loader2, ArrowLeft, Copy, Printer, Link as LinkIcon } from "lucide-react";
 import logoImg from "@/assets/logo.png";
-import { RevueDashboard, revueToText, type RevueData } from "@/components/admin/RevueDashboard";
+import { RevueDashboard, revueToText, isRevueEmpty, type RevueData } from "@/components/admin/RevueDashboard";
 
 type RevueRow = { id: string; titre: string | null; created_at: string; data: RevueData };
 

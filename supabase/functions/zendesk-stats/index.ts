@@ -135,6 +135,57 @@ async function fetchTicket(id: string) {
   };
 }
 
+async function fetchSideConversations(ticketId: string): Promise<any[]> {
+  const listUrl = `/api/v2/tickets/${ticketId}/side_conversations`;
+  let listJson: any;
+  try {
+    listJson = await zd(listUrl);
+  } catch (e: any) {
+    const msg = String(e?.message || e);
+    // Degrade softly if plan doesn't include Side Conversations
+    if (/\b(402|403|404)\b/.test(msg)) return [];
+    throw e;
+  }
+  const scs = listJson.side_conversations ?? [];
+  const results = await Promise.all(
+    scs.map(async (sc: any) => {
+      const scId = sc.id;
+      let events: any[] = [];
+      try {
+        const evJson = await zd(`/api/v2/tickets/${ticketId}/side_conversations/${scId}/events`);
+        events = (evJson.events ?? [])
+          .filter((ev: any) => ev.type === 'message' || ev.message)
+          .map((ev: any) => {
+            const m = ev.message || {};
+            return {
+              id: ev.id,
+              created_at: ev.created_at,
+              author_name: m.from?.name || m.from?.email || 'Fournisseur',
+              author_email: m.from?.email || null,
+              to: (m.to || []).map((t: any) => t?.email || t?.name).filter(Boolean),
+              cc: (m.cc || []).map((t: any) => t?.email || t?.name).filter(Boolean),
+              subject: m.subject || sc.subject || '',
+              body: m.body || m.plain_body || m.html_body || '',
+            };
+          });
+      } catch { /* skip broken event fetch */ }
+      return {
+        id: sc.id,
+        subject: sc.subject || '(sans sujet)',
+        state: sc.state,
+        created_at: sc.created_at,
+        updated_at: sc.updated_at,
+        participants: (sc.participants ?? []).map((p: any) => ({
+          name: p.name || p.email || 'Participant',
+          email: p.email || null,
+        })),
+        events,
+      };
+    }),
+  );
+  return results;
+}
+
 async function proxyAttachment(rawUrl: string): Promise<Response> {
   let url: URL;
   try { url = new URL(rawUrl); }
@@ -142,8 +193,7 @@ async function proxyAttachment(rawUrl: string): Promise<Response> {
   const host = url.hostname.toLowerCase();
   const allowed =
     host === `${SUB}.zendesk.com` ||
-    host.endsWith('.zdusercontent.com') ||
-    host.endsWith('.zendesk.com');
+    host.endsWith('.zdusercontent.com');
   if (!allowed) return new Response('forbidden host', { status: 403, headers: corsHeaders });
 
   const r = await fetch(url.toString(), { headers: { Authorization: authHeader() } });

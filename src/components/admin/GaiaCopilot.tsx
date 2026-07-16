@@ -141,9 +141,16 @@ export function GaiaCopilot() {
   const [chat, setChat] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const assistantRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const stickToBottomRef = useRef(true);
+  const [userId, setUserId] = useState<string | null>(null);
+  const chatHydratedRef = useRef(false);
 
   const [history, setHistory] = useState<SavedRevue[]>([]);
+
+  const storageKey = userId ? `gaia_copilot_chat:${userId}` : null;
 
   const loadHistory = async () => {
     const { data } = await (supabase as any)
@@ -153,6 +160,43 @@ export function GaiaCopilot() {
       .limit(30);
     setHistory((data as SavedRevue[]) ?? []);
   };
+
+  // Récupère l'utilisateur courant + restaure le chat depuis localStorage
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      const uid = data?.user?.id ?? null;
+      setUserId(uid);
+      if (uid) {
+        try {
+          const raw = localStorage.getItem(`gaia_copilot_chat:${uid}`);
+          if (raw) {
+            const parsed = JSON.parse(raw) as ChatMsg[];
+            if (Array.isArray(parsed)) {
+              // Nettoie les éventuels flags de streaming persistés
+              const clean = parsed.map((m) =>
+                m.role === "assistant" ? { ...m, streaming: false } : m,
+              );
+              setChat(clean);
+            }
+          }
+        } catch { /* ignore */ }
+      }
+      chatHydratedRef.current = true;
+    })();
+  }, []);
+
+  // Persiste le chat à chaque changement (après hydratation)
+  useEffect(() => {
+    if (!chatHydratedRef.current || !storageKey) return;
+    try {
+      // On ne persiste pas l'état "streaming"
+      const toSave = chat.map((m) =>
+        m.role === "assistant" ? { ...m, streaming: false } : m,
+      );
+      localStorage.setItem(storageKey, JSON.stringify(toSave));
+    } catch { /* quota, ignore */ }
+  }, [chat, storageKey]);
 
   useEffect(() => {
     (async () => {
@@ -171,9 +215,47 @@ export function GaiaCopilot() {
     })();
   }, []);
 
+  // Détecte si l'utilisateur est en bas du chat pour décider du "stick to bottom"
+  const handleChatScroll = () => {
+    const el = chatScrollRef.current;
+    if (!el) return;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    stickToBottomRef.current = distance < 40;
+  };
+
+  // Pendant le streaming : ne colle au bas QUE si l'utilisateur y est déjà.
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!chatLoading) return;
+    if (!stickToBottomRef.current) return;
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [chat, chatLoading]);
+
+  // Quand une réponse se termine : scroll vers le DÉBUT de la dernière réponse assistant.
+  const prevLoadingRef = useRef(false);
+  useEffect(() => {
+    if (prevLoadingRef.current && !chatLoading) {
+      // La réponse vient de se terminer
+      const idxs = Object.keys(assistantRefs.current)
+        .map((k) => Number(k))
+        .filter((i) => chat[i]?.role === "assistant" && !(chat[i] as any).streaming);
+      const lastIdx = idxs.length ? Math.max(...idxs) : -1;
+      const node = lastIdx >= 0 ? assistantRefs.current[lastIdx] : null;
+      if (node) {
+        node.scrollIntoView({ behavior: "smooth", block: "start" });
+        stickToBottomRef.current = false;
+      }
+    }
+    prevLoadingRef.current = chatLoading;
+  }, [chatLoading, chat]);
+
+  const resetConversation = () => {
+    setChat([]);
+    assistantRefs.current = {};
+    stickToBottomRef.current = true;
+    if (storageKey) {
+      try { localStorage.removeItem(storageKey); } catch { /* ignore */ }
+    }
+  };
 
   const saveRevue = async (data: RevueData) => {
     try {

@@ -1338,6 +1338,48 @@ export type Database = {
         }
         Relationships: []
       }
+      stock_sync_log: {
+        Row: {
+          cegid_code: string | null
+          created_at: string
+          delta: number | null
+          id: string
+          message: string | null
+          product_name: string | null
+          qty_after: number | null
+          qty_before: number | null
+          shopify_variant_id: string | null
+          status: string
+          triggered_by: string | null
+        }
+        Insert: {
+          cegid_code?: string | null
+          created_at?: string
+          delta?: number | null
+          id?: string
+          message?: string | null
+          product_name?: string | null
+          qty_after?: number | null
+          qty_before?: number | null
+          shopify_variant_id?: string | null
+          status: string
+          triggered_by?: string | null
+        }
+        Update: {
+          cegid_code?: string | null
+          created_at?: string
+          delta?: number | null
+          id?: string
+          message?: string | null
+          product_name?: string | null
+          qty_after?: number | null
+          qty_before?: number | null
+          shopify_variant_id?: string | null
+          status?: string
+          triggered_by?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           role: string

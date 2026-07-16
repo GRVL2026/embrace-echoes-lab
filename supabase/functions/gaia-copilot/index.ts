@@ -648,63 +648,29 @@ async function forceFinalText(
   system: string,
   messages: Array<{ role: 'user' | 'assistant'; content: any }>,
   dynamicSuffix?: string,
+  reinforced = false,
 ): Promise<{ text: string; stop_reason: string | null; block_types: string[] }> {
+  const instruction = reinforced
+    ? 'Rédige ta réponse complète en français maintenant, à partir des résultats déjà obtenus. Ne renvoie ni outil ni JSON brut : uniquement une synthèse claire en Markdown.'
+    : 'Donne maintenant ta réponse finale à partir des résultats déjà obtenus. Rédige une synthèse claire en français, en Markdown.';
   const forced = [...messages, {
     role: 'user' as const,
-    content: 'Donne maintenant ta réponse finale à partir des résultats déjà obtenus. Réponds directement, sans réfléchir en interne.',
+    content: instruction,
   }];
   const resp = await anthropicCall({
     model,
     max_tokens: 16000,
-    thinking: { type: 'disabled' },
+    thinking: { type: 'enabled', budget_tokens: 6000 },
     system: systemBlocks(system, dynamicSuffix),
     messages: withCacheOnLastMessage(forced),
   });
-  logUsage('forceFinalText', resp?.usage);
+  logUsage(`forceFinalText${reinforced ? ':retry' : ''}`, resp?.usage);
   const content = Array.isArray(resp?.content) ? resp.content : [];
   const blockTypes = content.map((b: any) => b?.type ?? 'unknown');
-  console.log(`[gaia-copilot] forceFinalText stop_reason=${resp?.stop_reason} blocks=${JSON.stringify(blockTypes)}`);
+  console.log(`[gaia-copilot] forceFinalText${reinforced ? ':retry' : ''} stop_reason=${resp?.stop_reason} blocks=${JSON.stringify(blockTypes)}`);
   return { text: extractText(content), stop_reason: resp?.stop_reason ?? null, block_types: blockTypes };
 }
 
-/**
- * Filet ultime : construit une réponse Markdown de secours à partir des DERNIERS
- * tool_result SQL de l'historique agentique, quand même forceFinalText ne rend rien.
- */
-function fallbackFromLastSqlResults(
-  messages: Array<{ role: 'user' | 'assistant'; content: any }>,
-): string {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i];
-    if (m.role !== 'user' || !Array.isArray(m.content)) continue;
-    const results = m.content.filter((b: any) => b?.type === 'tool_result');
-    if (!results.length) continue;
-
-    const blocks: string[] = [];
-    for (const r of results) {
-      const raw = typeof r.content === 'string' ? r.content : JSON.stringify(r.content);
-      let parsed: any = null;
-      try { parsed = JSON.parse(raw); } catch { parsed = null; }
-      const rows = Array.isArray(parsed?.rows)
-        ? parsed.rows
-        : Array.isArray(parsed) ? parsed : null;
-      if (rows && rows.length) {
-        const preview = rows.slice(0, 50);
-        blocks.push('```json\n' + JSON.stringify(preview, null, 2).slice(0, 8000) + '\n```');
-      } else if (parsed?.error) {
-        blocks.push(`Erreur outil : ${String(parsed.error).slice(0, 500)}`);
-      } else {
-        blocks.push('```\n' + raw.slice(0, 4000) + '\n```');
-      }
-    }
-    if (!blocks.length) continue;
-    return [
-      "⚠️ Je n'ai pas pu rédiger de synthèse (réponse texte vide du modèle). Voici les dernières données brutes récupérées :",
-      ...blocks,
-    ].join('\n\n');
-  }
-  return '';
-}
 
 
 /** Stream final Anthropic call (SSE passthrough) — utilisé pour la revue afin de conserver l'API SSE côté client. */

@@ -54,15 +54,44 @@ export default function AdminVeille() {
 
   const generate = async (type: "quotidien" | "hebdomadaire") => {
     setGenerating(type);
+    toast({
+      title: "Génération en cours",
+      description: "Le rapport peut prendre 1 à 2 minutes. Merci de patienter…",
+    });
     try {
-      const { data, error } = await supabase.functions.invoke("veille-marche", { body: { type } });
-      if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
-      toast({ title: "Rapport généré", description: (data as Rapport).periode });
-      await load();
-      setSelected(data as Rapport);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/veille-marche`;
+      console.log("[veille] POST", url, { type });
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ type }),
+      });
+      const raw = await res.text();
+      console.log("[veille] status", res.status, "body", raw.slice(0, 500));
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status} — ${raw.slice(0, 400)}`);
+      }
+      let parsed: any = null;
+      try { parsed = JSON.parse(raw); } catch { throw new Error(`Réponse non-JSON: ${raw.slice(0, 200)}`); }
+      if (parsed?.error) throw new Error(String(parsed.error));
+      const rapport = parsed as Rapport;
+      setRapports((prev) => [rapport, ...prev.filter((r) => r.id !== rapport.id)]);
+      setSelected(rapport);
+      toast({ title: "Rapport généré", description: rapport.periode });
+      load();
     } catch (e: any) {
-      toast({ title: "Erreur", description: e?.message ?? String(e), variant: "destructive" });
+      console.error("[veille] erreur", e);
+      toast({
+        title: "Erreur de génération",
+        description: e?.message ?? String(e),
+        variant: "destructive",
+      });
     } finally {
       setGenerating(null);
     }

@@ -681,9 +681,7 @@ export function GaiaCopilot() {
                   {/* Blocs de réponse : texte / graphique dans l'ordre */}
                   {m.parts.map((part, j) =>
                     part.type === "text" ? (
-                      <div key={j} className="chat-markdown">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{part.text}</ReactMarkdown>
-                      </div>
+                      <CopiloteMarkdown key={j} markdown={part.text} />
                     ) : (
                       <CopilotChart key={j} payload={part.chart} />
                     )

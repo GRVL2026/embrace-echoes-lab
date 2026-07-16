@@ -184,69 +184,24 @@ export function renderPlan2D(
     ctx.globalAlpha = 1;
   });
 
-  // Circulation path (matches editor: smoothed chains, green corridor, PMR turning zones)
-  if (options.showCirculation && circulation.length > 0) {
-    // Build continuous chains from segments
-    const chains: Point[][] = [];
-    let cur: Point[] = [];
-    for (const seg of circulation) {
-      if (cur.length === 0) {
-        cur.push(seg.start, seg.end);
-      } else {
-        const last = cur[cur.length - 1];
-        const d = Math.hypot(last.x - seg.start.x, last.y - seg.start.y);
-        if (d < 30) cur.push(seg.end);
-        else { chains.push(cur); cur = [seg.start, seg.end]; }
-      }
-    }
-    if (cur.length > 0) chains.push(cur);
-
-    const dedup = (ch: Point[], minD: number) => {
-      const out: Point[] = [];
-      for (const p of ch) {
-        const last = out[out.length - 1];
-        if (!last || Math.hypot(p.x - last.x, p.y - last.y) >= minD) out.push(p);
-      }
-      return out;
-    };
-    const smooth = (ch: Point[], iters: number) => {
-      let pts = ch;
-      for (let k = 0; k < iters; k++) {
-        if (pts.length < 3) break;
-        const next: Point[] = [pts[0]];
-        for (let i = 0; i < pts.length - 1; i++) {
-          const a = pts[i], b = pts[i + 1];
-          next.push({ x: 0.75 * a.x + 0.25 * b.x, y: 0.75 * a.y + 0.25 * b.y });
-          next.push({ x: 0.25 * a.x + 0.75 * b.x, y: 0.25 * a.y + 0.75 * b.y });
-        }
-        next.push(pts[pts.length - 1]);
-        pts = next;
-      }
-      return pts;
-    };
-
+  // Circulation path — uses shared spline (identical to editor + 3D)
+  const chains: Point[][] = options.showCirculation && circulation.length > 0
+    ? segmentsToSmoothChains(circulation, 10)
+    : [];
+  if (options.showCirculation && chains.length > 0) {
     const stdWidth = Math.min(...circulation.map(s => s.width || 120));
     const corridorPx = ts(stdWidth);
 
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
-    for (let ci = 0; ci < chains.length; ci++) {
-      let chain = dedup(chains[ci], 8);
-      chain = smooth(chain, 1);
-      chain = dedup(chain, 3);
-      if (chain.length < 2) continue;
-
+    for (const chain of chains) {
       const tracePath = () => {
         ctx.beginPath();
         ctx.moveTo(tx(chain[0].x), ty(chain[0].y));
-        for (let i = 1; i < chain.length - 1; i++) {
-          const mx = (chain[i].x + chain[i + 1].x) / 2;
-          const my = (chain[i].y + chain[i + 1].y) / 2;
-          ctx.quadraticCurveTo(tx(chain[i].x), ty(chain[i].y), tx(mx), ty(my));
+        for (let i = 1; i < chain.length; i++) {
+          ctx.lineTo(tx(chain[i].x), ty(chain[i].y));
         }
-        const last = chain[chain.length - 1];
-        ctx.lineTo(tx(last.x), ty(last.y));
       };
 
       // Outer corridor — translucent green
@@ -298,9 +253,7 @@ export function renderPlan2D(
 
     // Width label on the central chain
     if (chains.length > 0) {
-      let ch0 = dedup(chains[0], 8);
-      ch0 = smooth(ch0, 2);
-      ch0 = dedup(ch0, 3);
+      const ch0 = chains[0];
       if (ch0.length > 1) {
         const mid = ch0[Math.floor(ch0.length / 2)];
         const mx = tx(mid.x), my = ty(mid.y);

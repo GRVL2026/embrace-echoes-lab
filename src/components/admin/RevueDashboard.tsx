@@ -51,6 +51,9 @@ export function isRevueEmpty(r: RevueData | null | undefined): boolean {
     (Array.isArray(r.risques) ? r.risques.length : 0) +
     (Array.isArray(r.actions) ? r.actions.length : 0);
   return !santeFilled || sectionsFilled === 0;
+}
+
+
 
 export function revueToText(r: RevueData): string {
   const lines: string[] = [];

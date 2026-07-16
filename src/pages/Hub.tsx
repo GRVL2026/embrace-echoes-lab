@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { UserMenu } from "@/components/UserMenu";
 import { MobileNav } from "@/components/MobileNav";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ShoppingCart, Truck, Wrench, ArrowRight } from "lucide-react";
+import { Loader2, ShoppingCart, Truck, Wrench, ArrowRight, Globe } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 
 type EnvCard = {
@@ -30,6 +30,14 @@ const CARDS: EnvCard[] = [
     description: "Suivi des expéditions fournisseurs : flippers Stern (US), jeux Asie, dates, coûts, documents.",
     Icon: Truck,
     to: "/logistique",
+    available: true,
+  },
+  {
+    key: "ecommerce",
+    title: "E-commerce",
+    description: "Activité de la boutique en ligne : ventes, produits, clients.",
+    Icon: Globe,
+    to: "/ecommerce",
     available: true,
   },
   {
@@ -84,7 +92,7 @@ export default function Hub() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           {CARDS.map(({ key, title, description, Icon, to, available }) => {
             const inner = (
               <div

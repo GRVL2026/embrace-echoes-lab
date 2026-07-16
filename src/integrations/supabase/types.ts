@@ -1284,6 +1284,57 @@ export type Database = {
           },
         ]
       }
+      shopify_stats_cache: {
+        Row: {
+          created_at: string
+          data: Json
+          fetched_at: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          data: Json
+          fetched_at?: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json
+          fetched_at?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      shopify_token_cache: {
+        Row: {
+          access_token: string
+          created_at: string
+          expires_at: string
+          id: string
+          shop_domain: string
+          updated_at: string
+        }
+        Insert: {
+          access_token: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          shop_domain: string
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          shop_domain?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           role: string

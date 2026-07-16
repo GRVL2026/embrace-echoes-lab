@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import SpacePlanner from "./pages/SpacePlanner";
 import Hub from "./pages/Hub";
 import Logistique from "./pages/Logistique";
+import Ecommerce from "./pages/Ecommerce";
 import Catalogue from "./pages/Catalogue";
 import DossiersList from "./pages/DossiersList";
 import DossierEdit from "./pages/DossierEdit";
@@ -45,6 +46,7 @@ const App = () => (
             <Route path="/catalogue" element={<ProtectedRoute><Catalogue /></ProtectedRoute>} />
             <Route path="/dossiers/:id" element={<ProtectedRoute><DossierEdit /></ProtectedRoute>} />
             <Route path="/logistique" element={<ProtectedRoute><Logistique /></ProtectedRoute>} />
+            <Route path="/ecommerce" element={<ProtectedRoute><Ecommerce /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute><AdminDossiers /></ProtectedRoute>} />
             <Route path="/admin/catalog-erp" element={<ProtectedRoute><AdminCatalogErp /></ProtectedRoute>} />
             <Route path="/admin/gaia" element={<ProtectedRoute><AdminGaia /></ProtectedRoute>} />

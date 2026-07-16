@@ -136,11 +136,40 @@ export function BulkModel3DDialog({ open, onOpenChange, catalog, setCatalog }: P
       matchedId: bestMatch(f.name, catalog),
       status: "pending",
       progress: 0,
+      adoptDims: false,
     }));
     setRows((prev) => {
       // Dedup by filename
       const existing = new Set(prev.map((r) => r.file.name));
-      return [...prev, ...newRows.filter((r) => !existing.has(r.file.name))];
+      const merged = [...prev, ...newRows.filter((r) => !existing.has(r.file.name))];
+      // Kick off async bounding-box measurement for the newly added rows.
+      newRows.forEach((r) => {
+        if (existing.has(r.file.name)) return;
+        void (async () => {
+          try {
+            const dims = await readGLBDimensions(r.file, 0);
+            setRows((current) =>
+              current.map((row) => {
+                if (row.file.name !== r.file.name) return row;
+                const matched = catalog.find((c) => c.id === row.matchedId);
+                const diverges = matched
+                  ? dimsDivergeSignificantly(dims, matched)
+                  : true;
+                return { ...row, modelDims: dims, adoptDims: diverges };
+              }),
+            );
+          } catch (err: any) {
+            setRows((current) =>
+              current.map((row) =>
+                row.file.name === r.file.name
+                  ? { ...row, measuringError: err?.message || "Lecture GLB impossible" }
+                  : row,
+              ),
+            );
+          }
+        })();
+      });
+      return merged;
     });
     setReport(null);
   };

@@ -849,9 +849,10 @@ function ImportExcelDialog({
       const sheet = wb.Sheets[sheetName];
       const matrix = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1, raw: true, defval: null, blankrows: false });
 
-      // find header row
+      // find header row (peut être n'importe où : le fichier réel a l'en-tête en ligne 1
+      // mais on scanne toute la feuille par sécurité)
       let headerIdx = -1;
-      for (let i = 0; i < Math.min(matrix.length, 20); i++) {
+      for (let i = 0; i < matrix.length; i++) {
         const row = (matrix[i] ?? []).map((c) => stripAccents(normStr(c)));
         if (row.some((c) => c.includes("fournisseur")) && row.some((c) => c.includes("cde"))) {
           headerIdx = i; break;
@@ -872,6 +873,7 @@ function ImportExcelDialog({
         livraison:   findColIdx(headers, "livraison"),
         heure:       findColIdx(headers, "heure"),
         transitaire: findColIdx(headers, "transitaire"),
+        dossier:     findColIdx(headers, "dossier"),
         docs:        findColIdx(headers, "docs"),
         typeCont:    findColIdx(headers, "type", "conteneur"),
         numCont:     findColIdx(headers, "n", "conteneur"),
@@ -889,9 +891,11 @@ function ImportExcelDialog({
       for (let i = headerIdx + 1; i < matrix.length; i++) {
         const row = matrix[i] ?? [];
         const cdeCell = col.cde >= 0 ? row[col.cde] : null;
-        const cde = normStr(cdeCell).toUpperCase();
+        // Cde N° peut contenir un retour à la ligne ou un slash (ex 'CF876 /AA090',
+        // 'CF416\nAA080') : on remplace les retours par un espace, on trim et on met en majuscules.
+        const cde = normStr(cdeCell).replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim().toUpperCase();
         if (!cde) {
-          continue; // pas de numéro de commande → on ignore silencieusement les lignes vides
+          continue; // ligne vide ou sans numéro de commande → ignorée silencieusement
         }
 
         const remarquesExtra: string[] = [];
@@ -908,21 +912,53 @@ function ImportExcelDialog({
           continue;
         }
 
-        const transitaireCell = col.transitaire >= 0 ? normStr(row[col.transitaire]) : "";
-        let transitaire: string | null = null;
-        let numero_dossier: string | null = null;
-        if (transitaireCell) {
-          const parts = transitaireCell.split(/[\s\/]+/).filter(Boolean);
-          transitaire = parts[0] ?? null;
-          numero_dossier = parts.slice(1).join(" ") || null;
+        // Transitaire (colonne K) et N° dossier (colonne L) sont deux colonnes séparées.
+        const transitaire = col.transitaire >= 0 ? (normStr(row[col.transitaire]) || null) : null;
+        const numero_dossier = col.dossier >= 0 ? (normStr(row[col.dossier]) || null) : null;
+
+        // Docs transmis = booléen Excel natif (TRUE/FALSE), avec fallback texte.
+        let docs_transmis = false;
+        if (col.docs >= 0) {
+          const dv = row[col.docs];
+          if (typeof dv === "boolean") {
+            docs_transmis = dv;
+          } else if (dv != null && dv !== "") {
+            const s = stripAccents(normStr(dv));
+            docs_transmis = ["x", "oui", "yes", "ok", "true", "1", "✓"].includes(s) || s.includes("ok");
+          }
         }
 
-        const docsCell = col.docs >= 0 ? normStr(row[col.docs]) : "";
-        const docsLow = stripAccents(docsCell);
-        const docs_transmis = !!docsCell && (
-          ["x", "oui", "yes", "ok", "true", "1", "✓"].includes(docsLow) ||
-          docsLow.includes("ok")
-        );
+        // Heure : peut être une Date Excel native (fraction de jour) → HH:mm
+        let heure: string | null = null;
+        if (col.heure >= 0) {
+          const hv = row[col.heure];
+          if (hv instanceof Date && isValid(hv)) {
+            heure = format(hv, "HH:mm");
+          } else {
+            heure = normStr(hv) || null;
+          }
+        }
+
+        // Nom du navire : multi-lignes → une seule ligne
+        const nom_navire = col.navire >= 0
+          ? (normStr(row[col.navire]).replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim() || null)
+          : null;
+
+        // Coût EXW : si texte non numérique (ex "FOB"), on laisse vide et on ajoute aux remarques.
+        let cout_exw: number | null = null;
+        if (col.exw >= 0) {
+          const ev = row[col.exw];
+          if (typeof ev === "number" && isFinite(ev)) {
+            cout_exw = ev;
+          } else if (ev != null && ev !== "") {
+            const parsedExw = parseMoney(ev);
+            if (parsedExw != null) {
+              cout_exw = parsedExw;
+            } else {
+              remarquesExtra.push(`EXW: ${normStr(ev)}`);
+            }
+          }
+        }
 
         const remarquesBase = col.remarques >= 0 ? normStr(row[col.remarques]) : "";
 
@@ -936,17 +972,17 @@ function ImportExcelDialog({
           etd: grabDate(col.etd, "ETD"),
           eta_le_havre: grabDate(col.eta, "ETA Le Havre"),
           livraison_aa: grabDate(col.livraison, "Livraison AA"),
-          heure: col.heure >= 0 ? normStr(row[col.heure]) || null : null,
+          heure,
           transitaire,
           numero_dossier,
           docs_transmis,
           type_conteneur: col.typeCont >= 0 ? normStr(row[col.typeCont]) || null : null,
           numero_conteneur: col.numCont >= 0 ? normStr(row[col.numCont]) || null : null,
-          nom_navire: col.navire >= 0 ? normStr(row[col.navire]) || null : null,
+          nom_navire,
           monnayeurs: col.monnayeurs >= 0 ? normStr(row[col.monnayeurs]) || null : null,
           remarques: [remarquesBase, ...remarquesExtra].filter(Boolean).join(" · ") || null,
           cout_fret: col.fret >= 0 ? parseMoney(row[col.fret]) : null,
-          cout_exw: col.exw >= 0 ? parseMoney(row[col.exw]) : null,
+          cout_exw,
         };
 
         const found = existingByCmd.get(cde);

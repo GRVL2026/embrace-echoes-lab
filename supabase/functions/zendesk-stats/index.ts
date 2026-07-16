@@ -228,10 +228,21 @@ async function buildResume(ticketId: string) {
   }
 
   // Compose conversation transcript
-  const transcript = comments.map((c: any) => {
+  const mainTranscript = comments.map((c: any) => {
     const role = c.author_role === 'end-user' ? 'CLIENT' : 'AGENT';
-    return `[${role} — ${c.author_name} — ${new Date(c.created_at).toLocaleString('fr-FR')}]\n${c.plain_body}`;
+    const flag = c.public === false ? ' (note interne)' : '';
+    return `[${role}${flag} — ${c.author_name} — ${new Date(c.created_at).toLocaleString('fr-FR')}]\n${c.plain_body}`;
   }).join('\n\n---\n\n');
+
+  const supplierTranscript = (side_conversations || []).flatMap((sc: any) =>
+    (sc.events || []).map((ev: any) =>
+      `[FOURNISSEUR — ${ev.author_name} — ${new Date(ev.created_at).toLocaleString('fr-FR')}]\nSujet: ${ev.subject}\n${(ev.body || '').replace(/<[^>]+>/g, ' ')}`,
+    ),
+  ).join('\n\n---\n\n');
+
+  const transcript = supplierTranscript
+    ? `${mainTranscript}\n\n=== ÉCHANGES FOURNISSEURS ===\n\n${supplierTranscript}`
+    : mainTranscript;
 
   const tool = {
     name: 'build_resume',

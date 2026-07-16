@@ -88,7 +88,8 @@ function fmtSize(n: number) {
 
 function proxyUrl(url: string, token: string | undefined) {
   const p = new URLSearchParams({ action: "attachment", url });
-  return `${FN_URL}?${p.toString()}${token ? `&_t=${encodeURIComponent(token.slice(0, 8))}` : ""}`;
+  if (token) p.set("token", token);
+  return `${FN_URL}?${p.toString()}`;
 }
 
 function isImage(type: string) {

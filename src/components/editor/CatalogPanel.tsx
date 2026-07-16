@@ -20,6 +20,8 @@ import { computeCirculation } from "@/lib/circulation";
 import { ProductDialog } from "./ProductDialog";
 import { BulkModel3DDialog } from "./BulkModel3DDialog";
 import { ForcePlaceDialog } from "./ForcePlaceDialog";
+import { PlacementReportDialog } from "./PlacementReportDialog";
+import { AutoPlaceOptionsPopover } from "./AutoPlaceOptionsPopover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fetchShopifyCatalog } from "@/lib/shopifyApi";
 import { loadCatalogFromDB, syncShopifyToDB, updateCatalogProduct } from "@/lib/catalogDB";

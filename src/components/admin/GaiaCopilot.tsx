@@ -790,7 +790,17 @@ export function GaiaCopilot() {
             )}
           </div>
         )}
-        {revueData && (
+        {revueData && isRevueEmpty(revueData) && (
+          <div className="flex flex-col items-start gap-3 rounded border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+            <div className="font-semibold text-amber-300">
+              Cette revue est invalide (génération tronquée), relancez la génération.
+            </div>
+            <Button size="sm" onClick={generateRevue}>
+              <RotateCcw className="mr-2 h-3.5 w-3.5" /> Relancer la génération
+            </Button>
+          </div>
+        )}
+        {revueData && !isRevueEmpty(revueData) && (
           <div className="rounded border border-border/60 bg-background/40 p-4">
             <RevueRenderBoundary onRetry={generateRevue}>
               <RevueDashboard data={revueData} />

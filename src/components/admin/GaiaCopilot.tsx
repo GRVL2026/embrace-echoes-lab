@@ -876,22 +876,46 @@ export function GaiaCopilot() {
             <span className="text-xs text-muted-foreground">({history.length})</span>
           </div>
           <ul className="divide-y divide-border/50">
-            {history.map((h) => (
-              <li key={h.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{h.titre ?? "Revue"}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {new Date(h.created_at).toLocaleString("fr-FR")}
+            {history.map((h) => {
+              const statut = h.statut ?? "terminee";
+              const isRunning = statut === "en_cours";
+              const isError = statut === "erreur";
+              return (
+                <li key={h.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-medium">{h.titre ?? "Revue"}</span>
+                      {isRunning && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+                          <Loader2 className="h-2.5 w-2.5 animate-spin" /> En cours
+                        </span>
+                      )}
+                      {isError && (
+                        <span className="rounded-full border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[10px] text-destructive">
+                          Échec
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(h.created_at).toLocaleString("fr-FR")}
+                      {isError && h.erreur ? ` · ${h.erreur.slice(0, 120)}` : ""}
+                    </div>
                   </div>
-                </div>
-                <Link
-                  to={`/admin/gaia/revue/${h.id}`}
-                  className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-xs hover:bg-muted/40"
-                >
-                  Ouvrir <ExternalLink className="h-3 w-3" />
-                </Link>
-              </li>
-            ))}
+                  {isRunning ? (
+                    <span className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Patientez
+                    </span>
+                  ) : (
+                    <Link
+                      to={`/admin/gaia/revue/${h.id}`}
+                      className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-xs hover:bg-muted/40"
+                    >
+                      Ouvrir <ExternalLink className="h-3 w-3" />
+                    </Link>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

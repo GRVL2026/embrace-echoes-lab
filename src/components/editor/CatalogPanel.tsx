@@ -1041,6 +1041,33 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
           // Persist to catalog_products table
           await updateCatalogProduct(equipmentId, { model3d: modelUrl || null });
         }}
+        onUpdateProduct={async (equipmentId, patch) => {
+          setCatalog(prev => prev.map(eq =>
+            eq.id === equipmentId ? { ...eq, ...patch } : eq
+          ));
+          setViewingProduct(prev => prev && prev.id === equipmentId ? { ...prev, ...patch } : prev);
+          // Propagate rotation & dimensions to already-placed instances
+          state.placedEquipments
+            .filter(pe => pe.equipmentId === equipmentId)
+            .forEach(pe => {
+              const peUpdate: Partial<import("@/types/equipment").PlacedEquipment> = {};
+              if (patch.model3dRotation !== undefined) peUpdate.model3dRotation = patch.model3dRotation;
+              if (patch.width !== undefined) peUpdate.width = patch.width;
+              if (patch.depth !== undefined) peUpdate.depth = patch.depth;
+              if (patch.height !== undefined) peUpdate.height = patch.height;
+              if (Object.keys(peUpdate).length > 0) {
+                dispatch({ type: "UPDATE_PLACED_EQUIPMENT", id: pe.id, equipment: peUpdate });
+              }
+            });
+          const dbPatch: Record<string, any> = {};
+          if (patch.width !== undefined) dbPatch.width = patch.width;
+          if (patch.depth !== undefined) dbPatch.depth = patch.depth;
+          if (patch.height !== undefined) dbPatch.height = patch.height;
+          if (patch.model3dRotation !== undefined) dbPatch.model3d_rotation = patch.model3dRotation;
+          if (Object.keys(dbPatch).length > 0) {
+            await updateCatalogProduct(equipmentId, dbPatch);
+          }
+        }}
       />
 
       {/* Bulk 3D model upload dialog */}

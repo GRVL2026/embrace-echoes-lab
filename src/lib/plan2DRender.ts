@@ -6,6 +6,7 @@
  */
 import type { Room, Door, Pillar, Point, CirculationSegment } from "@/types/editor";
 import type { PlacedEquipment } from "@/types/equipment";
+import { segmentsToSmoothChains } from "@/lib/circulationSpline";
 
 export type Plan2DRenderOptions = {
   width?: number;            // canvas width in px

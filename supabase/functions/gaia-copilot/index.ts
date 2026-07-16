@@ -761,6 +761,10 @@ Deno.serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceKey);
     const data = await loadData(admin);
     const dataJson = JSON.stringify(data);
+    console.log(`[gaia-copilot] dataJson size=${dataJson.length} chars (${Object.keys(data ?? {}).length} clés)`);
+    if (dataJson.length < 200) {
+      console.log(`[gaia-copilot] ⚠️ dataJson suspicieusement petit: ${dataJson.slice(0, 500)}`);
+    }
 
     // Mémoire persistante — bloc dynamique (non caché) injecté après le préfixe stable.
     const memos = await loadMemories(admin);
@@ -785,6 +789,72 @@ Deno.serve(async (req) => {
       const encoder = new TextEncoder();
       const userIdForRow = userData.user.id;
       const titreRevue = `Revue commerciale — ${new Date().toLocaleDateString('fr-FR')}`;
+
+      // Valide la structure du build_revue : au moins un contenu utile
+      // dans santé globale OU dans une des sections principales.
+      const validateRevue = (input: any): { ok: true } | { ok: false; reason: string } => {
+        if (!input || typeof input !== 'object') return { ok: false, reason: 'input non-objet' };
+        const sante = input.sante && typeof input.sante === 'object' ? input.sante : {};
+        const santeCommentaire = typeof sante.commentaire === 'string' ? sante.commentaire.trim() : '';
+        const santeAnnees = Array.isArray(sante.annees) ? sante.annees : [];
+        const santeTendance = Array.isArray(sante.tendance_mensuelle) ? sante.tendance_mensuelle : [];
+        const santeFilled = santeCommentaire.length > 0 && santeAnnees.length > 0;
+
+        const mvts = input.mouvements && typeof input.mouvements === 'object' ? input.mouvements : {};
+        const familles = Array.isArray(mvts.familles) ? mvts.familles.length : 0;
+        const clientsHausse = Array.isArray(mvts.clients_hausse) ? mvts.clients_hausse.length : 0;
+        const clientsBaisse = Array.isArray(mvts.clients_baisse) ? mvts.clients_baisse.length : 0;
+        const risques = Array.isArray(input.risques) ? input.risques.length : 0;
+        const actions = Array.isArray(input.actions) ? input.actions.length : 0;
+        const sectionsFilled = familles + clientsHausse + clientsBaisse + risques + actions;
+
+        if (!santeFilled) {
+          return { ok: false, reason: `santé globale vide (commentaire="${santeCommentaire.slice(0, 40)}", annees=${santeAnnees.length}, tendance=${santeTendance.length})` };
+        }
+        if (sectionsFilled === 0) {
+          return { ok: false, reason: 'toutes les sections (mouvements, risques, actions) sont vides' };
+        }
+        return { ok: true };
+      };
+
+      // Effectue l'appel build_revue final ; renvoie l'input structuré ou lève.
+      const callBuildRevue = async (
+        agenticMessages: Array<{ role: 'user' | 'assistant'; content: any }>,
+        extraInstruction: string | null,
+      ): Promise<{ input: any; stopReason: string | null }> => {
+        const tail = extraInstruction
+          ? `Appelle maintenant l'outil build_revue avec la revue finale structurée. ${extraInstruction}`
+          : `Appelle maintenant l'outil build_revue avec la revue finale structurée.`;
+        const finalPayload: Record<string, unknown> = {
+          model: REVUE_MODEL,
+          // ↑ 32000 : la revue peut être volumineuse et on streame les heartbeats,
+          //   donc pas de risque de timeout HTTP côté client.
+          max_tokens: 32000,
+          thinking: { type: 'adaptive' },
+          system: systemBlocks(revueSystem, memorySuffix),
+          messages: withCacheOnLastMessage(sanitizeMessagesForApi(
+            agenticMessages.concat([{ role: 'user', content: tail }]),
+          )),
+          tools: [REVUE_TOOL],
+          tool_choice: { type: 'tool', name: 'build_revue' },
+          ...revueExtra,
+        };
+        const finalResp = await anthropicCall(finalPayload);
+        logUsage(extraInstruction ? 'revue:build_revue:retry' : 'revue:build_revue', finalResp?.usage);
+        const stopReason = finalResp?.stop_reason ?? null;
+        const finalContent = Array.isArray(finalResp?.content) ? finalResp.content : [];
+        const toolUse = finalContent.find((b: any) => b?.type === 'tool_use' && b?.name === 'build_revue');
+        const inputSize = toolUse?.input ? JSON.stringify(toolUse.input).length : 0;
+        console.log(`[gaia-copilot] build_revue${extraInstruction ? ':retry' : ''} stop_reason=${stopReason} tool_input_size=${inputSize}`);
+        if (!toolUse || !toolUse.input || typeof toolUse.input !== 'object') {
+          const blocks = finalContent.map((b: any) => b?.type ?? 'unknown');
+          throw new Error(`build_revue non renvoyé par le modèle. stop_reason=${stopReason} blocks=${JSON.stringify(blocks)}`);
+        }
+        if (stopReason === 'max_tokens') {
+          console.log(`[gaia-copilot] ⚠️ build_revue tronqué (stop_reason=max_tokens)`);
+        }
+        return { input: toolUse.input, stopReason };
+      };
 
       const stream = new ReadableStream<Uint8Array>({
         start(controller) {
@@ -827,6 +897,10 @@ Deno.serve(async (req) => {
               safeSend('gaia_start', { kind: 'revue', id: revueId });
               heartbeat = setInterval(safeHeartbeat, 10_000);
 
+              if (dataJson.length < 200) {
+                throw new Error(`Données agrégées insuffisantes (dataJson=${dataJson.length} chars) — la base commerciale n'a rien renvoyé. Vérifie la synchro Cegid.`);
+              }
+
               // 2. Boucle agentique SQL, streamée via gaia_sql / gaia_memoire
               const { messages: agenticMessages } = await toolLoop({
                 admin,
@@ -841,28 +915,22 @@ Deno.serve(async (req) => {
 
               // 3. Appel final build_revue (non-streamé, heartbeats maintiennent la connexion)
               safeSend('gaia_sql', { summary: 'Construction de la revue finale…', query: '' });
-              const finalPayload: Record<string, unknown> = {
-                model: REVUE_MODEL,
-                max_tokens: 16000,
-                thinking: { type: 'adaptive' },
-                system: systemBlocks(revueSystem, memorySuffix),
-                messages: withCacheOnLastMessage(sanitizeMessagesForApi(
-                  agenticMessages.concat([{
-                    role: 'user',
-                    content: 'Appelle maintenant l\'outil build_revue avec la revue finale structurée.',
-                  }]),
-                )),
-                tools: [REVUE_TOOL],
-                tool_choice: { type: 'tool', name: 'build_revue' },
-                ...revueExtra,
-              };
-              const finalResp = await anthropicCall(finalPayload);
-              logUsage('revue:build_revue', finalResp?.usage);
-              const finalContent = Array.isArray(finalResp?.content) ? finalResp.content : [];
-              const toolUse = finalContent.find((b: any) => b?.type === 'tool_use' && b?.name === 'build_revue');
-              if (!toolUse || !toolUse.input || typeof toolUse.input !== 'object') {
-                const blocks = finalContent.map((b: any) => b?.type ?? 'unknown');
-                throw new Error(`build_revue non renvoyé par le modèle. stop_reason=${finalResp?.stop_reason ?? '?'} blocks=${JSON.stringify(blocks)}`);
+              let { input: revueInput, stopReason } = await callBuildRevue(agenticMessages, null);
+
+              // 3bis. Validation : si vide/tronqué, on retente une fois avec une
+              // consigne de concision explicite.
+              let validation = validateRevue(revueInput);
+              if (!validation.ok) {
+                console.log(`[gaia-copilot] build_revue invalide (${validation.reason}) — retry`);
+                safeSend('gaia_sql', { summary: 'Nouvelle tentative (revue trop courte)…', query: '' });
+                const retryInstruction = `La précédente tentative a rendu une revue vide ou incomplète (${validation.reason}). REMPLIS OBLIGATOIREMENT sante.commentaire (2 phrases), sante.annees (au moins 2 exercices avec ca_ht) et AU MOINS UNE section parmi mouvements.familles, mouvements.clients_hausse/baisse, risques ou actions. Sois concis : chaque champ texte = 1-2 phrases maximum, maximum 5 items par liste.`;
+                const retry = await callBuildRevue(agenticMessages, retryInstruction);
+                revueInput = retry.input;
+                stopReason = retry.stopReason;
+                validation = validateRevue(revueInput);
+                if (!validation.ok) {
+                  throw new Error(`Revue vide même après retry (${validation.reason}). stop_reason=${stopReason}. Relancez la génération.`);
+                }
               }
 
               // 4. Sauvegarde finale
@@ -871,14 +939,14 @@ Deno.serve(async (req) => {
                   .from('gaia_revues')
                   .update({
                     statut: 'terminee',
-                    data: toolUse.input,
+                    data: revueInput,
                     erreur: null,
                     updated_at: new Date().toISOString(),
                   })
                   .eq('id', revueId);
                 if (updErr) console.log(`[gaia-copilot] revue update terminee error: ${updErr.message}`);
               }
-              safeSend('gaia_revue', { id: revueId, data: toolUse.input });
+              safeSend('gaia_revue', { id: revueId, data: revueInput });
             } catch (e: any) {
               const msg = e?.message ?? String(e);
               console.log(`[gaia-copilot] revue background fatal: ${msg}`);

@@ -8,7 +8,7 @@ import { UserMenu } from "@/components/UserMenu";
 import { MobileNav } from "@/components/MobileNav";
 import { Loader2, ArrowLeft, Copy, Printer, Link as LinkIcon } from "lucide-react";
 import logoImg from "@/assets/logo.png";
-import { RevueDashboard, revueToText, type RevueData } from "@/components/admin/RevueDashboard";
+import { RevueDashboard, revueToText, isRevueEmpty, type RevueData } from "@/components/admin/RevueDashboard";
 
 type RevueRow = { id: string; titre: string | null; created_at: string; data: RevueData };
 
@@ -124,7 +124,17 @@ export default function GaiaRevueView() {
             {error}
           </div>
         )}
-        {row && (
+        {row && isRevueEmpty(row.data) && (
+          <div className="rounded border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+            <div className="font-semibold text-amber-300">
+              Cette revue est invalide (génération tronquée), relancez la génération.
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Le modèle a rendu une revue vide ou incomplète. Retournez au copilote pour lancer une nouvelle génération.
+            </p>
+          </div>
+        )}
+        {row && !isRevueEmpty(row.data) && (
           <div className="rounded border border-border/60 bg-background/40 p-4 print:border-0 print:bg-white print:p-0">
             <RevueDashboard data={row.data} />
           </div>

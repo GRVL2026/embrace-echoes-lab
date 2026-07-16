@@ -1428,6 +1428,36 @@ export type Database = {
         }
         Relationships: []
       }
+      zendesk_stats_cache: {
+        Row: {
+          cache_version: number
+          created_at: string
+          fetched_at: string
+          id: string
+          payload: Json
+          period_key: string
+          updated_at: string
+        }
+        Insert: {
+          cache_version?: number
+          created_at?: string
+          fetched_at?: string
+          id?: string
+          payload: Json
+          period_key?: string
+          updated_at?: string
+        }
+        Update: {
+          cache_version?: number
+          created_at?: string
+          fetched_at?: string
+          id?: string
+          payload?: Json
+          period_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       v_gaia_articles: {

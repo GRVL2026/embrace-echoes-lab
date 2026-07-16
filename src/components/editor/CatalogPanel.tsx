@@ -1373,6 +1373,14 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
         onForcePlace={handleForcePlace}
         onCancel={() => setForcePlaceEquipments([])}
       />
+
+      <PlacementReportDialog
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        placedCount={placementReport.placedCount}
+        notPlacedCount={placementReport.notPlacedCount}
+        report={placementReport.items}
+      />
     </div>
   );
 }

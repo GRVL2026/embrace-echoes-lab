@@ -46,6 +46,7 @@ export type PlacedEquipment = {
   color: string;
   height?: number; // cm
   model3d?: string; // URL to .glb model
+  model3dRotation?: number; // degrees (0/90/180/270) applied BEFORE scaling in the 3D viewer
   centerPlacement?: boolean; // true for tables (palet, power puck) — no "front", players on short sides
   autoScale?: boolean; // true = use model's natural size instead of forcing width/depth/height
 };

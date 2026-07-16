@@ -514,6 +514,31 @@ function extractText(content: any[]): string {
 }
 
 /**
+ * Nettoie l'historique avant envoi API : supprime les blocs text vides,
+ * qui font échouer l'API avec "text content blocks must be non-empty".
+ */
+function sanitizeMessagesForApi(
+  messages: Array<{ role: 'user' | 'assistant'; content: any }>,
+): Array<{ role: 'user' | 'assistant'; content: any }> {
+  return messages
+    .map((m) => {
+      if (typeof m.content === 'string') {
+        return m.content.trim().length === 0 ? null : m;
+      }
+      if (!Array.isArray(m.content)) return m;
+      const cleaned = m.content.filter((b: any) => {
+        if (!b || typeof b !== 'object') return false;
+        if (b.type === 'text') return typeof b.text === 'string' && b.text.trim().length > 0;
+        if (b.type === 'thinking') return typeof b.thinking === 'string' && b.thinking.length > 0;
+        return true;
+      });
+      if (cleaned.length === 0) return null;
+      return { ...m, content: cleaned };
+    })
+    .filter((m): m is { role: 'user' | 'assistant'; content: any } => m !== null);
+}
+
+/**
  * Boucle agentique : dispatche les tool_use (executer_sql, memoriser, oublier, …)
  * jusqu'à MAX_TOOL_ROUNDS. Retourne l'historique complet (assistant renvoyé TEL QUEL,
  * thinking inclus), la dernière réponse, le nombre de tours et le journal détaillé.
@@ -549,12 +574,12 @@ async function toolLoop(params: {
       model,
       max_tokens: isLastRound ? 16000 : MAX_TOKENS_PER_TURN,
       system: systemBlocks(sys, dynamicSuffix),
-      messages: withCacheOnLastMessage(messages),
-      tools: isLastRound ? extraTools : tools,
-      ...(isLastRound ? { thinking: { type: 'adaptive' }, output_config: { effort: 'high' } } : {}),
+      messages: withCacheOnLastMessage(sanitizeMessagesForApi(messages)),
+      tools,
+      ...(isLastRound ? { thinking: { type: 'adaptive' }, output_config: { effort: 'high' }, tool_choice: { type: 'none' } } : {}),
       ...(extraPayload ?? {}),
     };
-    if (toolChoice) payload.tool_choice = toolChoice;
+    if (!isLastRound && toolChoice) payload.tool_choice = toolChoice;
 
     const resp = await anthropicCall(payload);
     logUsage(`round=${round}`, resp?.usage);
@@ -657,14 +682,23 @@ async function forceFinalText(
     role: 'user' as const,
     content: instruction,
   }];
-  const resp = await anthropicCall({
-    model,
-    max_tokens: 16000,
-    thinking: { type: 'adaptive' },
-    output_config: { effort: 'high' },
-    system: systemBlocks(system, dynamicSuffix),
-    messages: withCacheOnLastMessage(forced),
-  });
+  const tools = [SQL_TOOL, MEMORISE_TOOL, OUBLIER_TOOL, CHART_TOOL];
+  let resp: any;
+  try {
+    resp = await anthropicCall({
+      model,
+      max_tokens: 16000,
+      thinking: { type: 'adaptive' },
+      output_config: { effort: 'high' },
+      system: systemBlocks(system, dynamicSuffix),
+      messages: withCacheOnLastMessage(sanitizeMessagesForApi(forced)),
+      tools,
+      tool_choice: { type: 'none' },
+    });
+  } catch (e: any) {
+    console.log(`[gaia-copilot] forceFinalText${reinforced ? ':retry' : ''} Anthropic error body: ${e?.message ?? e}`);
+    throw e;
+  }
   logUsage(`forceFinalText${reinforced ? ':retry' : ''}`, resp?.usage);
   const content = Array.isArray(resp?.content) ? resp.content : [];
   const blockTypes = content.map((b: any) => b?.type ?? 'unknown');

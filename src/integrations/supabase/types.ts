@@ -1290,6 +1290,7 @@ export type Database = {
           data: Json
           fetched_at: string
           id: string
+          period: string
           updated_at: string
         }
         Insert: {
@@ -1297,6 +1298,7 @@ export type Database = {
           data: Json
           fetched_at?: string
           id?: string
+          period?: string
           updated_at?: string
         }
         Update: {
@@ -1304,6 +1306,7 @@ export type Database = {
           data?: Json
           fetched_at?: string
           id?: string
+          period?: string
           updated_at?: string
         }
         Relationships: []

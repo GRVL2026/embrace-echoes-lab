@@ -351,6 +351,10 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   const [show3DOnly, setShow3DOnly] = useState(false);
   const [loadingShopify, setLoadingShopify] = useState(false);
   const [bulk3DOpen, setBulk3DOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [placementReport, setPlacementReport] = useState<{
+    placedCount: number; notPlacedCount: number; items: PlacementReportItem[];
+  }>({ placedCount: 0, notPlacedCount: 0, items: [] });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Pré-remplit la sélection avec les jeux plaçables du dossier (une seule fois)

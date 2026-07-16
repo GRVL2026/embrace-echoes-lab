@@ -1353,13 +1353,11 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                       </span>
                     </div>
                   )}
-                  <Button 
-                    className="w-full gap-2" 
-                    onClick={() => { handleAutoPlace(); setExpandedView(false); }}
-                  >
-                    <Play className="h-4 w-4" />
-                    Placer {totalSelectedCount} jeu{totalSelectedCount > 1 ? "x" : ""} sur le plan
-                  </Button>
+                  <AutoPlaceOptionsPopover
+                    onLaunch={(opts) => { handleAutoPlace(opts); setExpandedView(false); }}
+                    label={`Placer ${totalSelectedCount} jeu${totalSelectedCount > 1 ? "x" : ""} sur le plan`}
+                    defaultPreserveExisting={layoutLocked}
+                  />
                 </div>
               </div>
             )}

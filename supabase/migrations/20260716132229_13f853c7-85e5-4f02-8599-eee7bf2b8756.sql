@@ -1,0 +1,2 @@
+ALTER TABLE public.shopify_stats_cache ADD COLUMN IF NOT EXISTS period text NOT NULL DEFAULT '30d';
+CREATE INDEX IF NOT EXISTS idx_shopify_stats_cache_period ON public.shopify_stats_cache(period, fetched_at DESC);

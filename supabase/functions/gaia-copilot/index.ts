@@ -514,6 +514,31 @@ function extractText(content: any[]): string {
 }
 
 /**
+ * Nettoie l'historique avant envoi API : supprime les blocs text vides,
+ * qui font échouer l'API avec "text content blocks must be non-empty".
+ */
+function sanitizeMessagesForApi(
+  messages: Array<{ role: 'user' | 'assistant'; content: any }>,
+): Array<{ role: 'user' | 'assistant'; content: any }> {
+  return messages
+    .map((m) => {
+      if (typeof m.content === 'string') {
+        return m.content.trim().length === 0 ? null : m;
+      }
+      if (!Array.isArray(m.content)) return m;
+      const cleaned = m.content.filter((b: any) => {
+        if (!b || typeof b !== 'object') return false;
+        if (b.type === 'text') return typeof b.text === 'string' && b.text.trim().length > 0;
+        if (b.type === 'thinking') return typeof b.thinking === 'string' && b.thinking.length > 0;
+        return true;
+      });
+      if (cleaned.length === 0) return null;
+      return { ...m, content: cleaned };
+    })
+    .filter((m): m is { role: 'user' | 'assistant'; content: any } => m !== null);
+}
+
+/**
  * Boucle agentique : dispatche les tool_use (executer_sql, memoriser, oublier, …)
  * jusqu'à MAX_TOOL_ROUNDS. Retourne l'historique complet (assistant renvoyé TEL QUEL,
  * thinking inclus), la dernière réponse, le nombre de tours et le journal détaillé.

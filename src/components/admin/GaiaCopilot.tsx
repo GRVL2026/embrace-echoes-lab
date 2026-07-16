@@ -336,26 +336,8 @@ export function GaiaCopilot() {
     }
   };
 
-  const saveRevue = async (data: RevueData) => {
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      const titre = `Revue commerciale — ${new Date().toLocaleDateString("fr-FR")}`;
-      const { error } = await (supabase as any).from("gaia_revues").insert({
-        titre,
-        data: data as any,
-        created_by: userData?.user?.id ?? null,
-      });
-      if (error) throw error;
-      await loadHistory();
-    } catch (e) {
-      console.error("save revue failed", e);
-      toast({
-        title: "Sauvegarde impossible",
-        description: e instanceof Error ? e.message : String(e),
-        variant: "destructive",
-      });
-    }
-  };
+  // La revue est désormais persistée côté serveur (statut en_cours → terminee/erreur).
+  // Le front n'insère plus la ligne : il se contente d'écouter le stream et de rafraîchir l'historique.
 
   const generateRevue = async () => {
     setRevueLoading(true);
@@ -368,16 +350,53 @@ export function GaiaCopilot() {
         onStep: (step) => setRevueSteps((prev) => [...prev, step]),
       });
       setRevueData(parsed);
-      await saveRevue(parsed);
-      toast({ title: "Revue enregistrée", description: "Consultable dans l'historique." });
+      await loadHistory();
+      toast({ title: "Revue prête", description: "Consultable dans l'historique." });
     } catch (e: unknown) {
       const message = await formatFunctionError(e);
       setRevueError(message);
       toast({ title: "Erreur de génération", description: message.slice(0, 200), variant: "destructive" });
+      // Le serveur a marqué la ligne en 'erreur' — rafraîchit pour que l'UI se libère.
+      await loadHistory().catch(() => undefined);
     } finally {
       setRevueLoading(false);
     }
   };
+
+  // Détecte une revue en cours (soit la nôtre, soit lancée depuis un autre onglet).
+  const inProgressRevue = history.find((h) => h.statut === "en_cours") ?? null;
+  const prevInProgressIdRef = useRef<string | null>(null);
+
+  // Polling léger tant qu'une revue est en_cours (toutes les 15 s).
+  useEffect(() => {
+    if (!inProgressRevue) return;
+    const id = setInterval(() => {
+      loadHistory().catch(() => undefined);
+    }, 15_000);
+    return () => clearInterval(id);
+  }, [inProgressRevue?.id]);
+
+  // Détecte la transition en_cours → terminee / erreur et notifie l'utilisateur.
+  useEffect(() => {
+    const prevId = prevInProgressIdRef.current;
+    if (prevId && (!inProgressRevue || inProgressRevue.id !== prevId)) {
+      const finished = history.find((h) => h.id === prevId);
+      if (finished?.statut === "terminee") {
+        toast({
+          title: "Revue prête",
+          description: "La revue commerciale est disponible dans l'historique.",
+        });
+      } else if (finished?.statut === "erreur") {
+        toast({
+          title: "Génération échouée",
+          description: (finished.erreur ?? "Erreur inconnue").slice(0, 200),
+          variant: "destructive",
+        });
+      }
+    }
+    prevInProgressIdRef.current = inProgressRevue?.id ?? null;
+  }, [inProgressRevue?.id, history]);
+
 
 
   const copyRevue = async () => {

@@ -17,6 +17,7 @@ function rowToEquipment(row: any): GameEquipment {
     centerPlacement: row.center_placement || false,
     playerClearance: row.player_clearance ? Number(row.player_clearance) : undefined,
     model3d: row.model3d || undefined,
+    model3dRotation: row.model3d_rotation != null ? Number(row.model3d_rotation) : 0,
     description: row.description || undefined,
     vendor: row.vendor || undefined,
     price: row.price ? Number(row.price) : undefined,

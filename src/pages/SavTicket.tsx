@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Loader2, ArrowLeft, ExternalLink, Wrench, Sparkles, RefreshCw,
-  Download, User, Headset, AlertCircle, Wrench as WrenchIcon,
+  Download, User, Headset, AlertCircle, Wrench as WrenchIcon, Truck, Mail,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,7 +29,16 @@ type Ticket = {
   requester_name: string; requester_email: string | null;
   assignee_name: string | null; tags: string[];
 };
-type TicketPayload = { ticket: Ticket; comments: Comment[] };
+type SideEvent = {
+  id: number | string; created_at: string; author_name: string; author_email: string | null;
+  to: string[]; cc: string[]; subject: string; body: string;
+};
+type SideConversation = {
+  id: number | string; subject: string; state: string; created_at: string; updated_at: string;
+  participants: { name: string; email: string | null }[];
+  events: SideEvent[];
+};
+type TicketPayload = { ticket: Ticket; comments: Comment[]; side_conversations?: SideConversation[] };
 type Resume = {
   probleme_rencontre: string; diagnostic: string; resolution: string;
   pieces_detachees: string[]; machine_concernee: string;

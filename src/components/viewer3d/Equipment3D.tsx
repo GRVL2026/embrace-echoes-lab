@@ -169,6 +169,7 @@ export function Equipment3D({ equipment, showHeight = false, roomExtent }: Props
               height={equipment.height || 120}
               autoScale={equipment.autoScale}
               roomExtent={roomExtent}
+              modelRotationDeg={equipment.model3dRotation || 0}
             />
           </Suspense>
         </ErrorBoundary>

@@ -18,6 +18,7 @@ import { DEFAULT_SAFETY_ZONE } from "@/types/equipment";
 import { autoPlaceEquipmentWithReport } from "@/lib/placement";
 import { computeCirculation } from "@/lib/circulation";
 import { ProductDialog } from "./ProductDialog";
+import { BulkModel3DDialog } from "./BulkModel3DDialog";
 import { ForcePlaceDialog } from "./ForcePlaceDialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fetchShopifyCatalog } from "@/lib/shopifyApi";
@@ -347,6 +348,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   const [expandedView, setExpandedView] = useState(false);
   const [show3DOnly, setShow3DOnly] = useState(false);
   const [loadingShopify, setLoadingShopify] = useState(false);
+  const [bulk3DOpen, setBulk3DOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Pré-remplit la sélection avec les jeux plaçables du dossier (une seule fois)
@@ -792,6 +794,19 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">Charger depuis Shopify</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setBulk3DOpen(true)}
+              >
+                <Box className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Importer des modèles 3D en masse</TooltipContent>
           </Tooltip>
           <Button
             variant="ghost"

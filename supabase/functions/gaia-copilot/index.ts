@@ -549,12 +549,12 @@ async function toolLoop(params: {
       model,
       max_tokens: isLastRound ? 16000 : MAX_TOKENS_PER_TURN,
       system: systemBlocks(sys, dynamicSuffix),
-      messages: withCacheOnLastMessage(messages),
-      tools: isLastRound ? extraTools : tools,
-      ...(isLastRound ? { thinking: { type: 'adaptive' }, output_config: { effort: 'high' } } : {}),
+      messages: withCacheOnLastMessage(sanitizeMessagesForApi(messages)),
+      tools,
+      ...(isLastRound ? { thinking: { type: 'adaptive' }, output_config: { effort: 'high' }, tool_choice: { type: 'none' } } : {}),
       ...(extraPayload ?? {}),
     };
-    if (toolChoice) payload.tool_choice = toolChoice;
+    if (!isLastRound && toolChoice) payload.tool_choice = toolChoice;
 
     const resp = await anthropicCall(payload);
     logUsage(`round=${round}`, resp?.usage);

@@ -142,7 +142,7 @@ export function GaiaCopilot() {
   const [revueLoading, setRevueLoading] = useState(false);
   const [revueData, setRevueData] = useState<RevueData | null>(null);
   const [revueError, setRevueError] = useState<string | null>(null);
-  const [revueProgress, setRevueProgress] = useState(0);
+  const [revueSteps, setRevueSteps] = useState<RevueStep[]>([]);
 
   const [devis, setDevis] = useState<DevisRelance[]>([]);
   const [dormants, setDormants] = useState<ClientDormant[]>([]);

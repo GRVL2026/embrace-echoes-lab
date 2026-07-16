@@ -3,7 +3,11 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const SUB = Deno.env.get('ZENDESK_SUBDOMAIN') || '';
+const SUB = (Deno.env.get('ZENDESK_SUBDOMAIN') || '')
+  .trim()
+  .replace(/^https?:\/\//i, '')
+  .replace(/\.zendesk\.com.*$/i, '')
+  .replace(/\/.*$/, '');
 const EMAIL = Deno.env.get('ZENDESK_EMAIL') || '';
 const TOKEN = Deno.env.get('ZENDESK_API_TOKEN') || '';
 

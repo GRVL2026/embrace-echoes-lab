@@ -547,10 +547,11 @@ async function toolLoop(params: {
       : system;
     const payload: Record<string, unknown> = {
       model,
-      max_tokens: MAX_TOKENS_PER_TURN,
+      max_tokens: isLastRound ? 16000 : MAX_TOKENS_PER_TURN,
       system: systemBlocks(sys, dynamicSuffix),
       messages: withCacheOnLastMessage(messages),
       tools: isLastRound ? extraTools : tools,
+      ...(isLastRound ? { thinking: { type: 'enabled', budget_tokens: 6000 } } : {}),
       ...(extraPayload ?? {}),
     };
     if (toolChoice) payload.tool_choice = toolChoice;

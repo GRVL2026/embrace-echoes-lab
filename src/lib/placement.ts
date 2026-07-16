@@ -530,11 +530,45 @@ function generateCirculationPath(room: Room, placed: PlacedEquipment[], corridor
 // MAIN PLACEMENT ENGINE — 10 RULES HIERARCHY
 // ═══════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════
+// PUBLIC TYPES — options, per-item report, backward-compatible result
+// ═══════════════════════════════════════════════════════════════════
+
+export type PlacementDensity = "confort" | "standard" | "max";
+
+export type PlacementOptions = {
+  density?: PlacementDensity;    // spacing multiplier
+  groupByFamily?: boolean;       // keep same category together
+  preserveExisting?: boolean;    // don't move existingPlacements
+};
+
+export type PlacementFailureReason =
+  | "no_closed_room"
+  | "no_wall_space"
+  | "circulation_broken"
+  | "too_large"
+  | "unknown";
+
+export type PlacementReportItem = {
+  equipmentId: string;
+  name: string;
+  reason: PlacementFailureReason;
+  message: string;
+};
+
 export type PlacementResult = {
   placed: PlacedEquipment[];
   notPlaced: GameEquipment[];
   circulation: CirculationSegment[];
+  report: PlacementReportItem[];
 };
+
+const HIGH_IMPACT_RE = /simulat|simulateur|screen|ecran|écran|vr|racing|driving|shooter|arcade\s*geant/i;
+const CRANE_RE = /grue|crane|pusher|prize|peluche|claw/i;
+
+// ═══════════════════════════════════════════════════════════════════
+// PUBLIC ENTRY POINTS
+// ═══════════════════════════════════════════════════════════════════
 
 export function autoPlaceEquipment(
   selectedEquipments: GameEquipment[], rooms: Room[], doors: Door[], pillars: Pillar[],
@@ -544,513 +578,380 @@ export function autoPlaceEquipment(
 }
 
 export function autoPlaceEquipmentWithReport(
-  selectedEquipments: GameEquipment[], rooms: Room[], doors: Door[], pillars: Pillar[],
+  selectedEquipments: GameEquipment[],
+  rooms: Room[],
+  doors: Door[],
+  pillars: Pillar[],
   existingPlacements: PlacedEquipment[],
+  options: PlacementOptions = {},
 ): PlacementResult {
-  if (rooms.length === 0 || selectedEquipments.length === 0) {
-    return { placed: [], notPlaced: selectedEquipments, circulation: [] };
+  const density: PlacementDensity = options.density ?? "standard";
+  const groupByFamily = options.groupByFamily ?? true;
+  const preserveExisting = options.preserveExisting ?? false;
+
+  // Density multiplier acts on inter-different-ref gap only.
+  const diffGap = density === "confort" ? 25 : density === "max" ? 5 : DIFFERENT_GAP;
+
+  const report: PlacementReportItem[] = [];
+
+  if (selectedEquipments.length === 0) {
+    return { placed: [], notPlaced: [], circulation: [], report };
   }
 
-  // Find largest closed room
-  let bestRoom: Room | null = null;
-  let bestArea = 0;
-  for (const room of rooms) {
-    if (!room.isClosed) continue;
-    const area = Math.abs(polygonSignedArea(room.points));
-    if (area > bestArea) { bestArea = area; bestRoom = room; }
+  const closedRooms = rooms
+    .filter(r => r.isClosed)
+    .sort((a, b) => Math.abs(polygonSignedArea(b.points)) - Math.abs(polygonSignedArea(a.points)));
+
+  if (closedRooms.length === 0) {
+    for (const eq of selectedEquipments) {
+      report.push({
+        equipmentId: eq.id, name: eq.name,
+        reason: "no_closed_room", message: "Aucune salle fermée dans le plan",
+      });
+    }
+    return { placed: [], notPlaced: [...selectedEquipments], circulation: [], report };
   }
-  if (!bestRoom) return { placed: [], notPlaced: selectedEquipments, circulation: [] };
 
   const doorZones = getDoorExclusionZones(rooms, doors);
   const pillarZones = getPillarExclusionZones(pillars);
-  const walls = getRoomWalls(bestRoom, doors);
-  const wallsByLength = [...walls].sort((a, b) => b.length - a.length);
 
-  console.log(`[placement] Room: ${walls.length} walls, area=${bestArea.toFixed(0)}`);
+  const startingPlacements: PlacedEquipment[] = preserveExisting ? [...existingPlacements] : [];
+  const placements: PlacedEquipment[] = [...startingPlacements];
+  const newlyPlaced: PlacedEquipment[] = [];
 
-  const placements: PlacedEquipment[] = [...existingPlacements];
-  const result: PlacedEquipment[] = [];
-  const notPlaced: GameEquipment[] = [];
+  // Split center-placement from wall equipment (individual duplicates preserved)
+  let pendingWall: GameEquipment[] = selectedEquipments.filter(e => !e.centerPlacement);
+  let pendingCenter: GameEquipment[] = selectedEquipments.filter(e => e.centerPlacement);
 
-  // ── Separate center-placement (tables) from wall-based equipment ──
-  const centerEquipments: GameEquipment[] = [];
-  const wallEquipments: GameEquipment[] = [];
-  for (const equip of selectedEquipments) {
-    if (equip.centerPlacement) centerEquipments.push(equip);
-    else wallEquipments.push(equip);
-  }
+  // ── Per-room placement ────────────────────────────────────────
+  for (const room of closedRooms) {
+    if (pendingWall.length === 0 && pendingCenter.length === 0) break;
 
-  // ── BLOCK MERGE: fuse flippers & basket games of the same ref into a single block ──
-  // Categories that should be merged as indivisible blocks (0cm gap between units)
-  const MERGE_BLOCK_CATEGORIES = new Set(["flipper", "basket"]);
-  function shouldMergeAsBlock(equip: GameEquipment): boolean {
-    const cat = (equip.category || "").toLowerCase().replace(/s$/, "");
-    if (MERGE_BLOCK_CATEGORIES.has(cat)) return true;
-    // Also match by name containing "basket" (e.g. category "sport" but name "BASKET EMOJI")
-    if (equip.name.toLowerCase().includes("basket")) return true;
-    return false;
-  }
+    const walls = getRoomWalls(room, doors);
+    if (walls.length === 0) continue;
 
-  // Track merged blocks so we can split them back after placement
-  type MergeBlock = { mergedEquip: GameEquipment; originals: GameEquipment[]; unitWidths: number[] };
-  const mergeBlocks: MergeBlock[] = [];
+    // ── Visibility scoring for each wall from the room's main door ──
+    const roomDoors = doors.filter(d => d.roomId === room.id);
+    const mainDoor = roomDoors.find(d => d.isMainDoor) || roomDoors[0];
+    const wallVisibility = computeWallVisibility(room, walls, mainDoor);
 
-  const mergedWallEquipments: GameEquipment[] = [];
-  // Group ALL merge-block items by CATEGORY (not by ref), so all flippers are fused together
-  const blocksByCategory = new Map<string, GameEquipment[]>();
+    // ── Family grouping ──
+    const families = groupWallEquipmentByFamily(pendingWall, groupByFamily);
 
-  for (const equip of wallEquipments) {
-    if (shouldMergeAsBlock(equip)) {
-      const cat = (equip.category || equip.name).toLowerCase().replace(/s$/, "");
-      const key = cat.includes("basket") ? "basket" : "flipper";
-      if (!blocksByCategory.has(key)) blocksByCategory.set(key, []);
-      blocksByCategory.get(key)!.push(equip);
-    } else {
-      mergedWallEquipments.push(equip);
-    }
-  }
+    // Family placement order: high-impact first, then cranes, then rest by footprint.
+    families.sort((a, b) => {
+      const rank = (k: FamilyKind) => k === "highImpact" ? 0 : k === "crane" ? 1 : 2;
+      if (rank(a.kind) !== rank(b.kind)) return rank(a.kind) - rank(b.kind);
+      const areaA = a.units.reduce((s, e) => s + e.width * e.depth, 0);
+      const areaB = b.units.reduce((s, e) => s + e.width * e.depth, 0);
+      return areaB - areaA;
+    });
 
-  for (const [catKey, items] of blocksByCategory) {
-    if (items.length <= 1) {
-      mergedWallEquipments.push(items[0]);
-    } else {
-      // Merge ALL items of this category into one virtual block (0cm gap)
-      const totalWidth = items.reduce((sum, e) => sum + e.width, 0);
-      const maxDepth = Math.max(...items.map(e => e.depth));
-      const maxHeight = Math.max(...items.map(e => e.height));
-      const mergedEquip: GameEquipment = {
-        ...items[0],
-        id: `__merge_block_${catKey}`,
-        name: `${items.map(e => e.name).filter((v, i, a) => a.indexOf(v) === i).join(" + ")} (x${items.length})`,
-        width: totalWidth,
-        depth: maxDepth,
-        height: maxHeight,
-      };
-      mergedWallEquipments.push(mergedEquip);
-      mergeBlocks.push({ mergedEquip, originals: items, unitWidths: items.map(e => e.width) });
-      console.log(`[placement] Merged ${items.length} ${catKey} items into block ${totalWidth}cm wide`);
-    }
-  }
+    // Track wall usage
+    const wallUsed = new Map<number, number>();
+    const wallDeepest = new Map<number, number>();
+    for (const w of walls) { wallUsed.set(w.edgeIndex, 0); wallDeepest.set(w.edgeIndex, 0); }
 
-  // ── Group by reference ID, then by category ──
-  const byEquipmentId = new Map<string, { equip: GameEquipment; count: number }>();
-  for (const equip of mergedWallEquipments) {
-    const existing = byEquipmentId.get(equip.id);
-    if (existing) existing.count++;
-    else byEquipmentId.set(equip.id, { equip, count: 1 });
-  }
+    const placedThisRoom = new Set<GameEquipment>();
 
-  const byCategory = new Map<string, { equip: GameEquipment; count: number }[]>();
-  for (const group of byEquipmentId.values()) {
-    const cat = (group.equip.category || "autre").toLowerCase().replace(/s$/, "");
-    if (!byCategory.has(cat)) byCategory.set(cat, []);
-    byCategory.get(cat)!.push(group);
-  }
+    // Cache last circulation-OK snapshot count to reduce checks.
+    let placedSinceCheck = 0;
 
-  // Rule 8: Sort categories by total footprint area (largest first)
-  const sortedCategories = Array.from(byCategory.entries()).sort((a, b) => {
-    const areaA = a[1].reduce((s, g) => s + g.equip.width * g.equip.depth * g.count, 0);
-    const areaB = b[1].reduce((s, g) => s + g.equip.width * g.equip.depth * g.count, 0);
-    return areaB - areaA;
-  });
-
-  // Track remaining capacity per wall for Rule 7
-  const wallUsedLength = new Map<number, number>(); // edgeIndex → total equipment width placed
-  for (const wall of walls) wallUsedLength.set(wall.edgeIndex, 0);
-
-  // Track deepest equipment per wall for Rule 5 (straight corridor)
-  const wallMaxDepth = new Map<number, number>();
-  for (const wall of walls) wallMaxDepth.set(wall.edgeIndex, 0);
-
-  const step = 5;
-
-  // ════════════════════════════════════════════════════════════════
-  // PHASE 1: Wall-backed placement (Rules 1-8)
-  // ════════════════════════════════════════════════════════════════
-  
-  const wallNotPlaced: GameEquipment[] = []; // equipment that couldn't fit on walls → Phase 2
-
-  for (const [category, equipmentGroups] of sortedCategories) {
-    console.log(`[placement] Category: "${category}" (${equipmentGroups.length} refs)`);
-
-    // Sort groups by area within category (largest first)
-    const sortedGroups = [...equipmentGroups].sort((a, b) =>
-      (b.equip.width * b.equip.depth * b.count) - (a.equip.width * a.equip.depth * a.count)
-    );
-
-    // Rule 7: track category wall
-    let categoryWallEdge: number | undefined = undefined;
-    let categoryLastPlacement: {
-      x: number; y: number; rotation: number; w: number; d: number; wallEdgeIndex?: number;
-    } | null = null;
-
-    for (const group of sortedGroups) {
-      const equip = group.equip;
-      const count = group.count;
-      const curW = equip.width;
-      const curD = equip.depth;
-
-      // ═══════════════════════════════════════════════════════════
-      // RULE 3 PRE-CHECK: Find a wall where ALL units of this
-      // reference fit together. This is MORE IMPORTANT than filling
-      // the current wall with mixed references.
-      // ═══════════════════════════════════════════════════════════
-      const totalRefWidth = count * curW + (count - 1) * SAME_REF_GAP;
-
-      // Score each wall for this entire reference group
-      let bestRefWallEdge: number | undefined = undefined;
-      {
-        type WallCandidate = { edgeIndex: number; score: number };
-        const candidates: WallCandidate[] = [];
-
-        for (const wall of wallsByLength) {
-          const used = wallUsedLength.get(wall.edgeIndex) || 0;
-          const available = wall.length - used - WALL_MARGIN * 2;
-          // All units must fit on this wall
-          if (available < totalRefWidth) continue;
-
-          let score = 0;
-          // Prefer the category wall (Rule 7)
-          if (categoryWallEdge !== undefined && wall.edgeIndex === categoryWallEdge) score -= 1000;
-          // Prefer longest walls (Rule 8)
-          score -= wall.length;
-          // Penalty for door walls
-          if (wall.hasDoor) score += 200;
-          candidates.push({ edgeIndex: wall.edgeIndex, score });
-        }
-        candidates.sort((a, b) => a.score - b.score);
-        if (candidates.length > 0) bestRefWallEdge = candidates[0].edgeIndex;
+    const circulationOK = (): boolean => {
+      try {
+        const r = computeCirculation(rooms, doors, pillars, placements);
+        return r.unreachableCount === 0;
+      } catch {
+        return true; // don't fail placement on circulation error
       }
+    };
 
-      console.log(`[placement] Ref "${equip.name}" x${count} needs ${totalRefWidth.toFixed(0)}cm → best wall: ${bestRefWallEdge ?? "none"}`);
+    for (const family of families) {
+      // Sort units inside family: same-ref first, then by footprint desc
+      const familyUnits = [...family.units].sort((a, b) => {
+        if (a.id === b.id) return 0;
+        return (b.width * b.depth) - (a.width * a.depth);
+      });
 
-      let sameRefWallEdgeIndex: number | undefined = bestRefWallEdge;
+      // Preferred wall order for this family
+      const wallOrder = orderWallsForFamily(walls, family.kind, wallVisibility, mainDoor);
 
-      for (let i = 0; i < count; i++) {
-        let placed = false;
-        const lastPlacement = categoryLastPlacement;
+      let currentWall: WallSegment | null = null;
+      let lastPlacement: { x: number; y: number; rotation: number; w: number; d: number } | null = null;
+      let lastRefId: string | null = null;
 
-        // ── STEP 1: Adjacent to last placement of same ref (Rule 3) ──
-        if (lastPlacement && i > 0) {
-          const adjPositions = generateAdjacentPositions(
-            lastPlacement.x, lastPlacement.y, lastPlacement.rotation,
-            lastPlacement.w, lastPlacement.d, curW, curD, SAME_REF_GAP,
-          );
-          for (const pos of adjPositions) {
-            if (isPlacementValid(pos.x, pos.y, curW, curD, pos.rotation, SAME_REF_GAP, bestRoom!, doorZones, pillarZones, placements)) {
-              const p = makePlacement(equip, pos.x, pos.y, pos.rotation, curW, curD);
-              placements.push(p); result.push(p);
-              categoryLastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w: curW, d: curD, wallEdgeIndex: lastPlacement.wallEdgeIndex };
-              if (sameRefWallEdgeIndex === undefined && lastPlacement.wallEdgeIndex !== undefined) sameRefWallEdgeIndex = lastPlacement.wallEdgeIndex;
-              wallUsedLength.set(lastPlacement.wallEdgeIndex!, (wallUsedLength.get(lastPlacement.wallEdgeIndex!) || 0) + curW);
-              wallMaxDepth.set(lastPlacement.wallEdgeIndex!, Math.max(wallMaxDepth.get(lastPlacement.wallEdgeIndex!) || 0, curD));
-              placed = true;
-              console.log(`[placement] Adjacent placed ${equip.name} (${i+1}/${count}) on wall ${lastPlacement.wallEdgeIndex}`);
-              break;
-            }
-          }
-        }
-        if (placed) continue;
-
-        // ── STEP 2: Place on the pre-selected best wall for this ref (Rule 3 + 7) ──
-        if (sameRefWallEdgeIndex !== undefined) {
-          const targetWall = walls.find(w => w.edgeIndex === sameRefWallEdgeIndex);
-          if (targetWall) {
-            const isVeryFirst = placements.length === 0;
-            const positions = generateWallPositions(targetWall, curW, curD, i === 0 ? step : 2, isVeryFirst && i === 0);
-
-            // Sort: prefer near last placement if exists, else near corner
-            if (lastPlacement) {
-              positions.sort((a, b) => {
-                const dA = Math.hypot(a.x - lastPlacement.x, a.y - lastPlacement.y);
-                const dB = Math.hypot(b.x - lastPlacement.x, b.y - lastPlacement.y);
-                return dA - dB;
-              });
-            } else {
-              positions.sort((a, b) => a.score - b.score);
-            }
-
-            for (const pos of positions) {
-              if (isPlacementValid(pos.x, pos.y, curW, curD, pos.rotation, SAME_REF_GAP, bestRoom!, doorZones, pillarZones, placements)) {
-                const p = makePlacement(equip, pos.x, pos.y, pos.rotation, curW, curD);
-                placements.push(p); result.push(p);
-                categoryLastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w: curW, d: curD, wallEdgeIndex: targetWall.edgeIndex };
-                if (categoryWallEdge === undefined) categoryWallEdge = targetWall.edgeIndex;
-                wallUsedLength.set(targetWall.edgeIndex, (wallUsedLength.get(targetWall.edgeIndex) || 0) + curW);
-                wallMaxDepth.set(targetWall.edgeIndex, Math.max(wallMaxDepth.get(targetWall.edgeIndex) || 0, curD));
-                placed = true;
-                console.log(`[placement] Placed ${equip.name} (${i+1}/${count}) on target wall ${targetWall.edgeIndex}`);
-                break;
-              }
-            }
-          }
-        }
-        if (placed) continue;
-
-        // ── STEP 3: Fallback — all walls scored, but NEVER split same ref ──
-        {
-          const allWallPos: { x: number; y: number; rotation: number; score: number; wallEdgeIndex: number }[] = [];
-          for (const wall of wallsByLength) {
-            const isVeryFirst = placements.length === 0;
-            const positions = generateWallPositions(wall, curW, curD, step, isVeryFirst);
-
-            // Rule 3: If this is not the first unit and we already have units placed,
-            // SKIP walls that can't hold ALL remaining units of this ref
-            if (i > 0 && sameRefWallEdgeIndex !== undefined && wall.edgeIndex !== sameRefWallEdgeIndex) {
-              continue; // HARD SKIP — never split same reference across walls
-            }
-
-            // Even for first unit: check if ALL units fit on this wall
-            if (i === 0) {
-              const used = wallUsedLength.get(wall.edgeIndex) || 0;
-              const available = wall.length - used - WALL_MARGIN * 2;
-              if (available < totalRefWidth) continue; // skip walls too small for all units
-            }
-
-            for (const pos of positions) {
-              let penalty = 0;
-
-              // Rule 7: penalty for splitting category across walls
-              if (categoryWallEdge !== undefined && wall.edgeIndex !== categoryWallEdge) {
-                const catWall = walls.find(w => w.edgeIndex === categoryWallEdge);
-                const used = wallUsedLength.get(categoryWallEdge) || 0;
-                const remaining = catWall ? catWall.length - used - WALL_MARGIN * 2 : 0;
-                if (remaining >= totalRefWidth) {
-                  penalty += 3000;
-                } else {
-                  penalty += 200;
-                }
-              }
-
-              if (categoryLastPlacement) {
-                const dist = Math.hypot(pos.x - categoryLastPlacement.x, pos.y - categoryLastPlacement.y);
-                penalty += dist * 2;
-              }
-
-              allWallPos.push({ x: pos.x, y: pos.y, rotation: pos.rotation, score: pos.score + penalty, wallEdgeIndex: wall.edgeIndex });
-            }
-          }
-          allWallPos.sort((a, b) => a.score - b.score);
-
-          for (const pos of allWallPos) {
-            if (isPlacementValid(pos.x, pos.y, curW, curD, pos.rotation, SAME_REF_GAP, bestRoom!, doorZones, pillarZones, placements)) {
-              const p = makePlacement(equip, pos.x, pos.y, pos.rotation, curW, curD);
-              placements.push(p); result.push(p);
-              categoryLastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w: curW, d: curD, wallEdgeIndex: pos.wallEdgeIndex };
-              if (sameRefWallEdgeIndex === undefined) sameRefWallEdgeIndex = pos.wallEdgeIndex;
-              if (categoryWallEdge === undefined) categoryWallEdge = pos.wallEdgeIndex;
-              wallUsedLength.set(pos.wallEdgeIndex, (wallUsedLength.get(pos.wallEdgeIndex) || 0) + curW);
-              wallMaxDepth.set(pos.wallEdgeIndex, Math.max(wallMaxDepth.get(pos.wallEdgeIndex) || 0, curD));
-              placed = true;
-              console.log(`[placement] Fallback placed ${equip.name} (${i+1}/${count}) on wall ${pos.wallEdgeIndex}`);
-              break;
-            }
-          }
-        }
-        if (placed) continue;
-
-        // Could not place on any wall → defer to Phase 2 (second row)
-        console.log(`[placement] ${equip.name} (${i + 1}/${count}) — no wall space, deferred to Phase 2`);
-        wallNotPlaced.push(equip);
-      }
-    }
-  }
-
-  // ════════════════════════════════════════════════════════════════
-  // PHASE 2: Second-row placement (Rule 2 extended)
-  // Equipment faces the opposite side of the corridor, creating an aisle.
-  // Wall equipment corridor takes priority.
-  // ════════════════════════════════════════════════════════════════
-
-  if (wallNotPlaced.length > 0) {
-    console.log(`[placement] Phase 2: ${wallNotPlaced.length} items for second-row placement`);
-
-    // Group second-row items by ref for adjacency
-    const secondRowByRef = new Map<string, GameEquipment[]>();
-    for (const equip of wallNotPlaced) {
-      if (!secondRowByRef.has(equip.id)) secondRowByRef.set(equip.id, []);
-      secondRowByRef.get(equip.id)!.push(equip);
-    }
-
-    let secondRowLast: { x: number; y: number; rotation: number; w: number; d: number; wallEdgeIndex?: number } | null = null;
-
-    for (const [refId, equips] of secondRowByRef) {
-      let refWallEdge: number | undefined = undefined;
-
-      for (const equip of equips) {
-        let placed = false;
+      for (let ui = 0; ui < familyUnits.length; ui++) {
+        const equip = familyUnits[ui];
         const curW = equip.width;
         const curD = equip.depth;
+        const sameRefAsLast = lastRefId === equip.id;
+        const gap = sameRefAsLast ? SAME_REF_GAP : diffGap;
 
-        // Try adjacent to last second-row placement first
-        if (secondRowLast && refWallEdge !== undefined) {
-          const adjPositions = generateAdjacentPositions(
-            secondRowLast.x, secondRowLast.y, secondRowLast.rotation,
-            secondRowLast.w, secondRowLast.d, curW, curD, SAME_REF_GAP,
+        // Guard: item wider than any wall — no chance
+        const longestWall = Math.max(...walls.map(w => w.length));
+        if (curW > longestWall - WALL_MARGIN * 2 && curD > longestWall - WALL_MARGIN * 2) {
+          report.push({
+            equipmentId: equip.id, name: equip.name,
+            reason: "too_large", message: `Trop grand (${curW}×${curD}cm) pour tous les murs de "${room.name || "la salle"}"`,
+          });
+          continue;
+        }
+
+        let placedOk = false;
+
+        // STEP A — extend current run on current wall (adjacency)
+        if (currentWall && lastPlacement) {
+          const adj = generateAdjacentPositions(
+            lastPlacement.x, lastPlacement.y, lastPlacement.rotation,
+            lastPlacement.w, lastPlacement.d, curW, curD, gap,
           );
-          for (const pos of adjPositions) {
-            if (isPlacementValid(pos.x, pos.y, curW, curD, pos.rotation, SAME_REF_GAP, bestRoom!, doorZones, pillarZones, placements, true)) {
-              // Verify we don't block any wall equipment's front zone
-              let blocksWallCorridor = false;
-              for (const pe of placements) {
-                if (pe.centerPlacement) continue;
-                const fz = getFrontClearanceZone(pe.position.x, pe.position.y, pe.width, pe.depth, pe.rotation, CORRIDOR_WIDTH);
-                if (rectsOverlap(fz.cx, fz.cy, fz.w, fz.d, fz.rot, pos.x, pos.y, curW, curD, pos.rotation)) {
-                  blocksWallCorridor = true; break;
-                }
-              }
-              if (!blocksWallCorridor) {
-                const p = makePlacement(equip, pos.x, pos.y, pos.rotation, curW, curD);
-                placements.push(p); result.push(p);
-                secondRowLast = { x: pos.x, y: pos.y, rotation: pos.rotation, w: curW, d: curD, wallEdgeIndex: refWallEdge };
-                placed = true;
-                break;
-              }
-            }
-          }
-        }
-        if (placed) continue;
-
-        // Generate second-row positions along all walls
-        const allSecondRowPos: { x: number; y: number; rotation: number; rotated90: boolean; score: number; wallEdgeIndex: number }[] = [];
-
-        for (const wall of wallsByLength) {
-          const maxDepth = wallMaxDepth.get(wall.edgeIndex) || 60; // default 60cm if no wall equipment
-          const positions = generateSecondRowPositions(wall, curW, curD, maxDepth, step);
-          for (const pos of positions) {
-            let penalty = 0;
-            // Prefer same wall as other same-ref items
-            if (refWallEdge !== undefined && wall.edgeIndex !== refWallEdge) penalty += 50000;
-            // Proximity to last placement
-            if (secondRowLast) penalty += Math.hypot(pos.x - secondRowLast.x, pos.y - secondRowLast.y) * 2;
-            allSecondRowPos.push({ ...pos, score: pos.score + penalty, wallEdgeIndex: wall.edgeIndex });
-          }
-        }
-        allSecondRowPos.sort((a, b) => a.score - b.score);
-
-        for (const pos of allSecondRowPos) {
-          // Basic validity (inside room, no physical overlaps)
-          if (!isPlacementValid(pos.x, pos.y, curW, curD, pos.rotation, SAME_REF_GAP, bestRoom!, doorZones, pillarZones, placements, true)) continue;
-
-          // Rule 2 priority: check that we don't block any wall-backed equipment's corridor
-          let blocksWallCorridor = false;
-          for (const pe of placements) {
-            if (pe.centerPlacement) continue;
-            // Check if this pe is a wall-backed equipment (not already a second-row item)
-            const fz = getFrontClearanceZone(pe.position.x, pe.position.y, pe.width, pe.depth, pe.rotation, CORRIDOR_WIDTH);
-            if (rectsOverlap(fz.cx, fz.cy, fz.w, fz.d, fz.rot, pos.x, pos.y, curW, curD, pos.rotation)) {
-              blocksWallCorridor = true;
+          for (const pos of adj) {
+            if (isPlacementValid(pos.x, pos.y, curW, curD, pos.rotation, gap, room, doorZones, pillarZones, placements)) {
+              const p = makePlacement(equip, pos.x, pos.y, pos.rotation, curW, curD);
+              placements.push(p); newlyPlaced.push(p); placedThisRoom.add(equip);
+              wallUsed.set(currentWall.edgeIndex, (wallUsed.get(currentWall.edgeIndex) || 0) + curW + gap);
+              wallDeepest.set(currentWall.edgeIndex, Math.max(wallDeepest.get(currentWall.edgeIndex) || 0, curD));
+              lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w: curW, d: curD };
+              lastRefId = equip.id;
+              placedOk = true;
               break;
             }
           }
-
-          if (blocksWallCorridor && !pos.rotated90) {
-            // Try to find the 90° rotated version on same wall at similar position
-            continue; // the 90° positions are already in the sorted list with higher score
-          }
-          if (blocksWallCorridor) continue; // even 90° blocks → skip
-
-          const p = makePlacement(equip, pos.x, pos.y, pos.rotation, curW, curD);
-          placements.push(p); result.push(p);
-          secondRowLast = { x: pos.x, y: pos.y, rotation: pos.rotation, w: curW, d: curD, wallEdgeIndex: pos.wallEdgeIndex };
-          if (refWallEdge === undefined) refWallEdge = pos.wallEdgeIndex;
-          placed = true;
-          console.log(`[placement] Second-row placed ${equip.name} on wall ${pos.wallEdgeIndex} rot90=${pos.rotated90}`);
-          break;
         }
 
-        if (!placed) {
-          console.warn(`[placement] Could not place: ${equip.name} — no wall or second-row space`);
-          notPlaced.push(equip);
+        // STEP B — fresh spot on current wall
+        if (!placedOk && currentWall) {
+          const positions = generateWallPositions(currentWall, curW, curD, 5, false);
+          positions.sort((a, b) => a.score - b.score);
+          for (const pos of positions) {
+            if (isPlacementValid(pos.x, pos.y, curW, curD, pos.rotation, diffGap, room, doorZones, pillarZones, placements)) {
+              const p = makePlacement(equip, pos.x, pos.y, pos.rotation, curW, curD);
+              placements.push(p); newlyPlaced.push(p); placedThisRoom.add(equip);
+              wallUsed.set(currentWall.edgeIndex, (wallUsed.get(currentWall.edgeIndex) || 0) + curW);
+              wallDeepest.set(currentWall.edgeIndex, Math.max(wallDeepest.get(currentWall.edgeIndex) || 0, curD));
+              lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w: curW, d: curD };
+              lastRefId = equip.id;
+              placedOk = true;
+              break;
+            }
+          }
+        }
+
+        // STEP C — CONTINUE the run on the next preferred wall
+        if (!placedOk) {
+          for (const wall of wallOrder) {
+            if (currentWall && wall.edgeIndex === currentWall.edgeIndex) continue;
+            const positions = generateWallPositions(wall, curW, curD, 5, true);
+            positions.sort((a, b) => a.score - b.score);
+            let hit = false;
+            for (const pos of positions) {
+              if (isPlacementValid(pos.x, pos.y, curW, curD, pos.rotation, diffGap, room, doorZones, pillarZones, placements)) {
+                const p = makePlacement(equip, pos.x, pos.y, pos.rotation, curW, curD);
+                placements.push(p); newlyPlaced.push(p); placedThisRoom.add(equip);
+                wallUsed.set(wall.edgeIndex, (wallUsed.get(wall.edgeIndex) || 0) + curW);
+                wallDeepest.set(wall.edgeIndex, Math.max(wallDeepest.get(wall.edgeIndex) || 0, curD));
+                lastPlacement = { x: pos.x, y: pos.y, rotation: pos.rotation, w: curW, d: curD };
+                lastRefId = equip.id;
+                currentWall = wall;
+                hit = true; break;
+              }
+            }
+            if (hit) { placedOk = true; break; }
+          }
+        }
+
+        if (!placedOk) {
+          // Leave in pendingWall so another room may take it.
+          continue;
+        }
+
+        // STEP D — circulation feasibility check (batched every 4 placements)
+        placedSinceCheck++;
+        const isBoundary = ui === familyUnits.length - 1 || placedSinceCheck >= 4;
+        if (isBoundary) {
+          placedSinceCheck = 0;
+          if (!circulationOK()) {
+            // Roll back the LAST placement made in this run.
+            const last = newlyPlaced.pop();
+            if (last) {
+              const idx = placements.lastIndexOf(last);
+              if (idx !== -1) placements.splice(idx, 1);
+              placedThisRoom.delete(equip);
+              report.push({
+                equipmentId: equip.id, name: equip.name,
+                reason: "circulation_broken",
+                message: "Retiré : le placement casse la circulation PMR 1,20 m",
+              });
+            }
+            // Force next unit onto a different wall
+            currentWall = null;
+            lastPlacement = null;
+            lastRefId = null;
+          }
         }
       }
     }
-  }
 
-  // ════════════════════════════════════════════════════════════════
-  // PHASE 3: Center-placement tables (Rule 9 — last)
-  // ════════════════════════════════════════════════════════════════
+    // Items not placed in this room go to the next room.
+    pendingWall = pendingWall.filter(e => !placedThisRoom.has(e));
 
-  {
-    const byId = new Map<string, { equip: GameEquipment; count: number }>();
-    for (const equip of centerEquipments) {
-      const existing = byId.get(equip.id);
-      if (existing) existing.count++;
-      else byId.set(equip.id, { equip, count: 1 });
-    }
+    // ── Center placement (islands with 1.20 m passage) ──
+    if (pendingCenter.length > 0) {
+      const placedCenterThisRoom = new Set<GameEquipment>();
+      const byId = new Map<string, { equip: GameEquipment; qty: number }>();
+      for (const eq of pendingCenter) {
+        const cur = byId.get(eq.id);
+        if (cur) cur.qty++;
+        else byId.set(eq.id, { equip: eq, qty: 1 });
+      }
 
-    let centerLast: { x: number; y: number; rotation: number; w: number; d: number } | null = null;
-    for (const group of byId.values()) {
-      const equip = group.equip;
-      const playerClearance = equip.playerClearance || 100;
-      for (let i = 0; i < group.count; i++) {
-        const w = equip.width, d = equip.depth;
-        const centerPositions = generateCenterPlacementPositions(bestRoom!, w, d, playerClearance, step);
-        if (centerLast) {
-          centerPositions.sort((a, b) =>
-            Math.hypot(a.x - centerLast!.x, a.y - centerLast!.y) - Math.hypot(b.x - centerLast!.x, b.y - centerLast!.y)
-          );
-        }
-        let placed = false;
-        for (const pos of centerPositions) {
-          if (isCenterPlacementValid(pos.x, pos.y, w, d, pos.rotation, playerClearance, bestRoom!, doorZones, pillarZones, placements)) {
-            const p = makePlacement(equip, pos.x, pos.y, pos.rotation, w, d);
-            placements.push(p); result.push(p);
-            centerLast = { x: pos.x, y: pos.y, rotation: pos.rotation, w, d };
-            placed = true;
-            console.log(`[placement] Center-placed ${equip.name} at (${pos.x.toFixed(0)},${pos.y.toFixed(0)})`);
+      let centerLast: { x: number; y: number } | null = null;
+      for (const { equip, qty } of byId.values()) {
+        const playerClearance = equip.playerClearance || 100;
+        for (let i = 0; i < qty; i++) {
+          const positions = generateCenterPlacementPositions(room, equip.width, equip.depth, playerClearance, 20);
+          if (centerLast) {
+            positions.sort((a, b) =>
+              Math.hypot(a.x - centerLast!.x, a.y - centerLast!.y) -
+              Math.hypot(b.x - centerLast!.x, b.y - centerLast!.y)
+            );
+          }
+          let placedThis = false;
+          for (const pos of positions) {
+            if (isCenterPlacementValid(pos.x, pos.y, equip.width, equip.depth, pos.rotation, playerClearance, room, doorZones, pillarZones, placements)) {
+              const p = makePlacement(equip, pos.x, pos.y, pos.rotation, equip.width, equip.depth);
+              placements.push(p); newlyPlaced.push(p);
+              centerLast = { x: pos.x, y: pos.y };
+              placedCenterThisRoom.add(equip);
+              placedThis = true;
+              break;
+            }
+          }
+          if (!placedThis) {
+            // Try again in next room
             break;
           }
         }
-        if (!placed) {
-          console.warn(`[placement] Could not center-place: ${equip.name}`);
-          notPlaced.push(equip);
-        }
       }
+      pendingCenter = pendingCenter.filter(e => !placedCenterThisRoom.has(e));
     }
   }
 
-  // ════════════════════════════════════════════════════════════════
-  // POST-PROCESSING: Split flipper blocks back into individual items
-  // ════════════════════════════════════════════════════════════════
-
-  if (mergeBlocks.length > 0) {
-    for (const block of mergeBlocks) {
-      // Find the placed block in result
-      const blockIdx = result.findIndex(p => p.equipmentId === block.mergedEquip.id);
-      if (blockIdx === -1) continue;
-
-      const blockPlacement = result[blockIdx];
-      const n = block.originals.length;
-      const rot = blockPlacement.rotation;
-      const rad = rot * Math.PI / 180;
-      const wallDirX = Math.cos(rad);
-      const wallDirY = Math.sin(rad);
-
-      // Remove the merged block
-      result.splice(blockIdx, 1);
-      const pIdx = placements.findIndex(p => p.equipmentId === block.mergedEquip.id);
-      if (pIdx !== -1) placements.splice(pIdx, 1);
-
-      // Compute cumulative offsets based on individual widths
-      const totalWidth = block.unitWidths.reduce((s, w) => s + w, 0);
-      let cursor = -totalWidth / 2;
-
-      for (let i = 0; i < n; i++) {
-        const orig = block.originals[i];
-        const w = block.unitWidths[i];
-        const offset = cursor + w / 2;
-        cursor += w;
-        const x = blockPlacement.position.x + wallDirX * offset;
-        const y = blockPlacement.position.y + wallDirY * offset;
-        const p = makePlacement(orig, x, y, rot, orig.width, orig.depth);
-        result.push(p);
-        placements.push(p);
-      }
-      console.log(`[placement] Split block into ${n} individual units`);
+  // Anything still pending after all rooms → notPlaced
+  const notPlaced: GameEquipment[] = [...pendingWall, ...pendingCenter];
+  for (const eq of notPlaced) {
+    // Avoid duplicate reports for items already logged (circulation/too_large)
+    if (!report.some(r => r.equipmentId === eq.id && (r.reason === "circulation_broken" || r.reason === "too_large"))) {
+      report.push({
+        equipmentId: eq.id, name: eq.name,
+        reason: "no_wall_space",
+        message: "Aucune position libre trouvée dans les salles disponibles",
+      });
     }
   }
 
-  const circulation = generateCirculationPath(bestRoom!, result, CORRIDOR_WIDTH);
-  return { placed: result, notPlaced, circulation };
+  // Final circulation for return
+  const circResult = (() => {
+    try { return computeCirculation(rooms, doors, pillars, placements).segments; }
+    catch { return [] as CirculationSegment[]; }
+  })();
+
+  return { placed: newlyPlaced, notPlaced, circulation: circResult, report };
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// FAMILY GROUPING & VISIBILITY
+// ═══════════════════════════════════════════════════════════════════
+
+type FamilyKind = "highImpact" | "crane" | "normal";
+type FamilyGroup = { key: string; kind: FamilyKind; units: GameEquipment[] };
+
+function familyKindOf(eq: GameEquipment): FamilyKind {
+  const s = `${eq.category || ""} ${eq.name || ""}`.toLowerCase();
+  if (HIGH_IMPACT_RE.test(s)) return "highImpact";
+  if (CRANE_RE.test(s)) return "crane";
+  return "normal";
+}
+
+function groupWallEquipmentByFamily(items: GameEquipment[], groupByFamily: boolean): FamilyGroup[] {
+  const map = new Map<string, FamilyGroup>();
+  for (const eq of items) {
+    const key = groupByFamily
+      ? (eq.category || "autre").toLowerCase().replace(/s$/, "")
+      : `__ref_${eq.id}`;
+    const kind = familyKindOf(eq);
+    if (!map.has(key)) map.set(key, { key, kind, units: [] });
+    map.get(key)!.units.push(eq);
+    // Upgrade family kind: any high-impact member promotes the group
+    const g = map.get(key)!;
+    if (kind === "highImpact") g.kind = "highImpact";
+    else if (kind === "crane" && g.kind === "normal") g.kind = "crane";
+  }
+  return [...map.values()];
+}
+
+/**
+ * Score each wall by how visible it is from the room's main door.
+ * Higher = more visible. Door wall itself is penalised.
+ */
+function computeWallVisibility(
+  room: Room,
+  walls: WallSegment[],
+  mainDoor: Door | undefined,
+): Map<number, number> {
+  const out = new Map<number, number>();
+  if (!mainDoor) {
+    for (const w of walls) out.set(w.edgeIndex, w.length);
+    return out;
+  }
+  const a = room.points[mainDoor.edgeIndex];
+  const b = room.points[(mainDoor.edgeIndex + 1) % room.points.length];
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const dLen = Math.hypot(dx, dy) || 1;
+  const doorNx = -dy / dLen, doorNy = dx / dLen; // inward normal (either sign)
+  const doorMid: Point = {
+    x: a.x + dx * mainDoor.positionRatio,
+    y: a.y + dy * mainDoor.positionRatio,
+  };
+
+  for (const w of walls) {
+    if (w.edgeIndex === mainDoor.edgeIndex) { out.set(w.edgeIndex, -1000); continue; }
+    const wm = { x: (w.start.x + w.end.x) / 2, y: (w.start.y + w.end.y) / 2 };
+    const vx = wm.x - doorMid.x, vy = wm.y - doorMid.y;
+    const vLen = Math.hypot(vx, vy) || 1;
+    // Alignment with door normal (facing the door) — the wall opposite the door wins.
+    const align = Math.abs(vx * doorNx + vy * doorNy) / vLen;
+    const score = align * 200 + w.length * 0.1 - vLen * 0.05;
+    out.set(w.edgeIndex, score);
+  }
+  return out;
+}
+
+function orderWallsForFamily(
+  walls: WallSegment[],
+  kind: FamilyKind,
+  visibility: Map<number, number>,
+  mainDoor: Door | undefined,
+): WallSegment[] {
+  if (kind === "highImpact") {
+    return [...walls].sort((a, b) =>
+      (visibility.get(b.edgeIndex) || 0) - (visibility.get(a.edgeIndex) || 0));
+  }
+  if (kind === "crane" && mainDoor) {
+    // Adjacent walls to the door
+    return [...walls].sort((a, b) => {
+      const da = Math.min(
+        Math.abs(a.edgeIndex - mainDoor.edgeIndex),
+        walls.length - Math.abs(a.edgeIndex - mainDoor.edgeIndex),
+      );
+      const db = Math.min(
+        Math.abs(b.edgeIndex - mainDoor.edgeIndex),
+        walls.length - Math.abs(b.edgeIndex - mainDoor.edgeIndex),
+      );
+      if (da !== db) return da - db;
+      return b.length - a.length;
+    });
+  }
+  return [...walls].sort((a, b) => b.length - a.length);
+}
+

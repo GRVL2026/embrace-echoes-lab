@@ -297,11 +297,15 @@ export default function Ecommerce() {
                   <BarChart data={stats.salesByMonth}>
                     <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" />
                     <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={monthLabel} />
-                    <YAxis yAxisId="left" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-                    <YAxis yAxisId="right" orientation="right" stroke="hsl(var(--secondary))" fontSize={11} />
+                    <YAxis yAxisId="left" stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={(v) => fmtMoney(Number(v), stats.currency)} />
+                    <YAxis yAxisId="right" orientation="right" stroke="hsl(var(--secondary))" fontSize={11} allowDecimals={false} />
                     <Tooltip
                       contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
-                      formatter={(v: any, name) => name === "amount" ? fmtMoney(Number(v), stats.currency) : `${v} cmd`}
+                      formatter={(v: any, _name, item: any) => {
+                        const key = item?.dataKey;
+                        if (key === "amount") return [fmtMoney(Number(v), stats.currency), "CA"];
+                        return [`${Math.round(Number(v))} commandes`, "Commandes"];
+                      }}
                       labelFormatter={monthLabel}
                     />
                     <Bar yAxisId="left" dataKey="amount" name="CA" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />

@@ -55,7 +55,12 @@ async function formatFunctionError(error: unknown) {
 }
 
 
-async function streamRevue(onJsonBuffer: (buf: string) => void): Promise<string> {
+type RevueStep = { summary: string; query: string };
+
+async function streamRevue(handlers: {
+  onStart?: () => void;
+  onStep?: (step: RevueStep) => void;
+}): Promise<RevueData> {
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
   if (sessionError) throw sessionError;
   const token = sessionData.session?.access_token;
@@ -80,8 +85,8 @@ async function streamRevue(onJsonBuffer: (buf: string) => void): Promise<string>
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  let jsonBuffer = "";
-  let debug: { input_chars?: number; stop_reason?: string | null } | null = null;
+  let revueData: RevueData | null = null;
+  let errorFromStream: string | null = null;
 
   const consumeEvent = (event: string) => {
     const dataText = event
@@ -99,14 +104,21 @@ async function streamRevue(onJsonBuffer: (buf: string) => void): Promise<string>
     let data: any;
     try { data = JSON.parse(dataText); } catch { return; }
 
-    if (eventName === "gaia_debug") { debug = data; return; }
-    if (eventName === "gaia_error") throw new Error(data?.error ? String(data.error) : dataText);
-    if (data?.type === "error") throw new Error(`Anthropic stream error: ${JSON.stringify(data)}`);
-
-    if (data?.type === "content_block_delta" && data?.delta?.type === "input_json_delta" && typeof data.delta.partial_json === "string") {
-      jsonBuffer += data.delta.partial_json;
-      onJsonBuffer(jsonBuffer);
+    if (eventName === "gaia_start") { handlers.onStart?.(); return; }
+    if (eventName === "gaia_sql") {
+      handlers.onStep?.({ summary: String(data?.summary ?? "Requête"), query: String(data?.query ?? "") });
+      return;
     }
+    if (eventName === "gaia_revue") {
+      revueData = data?.data as RevueData;
+      return;
+    }
+    if (eventName === "gaia_error") {
+      errorFromStream = data?.error ? String(data.error) : dataText;
+      return;
+    }
+    // heartbeats (":gaia-heartbeat …") sont filtrés en amont (pas d'event:/data:)
+    // gaia_memoire / autres : ignorés silencieusement pour la revue.
   };
 
   while (true) {
@@ -119,10 +131,9 @@ async function streamRevue(onJsonBuffer: (buf: string) => void): Promise<string>
   }
   if (buffer.trim()) consumeEvent(buffer);
 
-  if (!jsonBuffer.trim()) {
-    throw new Error(`HTTP 200 mais aucune donnée structurée reçue. debug=${JSON.stringify(debug ?? { stop_reason: "inconnu" })}`);
-  }
-  return jsonBuffer;
+  if (errorFromStream) throw new Error(errorFromStream);
+  if (!revueData) throw new Error("HTTP 200 mais aucune donnée de revue reçue.");
+  return revueData;
 }
 
 // ─────────── Main component ───────────

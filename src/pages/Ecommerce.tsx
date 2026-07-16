@@ -149,6 +149,7 @@ export default function Ecommerce() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [period, setPeriod] = useState<typeof PERIODS[number]["key"]>("30d");
   const [openOrder, setOpenOrder] = useState<OrderDetail | null>(null);
+  const [lowStockOpen, setLowStockOpen] = useState(false);
 
   const load = async (force = false, p = period) => {
     if (force) setRefreshing(true); else setLoading(true);
@@ -297,11 +298,15 @@ export default function Ecommerce() {
                   <BarChart data={stats.salesByMonth}>
                     <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" />
                     <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={monthLabel} />
-                    <YAxis yAxisId="left" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-                    <YAxis yAxisId="right" orientation="right" stroke="hsl(var(--secondary))" fontSize={11} />
+                    <YAxis yAxisId="left" stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={(v) => fmtMoney(Number(v), stats.currency)} />
+                    <YAxis yAxisId="right" orientation="right" stroke="hsl(var(--secondary))" fontSize={11} allowDecimals={false} />
                     <Tooltip
                       contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
-                      formatter={(v: any, name) => name === "amount" ? fmtMoney(Number(v), stats.currency) : `${v} cmd`}
+                      formatter={(v: any, _name, item: any) => {
+                        const key = item?.dataKey;
+                        if (key === "amount") return [fmtMoney(Number(v), stats.currency), "CA"];
+                        return [`${Math.round(Number(v))} commandes`, "Commandes"];
+                      }}
                       labelFormatter={monthLabel}
                     />
                     <Bar yAxisId="left" dataKey="amount" name="CA" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
@@ -326,10 +331,10 @@ export default function Ecommerce() {
                       fontSize={11}
                       tickFormatter={(d) => new Date(d).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" })}
                     />
-                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={(v) => fmtMoney(Number(v), stats.currency)} />
                     <Tooltip
                       contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
-                      formatter={(v: any) => fmtMoney(Number(v), stats.currency)}
+                      formatter={(v: any) => [fmtMoney(Number(v), stats.currency), "CA"]}
                       labelFormatter={(d) => new Date(d).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "short" })}
                     />
                     <Bar dataKey="amount" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
@@ -410,34 +415,49 @@ export default function Ecommerce() {
               </Card>
             </div>
 
-            {/* Low stock */}
-            <Card className="p-4 sm:p-6 bg-card/60 border-border">
-              <h2 className="font-display text-lg font-semibold mb-4 flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-yellow-500" /> Stock faible (&lt; 5)
-              </h2>
-              {stats.lowStock.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Tous les produits ont un stock suffisant.</p>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {stats.lowStock.map((v) => (
-                    <div key={v.id} className="flex items-center gap-3 rounded-md border border-border/60 bg-background/40 p-3">
-                      {v.image ? (
-                        <img src={v.image} alt="" className="h-12 w-12 rounded object-cover flex-shrink-0" />
-                      ) : (
-                        <div className="h-12 w-12 rounded bg-muted flex-shrink-0" />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium truncate">{v.productTitle}</div>
-                        <div className="text-[11px] text-muted-foreground truncate">{v.variantTitle} · {v.sku || "—"}</div>
-                      </div>
-                      <Badge className="bg-destructive/15 text-destructive border-destructive/40 border" variant="outline">
-                        {v.quantity}
-                      </Badge>
+            {/* Low stock (collapsed by default) */}
+            <Card className="bg-card/60 border-border">
+              <button
+                type="button"
+                onClick={() => setLowStockOpen((o) => !o)}
+                className="w-full flex items-center justify-between gap-2 p-4 sm:p-6 text-left"
+              >
+                <h2 className="font-display text-lg font-semibold flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                  Stock faible ({stats.lowStock.length})
+                </h2>
+                <ChevronRight
+                  className={`h-4 w-4 text-muted-foreground transition-transform ${lowStockOpen ? "rotate-90" : ""}`}
+                />
+              </button>
+              {lowStockOpen && (
+                <div className="px-4 sm:px-6 pb-4 sm:pb-6">
+                  {stats.lowStock.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Tous les produits ont un stock suffisant.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {stats.lowStock.map((v) => (
+                        <div key={v.id} className="flex items-center gap-3 rounded-md border border-border/60 bg-background/40 p-3">
+                          {v.image ? (
+                            <img src={v.image} alt="" className="h-12 w-12 rounded object-cover flex-shrink-0" />
+                          ) : (
+                            <div className="h-12 w-12 rounded bg-muted flex-shrink-0" />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-medium truncate">{v.productTitle}</div>
+                            <div className="text-[11px] text-muted-foreground truncate">{v.variantTitle} · {v.sku || "—"}</div>
+                          </div>
+                          <Badge className="bg-destructive/15 text-destructive border-destructive/40 border" variant="outline">
+                            {v.quantity}
+                          </Badge>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
             </Card>
+
 
             <StockSyncPanel />
           </>

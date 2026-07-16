@@ -941,19 +941,16 @@ Deno.serve(async (req) => {
             }
 
             if (!markdown) {
-              for (let i = finalMessages.length - 1; i >= 0 && !markdown; i--) {
-                const m = finalMessages[i];
-                if (m.role === 'assistant' && Array.isArray(m.content)) {
-                  markdown = extractText(m.content);
-                }
-              }
+              const fallback = fallbackFromLastSqlResults(finalMessages);
+              if (fallback) markdown = fallback;
             }
 
             const sqlUsed = journal.flatMap((j) => j.sql_queries);
 
             if (!markdown) {
+              const forcedStop = forcedDebug?.stop_reason ?? '?';
               send('gaia_error', {
-                error: `Réponse vide (stop_reason=${last?.stop_reason ?? '?'}, rounds=${rounds})`,
+                error: `Réponse vide (stop_reason=${last?.stop_reason ?? '?'}, forced_stop_reason=${forcedStop}, rounds=${rounds})`,
                 debug: { journal, forced: forcedDebug },
               });
             } else {

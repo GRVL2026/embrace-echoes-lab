@@ -908,17 +908,23 @@ Deno.serve(async (req) => {
             }
 
             if (!markdown) {
-              const fallback = fallbackFromLastSqlResults(finalMessages);
-              if (fallback) markdown = fallback;
+              try {
+                const retry = await forceFinalText(CHAT_MODEL, chatSystem, finalMessages, memorySuffix, true);
+                if (retry.text) markdown = retry.text;
+                forcedDebug = { ...(forcedDebug ?? {}), retry: { stop_reason: retry.stop_reason, block_types: retry.block_types } };
+              } catch (e: any) {
+                console.log(`[gaia-copilot] forceFinalText retry error: ${e?.message ?? e}`);
+                forcedDebug = { ...(forcedDebug ?? {}), retry: { error: e?.message ?? String(e) } };
+              }
             }
 
             const sqlUsed = journal.flatMap((j) => j.sql_queries);
 
             if (!markdown) {
-              const forcedStop = forcedDebug?.stop_reason ?? '?';
-              send('gaia_error', {
-                error: `Réponse vide (stop_reason=${last?.stop_reason ?? '?'}, forced_stop_reason=${forcedStop}, rounds=${rounds})`,
-                debug: { journal, forced: forcedDebug },
+              send('gaia_final', {
+                markdown: "Je n'ai pas réussi à formuler ma réponse. Peux-tu reformuler ta question ?",
+                debug: { stop_reason: last?.stop_reason ?? null, tool_rounds: rounds, journal, forced: forcedDebug, empty_response: true },
+                sql_used: sqlUsed,
               });
             } else {
               send('gaia_final', {

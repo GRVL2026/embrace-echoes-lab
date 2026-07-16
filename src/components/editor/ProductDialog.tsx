@@ -10,26 +10,31 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { ChevronLeft, ChevronRight, Play, Zap, Monitor, Users, Ticket, Package, Box, Upload, Check, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Play, Zap, Monitor, Users, Ticket, Package, Box, Upload, Check, Trash2, Ruler, RotateCw, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { GameEquipment } from "@/types/equipment";
 import { compressGLB, formatBytes } from "@/lib/glbCompression";
 import { uploadFileResumable } from "@/lib/resumableUpload";
+import { readGLBDimensions } from "@/lib/glbBounds";
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 Mo
+const ROTATIONS = [0, 90, 180, 270] as const;
 
 type ProductDialogProps = {
   equipment: GameEquipment | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUpdate3DModel?: (equipmentId: string, modelUrl: string | undefined) => void;
+  onUpdateProduct?: (equipmentId: string, patch: Partial<GameEquipment>) => Promise<void> | void;
 };
 
-export function ProductDialog({ equipment, open, onOpenChange, onUpdate3DModel }: ProductDialogProps) {
+export function ProductDialog({ equipment, open, onOpenChange, onUpdate3DModel, onUpdateProduct }: ProductDialogProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string>("");
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [adoptingDims, setAdoptingDims] = useState(false);
+  const [savingRotation, setSavingRotation] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!equipment) return null;
@@ -122,6 +127,42 @@ export function ProductDialog({ equipment, open, onOpenChange, onUpdate3DModel }
     onUpdate3DModel?.(equipment.id, undefined);
     toast.success(`Modèle 3D retiré de ${equipment.name}`);
   };
+
+  const handleAdoptDims = async () => {
+    if (!equipment.model3d || !onUpdateProduct) return;
+    setAdoptingDims(true);
+    try {
+      const dims = await readGLBDimensions(equipment.model3d, equipment.model3dRotation || 0);
+      await onUpdateProduct(equipment.id, {
+        width: dims.width,
+        depth: dims.depth,
+        height: dims.height,
+      });
+      toast.success(
+        `Dimensions mises à jour : ${dims.width} × ${dims.depth} × ${dims.height} cm`
+      );
+    } catch (err: any) {
+      console.error(err);
+      toast.error(`Impossible de lire le modèle 3D : ${err?.message || "erreur inconnue"}`);
+    } finally {
+      setAdoptingDims(false);
+    }
+  };
+
+  const handleSetRotation = async (deg: number) => {
+    if (!onUpdateProduct) return;
+    setSavingRotation(deg);
+    try {
+      await onUpdateProduct(equipment.id, { model3dRotation: deg });
+      toast.success(`Orientation du modèle 3D : ${deg}°`);
+    } catch (err: any) {
+      toast.error(`Erreur : ${err?.message || "inconnue"}`);
+    } finally {
+      setSavingRotation(null);
+    }
+  };
+
+  const currentRotation = equipment.model3dRotation || 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -278,7 +319,7 @@ export function ProductDialog({ equipment, open, onOpenChange, onUpdate3DModel }
             </div>
 
             {/* 3D Model section */}
-            <div className="rounded-lg border border-border bg-surface p-3 mb-4">
+            <div className="rounded-lg border border-border bg-surface p-3 mb-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Box className="h-4 w-4 text-primary" />
@@ -306,7 +347,8 @@ export function ProductDialog({ equipment, open, onOpenChange, onUpdate3DModel }
                   )}
                 </div>
               </div>
-              <div className="mt-2">
+
+              <div>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -332,6 +374,53 @@ export function ProductDialog({ equipment, open, onOpenChange, onUpdate3DModel }
                   <Progress value={uploadProgress} className="mt-2 h-1.5" />
                 )}
               </div>
+
+              {/* Adopt real dimensions from the GLB bounding box */}
+              {equipment.model3d && onUpdateProduct && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-2"
+                  onClick={handleAdoptDims}
+                  disabled={adoptingDims}
+                  title="Lit la bounding box du GLB (en mètres) et met à jour la largeur/profondeur/hauteur du produit"
+                >
+                  {adoptingDims ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Ruler className="h-4 w-4" />
+                  )}
+                  Reprendre les dimensions du modèle 3D
+                </Button>
+              )}
+
+              {/* Rotation correction (0 / 90 / 180 / 270) — applied before scaling */}
+              {equipment.model3d && onUpdateProduct && (
+                <div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                    <RotateCw className="h-3.5 w-3.5" />
+                    Orientation du modèle (avant mise à l'échelle)
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {ROTATIONS.map((deg) => {
+                      const isActive = currentRotation === deg;
+                      const isSaving = savingRotation === deg;
+                      return (
+                        <Button
+                          key={deg}
+                          variant={isActive ? "default" : "outline"}
+                          size="sm"
+                          className="gap-1"
+                          disabled={savingRotation !== null}
+                          onClick={() => handleSetRotation(deg)}
+                        >
+                          {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : `${deg}°`}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Video */}

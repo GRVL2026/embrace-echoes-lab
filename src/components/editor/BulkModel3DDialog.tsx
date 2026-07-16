@@ -404,6 +404,56 @@ export function BulkModel3DDialog({ open, onOpenChange, catalog, setCatalog }: P
                           </Select>
                         </div>
 
+                        {/* Adopt-dimensions checkbox — active once the GLB has been measured */}
+                        {r.matchedId !== IGNORE && r.status !== "done" && (
+                          (() => {
+                            const matched = catalog.find((c) => c.id === r.matchedId);
+                            if (!matched) return null;
+                            if (r.measuringError) {
+                              return (
+                                <p className="text-[10px] text-destructive pl-4">
+                                  Impossible de lire les dimensions du GLB : {r.measuringError}
+                                </p>
+                              );
+                            }
+                            if (!r.modelDims) {
+                              return (
+                                <p className="text-[10px] text-muted-foreground pl-4 flex items-center gap-1">
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                  Mesure du modèle 3D…
+                                </p>
+                              );
+                            }
+                            const diverges = dimsDivergeSignificantly(r.modelDims, matched);
+                            return (
+                              <label className="flex items-start gap-2 pl-4 cursor-pointer select-none">
+                                <Checkbox
+                                  checked={r.adoptDims}
+                                  disabled={running}
+                                  onCheckedChange={(v) =>
+                                    updateRow(idx, { adoptDims: v === true })
+                                  }
+                                  className="mt-0.5"
+                                />
+                                <div className="text-[11px] leading-tight">
+                                  <div className="flex items-center gap-1 text-foreground">
+                                    <Ruler className="h-3 w-3 text-muted-foreground" />
+                                    Adopter les dimensions du modèle :{" "}
+                                    <span className="font-medium">
+                                      {r.modelDims.width} × {r.modelDims.depth} × {r.modelDims.height} cm
+                                    </span>
+                                    {diverges && (
+                                      <span className="text-amber-500 ml-1">
+                                        (fiche : {matched.width} × {matched.depth} × {matched.height})
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </label>
+                            );
+                          })()
+                        )}
+
                         {r.status === "uploading" && (
                           <Progress value={r.progress} className="h-1.5" />
                         )}

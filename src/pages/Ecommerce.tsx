@@ -234,7 +234,7 @@ export default function Ecommerce() {
               />
               <KpiTile
                 label="Clients récurrents"
-                value={`${stats.kpi.returningShare.toFixed(0)}%`}
+                value={`${(stats.kpi.returningShare ?? 0).toFixed(0)}%`}
                 sub={`${stats.customers.returning} / ${stats.customers.new + stats.customers.returning} cmd`}
                 accent="primary"
               />

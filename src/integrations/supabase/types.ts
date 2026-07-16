@@ -1290,6 +1290,33 @@ export type Database = {
         }
         Relationships: []
       }
+      veille_rapports: {
+        Row: {
+          contenu_markdown: string
+          created_at: string
+          id: string
+          periode: string
+          sources: Json
+          type: string
+        }
+        Insert: {
+          contenu_markdown: string
+          created_at?: string
+          id?: string
+          periode: string
+          sources?: Json
+          type: string
+        }
+        Update: {
+          contenu_markdown?: string
+          created_at?: string
+          id?: string
+          periode?: string
+          sources?: Json
+          type?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       v_gaia_articles: {

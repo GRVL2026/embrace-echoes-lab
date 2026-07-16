@@ -124,7 +124,17 @@ export default function GaiaRevueView() {
             {error}
           </div>
         )}
-        {row && (
+        {row && isRevueEmpty(row.data) && (
+          <div className="rounded border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+            <div className="font-semibold text-amber-300">
+              Cette revue est invalide (génération tronquée), relancez la génération.
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Le modèle a rendu une revue vide ou incomplète. Retournez au copilote pour lancer une nouvelle génération.
+            </p>
+          </div>
+        )}
+        {row && !isRevueEmpty(row.data) && (
           <div className="rounded border border-border/60 bg-background/40 p-4 print:border-0 print:bg-white print:p-0">
             <RevueDashboard data={row.data} />
           </div>

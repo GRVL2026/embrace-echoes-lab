@@ -856,6 +856,82 @@ Deno.serve(async (req) => {
         return { input: toolUse.input, stopReason };
       };
 
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          let heartbeat: number | undefined;
+          let closed = false;
+          const safeSend = (event: string, data: unknown) => {
+            if (closed) return;
+            try {
+              controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+            } catch { closed = true; }
+          };
+          const safeHeartbeat = () => {
+            if (closed) return;
+            try { controller.enqueue(encoder.encode(`: gaia-heartbeat ${Date.now()}\n\n`)); }
+            catch { closed = true; }
+          };
+          const safeClose = () => {
+            if (closed) return;
+            closed = true;
+            try { controller.close(); } catch { /* already closed */ }
+          };
+
+          const work = async () => {
+            let revueId: string | null = null;
+            try {
+              // 1. Draft row (statut = 'en_cours') — persistée avant tout traitement
+              const { data: draftRow, error: draftErr } = await admin
+                .from('gaia_revues')
+                .insert({
+                  titre: titreRevue,
+                  statut: 'en_cours',
+                  data: null,
+                  created_by: userIdForRow,
+                })
+                .select('id')
+                .single();
+              if (draftErr) throw new Error(`Création de la revue impossible : ${draftErr.message}`);
+              revueId = (draftRow as any)?.id ?? null;
+
+              safeSend('gaia_start', { kind: 'revue', id: revueId });
+              heartbeat = setInterval(safeHeartbeat, 10_000);
+
+              if (dataJson.length < 200) {
+                throw new Error(`Données agrégées insuffisantes (dataJson=${dataJson.length} chars) — la base commerciale n'a rien renvoyé. Vérifie la synchro Cegid.`);
+              }
+
+              // 2. Boucle agentique SQL, streamée via gaia_sql / gaia_memoire
+              const { messages: agenticMessages } = await toolLoop({
+                admin,
+                model: REVUE_MODEL,
+                system: revueSystem,
+                dynamicSuffix: memorySuffix,
+                initialMessages,
+                extraTools: [],
+                extraPayload: revueExtra,
+                onEvent: (evt, data) => safeSend(evt, data),
+              });
+
+              // 3. Appel final build_revue (non-streamé, heartbeats maintiennent la connexion)
+              safeSend('gaia_sql', { summary: 'Construction de la revue finale…', query: '' });
+              let { input: revueInput, stopReason } = await callBuildRevue(agenticMessages, null);
+
+              // 3bis. Validation : si vide/tronqué, on retente une fois avec une
+              // consigne de concision explicite.
+              let validation = validateRevue(revueInput);
+              if (!validation.ok) {
+                console.log(`[gaia-copilot] build_revue invalide (${validation.reason}) — retry`);
+                safeSend('gaia_sql', { summary: 'Nouvelle tentative (revue trop courte)…', query: '' });
+                const retryInstruction = `La précédente tentative a rendu une revue vide ou incomplète (${validation.reason}). REMPLIS OBLIGATOIREMENT sante.commentaire (2 phrases), sante.annees (au moins 2 exercices avec ca_ht) et AU MOINS UNE section parmi mouvements.familles, mouvements.clients_hausse/baisse, risques ou actions. Sois concis : chaque champ texte = 1-2 phrases maximum, maximum 5 items par liste.`;
+                const retry = await callBuildRevue(agenticMessages, retryInstruction);
+                revueInput = retry.input;
+                stopReason = retry.stopReason;
+                validation = validateRevue(revueInput);
+                if (!validation.ok) {
+                  throw new Error(`Revue vide même après retry (${validation.reason}). stop_reason=${stopReason}. Relancez la génération.`);
+                }
+              }
 
               // 4. Sauvegarde finale
               if (revueId) {
@@ -863,14 +939,14 @@ Deno.serve(async (req) => {
                   .from('gaia_revues')
                   .update({
                     statut: 'terminee',
-                    data: toolUse.input,
+                    data: revueInput,
                     erreur: null,
                     updated_at: new Date().toISOString(),
                   })
                   .eq('id', revueId);
                 if (updErr) console.log(`[gaia-copilot] revue update terminee error: ${updErr.message}`);
               }
-              safeSend('gaia_revue', { id: revueId, data: toolUse.input });
+              safeSend('gaia_revue', { id: revueId, data: revueInput });
             } catch (e: any) {
               const msg = e?.message ?? String(e);
               console.log(`[gaia-copilot] revue background fatal: ${msg}`);

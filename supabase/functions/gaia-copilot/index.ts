@@ -650,11 +650,12 @@ async function forceFinalText(
 ): Promise<{ text: string; stop_reason: string | null; block_types: string[] }> {
   const forced = [...messages, {
     role: 'user' as const,
-    content: 'Donne maintenant ta réponse finale à partir des résultats déjà obtenus.',
+    content: 'Donne maintenant ta réponse finale à partir des résultats déjà obtenus. Réponds directement, sans réfléchir en interne.',
   }];
   const resp = await anthropicCall({
     model,
-    max_tokens: MAX_TOKENS_PER_TURN,
+    max_tokens: 16000,
+    thinking: { type: 'disabled' },
     system: systemBlocks(system, dynamicSuffix),
     messages: withCacheOnLastMessage(forced),
   });
@@ -663,6 +664,45 @@ async function forceFinalText(
   const blockTypes = content.map((b: any) => b?.type ?? 'unknown');
   console.log(`[gaia-copilot] forceFinalText stop_reason=${resp?.stop_reason} blocks=${JSON.stringify(blockTypes)}`);
   return { text: extractText(content), stop_reason: resp?.stop_reason ?? null, block_types: blockTypes };
+}
+
+/**
+ * Filet ultime : construit une réponse Markdown de secours à partir des DERNIERS
+ * tool_result SQL de l'historique agentique, quand même forceFinalText ne rend rien.
+ */
+function fallbackFromLastSqlResults(
+  messages: Array<{ role: 'user' | 'assistant'; content: any }>,
+): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role !== 'user' || !Array.isArray(m.content)) continue;
+    const results = m.content.filter((b: any) => b?.type === 'tool_result');
+    if (!results.length) continue;
+
+    const blocks: string[] = [];
+    for (const r of results) {
+      const raw = typeof r.content === 'string' ? r.content : JSON.stringify(r.content);
+      let parsed: any = null;
+      try { parsed = JSON.parse(raw); } catch { parsed = null; }
+      const rows = Array.isArray(parsed?.rows)
+        ? parsed.rows
+        : Array.isArray(parsed) ? parsed : null;
+      if (rows && rows.length) {
+        const preview = rows.slice(0, 50);
+        blocks.push('```json\n' + JSON.stringify(preview, null, 2).slice(0, 8000) + '\n```');
+      } else if (parsed?.error) {
+        blocks.push(`Erreur outil : ${String(parsed.error).slice(0, 500)}`);
+      } else {
+        blocks.push('```\n' + raw.slice(0, 4000) + '\n```');
+      }
+    }
+    if (!blocks.length) continue;
+    return [
+      "⚠️ Je n'ai pas pu rédiger de synthèse (réponse texte vide du modèle). Voici les dernières données brutes récupérées :",
+      ...blocks,
+    ].join('\n\n');
+  }
+  return '';
 }
 
 

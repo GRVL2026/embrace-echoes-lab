@@ -382,6 +382,7 @@ export function GaiaCopilot() {
     });
     setChatInput("");
     setChatLoading(true);
+    stickToBottomRef.current = true;
 
     try {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();

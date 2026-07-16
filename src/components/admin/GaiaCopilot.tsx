@@ -55,7 +55,12 @@ async function formatFunctionError(error: unknown) {
 }
 
 
-async function streamRevue(onJsonBuffer: (buf: string) => void): Promise<string> {
+type RevueStep = { summary: string; query: string };
+
+async function streamRevue(handlers: {
+  onStart?: () => void;
+  onStep?: (step: RevueStep) => void;
+}): Promise<RevueData> {
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
   if (sessionError) throw sessionError;
   const token = sessionData.session?.access_token;
@@ -80,8 +85,8 @@ async function streamRevue(onJsonBuffer: (buf: string) => void): Promise<string>
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  let jsonBuffer = "";
-  let debug: { input_chars?: number; stop_reason?: string | null } | null = null;
+  let revueData: RevueData | null = null;
+  let errorFromStream: string | null = null;
 
   const consumeEvent = (event: string) => {
     const dataText = event
@@ -99,14 +104,21 @@ async function streamRevue(onJsonBuffer: (buf: string) => void): Promise<string>
     let data: any;
     try { data = JSON.parse(dataText); } catch { return; }
 
-    if (eventName === "gaia_debug") { debug = data; return; }
-    if (eventName === "gaia_error") throw new Error(data?.error ? String(data.error) : dataText);
-    if (data?.type === "error") throw new Error(`Anthropic stream error: ${JSON.stringify(data)}`);
-
-    if (data?.type === "content_block_delta" && data?.delta?.type === "input_json_delta" && typeof data.delta.partial_json === "string") {
-      jsonBuffer += data.delta.partial_json;
-      onJsonBuffer(jsonBuffer);
+    if (eventName === "gaia_start") { handlers.onStart?.(); return; }
+    if (eventName === "gaia_sql") {
+      handlers.onStep?.({ summary: String(data?.summary ?? "Requête"), query: String(data?.query ?? "") });
+      return;
     }
+    if (eventName === "gaia_revue") {
+      revueData = data?.data as RevueData;
+      return;
+    }
+    if (eventName === "gaia_error") {
+      errorFromStream = data?.error ? String(data.error) : dataText;
+      return;
+    }
+    // heartbeats (":gaia-heartbeat …") sont filtrés en amont (pas d'event:/data:)
+    // gaia_memoire / autres : ignorés silencieusement pour la revue.
   };
 
   while (true) {
@@ -119,10 +131,9 @@ async function streamRevue(onJsonBuffer: (buf: string) => void): Promise<string>
   }
   if (buffer.trim()) consumeEvent(buffer);
 
-  if (!jsonBuffer.trim()) {
-    throw new Error(`HTTP 200 mais aucune donnée structurée reçue. debug=${JSON.stringify(debug ?? { stop_reason: "inconnu" })}`);
-  }
-  return jsonBuffer;
+  if (errorFromStream) throw new Error(errorFromStream);
+  if (!revueData) throw new Error("HTTP 200 mais aucune donnée de revue reçue.");
+  return revueData;
 }
 
 // ─────────── Main component ───────────
@@ -131,7 +142,7 @@ export function GaiaCopilot() {
   const [revueLoading, setRevueLoading] = useState(false);
   const [revueData, setRevueData] = useState<RevueData | null>(null);
   const [revueError, setRevueError] = useState<string | null>(null);
-  const [revueProgress, setRevueProgress] = useState(0);
+  const [revueSteps, setRevueSteps] = useState<RevueStep[]>([]);
 
   const [devis, setDevis] = useState<DevisRelance[]>([]);
   const [dormants, setDormants] = useState<ClientDormant[]>([]);
@@ -282,10 +293,12 @@ export function GaiaCopilot() {
     setRevueLoading(true);
     setRevueData(null);
     setRevueError(null);
-    setRevueProgress(0);
+    setRevueSteps([]);
     try {
-      const jsonBuffer = await streamRevue((buf) => setRevueProgress(buf.length));
-      const parsed = JSON.parse(jsonBuffer) as RevueData;
+      const parsed = await streamRevue({
+        onStart: () => setRevueSteps([]),
+        onStep: (step) => setRevueSteps((prev) => [...prev, step]),
+      });
       setRevueData(parsed);
       await saveRevue(parsed);
       toast({ title: "Revue enregistrée", description: "Consultable dans l'historique." });
@@ -657,15 +670,20 @@ export function GaiaCopilot() {
           </div>
         </div>
         {revueLoading && !revueData && (
-          <div className="flex h-32 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+          <div className="flex flex-col gap-2 rounded border border-border/60 bg-background/40 p-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Analyse en cours… le modèle réfléchit avant d'écrire.
+              Analyse en cours… le modèle interroge les données puis rédige la revue.
             </div>
-            {revueProgress > 0 && (
-              <div className="text-xs text-muted-foreground/70">
-                Assemblage des données ({revueProgress} caractères reçus)…
-              </div>
+            {revueSteps.length > 0 && (
+              <ul className="mt-1 space-y-0.5 text-[11px] text-muted-foreground/80">
+                {revueSteps.map((s, j) => (
+                  <li key={j} title={s.query} className="flex items-center gap-1.5">
+                    <Search className="h-3 w-3 shrink-0 opacity-70" />
+                    <span className="truncate">Requête : {s.summary}</span>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         )}

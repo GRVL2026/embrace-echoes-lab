@@ -19,10 +19,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Upload, Box, CheckCircle2, XCircle, Loader2, Trash2 } from "lucide-react";
+import { Upload, Box, CheckCircle2, XCircle, Loader2, Trash2, Ruler } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { GameEquipment } from "@/types/equipment";
 import { uploadFileResumable } from "@/lib/resumableUpload";
 import { updateCatalogProduct } from "@/lib/catalogDB";
+import { readGLBDimensions, dimsDivergeSignificantly, type GLBDimensions } from "@/lib/glbBounds";
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 Mo
 const IGNORE = "__ignore__";
@@ -30,9 +32,12 @@ const IGNORE = "__ignore__";
 type Row = {
   file: File;
   matchedId: string; // equipment id, or IGNORE
-  status: "pending" | "uploading" | "done" | "error" | "skipped";
+  status: "pending" | "measuring" | "uploading" | "done" | "error" | "skipped";
   progress: number;
   message?: string;
+  modelDims?: GLBDimensions; // measured GLB bounding box (cm)
+  measuringError?: string;
+  adoptDims: boolean; // checkbox — apply model dimensions to the product
 };
 
 type Props = {

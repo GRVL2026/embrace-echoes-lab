@@ -2616,8 +2616,6 @@ function drawCirculationPath(
 ) {
   if (segments.length === 0) return;
 
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { segmentsToSmoothChains } = require("@/lib/circulationSpline") as typeof import("@/lib/circulationSpline");
   const chains = segmentsToSmoothChains(segments, 10);
   if (chains.length === 0) return;
 

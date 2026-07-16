@@ -33,6 +33,133 @@ async function zd(path: string): Promise<any> {
   return r.json();
 }
 
+async function fetchUsersByIds(ids: number[]): Promise<Record<string, any>> {
+  const out: Record<string, any> = {};
+  const uniq = Array.from(new Set(ids.filter((x) => x != null)));
+  const CHUNK = 100;
+  for (let i = 0; i < uniq.length; i += CHUNK) {
+    const slice = uniq.slice(i, i + CHUNK);
+    try {
+      const j = await zd(`/api/v2/users/show_many.json?ids=${slice.join(',')}`);
+      for (const u of j.users ?? []) out[String(u.id)] = u;
+    } catch { /* skip */ }
+  }
+  return out;
+}
+
+async function searchTickets(q: string) {
+  const trimmed = q.trim();
+  if (!trimmed) return { tickets: [] };
+
+  // Direct ticket # lookup when purely numeric
+  if (/^\d+$/.test(trimmed)) {
+    try {
+      const j = await zd(`/api/v2/tickets/${trimmed}.json?include=users`);
+      const t = j.ticket;
+      const users: Record<string, any> = {};
+      for (const u of j.users ?? []) users[String(u.id)] = u;
+      if (t) {
+        return {
+          tickets: [{
+            id: t.id,
+            subject: t.subject || t.raw_subject || '(sans sujet)',
+            requester: users[String(t.requester_id)]?.name
+              || (await fetchUsersByIds([t.requester_id]))[String(t.requester_id)]?.name
+              || 'Inconnu',
+            status: t.status,
+            priority: t.priority,
+            created_at: t.created_at,
+            updated_at: t.updated_at,
+          }],
+        };
+      }
+    } catch (e: any) {
+      const msg = String(e?.message || e);
+      if (!/\b404\b/.test(msg)) throw e;
+      // fall through to text search
+    }
+  }
+
+  const query = `type:ticket ${trimmed}`;
+  const searchUrl = `/api/v2/search.json?query=${encodeURIComponent(query)}&sort_by=updated_at&sort_order=desc&per_page=25`;
+  const j = await zd(searchUrl);
+  const rawTickets = (j.results ?? []).filter((r: any) => r.result_type === 'ticket').slice(0, 25);
+  const users = await fetchUsersByIds(rawTickets.map((t: any) => t.requester_id));
+  const tickets = rawTickets.map((t: any) => ({
+    id: t.id,
+    subject: t.subject || t.raw_subject || '(sans sujet)',
+    requester: users[String(t.requester_id)]?.name || 'Inconnu',
+    status: t.status,
+    priority: t.priority,
+    created_at: t.created_at,
+    updated_at: t.updated_at,
+  }));
+  return { tickets };
+}
+
+async function computeTopClients() {
+  const MAX_PAGES = 10;
+  const PAGE_SIZE = 100;
+  const agg = new Map<number, { total: number; ouverts: number; enAttente: number }>();
+  let cursor: string | null = null;
+  let pages = 0;
+  let scanned = 0;
+  let hasMore = false;
+
+  for (pages = 0; pages < MAX_PAGES; pages++) {
+    const path = cursor
+      ? `/api/v2/tickets.json?page[size]=${PAGE_SIZE}&page[after]=${encodeURIComponent(cursor)}`
+      : `/api/v2/tickets.json?page[size]=${PAGE_SIZE}`;
+    const j: any = await zd(path);
+    for (const t of j.tickets ?? []) {
+      const rid = Number(t.requester_id);
+      if (!rid) continue;
+      const cur = agg.get(rid) || { total: 0, ouverts: 0, enAttente: 0 };
+      cur.total++;
+      if (t.status === 'open' || t.status === 'new') cur.ouverts++;
+      else if (t.status === 'pending' || t.status === 'hold') cur.enAttente++;
+      agg.set(rid, cur);
+      scanned++;
+    }
+    if (j.meta?.has_more && j.links?.next) {
+      // Parse the after_cursor from the next link
+      try {
+        const nextUrl = new URL(j.links.next);
+        cursor = nextUrl.searchParams.get('page[after]')
+          || nextUrl.searchParams.get('page%5Bafter%5D')
+          || null;
+      } catch { cursor = null; }
+      if (!cursor) break;
+      hasMore = true;
+    } else {
+      hasMore = false;
+      break;
+    }
+  }
+  if (pages >= MAX_PAGES && hasMore) hasMore = true; else hasMore = false;
+
+  const top = Array.from(agg.entries())
+    .sort((a, b) => b[1].total - a[1].total)
+    .slice(0, 10);
+  const users = await fetchUsersByIds(top.map(([id]) => id));
+  const clients = top.map(([id, v], i) => ({
+    rank: i + 1,
+    requester_id: id,
+    name: users[String(id)]?.name || 'Inconnu',
+    email: users[String(id)]?.email || null,
+    total: v.total,
+    ouverts: v.ouverts,
+    en_attente: v.enAttente,
+  }));
+
+  return {
+    clients,
+    scanned,
+    truncated: hasMore,
+    fetched_at: new Date().toISOString(),
+  };
+}
+
 async function fetchStats() {
   const startOfWeek = new Date(); startOfWeek.setDate(startOfWeek.getDate() - 7);
   const startOfMonth = new Date(); startOfMonth.setDate(startOfMonth.getDate() - 30);
@@ -348,6 +475,51 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    if (action === 'search') {
+      const q = url.searchParams.get('q') || '';
+      if (!q.trim()) {
+        return new Response(JSON.stringify({ tickets: [] }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const payload = await searchTickets(q);
+      return new Response(JSON.stringify(payload), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (action === 'top_clients') {
+      const force = url.searchParams.get('refresh') === '1';
+      const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
+      if (!force) {
+        const { data: cached } = await supabase
+          .from('zendesk_stats_cache')
+          .select('payload, fetched_at')
+          .eq('cache_version', CACHE_VERSION)
+          .eq('period_key', 'top_clients')
+          .order('fetched_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (cached?.fetched_at) {
+          const age = (Date.now() - new Date(cached.fetched_at).getTime()) / 1000 / 60;
+          if (age < 60) {
+            return new Response(JSON.stringify({ ...(cached.payload as any), cached: true }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+        }
+      }
+      const payload = await computeTopClients();
+      await supabase.from('zendesk_stats_cache').upsert(
+        { period_key: 'top_clients', cache_version: CACHE_VERSION, payload, fetched_at: payload.fetched_at },
+        { onConflict: 'period_key,cache_version' },
+      );
+      return new Response(JSON.stringify({ ...payload, cached: false }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
 
     // action=stats (default)
     const force = url.searchParams.get('refresh') === '1';

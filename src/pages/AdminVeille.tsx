@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -7,18 +7,165 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { UserMenu } from "@/components/UserMenu";
 import { MobileNav } from "@/components/MobileNav";
+import {
+  Accordion, AccordionContent, AccordionItem, AccordionTrigger,
+} from "@/components/ui/accordion";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, Shield, Database, Radar, CalendarDays, CalendarRange } from "lucide-react";
+import {
+  Loader2, Shield, Database, Radar, CalendarDays, CalendarRange,
+  Sparkles, Building2, CalendarClock, LineChart, ExternalLink,
+  Link as LinkIcon, Mail, Printer, ChevronRight,
+} from "lucide-react";
 import logoImg from "@/assets/logo.png";
+
+type VeilleLink = { label: string; url: string };
+type VeilleItem = {
+  titre: string;
+  resume: string;
+  points_cles: string[];
+  importance: "haute" | "moyenne" | "info";
+  liens: VeilleLink[];
+};
+type VeilleSection = {
+  id: "nouveautes" | "concurrents" | "evenements" | "tendances";
+  titre: string;
+  items: VeilleItem[];
+};
+type VeilleJson = {
+  titre: string;
+  periode: string;
+  resume_executif: string;
+  stats: { nb_nouveautes: number; nb_concurrents: number; nb_evenements: number; nb_sources: number };
+  sections: VeilleSection[];
+};
 
 type Rapport = {
   id: string;
   type: "quotidien" | "hebdomadaire";
   periode: string;
   contenu_markdown: string;
+  contenu_json: VeilleJson | null;
   sources: any;
   created_at: string;
 };
+
+const SECTION_META: Record<VeilleSection["id"], { icon: any; color: string; ring: string; bg: string }> = {
+  nouveautes: { icon: Sparkles, color: "text-primary", ring: "border-primary/40", bg: "bg-primary/10" },
+  concurrents: { icon: Building2, color: "text-orange-400", ring: "border-orange-500/40", bg: "bg-orange-500/10" },
+  evenements: { icon: CalendarClock, color: "text-emerald-400", ring: "border-emerald-500/40", bg: "bg-emerald-500/10" },
+  tendances: { icon: LineChart, color: "text-sky-400", ring: "border-sky-500/40", bg: "bg-sky-500/10" },
+};
+
+const IMPORTANCE_META: Record<VeilleItem["importance"], { label: string; cls: string }> = {
+  haute: { label: "Haute", cls: "bg-rose-500/15 text-rose-400 border-rose-500/40" },
+  moyenne: { label: "Moyenne", cls: "bg-amber-500/15 text-amber-400 border-amber-500/40" },
+  info: { label: "Info", cls: "bg-muted text-muted-foreground border-border" },
+};
+
+function StatTile({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div className={`rounded-lg border p-3 ${color}`}>
+      <div className="text-2xl font-bold font-display">{value ?? 0}</div>
+      <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
+    </div>
+  );
+}
+
+function ItemCard({ item }: { item: VeilleItem }) {
+  const imp = IMPORTANCE_META[item.importance] ?? IMPORTANCE_META.info;
+  return (
+    <AccordionItem value={item.titre} className="border border-border/60 rounded-md bg-background/40 px-3">
+      <AccordionTrigger className="hover:no-underline py-3">
+        <div className="flex items-center gap-3 flex-1 text-left">
+          <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border ${imp.cls}`}>
+            {imp.label}
+          </span>
+          <span className="font-medium text-sm flex-1">{item.titre}</span>
+        </div>
+      </AccordionTrigger>
+      <AccordionContent className="pt-1 pb-3 space-y-3">
+        <p className="text-sm text-muted-foreground">{item.resume}</p>
+        {item.points_cles?.length > 0 && (
+          <ul className="space-y-1">
+            {item.points_cles.map((p, i) => (
+              <li key={i} className="flex gap-2 text-sm">
+                <ChevronRight className="h-3.5 w-3.5 text-primary flex-shrink-0 mt-1" />
+                <span>{p}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {item.liens?.length > 0 && (
+          <div className="flex flex-wrap gap-2 pt-1">
+            {item.liens.map((l, i) => (
+              <a
+                key={i}
+                href={l.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs bg-muted hover:bg-muted/70 border border-border rounded px-2 py-1 text-foreground"
+              >
+                <ExternalLink className="h-3 w-3" />
+                <span className="max-w-[280px] truncate">{l.label || l.url}</span>
+              </a>
+            ))}
+          </div>
+        )}
+      </AccordionContent>
+    </AccordionItem>
+  );
+}
+
+function SectionCard({ section }: { section: VeilleSection }) {
+  const meta = SECTION_META[section.id] ?? SECTION_META.tendances;
+  const Icon = meta.icon;
+  return (
+    <section className={`rounded-lg border ${meta.ring} ${meta.bg} p-4 sm:p-5`}>
+      <header className="mb-3 flex items-center gap-2">
+        <Icon className={`h-5 w-5 ${meta.color}`} />
+        <h3 className="font-display text-base font-semibold">{section.titre}</h3>
+        <span className="ml-auto text-xs text-muted-foreground">{section.items?.length ?? 0} item(s)</span>
+      </header>
+      {section.items?.length ? (
+        <Accordion type="multiple" className="space-y-2">
+          {section.items.map((it, i) => <ItemCard key={i} item={it} />)}
+        </Accordion>
+      ) : (
+        <p className="text-sm text-muted-foreground italic">Rien à signaler sur cette section.</p>
+      )}
+    </section>
+  );
+}
+
+function VeilleRichView({ data }: { data: VeilleJson }) {
+  return (
+    <div className="space-y-5">
+      {/* Résumé exécutif */}
+      <section className="rounded-xl border border-primary/40 bg-gradient-to-br from-primary/10 to-secondary/5 p-5">
+        <div className="flex items-center gap-2 mb-2">
+          <Sparkles className="h-4 w-4 text-primary" />
+          <div className="text-[11px] uppercase tracking-wider text-primary font-semibold">Résumé exécutif</div>
+        </div>
+        <h1 className="font-display text-xl sm:text-2xl font-bold mb-2">{data.titre}</h1>
+        <p className="text-sm text-muted-foreground mb-3">{data.periode}</p>
+        <p className="text-base leading-relaxed">{data.resume_executif}</p>
+      </section>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <StatTile label="Nouveautés" value={data.stats?.nb_nouveautes} color="border-primary/40 bg-primary/5" />
+        <StatTile label="Concurrents" value={data.stats?.nb_concurrents} color="border-orange-500/40 bg-orange-500/5" />
+        <StatTile label="Événements" value={data.stats?.nb_evenements} color="border-emerald-500/40 bg-emerald-500/5" />
+        <StatTile label="Sources" value={data.stats?.nb_sources} color="border-sky-500/40 bg-sky-500/5" />
+      </div>
+
+      {/* Sections */}
+      <div className="grid grid-cols-1 gap-4">
+        {data.sections?.map((s, i) => <SectionCard key={i} section={s} />)}
+      </div>
+    </div>
+  );
+}
 
 export default function AdminVeille() {
   const { isAdmin, canAccessGaia, loading } = useAuth();
@@ -43,6 +190,12 @@ export default function AdminVeille() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canAccessGaia]);
 
+  const structured: VeilleJson | null = useMemo(() => {
+    const j = selected?.contenu_json;
+    if (!j || typeof j !== "object") return null;
+    return j as VeilleJson;
+  }, [selected]);
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background text-foreground">
@@ -56,13 +209,12 @@ export default function AdminVeille() {
     setGenerating(type);
     toast({
       title: "Génération en cours",
-      description: "Le rapport peut prendre 1 à 2 minutes. Merci de patienter…",
+      description: "Recherche web et synthèse : le rapport peut prendre 1 à 3 minutes.",
     });
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/veille-marche`;
-      console.log("[veille] POST", url, { type });
       const res = await fetch(url, {
         method: "POST",
         headers: {
@@ -73,33 +225,45 @@ export default function AdminVeille() {
         body: JSON.stringify({ type }),
       });
       const raw = await res.text();
-      console.log("[veille] status", res.status, "body", raw.slice(0, 500));
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status} — ${raw.slice(0, 400)}`);
-      }
-      let parsed: any = null;
-      try { parsed = JSON.parse(raw); } catch { throw new Error(`Réponse non-JSON: ${raw.slice(0, 200)}`); }
+      if (!res.ok) throw new Error(`HTTP ${res.status} — ${raw.slice(0, 400)}`);
+      const parsed = JSON.parse(raw);
       if (parsed?.error) throw new Error(String(parsed.error));
       const rapport = parsed as Rapport;
       setRapports((prev) => [rapport, ...prev.filter((r) => r.id !== rapport.id)]);
       setSelected(rapport);
       toast({ title: "Rapport généré", description: rapport.periode });
-      load();
     } catch (e: any) {
       console.error("[veille] erreur", e);
-      toast({
-        title: "Erreur de génération",
-        description: e?.message ?? String(e),
-        variant: "destructive",
-      });
+      toast({ title: "Erreur de génération", description: e?.message ?? String(e), variant: "destructive" });
     } finally {
       setGenerating(null);
     }
   };
 
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      toast({ title: "Lien copié" });
+    } catch {
+      toast({ title: "Erreur", description: "Impossible de copier.", variant: "destructive" });
+    }
+  };
+
+  const emailReport = () => {
+    if (!selected) return;
+    const j = structured;
+    const subject = encodeURIComponent(`[Veille marché] ${j?.titre ?? selected.periode}`);
+    const body = encodeURIComponent(
+      `${j?.titre ?? "Veille marché"}\n${j?.periode ?? selected.periode}\n\n` +
+      `${j?.resume_executif ?? selected.contenu_markdown.slice(0, 600)}\n\n` +
+      `Rapport complet : ${window.location.href}\n`
+    );
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  };
+
   return (
     <div className="min-h-screen w-full bg-background text-foreground">
-      <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-3 sm:px-6 gap-2">
+      <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-3 sm:px-6 gap-2 print:hidden">
         <div className="flex items-center gap-2 min-w-0">
           <MobileNav />
           <Link to={isAdmin ? "/" : "/dossiers"} className="flex items-center gap-2 min-w-0">
@@ -122,7 +286,7 @@ export default function AdminVeille() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 sm:px-6 py-6 sm:py-8">
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 print:hidden">
           <div>
             <h2 className="font-display text-xl sm:text-2xl font-bold flex items-center gap-2">
               <Radar className="h-6 w-6 text-primary" /> Veille marché
@@ -134,14 +298,14 @@ export default function AdminVeille() {
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => generate("quotidien")} disabled={generating !== null} variant="outline">
               {generating === "quotidien" ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Génération… (1-2 min)</>
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Génération…</>
               ) : (
                 <><CalendarDays className="mr-2 h-4 w-4" /> Rapport du jour</>
               )}
             </Button>
             <Button onClick={() => generate("hebdomadaire")} disabled={generating !== null}>
               {generating === "hebdomadaire" ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Génération… (1-2 min)</>
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Génération…</>
               ) : (
                 <><CalendarRange className="mr-2 h-4 w-4" /> Rapport de la semaine</>
               )}
@@ -150,7 +314,7 @@ export default function AdminVeille() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
-          <aside className="rounded-lg border border-border bg-card/40 p-3 max-h-[70vh] overflow-y-auto">
+          <aside className="rounded-lg border border-border bg-card/40 p-3 max-h-[75vh] overflow-y-auto print:hidden">
             <div className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Historique ({rapports.length})
             </div>
@@ -190,21 +354,41 @@ export default function AdminVeille() {
             </ul>
           </aside>
 
-          <section className="rounded-lg border border-border bg-card/40 p-4 sm:p-6 min-h-[60vh]">
+          <section className="min-h-[60vh] space-y-4">
+            {selected && (
+              <div className="flex flex-wrap gap-2 print:hidden">
+                <Button size="sm" variant="outline" onClick={() => window.print()}>
+                  <Printer className="mr-2 h-4 w-4" /> Télécharger en PDF
+                </Button>
+                <Button size="sm" variant="outline" onClick={copyLink}>
+                  <LinkIcon className="mr-2 h-4 w-4" /> Copier le lien
+                </Button>
+                <Button size="sm" variant="outline" onClick={emailReport}>
+                  <Mail className="mr-2 h-4 w-4" /> Envoyer par email
+                </Button>
+              </div>
+            )}
             {selected ? (
-              <>
-                <div className="mb-4 pb-3 border-b border-border">
-                  <div className="text-xs uppercase tracking-wider text-muted-foreground">
-                    {selected.type} · {new Date(selected.created_at).toLocaleString("fr-FR")}
+              structured ? (
+                <VeilleRichView data={structured} />
+              ) : (
+                <div className="rounded-lg border border-border bg-card/40 p-4 sm:p-6">
+                  <div className="mb-4 pb-3 border-b border-border">
+                    <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                      {selected.type} · {new Date(selected.created_at).toLocaleString("fr-FR")}
+                    </div>
+                    <div className="mt-1 font-display text-lg font-semibold">{selected.periode}</div>
+                    <p className="text-xs text-muted-foreground mt-1 italic">
+                      Ancien format (markdown) — les prochains rapports seront affichés en cartes structurées.
+                    </p>
                   </div>
-                  <div className="mt-1 font-display text-lg font-semibold">{selected.periode}</div>
+                  <article className="prose prose-invert prose-sm max-w-none prose-headings:font-display prose-a:text-primary prose-table:text-xs">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{selected.contenu_markdown}</ReactMarkdown>
+                  </article>
                 </div>
-                <article className="prose prose-invert prose-sm max-w-none prose-headings:font-display prose-a:text-primary prose-table:text-xs">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{selected.contenu_markdown}</ReactMarkdown>
-                </article>
-              </>
+              )
             ) : (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground rounded-lg border border-border bg-card/40 p-10">
                 Sélectionnez un rapport ou générez-en un nouveau.
               </div>
             )}

@@ -48,6 +48,7 @@ const App = () => (
             <Route path="/admin" element={<ProtectedRoute><AdminDossiers /></ProtectedRoute>} />
             <Route path="/admin/catalog-erp" element={<ProtectedRoute><AdminCatalogErp /></ProtectedRoute>} />
             <Route path="/admin/gaia" element={<ProtectedRoute><AdminGaia /></ProtectedRoute>} />
+            <Route path="/admin/veille" element={<ProtectedRoute><AdminVeille /></ProtectedRoute>} />
             <Route path="/admin/gaia/client/:nom" element={<ProtectedRoute><GaiaClientFiche /></ProtectedRoute>} />
             <Route path="/admin/gaia/revue/:id" element={<ProtectedRoute><GaiaRevueView /></ProtectedRoute>} />
 

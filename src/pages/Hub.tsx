@@ -33,6 +33,14 @@ const CARDS: EnvCard[] = [
     available: true,
   },
   {
+    key: "ecommerce",
+    title: "E-commerce",
+    description: "Activité de la boutique en ligne : ventes, produits, clients.",
+    Icon: Globe,
+    to: "/ecommerce",
+    available: true,
+  },
+  {
     key: "sav",
     title: "SAV",
     description: "Tickets, interventions et pièces détachées. Bientôt disponible.",

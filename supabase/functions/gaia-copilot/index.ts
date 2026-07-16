@@ -732,6 +732,8 @@ async function streamFinalRevue(
     model,
     max_tokens: 16000,
     stream: true,
+    // thinking adaptive requis pour opus-4-8 (omission = désactivé).
+    thinking: { type: 'adaptive' },
     system: systemBlocks(system, dynamicSuffix),
     messages: withCacheOnLastMessage(messages),
     tools: [REVUE_TOOL],

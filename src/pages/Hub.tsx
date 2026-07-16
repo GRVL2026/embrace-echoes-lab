@@ -95,7 +95,7 @@ export default function Hub() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          {CARDS.map(({ key, title, description, Icon, to, available }) => {
+          {visibleCards.map(({ key, title, description, Icon, to, available }) => {
             const inner = (
               <div
                 className={`group relative flex h-full flex-col justify-between rounded-2xl border p-6 sm:p-8 transition-all ${

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Database, Loader2, Radar, Shield, Globe } from "lucide-react";
+import { Database, Loader2, Radar, Shield, Globe, Wrench } from "lucide-react";
 import { UserMenu } from "@/components/UserMenu";
 import { MobileNav } from "@/components/MobileNav";
 import { useAuth } from "@/contexts/AuthContext";
@@ -27,6 +27,12 @@ const NAV: NavItem[] = [
     to: "/ecommerce",
     label: "E-commerce",
     icon: Globe,
+    show: ({ canAccessGaia }) => canAccessGaia,
+  },
+  {
+    to: "/sav",
+    label: "SAV",
+    icon: Wrench,
     show: ({ canAccessGaia }) => canAccessGaia,
   },
   {

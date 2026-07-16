@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { UserMenu } from "@/components/UserMenu";
 import { MobileNav } from "@/components/MobileNav";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ShoppingCart, Truck, Wrench, ArrowRight } from "lucide-react";
+import { Loader2, ShoppingCart, Truck, Wrench, ArrowRight, Globe } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 
 type EnvCard = {

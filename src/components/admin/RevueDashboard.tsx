@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  Sparkles, TrendingUp, TrendingDown, AlertTriangle, AlertOctagon, Info, Target,
+  TrendingUp, TrendingDown, AlertTriangle, AlertOctagon, Info, Target,
+  ChevronDown, Phone, Moon, Package, Sparkles, ArrowRight,
 } from "lucide-react";
 import {
-  ResponsiveContainer, AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Cell, Tooltip,
 } from "recharts";
 
 export type RevueData = {
@@ -31,10 +33,6 @@ export function exerciceLabel(annee: number, short = false) {
   return `Exercice ${annee} (sept. ${annee - 1} → août ${annee})`;
 }
 
-/**
- * Détecte une revue vide/invalide (générée tronquée par le modèle).
- * Retourne true si santé globale ET toutes les sections sont vides.
- */
 export function isRevueEmpty(r: RevueData | null | undefined): boolean {
   if (!r || typeof r !== "object") return true;
   const sante = r.sante ?? ({} as any);
@@ -53,8 +51,6 @@ export function isRevueEmpty(r: RevueData | null | undefined): boolean {
   return !santeFilled || sectionsFilled === 0;
 }
 
-
-
 export function revueToText(r: RevueData): string {
   const lines: string[] = [];
   lines.push(`# Revue commerciale du mois\n`);
@@ -67,6 +63,8 @@ export function revueToText(r: RevueData): string {
   r.sante.tendance_mensuelle.forEach((m) =>
     lines.push(`- ${m.mois} : ${pct(m.evolution_pct)}${m.commentaire ? ` — ${m.commentaire}` : ""}`)
   );
+  lines.push(`\n## Actions prioritaires`);
+  r.actions.forEach((a) => lines.push(`${a.rang}. ${a.titre} (${eur(a.impact_eur)}) — ${a.qui} · ${a.cible} · ${a.pourquoi}`));
   lines.push(`\n## Mouvements`);
   lines.push(`### Familles`);
   r.mouvements.familles.forEach((f) => lines.push(`- ${f.sens === "hausse" ? "↗" : "↘"} ${f.nom} — ${f.detail}`));
@@ -76,44 +74,7 @@ export function revueToText(r: RevueData): string {
   r.mouvements.clients_baisse.forEach((c) => lines.push(`- ${c.client} — ${c.detail}`));
   lines.push(`\n## Risques`);
   r.risques.forEach((x) => lines.push(`- [${x.gravite.toUpperCase()}] ${x.titre} — ${x.detail}`));
-  lines.push(`\n## Actions prioritaires`);
-  r.actions.forEach((a) => lines.push(`${a.rang}. ${a.titre} (${eur(a.impact_eur)}) — ${a.qui} · ${a.cible} · ${a.pourquoi}`));
   return lines.join("\n");
-}
-
-function EvolBadge({ value }: { value?: number }) {
-  if (value == null || isNaN(value)) return null;
-  const positive = value >= 0;
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-semibold ${
-        positive ? "bg-emerald-500/15 text-emerald-400" : "bg-rose-500/15 text-rose-400"
-      }`}
-    >
-      {positive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-      {pct(value)}
-    </span>
-  );
-}
-
-function MonthPill({ mois, evolution_pct, commentaire }: { mois: string; evolution_pct: number; commentaire?: string }) {
-  const clamp = Math.max(-30, Math.min(30, evolution_pct));
-  const bg =
-    clamp >= 0
-      ? `rgba(16,185,129,${0.15 + (clamp / 30) * 0.35})`
-      : `rgba(244,63,94,${0.15 + (-clamp / 30) * 0.35})`;
-  return (
-    <div
-      title={commentaire || ""}
-      className="flex min-w-[68px] flex-col items-center rounded border border-border/60 px-2 py-1.5 text-center revue-pill"
-      style={{ backgroundColor: bg }}
-    >
-      <div className="text-[11px] font-medium capitalize text-foreground/80">{mois}</div>
-      <div className={`text-xs font-semibold tabular-nums ${evolution_pct >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
-        {pct(evolution_pct)}
-      </div>
-    </div>
-  );
 }
 
 const eurCompact = (n: number) => {
@@ -124,330 +85,357 @@ const eurCompact = (n: number) => {
   return `${v} €`;
 };
 
-function SanteChart({ annees }: { annees: { annee: number; ca_ht: number; evolution_pct?: number }[] }) {
-  const sorted = [...annees].sort((a, b) => a.annee - b.annee);
-  if (sorted.length === 0) return null;
-  const lastAnnee = sorted[sorted.length - 1].annee;
-  const data = sorted.map((a) => ({
-    label: `Ex. ${a.annee}`,
-    annee: a.annee,
-    ca: Number(a.ca_ht) || 0,
-    evo: a.evolution_pct,
-    isLast: a.annee === lastAnnee,
-  }));
+/* ============ KPI band ============ */
 
-  // Y domain with headroom for top value labels
-  const maxCa = Math.max(...data.map((d) => d.ca), 0);
-  const minCa = Math.min(...data.map((d) => d.ca), 0);
-  const yMax = maxCa * 1.18 || 1;
-  const yMin = minCa < 0 ? minCa * 1.1 : 0;
-
-  const CustomDot = (props: any) => {
-    const { cx, cy, payload } = props;
-    if (cx == null || cy == null) return null;
-    const isLast = payload?.isLast;
-    return (
-      <g>
-        {isLast && (
-          <circle cx={cx} cy={cy} r={11} fill="hsl(var(--primary) / 0.18)" />
-        )}
-        <circle
-          cx={cx}
-          cy={cy}
-          r={isLast ? 6 : 4}
-          fill={isLast ? "hsl(var(--primary))" : "hsl(var(--background))"}
-          stroke="hsl(var(--primary))"
-          strokeWidth={isLast ? 2.5 : 2}
-        />
-      </g>
-    );
-  };
-
-  const ValueLabel = (props: any) => {
-    const { x, y, value, index } = props;
-    if (x == null || y == null || value == null) return null;
-    const d = data[index];
-    const isLast = d?.isLast;
-    return (
-      <text
-        x={x}
-        y={y - 18}
-        textAnchor="middle"
-        className="tabular-nums"
-        fill={isLast ? "hsl(var(--primary))" : "hsl(var(--foreground))"}
-        fontSize={isLast ? 13 : 12}
-        fontWeight={isLast ? 700 : 600}
-      >
-        {eurCompact(Number(value))}
-      </text>
-    );
-  };
-
-  const EvoLabel = (props: any) => {
-    const { x, y, index } = props;
-    if (x == null || y == null) return null;
-    const d = data[index];
-    if (d?.evo == null || isNaN(d.evo)) return null;
-    const positive = d.evo >= 0;
-    return (
-      <text
-        x={x}
-        y={y + 26}
-        textAnchor="middle"
-        fill={positive ? "rgb(52 211 153)" : "rgb(251 113 133)"}
-        fontSize={11}
-        fontWeight={700}
-      >
-        {pct(d.evo)}
-      </text>
-    );
-  };
-
+function KpiTile({
+  label, value, evo, highlight,
+}: { label: string; value: string; evo?: number; highlight?: boolean }) {
   return (
-    <div className="h-[300px] w-full">
+    <div
+      className={`flex-1 min-w-[140px] rounded-lg border p-3 ${
+        highlight
+          ? "border-primary/50 bg-primary/10"
+          : "border-border/60 bg-background/40"
+      }`}
+    >
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={`mt-1 font-display text-xl font-bold tabular-nums ${highlight ? "text-primary" : "text-foreground"}`}>
+        {value}
+      </div>
+      {evo != null && !isNaN(evo) && (
+        <div
+          className={`mt-0.5 inline-flex items-center gap-1 text-xs font-semibold ${
+            evo >= 0 ? "text-emerald-400" : "text-rose-400"
+          }`}
+        >
+          {evo >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+          {pct(evo)} <span className="font-normal text-muted-foreground">vs N-1</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MonthlySparkline({ data }: { data: { mois: string; evolution_pct: number; commentaire?: string }[] }) {
+  if (!data?.length) return null;
+  const chart = data.map((m) => ({
+    mois: m.mois,
+    evo: Math.max(-50, Math.min(50, Number(m.evolution_pct) || 0)),
+    raw: Number(m.evolution_pct) || 0,
+    commentaire: m.commentaire,
+  }));
+  return (
+    <div className="h-[110px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 36, right: 40, left: 24, bottom: 40 }}>
-          <defs>
-            <linearGradient id="santeCaFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.28} />
-              <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="2 4" stroke="hsl(var(--border) / 0.25)" vertical={false} />
+        <BarChart data={chart} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
           <XAxis
-            dataKey="label"
-            stroke="hsl(var(--muted-foreground))"
-            tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-            axisLine={false}
-            tickLine={false}
-            padding={{ left: 24, right: 24 }}
-            tickMargin={12}
-          />
-          <YAxis
+            dataKey="mois"
             stroke="hsl(var(--muted-foreground))"
             tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-            tickFormatter={(v) => eurCompact(Number(v))}
             axisLine={false}
             tickLine={false}
-            width={52}
-            tickCount={4}
-            domain={[yMin, yMax]}
+            interval={0}
           />
+          <YAxis hide domain={[-50, 50]} />
           <Tooltip
+            cursor={{ fill: "hsl(var(--muted) / 0.3)" }}
             contentStyle={{
               background: "hsl(var(--popover))",
               border: "1px solid hsl(var(--border))",
               borderRadius: 8,
               fontSize: 12,
             }}
-            formatter={(value: any, _n, item: any) => {
-              const evo = item?.payload?.evo;
-              return [
-                `${eurCompact(Number(value))}${evo != null ? ` (${pct(evo)})` : ""}`,
-                "CA à période égale",
-              ];
-            }}
+            formatter={(_v: any, _n, item: any) => [
+              `${pct(item?.payload?.raw ?? 0)}${item?.payload?.commentaire ? ` — ${item.payload.commentaire}` : ""}`,
+              "Évolution",
+            ]}
           />
-          <Area
-            type="monotone"
-            dataKey="ca"
-            stroke="hsl(var(--primary))"
-            strokeWidth={3}
-            fill="url(#santeCaFill)"
-            dot={<CustomDot />}
-            activeDot={{ r: 7, fill: "hsl(var(--primary))" }}
-            label={<ValueLabel />}
-            isAnimationActive={false}
-          />
-          <Line
-            type="monotone"
-            dataKey="ca"
-            stroke="transparent"
-            dot={false}
-            label={<EvoLabel />}
-            isAnimationActive={false}
-            legendType="none"
-          />
-        </AreaChart>
+          <Bar dataKey="evo" radius={[3, 3, 0, 0]}>
+            {chart.map((d, i) => (
+              <Cell key={i} fill={d.evo >= 0 ? "hsl(142 76% 45%)" : "hsl(0 84% 60%)"} />
+            ))}
+          </Bar>
+        </BarChart>
       </ResponsiveContainer>
     </div>
   );
 }
 
+function KpiBand({ data }: { data: RevueData }) {
+  const sorted = [...(data.sante?.annees ?? [])].sort((a, b) => b.annee - a.annee);
+  const n = sorted[0];
+  const n1 = sorted[1];
+  const n2 = sorted[2];
+  return (
+    <div className="rounded-lg border border-border/60 bg-background/40 p-4">
+      <div className="flex flex-wrap gap-3">
+        {n && <KpiTile label={`Ex. ${n.annee} — période égale`} value={eurCompact(n.ca_ht)} evo={n.evolution_pct} highlight />}
+        {n1 && <KpiTile label={`Ex. ${n1.annee}`} value={eurCompact(n1.ca_ht)} evo={n1.evolution_pct} />}
+        {n2 && <KpiTile label={`Ex. ${n2.annee}`} value={eurCompact(n2.ca_ht)} evo={n2.evolution_pct} />}
+        <div className="flex-[2] min-w-[260px] rounded-lg border border-border/60 bg-background/60 p-2">
+          <div className="px-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+            Tendance mensuelle vs N-1
+          </div>
+          <MonthlySparkline data={data.sante?.tendance_mensuelle ?? []} />
+        </div>
+      </div>
+      {data.sante?.commentaire && (
+        <p className="mt-3 line-clamp-2 text-sm text-foreground/90">{data.sante.commentaire}</p>
+      )}
+    </div>
+  );
+}
+
+/* ============ Actions ============ */
+
+function actionIcon(titre: string) {
+  const t = (titre || "").toLowerCase();
+  if (/devis|relan/.test(t)) return Phone;
+  if (/dormant|inact|reveil|réveil/.test(t)) return Moon;
+  if (/stock|logist|livrais/.test(t)) return Package;
+  return Sparkles;
+}
+
+function ActionCard({
+  a, rank, knownClients,
+}: { a: RevueData["actions"][number]; rank: number; knownClients: string[] }) {
+  const [open, setOpen] = useState(false);
+  const highlight = rank === 1;
+  const Icon = actionIcon(a.titre);
+  return (
+    <div
+      className={`rounded-lg border p-3 transition-colors ${
+        highlight
+          ? "border-primary/50 bg-primary/10 hover:bg-primary/15"
+          : "border-border/60 bg-background/40 hover:bg-background/70"
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-display text-sm font-bold ${
+            highlight ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
+          }`}
+        >
+          {rank}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <Icon className={`h-4 w-4 shrink-0 ${highlight ? "text-primary" : "text-muted-foreground"}`} />
+              <div className={`font-semibold leading-snug ${open ? "" : "line-clamp-2"}`}>
+                {a.titre}
+              </div>
+            </div>
+            <div
+              className={`shrink-0 rounded-md px-2 py-0.5 font-display text-base font-bold tabular-nums ${
+                highlight ? "bg-primary/20 text-primary" : "bg-muted text-foreground"
+              }`}
+            >
+              {eur(a.impact_eur)}
+            </div>
+          </div>
+          {!open && (
+            <button
+              onClick={() => setOpen(true)}
+              className="mt-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              Voir le détail →
+            </button>
+          )}
+          {open && (
+            <div className="mt-2 space-y-1 text-xs">
+              <div className="text-muted-foreground">
+                <span className="text-foreground/80">Qui :</span> {linkifyClients(a.qui, knownClients)}
+                <span className="mx-1.5 text-border">·</span>
+                <span className="text-foreground/80">Cible :</span> {linkifyClients(a.cible, knownClients)}
+              </div>
+              {a.pourquoi && (
+                <div className="text-foreground/80">{emphasizeNumbers(a.pourquoi)}</div>
+              )}
+              <button
+                onClick={() => setOpen(false)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                Réduire
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============ Mouvements ============ */
+
+function extractPct(text: string): number | null {
+  if (!text) return null;
+  const m = text.match(/(-?\d+(?:[.,]\d+)?)\s?%/);
+  if (!m) return null;
+  return parseFloat(m[1].replace(",", "."));
+}
+
+function MvtBullet({ name, detail, sens }: { name: string; detail: string; sens: "hausse" | "baisse" }) {
+  const p = extractPct(detail);
+  const positive = sens === "hausse";
+  return (
+    <li className="flex items-baseline justify-between gap-2 py-1 text-sm">
+      <span className="min-w-0 truncate font-medium" title={detail}>{name}</span>
+      {p != null ? (
+        <span
+          className={`shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold tabular-nums ${
+            positive ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300"
+          }`}
+        >
+          {pct(p)}
+        </span>
+      ) : (
+        <ArrowRight className={`h-3 w-3 shrink-0 ${positive ? "text-emerald-400" : "text-rose-400"}`} />
+      )}
+    </li>
+  );
+}
+
+function MouvementsBlock({ data }: { data: RevueData }) {
+  const hausse = [
+    ...data.mouvements.familles.filter((f) => f.sens === "hausse").map((f) => ({ name: f.nom, detail: f.detail })),
+    ...data.mouvements.clients_hausse.map((c) => ({ name: c.client, detail: c.detail })),
+  ];
+  const baisse = [
+    ...data.mouvements.familles.filter((f) => f.sens === "baisse").map((f) => ({ name: f.nom, detail: f.detail })),
+    ...data.mouvements.clients_baisse.map((c) => ({ name: c.client, detail: c.detail })),
+  ];
+  return (
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
+        <div className="mb-1 flex items-center gap-1.5 text-sm font-semibold text-emerald-400">
+          <TrendingUp className="h-4 w-4" /> En hausse
+        </div>
+        <ul className="divide-y divide-border/40">
+          {hausse.length === 0 && <li className="py-2 text-xs text-muted-foreground">Aucun mouvement.</li>}
+          {hausse.map((x, i) => <MvtBullet key={`h${i}`} name={x.name} detail={x.detail} sens="hausse" />)}
+        </ul>
+      </div>
+      <div className="rounded-lg border border-rose-500/30 bg-rose-500/5 p-3">
+        <div className="mb-1 flex items-center gap-1.5 text-sm font-semibold text-rose-400">
+          <TrendingDown className="h-4 w-4" /> En baisse
+        </div>
+        <ul className="divide-y divide-border/40">
+          {baisse.length === 0 && <li className="py-2 text-xs text-muted-foreground">Aucun mouvement.</li>}
+          {baisse.map((x, i) => <MvtBullet key={`b${i}`} name={x.name} detail={x.detail} sens="baisse" />)}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+/* ============ Risques (accordion fermé) ============ */
+
+function RisqueRow({ r }: { r: RevueData["risques"][number] }) {
+  const [open, setOpen] = useState(false);
+  const cfg = risqueStyle(r.gravite);
+  const Icon = cfg.icon;
+  return (
+    <div className={`rounded-lg border border-border/60 bg-background/40 ${cfg.border}`}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left"
+      >
+        <Icon className={`h-4 w-4 shrink-0 ${cfg.iconColor}`} />
+        <div className="min-w-0 flex-1 truncate font-medium text-foreground">{r.titre}</div>
+        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${cfg.badge}`}>
+          {r.gravite}
+        </span>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="border-t border-border/40 px-3 py-2 text-sm text-foreground/80">
+          {emphasizeNumbers(r.detail)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RisquesBlock({ items }: { items: RevueData["risques"] }) {
+  const sorted = [...items].sort((a, b) => graviteOrder(a.gravite) - graviteOrder(b.gravite));
+  return (
+    <div className="flex flex-col gap-2">
+      {sorted.map((r, i) => <RisqueRow key={i} r={r} />)}
+    </div>
+  );
+}
+
+/* ============ Main ============ */
+
 export function RevueDashboard({ data }: { data: RevueData }) {
+  const knownClients = collectClients(data);
+  const topActions = [...(data.actions ?? [])].sort((a, b) => a.rang - b.rang).slice(0, 5);
+
+  const scrollTo = (id: string) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   return (
     <div className="space-y-5 revue-dashboard">
-      {/* Santé */}
-      <section className="revue-section">
-        <h4 className="mb-3 flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          <Sparkles className="h-4 w-4 text-primary" /> Santé globale
-        </h4>
-        <div className="rounded-lg border border-border/60 bg-background/40 p-3 revue-card">
-          <SanteChart annees={data.sante.annees} />
-        </div>
-        {data.sante.commentaire && (
-          <p className="mt-3 text-sm text-foreground/90">{data.sante.commentaire}</p>
-        )}
-        {data.sante.tendance_mensuelle?.length > 0 && (
-          <>
-            <div className="mt-4 text-xs uppercase text-muted-foreground">Tendance mensuelle vs exercice précédent</div>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {data.sante.tendance_mensuelle.map((m, i) => <MonthPill key={i} {...m} />)}
-            </div>
-          </>
-        )}
+      {/* KPI band */}
+      <section id="revue-sante">
+        <KpiBand data={data} />
       </section>
 
-      {/* Mouvements */}
-      <section className="revue-section">
-        <h4 className="mb-3 flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          <TrendingUp className="h-4 w-4 text-primary" /> Mouvements
-        </h4>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 revue-card">
-            <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-emerald-400">
-              <TrendingUp className="h-4 w-4" /> En hausse ↗
-            </div>
-            <ul className="divide-y divide-border/40">
-              {data.mouvements.familles.filter((f) => f.sens === "hausse").map((f, i) => (
-                <li key={`fh${i}`} className="py-1.5 text-sm">
-                  <span className="font-medium">{f.nom}</span>
-                  <span className="text-muted-foreground"> — {f.detail}</span>
-                </li>
-              ))}
-              {data.mouvements.clients_hausse.map((c, i) => (
-                <li key={`ch${i}`} className="py-1.5 text-sm">
-                  <span className="font-medium">{c.client}</span>
-                  <span className="text-muted-foreground"> — {c.detail}</span>
-                </li>
-              ))}
-              {data.mouvements.familles.filter((f) => f.sens === "hausse").length === 0 &&
-                data.mouvements.clients_hausse.length === 0 && (
-                  <li className="py-2 text-xs text-muted-foreground">Aucun mouvement à la hausse.</li>
-                )}
-            </ul>
-          </div>
-          <div className="rounded-lg border border-rose-500/30 bg-rose-500/5 p-3 revue-card">
-            <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-rose-400">
-              <TrendingDown className="h-4 w-4" /> En baisse ↘
-            </div>
-            <ul className="divide-y divide-border/40">
-              {data.mouvements.familles.filter((f) => f.sens === "baisse").map((f, i) => (
-                <li key={`fb${i}`} className="py-1.5 text-sm">
-                  <span className="font-medium">{f.nom}</span>
-                  <span className="text-muted-foreground"> — {f.detail}</span>
-                </li>
-              ))}
-              {data.mouvements.clients_baisse.map((c, i) => (
-                <li key={`cb${i}`} className="py-1.5 text-sm">
-                  <span className="font-medium">{c.client}</span>
-                  <span className="text-muted-foreground"> — {c.detail}</span>
-                </li>
-              ))}
-              {data.mouvements.familles.filter((f) => f.sens === "baisse").length === 0 &&
-                data.mouvements.clients_baisse.length === 0 && (
-                  <li className="py-2 text-xs text-muted-foreground">Aucun mouvement à la baisse.</li>
-                )}
-            </ul>
-          </div>
-        </div>
-      </section>
+      {/* Sticky anchor bar */}
+      <nav className="sticky top-0 z-10 -mx-2 flex items-center gap-1 border-b border-border/60 bg-background/85 px-2 py-1.5 backdrop-blur print:hidden">
+        <a href="#revue-actions" onClick={scrollTo("revue-actions")} className="rounded-md px-2 py-1 text-xs font-semibold text-foreground hover:bg-muted">
+          <Target className="mr-1 inline h-3.5 w-3.5 text-primary" />
+          Actions
+        </a>
+        <a href="#revue-mouvements" onClick={scrollTo("revue-mouvements")} className="rounded-md px-2 py-1 text-xs font-semibold text-foreground hover:bg-muted">
+          <TrendingUp className="mr-1 inline h-3.5 w-3.5 text-primary" />
+          Mouvements
+        </a>
+        <a href="#revue-risques" onClick={scrollTo("revue-risques")} className="rounded-md px-2 py-1 text-xs font-semibold text-foreground hover:bg-muted">
+          <AlertTriangle className="mr-1 inline h-3.5 w-3.5 text-primary" />
+          Risques
+        </a>
+      </nav>
 
-      {/* Risques */}
-      {data.risques?.length > 0 && (
-        <section className="revue-section">
-          <h4 className="mb-3 flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            <AlertTriangle className="h-4 w-4 text-primary" /> Risques
+      {/* Actions (top-billing) */}
+      {topActions.length > 0 && (
+        <section id="revue-actions" className="scroll-mt-16">
+          <h4 className="mb-2 flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            <Target className="h-4 w-4 text-primary" /> Actions prioritaires
           </h4>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {[...data.risques]
-              .sort((a, b) => graviteOrder(a.gravite) - graviteOrder(b.gravite))
-              .map((r, i) => {
-                const cfg = risqueStyle(r.gravite);
-                const Icon = cfg.icon;
-                return (
-                  <div
-                    key={i}
-                    className={`flex h-full flex-col rounded-lg border border-border/60 bg-background/40 p-3 pl-4 revue-card ${cfg.border}`}
-                  >
-                    <div className="mb-1.5 flex items-start justify-between gap-2">
-                      <div className="flex min-w-0 items-start gap-2">
-                        <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${cfg.iconColor}`} />
-                        <div className={`font-semibold leading-snug line-clamp-2 ${cfg.title}`}>{r.titre}</div>
-                      </div>
-                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${cfg.badge}`}>
-                        {r.gravite}
-                      </span>
-                    </div>
-                    <p className="text-sm text-foreground/80">{emphasizeNumbers(r.detail)}</p>
-                  </div>
-                );
-              })}
+          <div className="flex flex-col gap-2">
+            {topActions.map((a, i) => (
+              <ActionCard key={a.rang ?? i} a={a} rank={a.rang ?? i + 1} knownClients={knownClients} />
+            ))}
           </div>
         </section>
       )}
 
-      {/* Actions */}
-      {data.actions?.length > 0 && (
-        <section className="revue-section">
-          <h4 className="mb-3 flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            <Target className="h-4 w-4 text-primary" /> Actions prioritaires
+      {/* Mouvements */}
+      <section id="revue-mouvements" className="scroll-mt-16">
+        <h4 className="mb-2 flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <TrendingUp className="h-4 w-4 text-primary" /> Mouvements
+        </h4>
+        <MouvementsBlock data={data} />
+      </section>
+
+      {/* Risques */}
+      {data.risques?.length > 0 && (
+        <section id="revue-risques" className="scroll-mt-16">
+          <h4 className="mb-2 flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            <AlertTriangle className="h-4 w-4 text-primary" /> Risques
           </h4>
-          <div className="flex flex-col gap-2">
-            {[...data.actions]
-              .sort((a, b) => a.rang - b.rang)
-              .map((a) => {
-                const highlight = a.rang === 1;
-                const knownClients = collectClients(data);
-                return (
-                  <div
-                    key={a.rang}
-                    className={`group flex flex-col gap-2 rounded-lg border p-3 transition-colors sm:flex-row sm:items-start sm:gap-4 revue-card ${
-                      highlight
-                        ? "border-primary/40 bg-primary/10 hover:bg-primary/15"
-                        : "border-border/60 bg-background/40 hover:bg-background/70"
-                    }`}
-                  >
-                    <div
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-display text-sm font-bold ${
-                        highlight
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-foreground"
-                      }`}
-                    >
-                      {a.rang}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
-                        <div className={`font-semibold leading-snug break-words ${highlight ? "text-foreground" : "text-foreground/95"}`}>
-                          {a.titre}
-                        </div>
-                        <div
-                          className={`font-display text-lg font-bold tabular-nums sm:text-xl ${
-                            highlight ? "text-primary" : "text-foreground"
-                          }`}
-                        >
-                          {eur(a.impact_eur)}
-                        </div>
-                      </div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        <span className="text-foreground/80">Qui :</span> {linkifyClients(a.qui, knownClients)}
-                        <span className="mx-1.5 text-border">·</span>
-                        <span className="text-foreground/80">Cible :</span> {linkifyClients(a.cible, knownClients)}
-                      </div>
-                      {a.pourquoi && (
-                        <div className="mt-1 text-xs text-foreground/70">{emphasizeNumbers(a.pourquoi)}</div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
+          <RisquesBlock items={data.risques} />
         </section>
       )}
     </div>
   );
 }
+
+/* ============ Helpers ============ */
 
 const graviteOrder = (g: string) => (g === "haute" ? 0 : g === "moyenne" ? 1 : 2);
 
@@ -458,7 +446,6 @@ function risqueStyle(g: string) {
       badge: "bg-rose-500/20 text-rose-300",
       icon: AlertOctagon,
       iconColor: "text-rose-400",
-      title: "text-foreground",
     };
   }
   if (g === "moyenne") {
@@ -467,7 +454,6 @@ function risqueStyle(g: string) {
       badge: "bg-amber-500/20 text-amber-300",
       icon: AlertTriangle,
       iconColor: "text-amber-400",
-      title: "text-foreground",
     };
   }
   return {
@@ -475,11 +461,9 @@ function risqueStyle(g: string) {
     badge: "bg-muted text-muted-foreground",
     icon: Info,
     iconColor: "text-muted-foreground",
-    title: "text-foreground",
   };
 }
 
-// Bold numbers: montants (€, k€, M€), pourcentages, années 4 chiffres
 function emphasizeNumbers(text: string) {
   if (!text) return text;
   const regex = /(\d{1,3}(?:[ .]\d{3})+(?:[.,]\d+)?\s?(?:€|k€|M€|%)?|\d+(?:[.,]\d+)?\s?(?:€|k€|M€|%)|\b(?:19|20)\d{2}\b)/g;

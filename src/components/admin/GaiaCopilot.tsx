@@ -756,7 +756,9 @@ export function GaiaCopilot() {
         )}
         {revueData && (
           <div className="rounded border border-border/60 bg-background/40 p-4">
-            <RevueDashboard data={revueData} />
+            <RevueRenderBoundary onRetry={generateRevue}>
+              <RevueDashboard data={revueData} />
+            </RevueRenderBoundary>
           </div>
         )}
         {revueError && (

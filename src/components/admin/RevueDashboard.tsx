@@ -31,6 +31,27 @@ export function exerciceLabel(annee: number, short = false) {
   return `Exercice ${annee} (sept. ${annee - 1} → août ${annee})`;
 }
 
+/**
+ * Détecte une revue vide/invalide (générée tronquée par le modèle).
+ * Retourne true si santé globale ET toutes les sections sont vides.
+ */
+export function isRevueEmpty(r: RevueData | null | undefined): boolean {
+  if (!r || typeof r !== "object") return true;
+  const sante = r.sante ?? ({} as any);
+  const santeFilled =
+    typeof sante.commentaire === "string" &&
+    sante.commentaire.trim().length > 0 &&
+    Array.isArray(sante.annees) &&
+    sante.annees.length > 0;
+  const mvts = r.mouvements ?? ({} as any);
+  const sectionsFilled =
+    (Array.isArray(mvts.familles) ? mvts.familles.length : 0) +
+    (Array.isArray(mvts.clients_hausse) ? mvts.clients_hausse.length : 0) +
+    (Array.isArray(mvts.clients_baisse) ? mvts.clients_baisse.length : 0) +
+    (Array.isArray(r.risques) ? r.risques.length : 0) +
+    (Array.isArray(r.actions) ? r.actions.length : 0);
+  return !santeFilled || sectionsFilled === 0;
+
 export function revueToText(r: RevueData): string {
   const lines: string[] = [];
   lines.push(`# Revue commerciale du mois\n`);

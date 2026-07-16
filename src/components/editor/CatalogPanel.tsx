@@ -1040,6 +1040,16 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
         }}
       />
 
+      {/* Bulk 3D model upload dialog */}
+      <BulkModel3DDialog
+        open={bulk3DOpen}
+        onOpenChange={setBulk3DOpen}
+        catalog={catalog}
+        setCatalog={setCatalog}
+      />
+
+
+
       {/* Expanded catalog dialog */}
       <Dialog open={expandedView} onOpenChange={setExpandedView}>
         <DialogContent className={`h-[85vh] overflow-hidden p-0 ${totalSelectedCount > 0 ? 'sm:max-w-6xl' : 'sm:max-w-4xl'}`}>

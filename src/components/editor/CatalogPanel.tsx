@@ -15,7 +15,7 @@ import { Upload, Package, Play, Trash2, Check, X, Info, Search, Maximize2, Minus
 import type { GameEquipment, CatalogJSON } from "@/types/equipment";
 import { find3DModel } from "@/lib/shopifyApi";
 import { DEFAULT_SAFETY_ZONE } from "@/types/equipment";
-import { autoPlaceEquipmentWithReport } from "@/lib/placement";
+import { autoPlaceEquipmentWithReport, type PlacementOptions, type PlacementReportItem } from "@/lib/placement";
 import { computeCirculation } from "@/lib/circulation";
 import { ProductDialog } from "./ProductDialog";
 import { BulkModel3DDialog } from "./BulkModel3DDialog";

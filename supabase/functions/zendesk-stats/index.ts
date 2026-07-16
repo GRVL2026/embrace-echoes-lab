@@ -476,6 +476,51 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (action === 'search') {
+      const q = url.searchParams.get('q') || '';
+      if (!q.trim()) {
+        return new Response(JSON.stringify({ tickets: [] }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const payload = await searchTickets(q);
+      return new Response(JSON.stringify(payload), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (action === 'top_clients') {
+      const force = url.searchParams.get('refresh') === '1';
+      const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
+      if (!force) {
+        const { data: cached } = await supabase
+          .from('zendesk_stats_cache')
+          .select('payload, fetched_at')
+          .eq('cache_version', CACHE_VERSION)
+          .eq('period_key', 'top_clients')
+          .order('fetched_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (cached?.fetched_at) {
+          const age = (Date.now() - new Date(cached.fetched_at).getTime()) / 1000 / 60;
+          if (age < 60) {
+            return new Response(JSON.stringify({ ...(cached.payload as any), cached: true }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+        }
+      }
+      const payload = await computeTopClients();
+      await supabase.from('zendesk_stats_cache').upsert(
+        { period_key: 'top_clients', cache_version: CACHE_VERSION, payload, fetched_at: payload.fetched_at },
+        { onConflict: 'period_key,cache_version' },
+      );
+      return new Response(JSON.stringify({ ...payload, cached: false }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+
     // action=stats (default)
     const force = url.searchParams.get('refresh') === '1';
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);

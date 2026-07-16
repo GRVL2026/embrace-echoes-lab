@@ -670,15 +670,20 @@ export function GaiaCopilot() {
           </div>
         </div>
         {revueLoading && !revueData && (
-          <div className="flex h-32 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+          <div className="flex flex-col gap-2 rounded border border-border/60 bg-background/40 p-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Analyse en cours… le modèle réfléchit avant d'écrire.
+              Analyse en cours… le modèle interroge les données puis rédige la revue.
             </div>
-            {revueProgress > 0 && (
-              <div className="text-xs text-muted-foreground/70">
-                Assemblage des données ({revueProgress} caractères reçus)…
-              </div>
+            {revueSteps.length > 0 && (
+              <ul className="mt-1 space-y-0.5 text-[11px] text-muted-foreground/80">
+                {revueSteps.map((s, j) => (
+                  <li key={j} title={s.query} className="flex items-center gap-1.5">
+                    <Search className="h-3 w-3 shrink-0 opacity-70" />
+                    <span className="truncate">Requête : {s.summary}</span>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         )}

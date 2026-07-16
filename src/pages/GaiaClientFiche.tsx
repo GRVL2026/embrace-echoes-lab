@@ -232,19 +232,73 @@ export default function GaiaClientFiche() {
   const missingConso = hasParc && !consoLast12 && ventes12m.length > 0;
 
   // ===== Copilote =====
+  const [copilotSteps, setCopilotSteps] = useState<Array<{ summary: string; query: string }>>([]);
+
   const askCopilot = async (question: string) => {
     setCopilotOpen(true);
     setCopilotQuestion(question);
     setCopilotAnswer("");
+    setCopilotSteps([]);
     setCopilotLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("gaia-copilot", {
-        body: { action: "chat", question, history: [] },
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error("Session expirée. Veuillez vous reconnecter.");
+
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gaia-copilot`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action: "chat", question, history: [] }),
       });
-      if (error) throw error;
-      const d = data as { ok?: boolean; markdown?: string; error?: string };
-      if (!d?.ok || !d.markdown) throw new Error(d?.error ?? "Réponse vide");
-      setCopilotAnswer(d.markdown);
+      if (!resp.ok) {
+        const body = await resp.text();
+        throw new Error(`HTTP ${resp.status} ${resp.statusText}\n${body}`);
+      }
+      if (!resp.body) throw new Error("HTTP 200 sans flux de réponse");
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finalMarkdown = "";
+      let errorFromStream: string | null = null;
+
+      const consume = (event: string) => {
+        const dataText = event
+          .split(/\r?\n/)
+          .filter((l) => l.startsWith("data:"))
+          .map((l) => l.slice(5).trimStart())
+          .join("\n");
+        const evtName = event.split(/\r?\n/).find((l) => l.startsWith("event:"))?.slice(6).trim();
+        if (!dataText) return;
+        let data: any;
+        try { data = JSON.parse(dataText); } catch { return; }
+        if (evtName === "gaia_sql") {
+          setCopilotSteps((s) => [...s, { summary: data.summary ?? "Requête", query: data.query ?? "" }]);
+        } else if (evtName === "gaia_final") {
+          finalMarkdown = data.markdown ?? "";
+        } else if (evtName === "gaia_error") {
+          errorFromStream = data.error ?? "Erreur inconnue";
+        }
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        buffer += decoder.decode(value, { stream: !done });
+        const events = buffer.split(/\r?\n\r?\n/);
+        buffer = events.pop() ?? "";
+        events.forEach(consume);
+        if (done) break;
+      }
+      if (buffer.trim()) consume(buffer);
+
+      if (errorFromStream) throw new Error(errorFromStream);
+      if (!finalMarkdown) throw new Error("Réponse vide");
+      setCopilotAnswer(finalMarkdown);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setCopilotAnswer(`⚠️ ${msg}`);

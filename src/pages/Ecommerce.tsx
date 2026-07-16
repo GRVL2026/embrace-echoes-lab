@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import StockSyncPanel from "@/components/ecommerce/StockSyncPanel";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
@@ -404,9 +405,12 @@ export default function Ecommerce() {
                 </div>
               )}
             </Card>
+
+            <StockSyncPanel />
           </>
         )}
       </main>
+
 
       {/* Order detail sheet */}
       <Sheet open={!!openOrder} onOpenChange={(o) => !o && setOpenOrder(null)}>

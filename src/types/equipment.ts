@@ -13,6 +13,8 @@ export type GameEquipment = {
   centerPlacement?: boolean; // true = played from short sides, placed as island (palet, power puck)
   playerClearance?: number; // cm — clearance on short sides for players (default 100)
   model3d?: string; // URL to a .glb/.gltf 3D model file
+  model3dRotation?: number; // degrees (0/90/180/270) applied BEFORE scaling in the 3D viewer
+
   
   // Shopify extended fields
   description?: string; // HTML description

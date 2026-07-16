@@ -780,23 +780,32 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
-          data: Json
+          data: Json | null
+          erreur: string | null
           id: string
+          statut: string
           titre: string | null
+          updated_at: string
         }
         Insert: {
           created_at?: string
           created_by?: string | null
-          data: Json
+          data?: Json | null
+          erreur?: string | null
           id?: string
+          statut?: string
           titre?: string | null
+          updated_at?: string
         }
         Update: {
           created_at?: string
           created_by?: string | null
-          data?: Json
+          data?: Json | null
+          erreur?: string | null
           id?: string
+          statut?: string
           titre?: string | null
+          updated_at?: string
         }
         Relationships: []
       }

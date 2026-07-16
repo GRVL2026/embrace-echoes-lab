@@ -783,73 +783,138 @@ Deno.serve(async (req) => {
       const revueExtra = { output_config: { effort: 'xhigh' } };
 
       const encoder = new TextEncoder();
-      let heartbeat: number | undefined;
+      const userIdForRow = userData.user.id;
+      const titreRevue = `Revue commerciale — ${new Date().toLocaleDateString('fr-FR')}`;
 
       const stream = new ReadableStream<Uint8Array>({
-        async start(controller) {
-          const send = (event: string, data: unknown) => {
+        start(controller) {
+          let heartbeat: number | undefined;
+          let closed = false;
+          const safeSend = (event: string, data: unknown) => {
+            if (closed) return;
             try {
               controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
-            } catch { /* closed */ }
+            } catch { closed = true; }
           };
-          send('gaia_start', { kind: 'revue' });
-          heartbeat = setInterval(() => {
+          const safeHeartbeat = () => {
+            if (closed) return;
             try { controller.enqueue(encoder.encode(`: gaia-heartbeat ${Date.now()}\n\n`)); }
-            catch { if (heartbeat !== undefined) clearInterval(heartbeat); }
-          }, 10_000);
-
-          try {
-            // Phase 1 : boucle agentique SQL, streamée via gaia_sql / gaia_memoire
-            const { messages: agenticMessages } = await toolLoop({
-              admin,
-              model: REVUE_MODEL,
-              system: revueSystem,
-              dynamicSuffix: memorySuffix,
-              initialMessages,
-              extraTools: [],
-              extraPayload: revueExtra,
-              onEvent: (evt, data) => send(evt, data),
-            });
-
-            // Phase 2 : appel final build_revue (non-streamé, heartbeats maintiennent la connexion)
-            send('gaia_sql', { summary: 'Construction de la revue finale…', query: '' });
-            const finalPayload: Record<string, unknown> = {
-              model: REVUE_MODEL,
-              max_tokens: 16000,
-              thinking: { type: 'adaptive' },
-              system: systemBlocks(revueSystem, memorySuffix),
-              messages: withCacheOnLastMessage(sanitizeMessagesForApi(
-                agenticMessages.concat([{
-                  role: 'user',
-                  content: 'Appelle maintenant l\'outil build_revue avec la revue finale structurée.',
-                }]),
-              )),
-              tools: [REVUE_TOOL],
-              tool_choice: { type: 'tool', name: 'build_revue' },
-              ...revueExtra,
-            };
-            const finalResp = await anthropicCall(finalPayload);
-            logUsage('revue:build_revue', finalResp?.usage);
-            const finalContent = Array.isArray(finalResp?.content) ? finalResp.content : [];
-            const toolUse = finalContent.find((b: any) => b?.type === 'tool_use' && b?.name === 'build_revue');
-            if (!toolUse || !toolUse.input || typeof toolUse.input !== 'object') {
-              const blocks = finalContent.map((b: any) => b?.type ?? 'unknown');
-              send('gaia_error', {
-                error: `build_revue non renvoyé par le modèle. stop_reason=${finalResp?.stop_reason ?? '?'} blocks=${JSON.stringify(blocks)}`,
-              });
-              return;
-            }
-            send('gaia_revue', { data: toolUse.input });
-          } catch (e: any) {
-            console.log(`[gaia-copilot] revue stream fatal: ${e?.message ?? e}`);
-            send('gaia_error', { error: e?.message ?? String(e) });
-          } finally {
-            if (heartbeat !== undefined) clearInterval(heartbeat);
+            catch { closed = true; }
+          };
+          const safeClose = () => {
+            if (closed) return;
+            closed = true;
             try { controller.close(); } catch { /* already closed */ }
-          }
+          };
+
+          const work = async () => {
+            let revueId: string | null = null;
+            try {
+              // 1. Draft row (statut = 'en_cours') — persistée avant tout traitement
+              const { data: draftRow, error: draftErr } = await admin
+                .from('gaia_revues')
+                .insert({
+                  titre: titreRevue,
+                  statut: 'en_cours',
+                  data: null,
+                  created_by: userIdForRow,
+                })
+                .select('id')
+                .single();
+              if (draftErr) throw new Error(`Création de la revue impossible : ${draftErr.message}`);
+              revueId = (draftRow as any)?.id ?? null;
+
+              safeSend('gaia_start', { kind: 'revue', id: revueId });
+              heartbeat = setInterval(safeHeartbeat, 10_000);
+
+              // 2. Boucle agentique SQL, streamée via gaia_sql / gaia_memoire
+              const { messages: agenticMessages } = await toolLoop({
+                admin,
+                model: REVUE_MODEL,
+                system: revueSystem,
+                dynamicSuffix: memorySuffix,
+                initialMessages,
+                extraTools: [],
+                extraPayload: revueExtra,
+                onEvent: (evt, data) => safeSend(evt, data),
+              });
+
+              // 3. Appel final build_revue (non-streamé, heartbeats maintiennent la connexion)
+              safeSend('gaia_sql', { summary: 'Construction de la revue finale…', query: '' });
+              const finalPayload: Record<string, unknown> = {
+                model: REVUE_MODEL,
+                max_tokens: 16000,
+                thinking: { type: 'adaptive' },
+                system: systemBlocks(revueSystem, memorySuffix),
+                messages: withCacheOnLastMessage(sanitizeMessagesForApi(
+                  agenticMessages.concat([{
+                    role: 'user',
+                    content: 'Appelle maintenant l\'outil build_revue avec la revue finale structurée.',
+                  }]),
+                )),
+                tools: [REVUE_TOOL],
+                tool_choice: { type: 'tool', name: 'build_revue' },
+                ...revueExtra,
+              };
+              const finalResp = await anthropicCall(finalPayload);
+              logUsage('revue:build_revue', finalResp?.usage);
+              const finalContent = Array.isArray(finalResp?.content) ? finalResp.content : [];
+              const toolUse = finalContent.find((b: any) => b?.type === 'tool_use' && b?.name === 'build_revue');
+              if (!toolUse || !toolUse.input || typeof toolUse.input !== 'object') {
+                const blocks = finalContent.map((b: any) => b?.type ?? 'unknown');
+                throw new Error(`build_revue non renvoyé par le modèle. stop_reason=${finalResp?.stop_reason ?? '?'} blocks=${JSON.stringify(blocks)}`);
+              }
+
+              // 4. Sauvegarde finale
+              if (revueId) {
+                const { error: updErr } = await admin
+                  .from('gaia_revues')
+                  .update({
+                    statut: 'terminee',
+                    data: toolUse.input,
+                    erreur: null,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq('id', revueId);
+                if (updErr) console.log(`[gaia-copilot] revue update terminee error: ${updErr.message}`);
+              }
+              safeSend('gaia_revue', { id: revueId, data: toolUse.input });
+            } catch (e: any) {
+              const msg = e?.message ?? String(e);
+              console.log(`[gaia-copilot] revue background fatal: ${msg}`);
+              if (revueId) {
+                try {
+                  await admin
+                    .from('gaia_revues')
+                    .update({
+                      statut: 'erreur',
+                      erreur: msg.slice(0, 2000),
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq('id', revueId);
+                } catch (persistErr: any) {
+                  console.log(`[gaia-copilot] revue update erreur failed: ${persistErr?.message ?? persistErr}`);
+                }
+              }
+              safeSend('gaia_error', { error: msg, id: revueId });
+            } finally {
+              if (heartbeat !== undefined) clearInterval(heartbeat);
+              safeClose();
+            }
+          };
+
+          const promise = work();
+          // Garantit la poursuite du travail même si le client ferme la connexion SSE.
+          try {
+            // @ts-ignore EdgeRuntime est fourni par Supabase Edge Functions
+            if (typeof EdgeRuntime !== 'undefined' && typeof EdgeRuntime.waitUntil === 'function') {
+              // @ts-ignore
+              EdgeRuntime.waitUntil(promise);
+            }
+          } catch { /* ignore */ }
         },
         cancel() {
-          if (heartbeat !== undefined) clearInterval(heartbeat);
+          // Ne rien annuler : le travail continue via EdgeRuntime.waitUntil.
         },
       });
 

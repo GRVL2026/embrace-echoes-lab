@@ -18,7 +18,7 @@ import { CopilotChart, type ChartPayload } from "./CopilotChart";
 type DevisRelance = { n_cde: string; code_client: string; client: string; date_devis: string; age_jours: number; montant_ht: number };
 type ClientDormant = { code_client: string; client: string; ca_annee_courante: number; ca_n1: number; ca_n2: number; derniere_facture: string | null };
 type StockDormant = { code_article: string; description: string; famille: string; quantite: number; valeur_achat: number };
-type SavedRevue = { id: string; titre: string | null; created_at: string };
+type SavedRevue = { id: string; titre: string | null; created_at: string; statut?: string | null; erreur?: string | null };
 
 type ChatPart =
   | { type: "text"; text: string }
@@ -233,10 +233,11 @@ export function GaiaCopilot() {
   const loadHistory = async () => {
     const { data } = await (supabase as any)
       .from("gaia_revues")
-      .select("id,titre,created_at")
+      .select("id,titre,created_at,statut,erreur")
       .order("created_at", { ascending: false })
       .limit(30);
     setHistory((data as SavedRevue[]) ?? []);
+    return (data as SavedRevue[]) ?? [];
   };
 
   // Récupère l'utilisateur courant + restaure le chat depuis localStorage
@@ -335,26 +336,8 @@ export function GaiaCopilot() {
     }
   };
 
-  const saveRevue = async (data: RevueData) => {
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      const titre = `Revue commerciale — ${new Date().toLocaleDateString("fr-FR")}`;
-      const { error } = await (supabase as any).from("gaia_revues").insert({
-        titre,
-        data: data as any,
-        created_by: userData?.user?.id ?? null,
-      });
-      if (error) throw error;
-      await loadHistory();
-    } catch (e) {
-      console.error("save revue failed", e);
-      toast({
-        title: "Sauvegarde impossible",
-        description: e instanceof Error ? e.message : String(e),
-        variant: "destructive",
-      });
-    }
-  };
+  // La revue est désormais persistée côté serveur (statut en_cours → terminee/erreur).
+  // Le front n'insère plus la ligne : il se contente d'écouter le stream et de rafraîchir l'historique.
 
   const generateRevue = async () => {
     setRevueLoading(true);
@@ -367,16 +350,53 @@ export function GaiaCopilot() {
         onStep: (step) => setRevueSteps((prev) => [...prev, step]),
       });
       setRevueData(parsed);
-      await saveRevue(parsed);
-      toast({ title: "Revue enregistrée", description: "Consultable dans l'historique." });
+      await loadHistory();
+      toast({ title: "Revue prête", description: "Consultable dans l'historique." });
     } catch (e: unknown) {
       const message = await formatFunctionError(e);
       setRevueError(message);
       toast({ title: "Erreur de génération", description: message.slice(0, 200), variant: "destructive" });
+      // Le serveur a marqué la ligne en 'erreur' — rafraîchit pour que l'UI se libère.
+      await loadHistory().catch(() => undefined);
     } finally {
       setRevueLoading(false);
     }
   };
+
+  // Détecte une revue en cours (soit la nôtre, soit lancée depuis un autre onglet).
+  const inProgressRevue = history.find((h) => h.statut === "en_cours") ?? null;
+  const prevInProgressIdRef = useRef<string | null>(null);
+
+  // Polling léger tant qu'une revue est en_cours (toutes les 15 s).
+  useEffect(() => {
+    if (!inProgressRevue) return;
+    const id = setInterval(() => {
+      loadHistory().catch(() => undefined);
+    }, 15_000);
+    return () => clearInterval(id);
+  }, [inProgressRevue?.id]);
+
+  // Détecte la transition en_cours → terminee / erreur et notifie l'utilisateur.
+  useEffect(() => {
+    const prevId = prevInProgressIdRef.current;
+    if (prevId && (!inProgressRevue || inProgressRevue.id !== prevId)) {
+      const finished = history.find((h) => h.id === prevId);
+      if (finished?.statut === "terminee") {
+        toast({
+          title: "Revue prête",
+          description: "La revue commerciale est disponible dans l'historique.",
+        });
+      } else if (finished?.statut === "erreur") {
+        toast({
+          title: "Génération échouée",
+          description: (finished.erreur ?? "Erreur inconnue").slice(0, 200),
+          variant: "destructive",
+        });
+      }
+    }
+    prevInProgressIdRef.current = inProgressRevue?.id ?? null;
+  }, [inProgressRevue?.id, history]);
+
 
 
   const copyRevue = async () => {
@@ -722,9 +742,9 @@ export function GaiaCopilot() {
             <h3 className="font-display text-lg font-semibold">Revue commerciale du mois</h3>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={generateRevue} disabled={revueLoading}>
-              {revueLoading ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Génération… (30 à 60 s)</>
+            <Button onClick={generateRevue} disabled={revueLoading || !!inProgressRevue}>
+              {revueLoading || inProgressRevue ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Génération… (2 à 4 min)</>
               ) : (
                 <><Sparkles className="mr-2 h-4 w-4" /> Générer la revue du mois</>
               )}
@@ -736,6 +756,22 @@ export function GaiaCopilot() {
             )}
           </div>
         </div>
+        {inProgressRevue && !revueLoading && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-primary/30 bg-primary/5 p-3 text-sm">
+            <div className="flex items-center gap-2 text-primary">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>
+                Revue en cours de génération…{" "}
+                <span className="text-muted-foreground">
+                  Vous pouvez naviguer ailleurs, elle apparaîtra dans l'historique une fois prête.
+                </span>
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              Démarrée à {new Date(inProgressRevue.created_at).toLocaleTimeString("fr-FR")}
+            </span>
+          </div>
+        )}
         {revueLoading && !revueData && (
           <div className="flex flex-col gap-2 rounded border border-border/60 bg-background/40 p-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
@@ -766,7 +802,7 @@ export function GaiaCopilot() {
             {revueError}
           </pre>
         )}
-        {!revueData && !revueLoading && !revueError && (
+        {!revueData && !revueLoading && !revueError && !inProgressRevue && (
           <p className="text-sm text-muted-foreground">
             Le copilote analyse les vues Gaia et produit une revue chiffrée avec risques et actions prioritaires.
           </p>
@@ -840,22 +876,46 @@ export function GaiaCopilot() {
             <span className="text-xs text-muted-foreground">({history.length})</span>
           </div>
           <ul className="divide-y divide-border/50">
-            {history.map((h) => (
-              <li key={h.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{h.titre ?? "Revue"}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {new Date(h.created_at).toLocaleString("fr-FR")}
+            {history.map((h) => {
+              const statut = h.statut ?? "terminee";
+              const isRunning = statut === "en_cours";
+              const isError = statut === "erreur";
+              return (
+                <li key={h.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-medium">{h.titre ?? "Revue"}</span>
+                      {isRunning && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+                          <Loader2 className="h-2.5 w-2.5 animate-spin" /> En cours
+                        </span>
+                      )}
+                      {isError && (
+                        <span className="rounded-full border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[10px] text-destructive">
+                          Échec
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(h.created_at).toLocaleString("fr-FR")}
+                      {isError && h.erreur ? ` · ${h.erreur.slice(0, 120)}` : ""}
+                    </div>
                   </div>
-                </div>
-                <Link
-                  to={`/admin/gaia/revue/${h.id}`}
-                  className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-xs hover:bg-muted/40"
-                >
-                  Ouvrir <ExternalLink className="h-3 w-3" />
-                </Link>
-              </li>
-            ))}
+                  {isRunning ? (
+                    <span className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Patientez
+                    </span>
+                  ) : (
+                    <Link
+                      to={`/admin/gaia/revue/${h.id}`}
+                      className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-xs hover:bg-muted/40"
+                    >
+                      Ouvrir <ExternalLink className="h-3 w-3" />
+                    </Link>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

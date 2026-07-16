@@ -742,9 +742,9 @@ export function GaiaCopilot() {
             <h3 className="font-display text-lg font-semibold">Revue commerciale du mois</h3>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={generateRevue} disabled={revueLoading}>
-              {revueLoading ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Génération… (30 à 60 s)</>
+            <Button onClick={generateRevue} disabled={revueLoading || !!inProgressRevue}>
+              {revueLoading || inProgressRevue ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Génération… (2 à 4 min)</>
               ) : (
                 <><Sparkles className="mr-2 h-4 w-4" /> Générer la revue du mois</>
               )}
@@ -756,6 +756,22 @@ export function GaiaCopilot() {
             )}
           </div>
         </div>
+        {inProgressRevue && !revueLoading && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-primary/30 bg-primary/5 p-3 text-sm">
+            <div className="flex items-center gap-2 text-primary">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>
+                Revue en cours de génération…{" "}
+                <span className="text-muted-foreground">
+                  Vous pouvez naviguer ailleurs, elle apparaîtra dans l'historique une fois prête.
+                </span>
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              Démarrée à {new Date(inProgressRevue.created_at).toLocaleTimeString("fr-FR")}
+            </span>
+          </div>
+        )}
         {revueLoading && !revueData && (
           <div className="flex flex-col gap-2 rounded border border-border/60 bg-background/40 p-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
@@ -786,7 +802,7 @@ export function GaiaCopilot() {
             {revueError}
           </pre>
         )}
-        {!revueData && !revueLoading && !revueError && (
+        {!revueData && !revueLoading && !revueError && !inProgressRevue && (
           <p className="text-sm text-muted-foreground">
             Le copilote analyse les vues Gaia et produit une revue chiffrée avec risques et actions prioritaires.
           </p>

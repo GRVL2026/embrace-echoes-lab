@@ -2606,7 +2606,8 @@ function buildOffsetPolyline(chain: Point[], offset: number): Point[] {
   return result;
 }
 
-// Draw circulation path (safety corridors)
+// Draw circulation path (safety corridors) — uses shared spline sampler for
+// perfect coherence with 3D and PDF renderers.
 function drawCirculationPath(
   ctx: CanvasRenderingContext2D,
   segments: CirculationSegment[],
@@ -2614,50 +2615,21 @@ function drawCirculationPath(
 ) {
   if (segments.length === 0) return;
 
-  const hw = (segments[0]?.width || 120) * CM_TO_PX / 2;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { segmentsToSmoothChains } = require("@/lib/circulationSpline") as typeof import("@/lib/circulationSpline");
+  const chains = segmentsToSmoothChains(segments, 10);
+  if (chains.length === 0) return;
 
-  // Build continuous chains from segments
-  const chains: Point[][] = [];
-  let currentChain: Point[] = [];
+  const standardWidth = Math.min(...segments.map(s => s.width));
+  const corridorWidthPx = (standardWidth || 120) * CM_TO_PX;
 
-  for (const seg of segments) {
-    if (currentChain.length === 0) {
-      currentChain.push(seg.start, seg.end);
-    } else {
-      const last = currentChain[currentChain.length - 1];
-      const dist = Math.sqrt((last.x - seg.start.x) ** 2 + (last.y - seg.start.y) ** 2);
-      if (dist < 30) {
-        currentChain.push(seg.end);
-      } else {
-        chains.push(currentChain);
-        currentChain = [seg.start, seg.end];
-      }
-    }
-  }
-  if (currentChain.length > 0) chains.push(currentChain);
-
-  for (let ci = 0; ci < chains.length; ci++) {
-    let chain = deduplicateChain(chains[ci], 8);
-    chain = visualSmooth(chain, 1); // 1 iteration: slight corner rounding without blob effect
-    chain = deduplicateChain(chain, 3);
-    if (chain.length < 2) continue;
-
-    // Use the minimum width (standard corridor), not turning zone width
-    const standardWidth = Math.min(...segments.map(s => s.width));
-    const corridorWidthPx = (standardWidth || 120) * CM_TO_PX;
-
-    // Helper to trace the chain path
+  for (const chain of chains) {
     const tracePath = () => {
       ctx.beginPath();
       ctx.moveTo(chain[0].x * CM_TO_PX, chain[0].y * CM_TO_PX);
-      // Use quadratic curves between midpoints for extra smoothness
-      for (let i = 1; i < chain.length - 1; i++) {
-        const mx = (chain[i].x + chain[i + 1].x) / 2 * CM_TO_PX;
-        const my = (chain[i].y + chain[i + 1].y) / 2 * CM_TO_PX;
-        ctx.quadraticCurveTo(chain[i].x * CM_TO_PX, chain[i].y * CM_TO_PX, mx, my);
+      for (let i = 1; i < chain.length; i++) {
+        ctx.lineTo(chain[i].x * CM_TO_PX, chain[i].y * CM_TO_PX);
       }
-      const last = chain[chain.length - 1];
-      ctx.lineTo(last.x * CM_TO_PX, last.y * CM_TO_PX);
     };
 
     // Outer corridor edges — dark border
@@ -2668,38 +2640,30 @@ function drawCirculationPath(
     ctx.lineCap = "round";
     ctx.stroke();
 
-    // Inner fill — lighter center
+    // Inner lighter fill
     tracePath();
-    ctx.strokeStyle = "hsla(142, 70%, 50%, 0.06)";
-    ctx.lineWidth = corridorWidthPx - 3 / zoom;
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
+    ctx.strokeStyle = "hsla(142, 70%, 50%, 0.08)";
+    ctx.lineWidth = Math.max(1, corridorWidthPx - 3 / zoom);
     ctx.stroke();
 
-    // Centerline — smooth dashed with quadratic curves
-    ctx.strokeStyle = "hsla(142, 70%, 55%, 0.45)";
+    // Centerline — dashed
+    ctx.strokeStyle = "hsla(142, 80%, 70%, 0.55)";
     ctx.lineWidth = 1.5 / zoom;
     ctx.setLineDash([14 / zoom, 10 / zoom]);
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
     tracePath();
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.lineCap = "butt";
 
-    // Turning zone circles at start/end (PMR 1.40m)
-    const turningRadiusPx = (140 / 2) * CM_TO_PX; // 70cm radius
+    // Turning zones (PMR 1.40m) at chain ends
+    const turningRadiusPx = (140 / 2) * CM_TO_PX;
     for (const pt of [chain[0], chain[chain.length - 1]]) {
       const px = pt.x * CM_TO_PX;
       const py = pt.y * CM_TO_PX;
-
-      // Filled zone
       ctx.beginPath();
       ctx.arc(px, py, turningRadiusPx, 0, Math.PI * 2);
       ctx.fillStyle = "hsla(200, 70%, 50%, 0.08)";
       ctx.fill();
-
-      // Dashed border
       ctx.beginPath();
       ctx.arc(px, py, turningRadiusPx, 0, Math.PI * 2);
       ctx.strokeStyle = "hsla(200, 70%, 55%, 0.45)";
@@ -2707,14 +2671,10 @@ function drawCirculationPath(
       ctx.setLineDash([6 / zoom, 4 / zoom]);
       ctx.stroke();
       ctx.setLineDash([]);
-
-      // Small label
       ctx.font = `${8 / zoom}px Inter`;
       ctx.fillStyle = "hsla(200, 70%, 60%, 0.7)";
       ctx.textAlign = "center";
       ctx.fillText("PMR 1.40m", px, py - turningRadiusPx - 3 / zoom);
-
-      // Center dot
       ctx.beginPath();
       ctx.arc(px, py, 3.5 / zoom, 0, Math.PI * 2);
       ctx.fillStyle = "hsla(142, 70%, 50%, 0.6)";
@@ -2722,13 +2682,10 @@ function drawCirculationPath(
     }
   }
 
-  // Label
-  if (chains.length > 0 && chains[0].length > 1) {
-    let chain0 = deduplicateChain(chains[0], 8);
-    chain0 = visualSmooth(chain0, 2);
-    chain0 = deduplicateChain(chain0, 3);
-    const midIdx = Math.floor(chain0.length / 2);
-    const midPt = chain0[midIdx];
+  // Central width label
+  const chain0 = chains[0];
+  if (chain0 && chain0.length > 1) {
+    const midPt = chain0[Math.floor(chain0.length / 2)];
     const midX = midPt.x * CM_TO_PX;
     const midY = midPt.y * CM_TO_PX;
 

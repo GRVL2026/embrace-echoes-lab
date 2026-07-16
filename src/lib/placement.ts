@@ -1,6 +1,7 @@
 import type { Point, Room, Door, Pillar } from "@/types/editor";
 import type { GameEquipment, PlacedEquipment } from "@/types/equipment";
 import { DOOR_EXCLUSION_DEPTH } from "@/types/equipment";
+import { computeCirculation } from "@/lib/circulation";
 
 // ═══════════════════════════════════════════════════════════════════
 // CONSTANTS

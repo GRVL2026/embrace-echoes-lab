@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Menu, Shield, Database, FolderKanban, LayoutGrid, LogOut, Home, BookOpen, Truck, Radar } from "lucide-react";
+import { Menu, Shield, Database, FolderKanban, LayoutGrid, LogOut, Home, BookOpen, Truck, Radar, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useAuth } from "@/contexts/AuthContext";
@@ -54,6 +54,7 @@ export function MobileNav() {
           {item("/planner", "Arcade Planner", LayoutGrid)}
           {item("/catalogue", "Catalogue", BookOpen)}
           {isAdmin && item("/logistique", "Logistique", Truck)}
+          {canAccessGaia && item("/ecommerce", "E-commerce", Globe)}
           {canAccessGaia && item("/admin/gaia", "Gaia", Database)}
           {canAccessGaia && item("/admin/veille", "Veille marché", Radar)}
           {isAdmin && item("/admin", "Admin", Shield)}

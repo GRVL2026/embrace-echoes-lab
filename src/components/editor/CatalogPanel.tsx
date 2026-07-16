@@ -541,33 +541,39 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
       }
     });
 
-    // If layout is locked, only place NEW items without touching existing positions
-    if (layoutLocked) {
+    const preserveExisting = options.preserveExisting ?? layoutLocked;
+    const engineOpts: PlacementOptions = {
+      density: options.density ?? "standard",
+      groupByFamily: options.groupByFamily ?? true,
+      preserveExisting,
+    };
+
+    // ── Branch 1: preserve existing — only place NEW items around obstacles ──
+    if (preserveExisting) {
       const placementResult = autoPlaceEquipmentWithReport(
         selected,
         state.rooms,
         state.doors,
         state.pillars,
-        state.placedEquipments, // keep existing as obstacles
+        state.placedEquipments,
+        engineOpts,
       );
-
-      if (placementResult.placed.length === 0) {
-        const failedIds = new Set(placementResult.notPlaced.map(e => e.id));
-        setNotPlacedIds(failedIds);
-        setForcePlaceEquipments(placementResult.notPlaced);
-        return;
-      }
-
-      dispatch({ type: "ADD_PLACED_EQUIPMENTS", equipments: placementResult.placed });
-
-      const allPlaced = [...state.placedEquipments, ...placementResult.placed];
-      const circResult = computeCirculation(state.rooms, state.doors, state.pillars, allPlaced);
-      dispatch({ type: "SET_CIRCULATION", circulation: circResult.segments });
 
       const placed = placementResult.placed.length;
       const failed = placementResult.notPlaced.length;
       const failedIds = new Set(placementResult.notPlaced.map(e => e.id));
       setNotPlacedIds(failedIds);
+
+      if (placed === 0) {
+        setForcePlaceEquipments(placementResult.notPlaced);
+        showReport(0, failed, placementResult.report);
+        return;
+      }
+
+      dispatch({ type: "ADD_PLACED_EQUIPMENTS", equipments: placementResult.placed });
+      const allPlaced = [...state.placedEquipments, ...placementResult.placed];
+      const circResult = computeCirculation(state.rooms, state.doors, state.pillars, allPlaced);
+      dispatch({ type: "SET_CIRCULATION", circulation: circResult.segments });
 
       if (failed > 0) {
         setForcePlaceEquipments(placementResult.notPlaced);
@@ -577,18 +583,15 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
           if (notPlacedQty > 0) newQuantities.set(eq.id, notPlacedQty);
         });
         setSelectedQuantities(newQuantities);
-        toast.success(`${placed} jeu${placed > 1 ? "x" : ""} placé${placed > 1 ? "s" : ""}`);
       } else {
-        toast.success(`${placed} jeu${placed > 1 ? "x" : ""} placé${placed > 1 ? "s" : ""} avec succès`);
         setSelectedQuantities(new Map());
       }
+      showReport(placed, failed, placementResult.report);
       return;
     }
 
-    // Convert existing placements back to GameEquipment entries so everything
-    // can be re-placed together, keeping categories grouped optimally.
+    // ── Branch 2: full re-placement — existing + new re-placed from scratch ──
     const existingAsEquip: GameEquipment[] = state.placedEquipments.map(pe => {
-      // Try to find original catalog entry for full metadata
       const catalogEntry = catalog.find(c => c.id === pe.equipmentId);
       return catalogEntry || {
         id: pe.equipmentId,
@@ -604,58 +607,44 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
       };
     });
 
-    // Re-place ALL equipment (existing + new) from scratch for optimal grouping
     const allEquipToPlace = [...existingAsEquip, ...selected];
     const placementResult = autoPlaceEquipmentWithReport(
       allEquipToPlace,
       state.rooms,
       state.doors,
       state.pillars,
-      [], // no existing placements — we're re-placing everything
+      [],
+      engineOpts,
     );
-
-    if (placementResult.placed.length === 0) {
-      const failedIds = new Set(placementResult.notPlaced.map(e => e.id));
-      setNotPlacedIds(failedIds);
-      // Show force-place dialog instead of just a toast
-      setForcePlaceEquipments(placementResult.notPlaced);
-      return;
-    }
-
-    // Replace all placed equipment with the new optimized layout
-    dispatch({ type: "CLEAR_PLACED_EQUIPMENTS" });
-    dispatch({ type: "ADD_PLACED_EQUIPMENTS", equipments: placementResult.placed });
-    
-    // Compute dynamic circulation
-    const circResult = computeCirculation(state.rooms, state.doors, state.pillars, placementResult.placed);
-    dispatch({ type: "SET_CIRCULATION", circulation: circResult.segments });
 
     const placed = placementResult.placed.length;
     const failed = placementResult.notPlaced.length;
-    
-    // Track which equipment IDs couldn't be placed
     const failedIds = new Set(placementResult.notPlaced.map(e => e.id));
     setNotPlacedIds(failedIds);
-    
-    // Clear selection for placed items, keep selection for not-placed items
+
+    if (placed === 0) {
+      setForcePlaceEquipments(placementResult.notPlaced);
+      showReport(0, failed, placementResult.report);
+      return;
+    }
+
+    dispatch({ type: "CLEAR_PLACED_EQUIPMENTS" });
+    dispatch({ type: "ADD_PLACED_EQUIPMENTS", equipments: placementResult.placed });
+    const circResult = computeCirculation(state.rooms, state.doors, state.pillars, placementResult.placed);
+    dispatch({ type: "SET_CIRCULATION", circulation: circResult.segments });
+
     if (failed > 0) {
       const newQuantities = new Map<string, number>();
       placementResult.notPlaced.forEach(eq => {
         const notPlacedQty = placementResult.notPlaced.filter(np => np.id === eq.id).length;
-        if (notPlacedQty > 0) {
-          newQuantities.set(eq.id, notPlacedQty);
-        }
+        if (notPlacedQty > 0) newQuantities.set(eq.id, notPlacedQty);
       });
       setSelectedQuantities(newQuantities);
-      
-      // Show force-place dialog for not-placed items
       setForcePlaceEquipments(placementResult.notPlaced);
-
-      toast.success(`${placed} jeu${placed > 1 ? "x" : ""} placé${placed > 1 ? "s" : ""}`);
     } else {
-      toast.success(`${placed} jeu${placed > 1 ? "x" : ""} placé${placed > 1 ? "s" : ""} avec succès`);
       setSelectedQuantities(new Map());
     }
+    showReport(placed, failed, placementResult.report);
   };
 
   const handleForcePlace = (equipments: GameEquipment[]) => {

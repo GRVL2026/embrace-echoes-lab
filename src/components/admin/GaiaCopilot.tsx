@@ -513,9 +513,23 @@ export function GaiaCopilot() {
     <div className="space-y-6">
       {/* 1. Chat — priorité visuelle */}
       <div className="rounded-lg border border-border bg-card/40 p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-secondary" />
-          <h3 className="font-display text-lg font-semibold">Discuter avec le copilote</h3>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-secondary" />
+            <h3 className="font-display text-lg font-semibold">Discuter avec le copilote</h3>
+          </div>
+          {chat.length > 0 && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={resetConversation}
+              disabled={chatLoading}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Nouvelle conversation
+            </Button>
+          )}
         </div>
 
         {chat.length === 0 && (
@@ -528,7 +542,11 @@ export function GaiaCopilot() {
           </div>
         )}
 
-        <div className="max-h-[620px] space-y-3 overflow-y-auto rounded border border-border/60 bg-background/40 p-3">
+        <div
+          ref={chatScrollRef}
+          onScroll={handleChatScroll}
+          className="max-h-[620px] space-y-3 overflow-y-auto rounded border border-border/60 bg-background/40 p-3"
+        >
           {chat.length === 0 && (
             <div className="py-8 text-center text-sm text-muted-foreground">
               Posez une question sur le CA, les clients, les devis ou le stock.
@@ -542,7 +560,11 @@ export function GaiaCopilot() {
                 </div>
               </div>
             ) : (
-              <div key={i} className="flex justify-start">
+              <div
+                key={i}
+                ref={(el) => { assistantRefs.current[i] = el; }}
+                className="flex justify-start scroll-mt-2"
+              >
                 <div className="w-full max-w-[95%] rounded-lg bg-muted/40 border border-border/60 px-4 py-3 text-sm">
                   {/* Étapes de progression (grisé, petit) */}
                   {m.steps.length > 0 && (

@@ -262,12 +262,18 @@ export default function StockSyncPanel() {
 
             {isAdmin && selectedCount > 0 && (
               <div className="mt-4 flex justify-end">
-                <Button onClick={() => setConfirmOpen(true)} disabled={applying}>
-                  {applying ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ArrowRight className="h-4 w-4 mr-2" />}
-                  Appliquer la synchronisation ({selectedCount} produit{selectedCount > 1 ? "s" : ""})
-                </Button>
+                <span title={!applyEnabled ? "En attente de validation interne" : ""}>
+                  <Button
+                    onClick={() => setConfirmOpen(true)}
+                    disabled={applying || !applyEnabled}
+                  >
+                    {applying ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ArrowRight className="h-4 w-4 mr-2" />}
+                    Appliquer la synchronisation ({selectedCount} produit{selectedCount > 1 ? "s" : ""})
+                  </Button>
+                </span>
               </div>
             )}
+
             {!isAdmin && selectedCount > 0 && (
               <div className="mt-3 text-xs text-muted-foreground">
                 Seul un administrateur peut appliquer la synchronisation.

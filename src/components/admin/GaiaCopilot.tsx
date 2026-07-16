@@ -233,10 +233,11 @@ export function GaiaCopilot() {
   const loadHistory = async () => {
     const { data } = await (supabase as any)
       .from("gaia_revues")
-      .select("id,titre,created_at")
+      .select("id,titre,created_at,statut,erreur")
       .order("created_at", { ascending: false })
       .limit(30);
     setHistory((data as SavedRevue[]) ?? []);
+    return (data as SavedRevue[]) ?? [];
   };
 
   // Récupère l'utilisateur courant + restaure le chat depuis localStorage

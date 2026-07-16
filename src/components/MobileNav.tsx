@@ -55,6 +55,7 @@ export function MobileNav() {
           {item("/catalogue", "Catalogue", BookOpen)}
           {isAdmin && item("/logistique", "Logistique", Truck)}
           {canAccessGaia && item("/admin/gaia", "Gaia", Database)}
+          {canAccessGaia && item("/admin/veille", "Veille marché", Radar)}
           {isAdmin && item("/admin", "Admin", Shield)}
         </div>
         <div className="border-t border-border p-3">

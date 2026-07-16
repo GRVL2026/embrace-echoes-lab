@@ -313,6 +313,11 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const action = url.searchParams.get('action') || 'stats';
 
+    // Auth gate: every action requires admin/direction. JWT via Authorization
+    // header, or via ?token= query param for <img>/<a> attachment tags.
+    const gate = await requireRole(req, ['admin', 'direction']);
+    if (!gate.ok) return gate.response;
+
     if (action === 'attachment') {
       const src = url.searchParams.get('url');
       if (!src) return new Response('missing url', { status: 400, headers: corsHeaders });
@@ -324,8 +329,11 @@ Deno.serve(async (req) => {
       if (!id) return new Response(JSON.stringify({ error: 'missing id' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
-      const payload = await fetchTicket(id);
-      return new Response(JSON.stringify(payload), {
+      const [core, side_conversations] = await Promise.all([
+        fetchTicket(id),
+        fetchSideConversations(id),
+      ]);
+      return new Response(JSON.stringify({ ...core, side_conversations }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

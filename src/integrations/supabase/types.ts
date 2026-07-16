@@ -1292,6 +1292,7 @@ export type Database = {
       }
       veille_rapports: {
         Row: {
+          contenu_json: Json | null
           contenu_markdown: string
           created_at: string
           id: string
@@ -1300,6 +1301,7 @@ export type Database = {
           type: string
         }
         Insert: {
+          contenu_json?: Json | null
           contenu_markdown: string
           created_at?: string
           id?: string
@@ -1308,6 +1310,7 @@ export type Database = {
           type: string
         }
         Update: {
+          contenu_json?: Json | null
           contenu_markdown?: string
           created_at?: string
           id?: string

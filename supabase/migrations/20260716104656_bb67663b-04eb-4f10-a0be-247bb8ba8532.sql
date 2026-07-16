@@ -1,0 +1,1 @@
+ALTER TABLE public.veille_rapports ADD COLUMN IF NOT EXISTS contenu_json jsonb;

@@ -12,7 +12,7 @@ import {
   Search, ThumbsUp, ThumbsDown, RotateCcw,
 } from "lucide-react";
 
-import { RevueDashboard, revueToText, eur, type RevueData } from "./RevueDashboard";
+import { RevueDashboard, revueToText, eur, isRevueEmpty, type RevueData } from "./RevueDashboard";
 import { CopilotChart, type ChartPayload } from "./CopilotChart";
 
 type DevisRelance = { n_cde: string; code_client: string; client: string; date_devis: string; age_jours: number; montant_ht: number };

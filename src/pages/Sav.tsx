@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate, Link } from "react-router-dom";
+import { Navigate, Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
@@ -72,6 +72,7 @@ function KpiTile({ label, value, sub, Icon, accent = "primary" }: {
 }
 
 export default function Sav() {
+  const navigate = useNavigate();
   const { canAccessGaia, isLoading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -194,9 +195,11 @@ export default function Sav() {
                     </thead>
                     <tbody>
                       {stats.tickets.map((t) => (
-                        <tr key={t.id} className="border-b border-border/40 last:border-0 hover:bg-muted/30">
+                        <tr key={t.id}
+                            onClick={() => navigate(`/sav/ticket/${t.id}`)}
+                            className="border-b border-border/40 last:border-0 hover:bg-muted/40 cursor-pointer">
                           <td className="py-2 pr-3 tabular-nums text-muted-foreground">#{t.id}</td>
-                          <td className="py-2 pr-3 max-w-[280px] truncate" title={t.subject}>{t.subject}</td>
+                          <td className="py-2 pr-3 max-w-[280px] truncate font-medium text-primary" title={t.subject}>{t.subject}</td>
                           <td className="py-2 pr-3 max-w-[160px] truncate">{t.requester}</td>
                           <td className="py-2 pr-3">
                             <Badge variant="outline" className={`text-[10px] ${STATUS_STYLE[t.status] || STATUS_STYLE.closed}`}>
@@ -216,10 +219,11 @@ export default function Sav() {
                           <td className="py-2 pr-3 text-xs text-muted-foreground whitespace-nowrap">
                             {new Date(t.updated_at).toLocaleDateString("fr-FR")}
                           </td>
-                          <td className="py-2">
+                          <td className="py-2" onClick={(e) => e.stopPropagation()}>
                             <a href={ticketUrl(t.id)} target="_blank" rel="noreferrer"
-                               className="inline-flex items-center gap-1 text-primary hover:underline text-xs">
-                              Ouvrir <ExternalLink className="h-3 w-3" />
+                               className="inline-flex items-center gap-1 text-muted-foreground hover:text-primary text-xs"
+                               title="Ouvrir dans Zendesk">
+                              <ExternalLink className="h-3 w-3" />
                             </a>
                           </td>
                         </tr>

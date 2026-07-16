@@ -57,36 +57,16 @@ const STEP_PROGRESS: Record<AnalysisStep, number> = {
   done: 100,
 };
 
-export function EditorSidebar() {
+type EditorSidebarProps = {
+  catalog: GameEquipment[];
+  setCatalog: React.Dispatch<React.SetStateAction<GameEquipment[]>>;
+};
+
+export function EditorSidebar({ catalog, setCatalog }: EditorSidebarProps) {
   const { state, dispatch } = useEditor();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStep, setAnalysisStep] = useState<AnalysisStep | null>(null);
-  const [catalog, setCatalog] = useState<GameEquipment[]>([]);
-
-  // Auto-save on every change
-  useAutoSave(state, catalog);
-
-  // Restore session on mount
-  useEffect(() => {
-    const session = loadSession();
-    if (session) {
-      dispatch({
-        type: "LOAD_STATE",
-        state: {
-          rooms: session.plan.rooms,
-          doors: session.plan.doors,
-          pillars: session.plan.pillars,
-          placedEquipments: session.plan.placedEquipments,
-          gridSize: session.plan.gridSize,
-          circulationPath: session.plan.circulationPath || [],
-        },
-      });
-      if (session.catalog.length > 0) {
-        setCatalog(session.catalog);
-      }
-    }
-  }, []);
   const handleImportPlan = async (file: File) => {
     const isPdf = file.type === "application/pdf";
     const isImage = file.type.startsWith("image/");

@@ -165,7 +165,7 @@ export default function Ecommerce() {
       });
       const j = await r.json();
       if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`);
-      setStats(j);
+      setStats(normalizeStats(j));
     } catch (e: any) {
       toast.error("Erreur Shopify", { description: e?.message || String(e) });
     } finally {

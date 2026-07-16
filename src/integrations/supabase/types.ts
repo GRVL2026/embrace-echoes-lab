@@ -148,6 +148,7 @@ export type Database = {
           id: string
           images: string[] | null
           model3d: string | null
+          model3d_rotation: number
           name: string
           player_clearance: number | null
           pmr_accessible: boolean | null
@@ -182,6 +183,7 @@ export type Database = {
           id?: string
           images?: string[] | null
           model3d?: string | null
+          model3d_rotation?: number
           name: string
           player_clearance?: number | null
           pmr_accessible?: boolean | null
@@ -216,6 +218,7 @@ export type Database = {
           id?: string
           images?: string[] | null
           model3d?: string | null
+          model3d_rotation?: number
           name?: string
           player_clearance?: number | null
           pmr_accessible?: boolean | null

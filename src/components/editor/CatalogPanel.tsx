@@ -509,7 +509,12 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
     setViewingProduct(eq);
   };
 
-  const handleAutoPlace = () => {
+  const showReport = (placedCount: number, notPlacedCount: number, items: PlacementReportItem[]) => {
+    setPlacementReport({ placedCount, notPlacedCount, items });
+    setReportOpen(true);
+  };
+
+  const handleAutoPlace = (options: PlacementOptions = {}) => {
     if (selectedQuantities.size === 0) {
       toast.error("Sélectionnez au moins un jeu");
       return;

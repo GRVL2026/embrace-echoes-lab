@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Component, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -89,20 +89,26 @@ async function streamRevue(handlers: {
   let errorFromStream: string | null = null;
 
   const consumeEvent = (event: string) => {
-    const dataText = event
-      .split(/\r?\n/)
+    // Ignore heartbeats (lines starting with ':') and blank events
+    const lines = event.split(/\r?\n/).filter((l) => l.length > 0 && !l.startsWith(":"));
+    if (lines.length === 0) return;
+    const dataText = lines
       .filter((line) => line.startsWith("data:"))
       .map((line) => line.slice(5).trimStart())
       .join("\n");
     if (!dataText || dataText === "[DONE]") return;
-    const eventName = event
-      .split(/\r?\n/)
-      .find((line) => line.startsWith("event:"))
-      ?.slice(6)
-      .trim();
+    const eventName = lines.find((line) => line.startsWith("event:"))?.slice(6).trim();
 
     let data: any;
-    try { data = JSON.parse(dataText); } catch { return; }
+    try {
+      data = JSON.parse(dataText);
+    } catch (err) {
+      console.warn("[revue] JSON.parse failed for event", eventName, err);
+      if (eventName === "gaia_revue") {
+        errorFromStream = "Le JSON de la revue est incomplet ou invalide.";
+      }
+      return;
+    }
 
     if (eventName === "gaia_start") { handlers.onStart?.(); return; }
     if (eventName === "gaia_sql") {
@@ -117,23 +123,84 @@ async function streamRevue(handlers: {
       errorFromStream = data?.error ? String(data.error) : dataText;
       return;
     }
-    // heartbeats (":gaia-heartbeat …") sont filtrés en amont (pas d'event:/data:)
-    // gaia_memoire / autres : ignorés silencieusement pour la revue.
+    // Unknown events: ignore silently.
   };
 
-  while (true) {
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value, { stream: !done });
-    const events = buffer.split(/\r?\n\r?\n/);
-    buffer = events.pop() ?? "";
-    events.forEach(consumeEvent);
-    if (done) break;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      buffer += decoder.decode(value, { stream: !done });
+      const events = buffer.split(/\r?\n\r?\n/);
+      buffer = events.pop() ?? "";
+      events.forEach(consumeEvent);
+      if (done) break;
+    }
+    if (buffer.trim()) consumeEvent(buffer);
+  } catch (err) {
+    throw new Error(
+      `Flux interrompu : ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
-  if (buffer.trim()) consumeEvent(buffer);
 
   if (errorFromStream) throw new Error(errorFromStream);
-  if (!revueData) throw new Error("HTTP 200 mais aucune donnée de revue reçue.");
-  return revueData;
+  if (!revueData) throw new Error("Génération interrompue avant l'envoi de la revue.");
+  return normalizeRevue(revueData);
+}
+
+function normalizeRevue(raw: any): RevueData {
+  const r = raw && typeof raw === "object" ? raw : {};
+  const sante = r.sante && typeof r.sante === "object" ? r.sante : {};
+  const mouvements = r.mouvements && typeof r.mouvements === "object" ? r.mouvements : {};
+  return {
+    sante: {
+      commentaire: typeof sante.commentaire === "string" ? sante.commentaire : "",
+      annees: Array.isArray(sante.annees) ? sante.annees : [],
+      tendance_mensuelle: Array.isArray(sante.tendance_mensuelle) ? sante.tendance_mensuelle : [],
+    },
+    mouvements: {
+      familles: Array.isArray(mouvements.familles) ? mouvements.familles : [],
+      clients_hausse: Array.isArray(mouvements.clients_hausse) ? mouvements.clients_hausse : [],
+      clients_baisse: Array.isArray(mouvements.clients_baisse) ? mouvements.clients_baisse : [],
+    },
+    risques: Array.isArray(r.risques) ? r.risques : [],
+    actions: Array.isArray(r.actions) ? r.actions : [],
+  };
+}
+
+class RevueRenderBoundary extends Component<
+  { onRetry: () => void; children: ReactNode },
+  { hasError: boolean; message?: string }
+> {
+  state = { hasError: false, message: undefined as string | undefined };
+  static getDerivedStateFromError(err: unknown) {
+    return { hasError: true, message: err instanceof Error ? err.message : String(err) };
+  }
+  componentDidCatch(err: unknown) {
+    console.error("[revue] render error", err);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-start gap-3 rounded border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+          <div className="font-semibold text-amber-300">Génération interrompue, réessayez.</div>
+          <div className="text-xs text-muted-foreground">
+            La revue est arrivée incomplète et n'a pas pu être affichée.
+            {this.state.message ? ` (${this.state.message})` : ""}
+          </div>
+          <Button
+            size="sm"
+            onClick={() => {
+              this.setState({ hasError: false, message: undefined });
+              this.props.onRetry();
+            }}
+          >
+            <RotateCcw className="mr-2 h-3.5 w-3.5" /> Réessayer
+          </Button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 // ─────────── Main component ───────────
@@ -689,7 +756,9 @@ export function GaiaCopilot() {
         )}
         {revueData && (
           <div className="rounded border border-border/60 bg-background/40 p-4">
-            <RevueDashboard data={revueData} />
+            <RevueRenderBoundary onRetry={generateRevue}>
+              <RevueDashboard data={revueData} />
+            </RevueRenderBoundary>
           </div>
         )}
         {revueError && (

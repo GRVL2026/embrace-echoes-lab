@@ -780,29 +780,88 @@ Deno.serve(async (req) => {
         content: `Voici les données commerciales agrégées (JSON) :\n\n\`\`\`json\n${dataJson}\n\`\`\`\n\nProduis la revue commerciale du mois via l'outil build_revue.\n- santé globale : CA à période égale N/N-1/N-2 + évolution en % ; tendance mensuelle en % vs N-1 pour chaque mois disponible ; commentaire 2 phrases max.\n- mouvements : familles et clients qui montent/descendent (top mouvements chiffrés) ;\n- risques (marge, dépendance client, stock, cash, calendrier) avec gravité ;\n- TOP 5 actions priorisées par impact euros (relances devis nominatives, clients dormants à réactiver, stock à écouler). Chaque champ texte : 1-2 phrases max, ton direct.${suivisBlock}\n\nAvant d'appeler build_revue, utilise executer_sql autant de fois que nécessaire pour vérifier/enrichir tes chiffres, et "memoriser" pour consigner les nouvelles décisions/plans que la revue implique.`,
       }];
       const revueSystem = `${SYSTEM_PROMPT}\n\n${SUIVI_INSTRUCTION}\n\nTu peux utiliser executer_sql pour vérifier des chiffres, "memoriser"/"oublier" pour gérer la mémoire, avant de construire la revue. Ta réponse FINALE doit être un unique appel à l'outil build_revue avec des données structurées, sans texte libre.`;
-
-      // Boucle SQL non-streamée
       const revueExtra = { output_config: { effort: 'xhigh' } };
-      const { messages: agenticMessages } = await toolLoop({
-        admin,
-        model: REVUE_MODEL,
-        system: revueSystem,
-        dynamicSuffix: memorySuffix,
-        initialMessages,
-        extraTools: [],
-        extraPayload: revueExtra,
+
+      const encoder = new TextEncoder();
+      let heartbeat: number | undefined;
+
+      const stream = new ReadableStream<Uint8Array>({
+        async start(controller) {
+          const send = (event: string, data: unknown) => {
+            try {
+              controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+            } catch { /* closed */ }
+          };
+          send('gaia_start', { kind: 'revue' });
+          heartbeat = setInterval(() => {
+            try { controller.enqueue(encoder.encode(`: gaia-heartbeat ${Date.now()}\n\n`)); }
+            catch { if (heartbeat !== undefined) clearInterval(heartbeat); }
+          }, 10_000);
+
+          try {
+            // Phase 1 : boucle agentique SQL, streamée via gaia_sql / gaia_memoire
+            const { messages: agenticMessages } = await toolLoop({
+              admin,
+              model: REVUE_MODEL,
+              system: revueSystem,
+              dynamicSuffix: memorySuffix,
+              initialMessages,
+              extraTools: [],
+              extraPayload: revueExtra,
+              onEvent: (evt, data) => send(evt, data),
+            });
+
+            // Phase 2 : appel final build_revue (non-streamé, heartbeats maintiennent la connexion)
+            send('gaia_sql', { summary: 'Construction de la revue finale…', query: '' });
+            const finalPayload: Record<string, unknown> = {
+              model: REVUE_MODEL,
+              max_tokens: 16000,
+              thinking: { type: 'adaptive' },
+              system: systemBlocks(revueSystem, memorySuffix),
+              messages: withCacheOnLastMessage(sanitizeMessagesForApi(
+                agenticMessages.concat([{
+                  role: 'user',
+                  content: 'Appelle maintenant l\'outil build_revue avec la revue finale structurée.',
+                }]),
+              )),
+              tools: [REVUE_TOOL],
+              tool_choice: { type: 'tool', name: 'build_revue' },
+              ...revueExtra,
+            };
+            const finalResp = await anthropicCall(finalPayload);
+            logUsage('revue:build_revue', finalResp?.usage);
+            const finalContent = Array.isArray(finalResp?.content) ? finalResp.content : [];
+            const toolUse = finalContent.find((b: any) => b?.type === 'tool_use' && b?.name === 'build_revue');
+            if (!toolUse || !toolUse.input || typeof toolUse.input !== 'object') {
+              const blocks = finalContent.map((b: any) => b?.type ?? 'unknown');
+              send('gaia_error', {
+                error: `build_revue non renvoyé par le modèle. stop_reason=${finalResp?.stop_reason ?? '?'} blocks=${JSON.stringify(blocks)}`,
+              });
+              return;
+            }
+            send('gaia_revue', { data: toolUse.input });
+          } catch (e: any) {
+            console.log(`[gaia-copilot] revue stream fatal: ${e?.message ?? e}`);
+            send('gaia_error', { error: e?.message ?? String(e) });
+          } finally {
+            if (heartbeat !== undefined) clearInterval(heartbeat);
+            try { controller.close(); } catch { /* already closed */ }
+          }
+        },
+        cancel() {
+          if (heartbeat !== undefined) clearInterval(heartbeat);
+        },
       });
 
-      return await streamFinalRevue(
-        REVUE_MODEL,
-        revueSystem,
-        agenticMessages.concat([{
-          role: 'user',
-          content: 'Appelle maintenant l\'outil build_revue avec la revue finale structurée.',
-        }]),
-        revueExtra,
-        memorySuffix,
-      );
+      return new Response(stream, {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'text/event-stream; charset=utf-8',
+          'Cache-Control': 'no-cache, no-transform',
+          'X-Accel-Buffering': 'no',
+        },
+      });
     }
 
     if (action === 'chat') {

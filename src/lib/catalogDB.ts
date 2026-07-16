@@ -46,6 +46,7 @@ function equipmentToRow(eq: GameEquipment) {
     center_placement: eq.centerPlacement || false,
     player_clearance: eq.playerClearance || null,
     model3d: eq.model3d || null,
+    model3d_rotation: eq.model3dRotation ?? 0,
     description: eq.description || null,
     vendor: eq.vendor || null,
     price: eq.price || null,

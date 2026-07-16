@@ -24,12 +24,19 @@ function parseHSLColor(color: string): THREE.Color {
 }
 
 /** Renders a loaded .glb model scaled to fit equipment dimensions */
-function GLBModel({ url, width, depth, height, autoScale, roomExtent }: { url: string; width: number; depth: number; height: number; autoScale?: boolean; roomExtent?: { width: number; depth: number } }) {
+function GLBModel({ url, width, depth, height, autoScale, roomExtent, modelRotationDeg = 0 }: { url: string; width: number; depth: number; height: number; autoScale?: boolean; roomExtent?: { width: number; depth: number }; modelRotationDeg?: number }) {
   // Enable Draco decoder (gstatic CDN) so Draco-compressed .glb models load correctly.
   const { scene } = useGLTF(url, true);
   
   const clonedScene = useMemo(() => {
     const clone = scene.clone(true);
+
+    // Apply the per-product Y-axis correction BEFORE measuring the bbox so
+    // scaling and centering use the visible orientation of the model.
+    if (modelRotationDeg) {
+      clone.rotation.y = -modelRotationDeg * (Math.PI / 180);
+      clone.updateMatrixWorld(true);
+    }
     
     // Deep-clone materials and ensure textures have correct color space
     clone.traverse((child) => {

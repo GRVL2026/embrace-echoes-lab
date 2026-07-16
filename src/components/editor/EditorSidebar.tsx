@@ -3,14 +3,13 @@ import { Trash2, Upload, Loader2, FileImage, FileText, FileUp, Home, Wallet } fr
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
-import { useRef, useState, useEffect, useMemo } from "react";
-import { useAutoSave, loadSession } from "@/hooks/useAutoSave";
+import { useRef, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { Door } from "@/types/editor";
 import type { GameEquipment, PlacedEquipment } from "@/types/equipment";
 import { CatalogPanel } from "./CatalogPanel";
-import { ProjectMenu } from "./ProjectMenu";
+
 import { SidebarSection } from "./SidebarSection";
 import { pdfToImage } from "@/lib/pdfUtils";
 
@@ -57,36 +56,16 @@ const STEP_PROGRESS: Record<AnalysisStep, number> = {
   done: 100,
 };
 
-export function EditorSidebar() {
+type EditorSidebarProps = {
+  catalog: GameEquipment[];
+  setCatalog: React.Dispatch<React.SetStateAction<GameEquipment[]>>;
+};
+
+export function EditorSidebar({ catalog, setCatalog }: EditorSidebarProps) {
   const { state, dispatch } = useEditor();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStep, setAnalysisStep] = useState<AnalysisStep | null>(null);
-  const [catalog, setCatalog] = useState<GameEquipment[]>([]);
-
-  // Auto-save on every change
-  useAutoSave(state, catalog);
-
-  // Restore session on mount
-  useEffect(() => {
-    const session = loadSession();
-    if (session) {
-      dispatch({
-        type: "LOAD_STATE",
-        state: {
-          rooms: session.plan.rooms,
-          doors: session.plan.doors,
-          pillars: session.plan.pillars,
-          placedEquipments: session.plan.placedEquipments,
-          gridSize: session.plan.gridSize,
-          circulationPath: session.plan.circulationPath || [],
-        },
-      });
-      if (session.catalog.length > 0) {
-        setCatalog(session.catalog);
-      }
-    }
-  }, []);
   const handleImportPlan = async (file: File) => {
     const isPdf = file.type === "application/pdf";
     const isImage = file.type.startsWith("image/");
@@ -255,16 +234,13 @@ export function EditorSidebar() {
   return (
     <div className="flex w-72 flex-col border-l border-border bg-card/50 backdrop-blur-sm">
       {/* Header */}
-      <div className="border-b border-border p-4 flex items-center justify-between">
-        <div>
-          <h2 className="font-display text-lg font-bold text-foreground">Projet</h2>
-          <p className="text-xs text-muted-foreground mt-1">
-            {state.rooms.length === 0 && state.pillars.length === 0
-              ? "Dessinez ou importez un plan"
-              : `${state.rooms.length} salle${state.rooms.length > 1 ? "s" : ""}${state.pillars.length > 0 ? ` · ${state.pillars.length} poteau${state.pillars.length > 1 ? "x" : ""}` : ""}`}
-          </p>
-        </div>
-        <ProjectMenu catalog={catalog} onLoadCatalog={setCatalog} />
+      <div className="border-b border-border p-4">
+        <h2 className="font-display text-lg font-bold text-foreground">Projet</h2>
+        <p className="text-xs text-muted-foreground mt-1">
+          {state.rooms.length === 0 && state.pillars.length === 0
+            ? "Dessinez ou importez un plan"
+            : `${state.rooms.length} salle${state.rooms.length > 1 ? "s" : ""}${state.pillars.length > 0 ? ` · ${state.pillars.length} poteau${state.pillars.length > 1 ? "x" : ""}` : ""}`}
+        </p>
       </div>
 
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">

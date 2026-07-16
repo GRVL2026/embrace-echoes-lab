@@ -6,6 +6,7 @@ import type { PlacedEquipment } from "@/types/equipment";
 import { DoorDialog } from "./DoorDialog";
 import { PillarDialog } from "./PillarDialog";
 import { computeCirculation, type CirculationResult, type RemovalProposal } from "@/lib/circulation";
+import { segmentsToSmoothChains } from "@/lib/circulationSpline";
 import { CirculationProposalDialog } from "./CirculationProposalDialog";
 
 export function EditorCanvas() {

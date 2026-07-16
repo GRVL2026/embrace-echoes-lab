@@ -496,6 +496,7 @@ function makePlacement(equip: GameEquipment, x: number, y: number, rotation: num
     color: equip.color || "hsl(263, 85%, 68%)",
     height: equip.height,
     model3d: equip.model3d,
+    model3dRotation: equip.model3dRotation,
     centerPlacement: equip.centerPlacement,
   };
 }

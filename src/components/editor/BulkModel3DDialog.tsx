@@ -19,10 +19,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Upload, Box, CheckCircle2, XCircle, Loader2, Trash2 } from "lucide-react";
+import { Upload, Box, CheckCircle2, XCircle, Loader2, Trash2, Ruler } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { GameEquipment } from "@/types/equipment";
 import { uploadFileResumable } from "@/lib/resumableUpload";
 import { updateCatalogProduct } from "@/lib/catalogDB";
+import { readGLBDimensions, dimsDivergeSignificantly, type GLBDimensions } from "@/lib/glbBounds";
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 Mo
 const IGNORE = "__ignore__";
@@ -30,9 +32,12 @@ const IGNORE = "__ignore__";
 type Row = {
   file: File;
   matchedId: string; // equipment id, or IGNORE
-  status: "pending" | "uploading" | "done" | "error" | "skipped";
+  status: "pending" | "measuring" | "uploading" | "done" | "error" | "skipped";
   progress: number;
   message?: string;
+  modelDims?: GLBDimensions; // measured GLB bounding box (cm)
+  measuringError?: string;
+  adoptDims: boolean; // checkbox — apply model dimensions to the product
 };
 
 type Props = {
@@ -131,11 +136,40 @@ export function BulkModel3DDialog({ open, onOpenChange, catalog, setCatalog }: P
       matchedId: bestMatch(f.name, catalog),
       status: "pending",
       progress: 0,
+      adoptDims: false,
     }));
     setRows((prev) => {
       // Dedup by filename
       const existing = new Set(prev.map((r) => r.file.name));
-      return [...prev, ...newRows.filter((r) => !existing.has(r.file.name))];
+      const merged = [...prev, ...newRows.filter((r) => !existing.has(r.file.name))];
+      // Kick off async bounding-box measurement for the newly added rows.
+      newRows.forEach((r) => {
+        if (existing.has(r.file.name)) return;
+        void (async () => {
+          try {
+            const dims = await readGLBDimensions(r.file, 0);
+            setRows((current) =>
+              current.map((row) => {
+                if (row.file.name !== r.file.name) return row;
+                const matched = catalog.find((c) => c.id === row.matchedId);
+                const diverges = matched
+                  ? dimsDivergeSignificantly(dims, matched)
+                  : true;
+                return { ...row, modelDims: dims, adoptDims: diverges };
+              }),
+            );
+          } catch (err: any) {
+            setRows((current) =>
+              current.map((row) =>
+                row.file.name === r.file.name
+                  ? { ...row, measuringError: err?.message || "Lecture GLB impossible" }
+                  : row,
+              ),
+            );
+          }
+        })();
+      });
+      return merged;
     });
     setReport(null);
   };
@@ -193,8 +227,18 @@ export function BulkModel3DDialog({ open, onOpenChange, catalog, setCatalog }: P
         const { data: urlData } = supabase.storage.from("models-3d").getPublicUrl(filePath);
         const url = urlData.publicUrl;
 
-        await updateCatalogProduct(eq.id, { model3d: url });
-        setCatalog((prev) => prev.map((c) => (c.id === eq.id ? { ...c, model3d: url } : c)));
+        const dbPatch: Record<string, any> = { model3d: url };
+        const localPatch: Partial<GameEquipment> = { model3d: url };
+        if (r.adoptDims && r.modelDims) {
+          dbPatch.width = r.modelDims.width;
+          dbPatch.depth = r.modelDims.depth;
+          dbPatch.height = r.modelDims.height;
+          localPatch.width = r.modelDims.width;
+          localPatch.depth = r.modelDims.depth;
+          localPatch.height = r.modelDims.height;
+        }
+        await updateCatalogProduct(eq.id, dbPatch);
+        setCatalog((prev) => prev.map((c) => (c.id === eq.id ? { ...c, ...localPatch } : c)));
 
         updateRow(i, { status: "done", progress: 100 });
         ok++;
@@ -359,6 +403,56 @@ export function BulkModel3DDialog({ open, onOpenChange, catalog, setCatalog }: P
                             </SelectContent>
                           </Select>
                         </div>
+
+                        {/* Adopt-dimensions checkbox — active once the GLB has been measured */}
+                        {r.matchedId !== IGNORE && r.status !== "done" && (
+                          (() => {
+                            const matched = catalog.find((c) => c.id === r.matchedId);
+                            if (!matched) return null;
+                            if (r.measuringError) {
+                              return (
+                                <p className="text-[10px] text-destructive pl-4">
+                                  Impossible de lire les dimensions du GLB : {r.measuringError}
+                                </p>
+                              );
+                            }
+                            if (!r.modelDims) {
+                              return (
+                                <p className="text-[10px] text-muted-foreground pl-4 flex items-center gap-1">
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                  Mesure du modèle 3D…
+                                </p>
+                              );
+                            }
+                            const diverges = dimsDivergeSignificantly(r.modelDims, matched);
+                            return (
+                              <label className="flex items-start gap-2 pl-4 cursor-pointer select-none">
+                                <Checkbox
+                                  checked={r.adoptDims}
+                                  disabled={running}
+                                  onCheckedChange={(v) =>
+                                    updateRow(idx, { adoptDims: v === true })
+                                  }
+                                  className="mt-0.5"
+                                />
+                                <div className="text-[11px] leading-tight">
+                                  <div className="flex items-center gap-1 text-foreground">
+                                    <Ruler className="h-3 w-3 text-muted-foreground" />
+                                    Adopter les dimensions du modèle :{" "}
+                                    <span className="font-medium">
+                                      {r.modelDims.width} × {r.modelDims.depth} × {r.modelDims.height} cm
+                                    </span>
+                                    {diverges && (
+                                      <span className="text-amber-500 ml-1">
+                                        (fiche : {matched.width} × {matched.depth} × {matched.height})
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </label>
+                            );
+                          })()
+                        )}
 
                         {r.status === "uploading" && (
                           <Progress value={r.progress} className="h-1.5" />

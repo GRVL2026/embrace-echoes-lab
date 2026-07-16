@@ -181,9 +181,18 @@ export default function StockSyncPanel() {
 
         {rows && (
           <>
+            {!applyEnabled && (
+              <div className="mb-3 rounded-md border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-600 dark:text-yellow-400 flex items-start gap-2">
+                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                <span>
+                  L'application de la synchronisation est en attente de validation interne. L'analyse des écarts reste disponible en lecture seule.
+                </span>
+              </div>
+            )}
             <div className="text-xs text-muted-foreground mb-2">
               {rows.length} produits appairés · {nonZeroCount} écart(s) non nul(s) · {selectedCount} sélectionné(s)
             </div>
+
             <div className="overflow-x-auto rounded-md border border-border/60">
               <table className="w-full text-sm">
                 <thead className="bg-background/60">

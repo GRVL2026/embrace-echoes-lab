@@ -15,11 +15,13 @@ import { Upload, Package, Play, Trash2, Check, X, Info, Search, Maximize2, Minus
 import type { GameEquipment, CatalogJSON } from "@/types/equipment";
 import { find3DModel } from "@/lib/shopifyApi";
 import { DEFAULT_SAFETY_ZONE } from "@/types/equipment";
-import { autoPlaceEquipmentWithReport } from "@/lib/placement";
+import { autoPlaceEquipmentWithReport, type PlacementOptions, type PlacementReportItem } from "@/lib/placement";
 import { computeCirculation } from "@/lib/circulation";
 import { ProductDialog } from "./ProductDialog";
 import { BulkModel3DDialog } from "./BulkModel3DDialog";
 import { ForcePlaceDialog } from "./ForcePlaceDialog";
+import { PlacementReportDialog } from "./PlacementReportDialog";
+import { AutoPlaceOptionsPopover } from "./AutoPlaceOptionsPopover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fetchShopifyCatalog } from "@/lib/shopifyApi";
 import { loadCatalogFromDB, syncShopifyToDB, updateCatalogProduct } from "@/lib/catalogDB";
@@ -349,6 +351,10 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   const [show3DOnly, setShow3DOnly] = useState(false);
   const [loadingShopify, setLoadingShopify] = useState(false);
   const [bulk3DOpen, setBulk3DOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [placementReport, setPlacementReport] = useState<{
+    placedCount: number; notPlacedCount: number; items: PlacementReportItem[];
+  }>({ placedCount: 0, notPlacedCount: 0, items: [] });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Pré-remplit la sélection avec les jeux plaçables du dossier (une seule fois)
@@ -503,7 +509,12 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
     setViewingProduct(eq);
   };
 
-  const handleAutoPlace = () => {
+  const showReport = (placedCount: number, notPlacedCount: number, items: PlacementReportItem[]) => {
+    setPlacementReport({ placedCount, notPlacedCount, items });
+    setReportOpen(true);
+  };
+
+  const handleAutoPlace = (options: PlacementOptions = {}) => {
     if (selectedQuantities.size === 0) {
       toast.error("Sélectionnez au moins un jeu");
       return;
@@ -530,33 +541,39 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
       }
     });
 
-    // If layout is locked, only place NEW items without touching existing positions
-    if (layoutLocked) {
+    const preserveExisting = options.preserveExisting ?? layoutLocked;
+    const engineOpts: PlacementOptions = {
+      density: options.density ?? "standard",
+      groupByFamily: options.groupByFamily ?? true,
+      preserveExisting,
+    };
+
+    // ── Branch 1: preserve existing — only place NEW items around obstacles ──
+    if (preserveExisting) {
       const placementResult = autoPlaceEquipmentWithReport(
         selected,
         state.rooms,
         state.doors,
         state.pillars,
-        state.placedEquipments, // keep existing as obstacles
+        state.placedEquipments,
+        engineOpts,
       );
-
-      if (placementResult.placed.length === 0) {
-        const failedIds = new Set(placementResult.notPlaced.map(e => e.id));
-        setNotPlacedIds(failedIds);
-        setForcePlaceEquipments(placementResult.notPlaced);
-        return;
-      }
-
-      dispatch({ type: "ADD_PLACED_EQUIPMENTS", equipments: placementResult.placed });
-
-      const allPlaced = [...state.placedEquipments, ...placementResult.placed];
-      const circResult = computeCirculation(state.rooms, state.doors, state.pillars, allPlaced);
-      dispatch({ type: "SET_CIRCULATION", circulation: circResult.segments });
 
       const placed = placementResult.placed.length;
       const failed = placementResult.notPlaced.length;
       const failedIds = new Set(placementResult.notPlaced.map(e => e.id));
       setNotPlacedIds(failedIds);
+
+      if (placed === 0) {
+        setForcePlaceEquipments(placementResult.notPlaced);
+        showReport(0, failed, placementResult.report);
+        return;
+      }
+
+      dispatch({ type: "ADD_PLACED_EQUIPMENTS", equipments: placementResult.placed });
+      const allPlaced = [...state.placedEquipments, ...placementResult.placed];
+      const circResult = computeCirculation(state.rooms, state.doors, state.pillars, allPlaced);
+      dispatch({ type: "SET_CIRCULATION", circulation: circResult.segments });
 
       if (failed > 0) {
         setForcePlaceEquipments(placementResult.notPlaced);
@@ -566,18 +583,15 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
           if (notPlacedQty > 0) newQuantities.set(eq.id, notPlacedQty);
         });
         setSelectedQuantities(newQuantities);
-        toast.success(`${placed} jeu${placed > 1 ? "x" : ""} placé${placed > 1 ? "s" : ""}`);
       } else {
-        toast.success(`${placed} jeu${placed > 1 ? "x" : ""} placé${placed > 1 ? "s" : ""} avec succès`);
         setSelectedQuantities(new Map());
       }
+      showReport(placed, failed, placementResult.report);
       return;
     }
 
-    // Convert existing placements back to GameEquipment entries so everything
-    // can be re-placed together, keeping categories grouped optimally.
+    // ── Branch 2: full re-placement — existing + new re-placed from scratch ──
     const existingAsEquip: GameEquipment[] = state.placedEquipments.map(pe => {
-      // Try to find original catalog entry for full metadata
       const catalogEntry = catalog.find(c => c.id === pe.equipmentId);
       return catalogEntry || {
         id: pe.equipmentId,
@@ -593,58 +607,44 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
       };
     });
 
-    // Re-place ALL equipment (existing + new) from scratch for optimal grouping
     const allEquipToPlace = [...existingAsEquip, ...selected];
     const placementResult = autoPlaceEquipmentWithReport(
       allEquipToPlace,
       state.rooms,
       state.doors,
       state.pillars,
-      [], // no existing placements — we're re-placing everything
+      [],
+      engineOpts,
     );
-
-    if (placementResult.placed.length === 0) {
-      const failedIds = new Set(placementResult.notPlaced.map(e => e.id));
-      setNotPlacedIds(failedIds);
-      // Show force-place dialog instead of just a toast
-      setForcePlaceEquipments(placementResult.notPlaced);
-      return;
-    }
-
-    // Replace all placed equipment with the new optimized layout
-    dispatch({ type: "CLEAR_PLACED_EQUIPMENTS" });
-    dispatch({ type: "ADD_PLACED_EQUIPMENTS", equipments: placementResult.placed });
-    
-    // Compute dynamic circulation
-    const circResult = computeCirculation(state.rooms, state.doors, state.pillars, placementResult.placed);
-    dispatch({ type: "SET_CIRCULATION", circulation: circResult.segments });
 
     const placed = placementResult.placed.length;
     const failed = placementResult.notPlaced.length;
-    
-    // Track which equipment IDs couldn't be placed
     const failedIds = new Set(placementResult.notPlaced.map(e => e.id));
     setNotPlacedIds(failedIds);
-    
-    // Clear selection for placed items, keep selection for not-placed items
+
+    if (placed === 0) {
+      setForcePlaceEquipments(placementResult.notPlaced);
+      showReport(0, failed, placementResult.report);
+      return;
+    }
+
+    dispatch({ type: "CLEAR_PLACED_EQUIPMENTS" });
+    dispatch({ type: "ADD_PLACED_EQUIPMENTS", equipments: placementResult.placed });
+    const circResult = computeCirculation(state.rooms, state.doors, state.pillars, placementResult.placed);
+    dispatch({ type: "SET_CIRCULATION", circulation: circResult.segments });
+
     if (failed > 0) {
       const newQuantities = new Map<string, number>();
       placementResult.notPlaced.forEach(eq => {
         const notPlacedQty = placementResult.notPlaced.filter(np => np.id === eq.id).length;
-        if (notPlacedQty > 0) {
-          newQuantities.set(eq.id, notPlacedQty);
-        }
+        if (notPlacedQty > 0) newQuantities.set(eq.id, notPlacedQty);
       });
       setSelectedQuantities(newQuantities);
-      
-      // Show force-place dialog for not-placed items
       setForcePlaceEquipments(placementResult.notPlaced);
-
-      toast.success(`${placed} jeu${placed > 1 ? "x" : ""} placé${placed > 1 ? "s" : ""}`);
     } else {
-      toast.success(`${placed} jeu${placed > 1 ? "x" : ""} placé${placed > 1 ? "s" : ""} avec succès`);
       setSelectedQuantities(new Map());
     }
+    showReport(placed, failed, placementResult.report);
   };
 
   const handleForcePlace = (equipments: GameEquipment[]) => {
@@ -915,10 +915,10 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
               <span className="text-xs text-primary font-medium flex-1">
                 {totalSelectedCount} jeu{totalSelectedCount > 1 ? "x" : ""} ({selectedQuantities.size} type{selectedQuantities.size > 1 ? "s" : ""})
               </span>
-              <Button size="sm" className="h-7 gap-1 text-xs" onClick={handleAutoPlace}>
-                <Play className="h-3 w-3" />
-                Placer
-              </Button>
+              <AutoPlaceOptionsPopover
+                onLaunch={handleAutoPlace}
+                defaultPreserveExisting={layoutLocked}
+              />
               <Button
                 variant="ghost"
                 size="icon"
@@ -1353,13 +1353,11 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
                       </span>
                     </div>
                   )}
-                  <Button 
-                    className="w-full gap-2" 
-                    onClick={() => { handleAutoPlace(); setExpandedView(false); }}
-                  >
-                    <Play className="h-4 w-4" />
-                    Placer {totalSelectedCount} jeu{totalSelectedCount > 1 ? "x" : ""} sur le plan
-                  </Button>
+                  <AutoPlaceOptionsPopover
+                    onLaunch={(opts) => { handleAutoPlace(opts); setExpandedView(false); }}
+                    label={`Placer ${totalSelectedCount} jeu${totalSelectedCount > 1 ? "x" : ""} sur le plan`}
+                    defaultPreserveExisting={layoutLocked}
+                  />
                 </div>
               </div>
             )}
@@ -1374,6 +1372,14 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
         notPlacedEquipments={forcePlaceEquipments}
         onForcePlace={handleForcePlace}
         onCancel={() => setForcePlaceEquipments([])}
+      />
+
+      <PlacementReportDialog
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        placedCount={placementReport.placedCount}
+        notPlacedCount={placementReport.notPlacedCount}
+        report={placementReport.items}
       />
     </div>
   );

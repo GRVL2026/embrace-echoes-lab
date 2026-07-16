@@ -589,6 +589,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
         safetyZone: pe.safetyZone,
         color: pe.color,
         model3d: pe.model3d,
+        model3dRotation: pe.model3dRotation,
       };
     });
 
@@ -671,6 +672,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
         rotation: 0,
         position: { x: cx + offset, y: cy + offset },
         model3d: eq.model3d,
+        model3dRotation: eq.model3dRotation,
         centerPlacement: eq.centerPlacement,
       };
       placed.push(pe);
@@ -711,6 +713,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
         safetyZone: pe.safetyZone,
         color: pe.color,
         model3d: pe.model3d,
+        model3dRotation: pe.model3dRotation,
       };
     });
 

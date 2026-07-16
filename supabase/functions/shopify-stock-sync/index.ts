@@ -298,6 +298,21 @@ Deno.serve(async (req) => {
         });
       }
 
+      // Internal validation gate — controlled by gaia_config.stock_sync_apply_enabled
+      const { data: cfg } = await admin
+        .from("gaia_config")
+        .select("value")
+        .eq("key", "stock_sync_apply_enabled")
+        .maybeSingle();
+      const enabled = String(cfg?.value ?? "false").toLowerCase() === "true";
+      if (!enabled) {
+        return new Response(
+          JSON.stringify({ error: "Synchronisation des stocks désactivée — en attente de validation interne" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+
       const items = Array.isArray(body?.items) ? body.items : [];
       if (!items.length) {
         return new Response(JSON.stringify({ error: "Aucun produit fourni" }), {

@@ -65,6 +65,7 @@ export default function StockSyncPanel() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [logs, setLogs] = useState<LogRow[]>([]);
   const [applyResult, setApplyResult] = useState<any[] | null>(null);
+  const [applyEnabled, setApplyEnabled] = useState<boolean>(false);
 
   const loadLogs = async () => {
     const { data } = await supabase
@@ -75,7 +76,17 @@ export default function StockSyncPanel() {
     setLogs((data as LogRow[]) || []);
   };
 
-  useEffect(() => { loadLogs(); }, []);
+  const loadApplyFlag = async () => {
+    const { data } = await supabase
+      .from("gaia_config")
+      .select("value")
+      .eq("key", "stock_sync_apply_enabled")
+      .maybeSingle();
+    setApplyEnabled(String((data as any)?.value ?? "false").toLowerCase() === "true");
+  };
+
+  useEffect(() => { loadLogs(); loadApplyFlag(); }, []);
+
 
   const analyze = async () => {
     setLoading(true);
@@ -170,9 +181,18 @@ export default function StockSyncPanel() {
 
         {rows && (
           <>
+            {!applyEnabled && (
+              <div className="mb-3 rounded-md border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-600 dark:text-yellow-400 flex items-start gap-2">
+                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                <span>
+                  L'application de la synchronisation est en attente de validation interne. L'analyse des écarts reste disponible en lecture seule.
+                </span>
+              </div>
+            )}
             <div className="text-xs text-muted-foreground mb-2">
               {rows.length} produits appairés · {nonZeroCount} écart(s) non nul(s) · {selectedCount} sélectionné(s)
             </div>
+
             <div className="overflow-x-auto rounded-md border border-border/60">
               <table className="w-full text-sm">
                 <thead className="bg-background/60">
@@ -242,12 +262,18 @@ export default function StockSyncPanel() {
 
             {isAdmin && selectedCount > 0 && (
               <div className="mt-4 flex justify-end">
-                <Button onClick={() => setConfirmOpen(true)} disabled={applying}>
-                  {applying ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ArrowRight className="h-4 w-4 mr-2" />}
-                  Appliquer la synchronisation ({selectedCount} produit{selectedCount > 1 ? "s" : ""})
-                </Button>
+                <span title={!applyEnabled ? "En attente de validation interne" : ""}>
+                  <Button
+                    onClick={() => setConfirmOpen(true)}
+                    disabled={applying || !applyEnabled}
+                  >
+                    {applying ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ArrowRight className="h-4 w-4 mr-2" />}
+                    Appliquer la synchronisation ({selectedCount} produit{selectedCount > 1 ? "s" : ""})
+                  </Button>
+                </span>
               </div>
             )}
+
             {!isAdmin && selectedCount > 0 && (
               <div className="mt-3 text-xs text-muted-foreground">
                 Seul un administrateur peut appliquer la synchronisation.

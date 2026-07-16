@@ -598,8 +598,8 @@ export function computeCirculation(
     const pathCells = astar(grid, fromGrid.r, fromGrid.c, toGrid_.r, toGrid_.c, rows, cols);
     if (!pathCells || pathCells.length < 2) return false;
     const worldPoints = pathCells.map(cell => toWorld(cell.r, cell.c));
-    const simplified = simplifyPath(worldPoints, resolution * 0.5);
-    const smoothed = smoothPath(simplified, 2, isBlockedWorld);
+    const simplified = simplifyPath(worldPoints, resolution * 0.8);
+    const smoothed = sampleSpline(simplified, 10, isBlockedWorld);
     for (let i = 0; i < smoothed.length - 1; i++) {
       allSegments.push({ start: smoothed[i], end: smoothed[i + 1], width: CORRIDOR_WIDTH });
     }

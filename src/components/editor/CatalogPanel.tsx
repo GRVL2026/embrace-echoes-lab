@@ -754,10 +754,10 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   return (
     <div className={`flex flex-col border-t border-border ${catalogOpen ? "flex-1 min-h-0" : "flex-none"}`}>
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border">
+      <div className="flex items-center justify-between border-b border-border gap-1">
         <button
           onClick={() => setCatalogOpen(!catalogOpen)}
-          className="flex items-center gap-2 p-3 hover:bg-muted/30 transition-colors flex-1"
+          className="flex items-center gap-2 p-2 hover:bg-muted/30 transition-colors flex-1 min-w-0"
         >
           {catalogOpen ? (
             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -765,14 +765,14 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
             <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           )}
           <Package className="h-4 w-4 text-primary shrink-0" />
-          <span className="font-display text-sm font-bold text-foreground">Catalogue</span>
+          <span className="font-display text-sm font-bold text-foreground truncate">Catalogue</span>
           {catalog.length > 0 && (
-            <span className="ml-auto rounded-full bg-primary/20 text-primary text-[10px] font-semibold px-1.5 py-0.5 min-w-[18px] text-center">
+            <span className="rounded-full bg-primary/20 text-primary text-[10px] font-semibold px-1.5 py-0.5 min-w-[18px] text-center shrink-0">
               {catalog.length}
             </span>
           )}
         </button>
-        <div className="flex gap-1 pr-2">
+        <div className="flex gap-0.5 pr-1 shrink-0">
           <input
             ref={fileInputRef}
             type="file"

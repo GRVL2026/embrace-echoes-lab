@@ -9,7 +9,7 @@ const API_VERSION = "2026-01";
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 min
 // Bump on every structural change to the returned stats payload to invalidate stale cache entries.
 const CACHE_VERSION = 2;
-const cacheKey = (p: PeriodKey) => `v${CACHE_VERSION}:${p}`;
+const cacheKey = (p: string) => `v${CACHE_VERSION}:${p}`;
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,

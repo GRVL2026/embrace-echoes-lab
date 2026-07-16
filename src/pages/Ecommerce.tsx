@@ -149,6 +149,7 @@ export default function Ecommerce() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [period, setPeriod] = useState<typeof PERIODS[number]["key"]>("30d");
   const [openOrder, setOpenOrder] = useState<OrderDetail | null>(null);
+  const [lowStockOpen, setLowStockOpen] = useState(false);
 
   const load = async (force = false, p = period) => {
     if (force) setRefreshing(true); else setLoading(true);

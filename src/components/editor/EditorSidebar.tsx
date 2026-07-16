@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import type { Door } from "@/types/editor";
 import type { GameEquipment, PlacedEquipment } from "@/types/equipment";
 import { CatalogPanel } from "./CatalogPanel";
-import { ProjectMenu } from "./ProjectMenu";
+
 import { SidebarSection } from "./SidebarSection";
 import { pdfToImage } from "@/lib/pdfUtils";
 
@@ -255,16 +255,13 @@ export function EditorSidebar() {
   return (
     <div className="flex w-72 flex-col border-l border-border bg-card/50 backdrop-blur-sm">
       {/* Header */}
-      <div className="border-b border-border p-4 flex items-center justify-between">
-        <div>
-          <h2 className="font-display text-lg font-bold text-foreground">Projet</h2>
-          <p className="text-xs text-muted-foreground mt-1">
-            {state.rooms.length === 0 && state.pillars.length === 0
-              ? "Dessinez ou importez un plan"
-              : `${state.rooms.length} salle${state.rooms.length > 1 ? "s" : ""}${state.pillars.length > 0 ? ` · ${state.pillars.length} poteau${state.pillars.length > 1 ? "x" : ""}` : ""}`}
-          </p>
-        </div>
-        <ProjectMenu catalog={catalog} onLoadCatalog={setCatalog} />
+      <div className="border-b border-border p-4">
+        <h2 className="font-display text-lg font-bold text-foreground">Projet</h2>
+        <p className="text-xs text-muted-foreground mt-1">
+          {state.rooms.length === 0 && state.pillars.length === 0
+            ? "Dessinez ou importez un plan"
+            : `${state.rooms.length} salle${state.rooms.length > 1 ? "s" : ""}${state.pillars.length > 0 ? ` · ${state.pillars.length} poteau${state.pillars.length > 1 ? "x" : ""}` : ""}`}
+        </p>
       </div>
 
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">

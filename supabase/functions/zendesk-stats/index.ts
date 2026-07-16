@@ -212,7 +212,10 @@ async function proxyAttachment(rawUrl: string): Promise<Response> {
 async function buildResume(ticketId: string) {
   if (!ANTHROPIC_KEY) throw new Error('ANTHROPIC_API_KEY manquant');
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
-  const { ticket, comments } = await fetchTicket(ticketId);
+  const [{ ticket, comments }, side_conversations] = await Promise.all([
+    fetchTicket(ticketId),
+    fetchSideConversations(ticketId),
+  ]);
 
   // Cache check
   const { data: cached } = await supabase

@@ -18,7 +18,7 @@ import { CopilotChart, type ChartPayload } from "./CopilotChart";
 type DevisRelance = { n_cde: string; code_client: string; client: string; date_devis: string; age_jours: number; montant_ht: number };
 type ClientDormant = { code_client: string; client: string; ca_annee_courante: number; ca_n1: number; ca_n2: number; derniere_facture: string | null };
 type StockDormant = { code_article: string; description: string; famille: string; quantite: number; valeur_achat: number };
-type SavedRevue = { id: string; titre: string | null; created_at: string };
+type SavedRevue = { id: string; titre: string | null; created_at: string; statut?: string | null; erreur?: string | null };
 
 type ChatPart =
   | { type: "text"; text: string }

@@ -330,10 +330,10 @@ export default function Ecommerce() {
                       fontSize={11}
                       tickFormatter={(d) => new Date(d).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" })}
                     />
-                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={(v) => fmtMoney(Number(v), stats.currency)} />
                     <Tooltip
                       contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
-                      formatter={(v: any) => fmtMoney(Number(v), stats.currency)}
+                      formatter={(v: any) => [fmtMoney(Number(v), stats.currency), "CA"]}
                       labelFormatter={(d) => new Date(d).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "short" })}
                     />
                     <Bar dataKey="amount" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />

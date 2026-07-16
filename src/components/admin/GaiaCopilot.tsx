@@ -293,10 +293,12 @@ export function GaiaCopilot() {
     setRevueLoading(true);
     setRevueData(null);
     setRevueError(null);
-    setRevueProgress(0);
+    setRevueSteps([]);
     try {
-      const jsonBuffer = await streamRevue((buf) => setRevueProgress(buf.length));
-      const parsed = JSON.parse(jsonBuffer) as RevueData;
+      const parsed = await streamRevue({
+        onStart: () => setRevueSteps([]),
+        onStep: (step) => setRevueSteps((prev) => [...prev, step]),
+      });
       setRevueData(parsed);
       await saveRevue(parsed);
       toast({ title: "Revue enregistrée", description: "Consultable dans l'historique." });

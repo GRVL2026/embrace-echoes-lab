@@ -119,7 +119,7 @@ function GLBModel({ url, width, depth, height, autoScale, roomExtent, modelRotat
     }
     
     return clone;
-  }, [scene, width, depth, height, autoScale, roomExtent]);
+  }, [scene, width, depth, height, autoScale, roomExtent, modelRotationDeg]);
 
   return <primitive object={clonedScene} />;
 }

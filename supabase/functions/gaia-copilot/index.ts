@@ -717,95 +717,9 @@ async function forceFinalText(
 
 
 
-/** Stream final Anthropic call (SSE passthrough) — utilisé pour la revue afin de conserver l'API SSE côté client. */
-async function streamFinalRevue(
-  model: string,
-  system: string,
-  messages: Array<{ role: 'user' | 'assistant'; content: any }>,
-  extraPayload?: Record<string, unknown>,
-  dynamicSuffix?: string,
-) {
-  const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY manquant');
-
-  const payload = {
-    model,
-    max_tokens: 16000,
-    stream: true,
-    // thinking adaptive requis pour opus-4-8 (omission = désactivé).
-    thinking: { type: 'adaptive' },
-    system: systemBlocks(system, dynamicSuffix),
-    messages: withCacheOnLastMessage(messages),
-    tools: [REVUE_TOOL],
-    tool_choice: { type: 'tool', name: 'build_revue' },
-    ...(extraPayload ?? {}),
-  };
-  const payloadStr = JSON.stringify(payload);
-  const inputChars = payloadStr.length;
-
-  const encoder = new TextEncoder();
-  let heartbeat: number | undefined;
-  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
-
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      controller.enqueue(encoder.encode(`event: gaia_start\ndata: ${JSON.stringify({ input_chars: inputChars })}\n\n`));
-      heartbeat = setInterval(() => {
-        try { controller.enqueue(encoder.encode(`: gaia-heartbeat ${Date.now()}\n\n`)); }
-        catch { if (heartbeat !== undefined) clearInterval(heartbeat); }
-      }, 10_000);
-      try {
-        const upstream = await fetch(ANTHROPIC_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': apiKey,
-            'anthropic-version': ANTHROPIC_VERSION,
-          },
-          body: payloadStr,
-        });
-        if (!upstream.ok) {
-          const body = await upstream.text();
-          controller.enqueue(encoder.encode(`event: gaia_error\ndata: ${JSON.stringify({ error: `Anthropic HTTP ${upstream.status} ${upstream.statusText}. Body: ${body}`, status: upstream.status })}\n\n`));
-          controller.close();
-          return;
-        }
-        if (!upstream.body) {
-          controller.enqueue(encoder.encode(`event: gaia_error\ndata: ${JSON.stringify({ error: 'Anthropic 200 sans flux de réponse' })}\n\n`));
-          controller.close();
-          return;
-        }
-        reader = upstream.body.getReader();
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          controller.enqueue(value);
-        }
-        controller.enqueue(encoder.encode(`\n\nevent: gaia_debug\ndata: ${JSON.stringify({ input_chars: inputChars })}\n\n`));
-        controller.close();
-      } catch (error) {
-        controller.enqueue(encoder.encode(`event: gaia_error\ndata: ${JSON.stringify({ error: error instanceof Error ? error.message : String(error) })}\n\n`));
-        controller.close();
-      } finally {
-        if (heartbeat !== undefined) clearInterval(heartbeat);
-      }
-    },
-    cancel() {
-      if (heartbeat !== undefined) clearInterval(heartbeat);
-      reader?.cancel();
-    },
-  });
-
-  return new Response(stream, {
-    status: 200,
-    headers: {
-      ...corsHeaders,
-      'Content-Type': 'text/event-stream; charset=utf-8',
-      'Cache-Control': 'no-cache, no-transform',
-      'X-Accel-Buffering': 'no',
-    },
-  });
-}
+// streamFinalRevue supprimé : la revue est désormais générée à l'intérieur du
+// stream SSE ouvert immédiatement au début de l'action 'revue' (voir plus bas),
+// pour éviter les IDLE_TIMEOUT de la gateway pendant la boucle toolLoop.
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });

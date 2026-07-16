@@ -89,20 +89,26 @@ async function streamRevue(handlers: {
   let errorFromStream: string | null = null;
 
   const consumeEvent = (event: string) => {
-    const dataText = event
-      .split(/\r?\n/)
+    // Ignore heartbeats (lines starting with ':') and blank events
+    const lines = event.split(/\r?\n/).filter((l) => l.length > 0 && !l.startsWith(":"));
+    if (lines.length === 0) return;
+    const dataText = lines
       .filter((line) => line.startsWith("data:"))
       .map((line) => line.slice(5).trimStart())
       .join("\n");
     if (!dataText || dataText === "[DONE]") return;
-    const eventName = event
-      .split(/\r?\n/)
-      .find((line) => line.startsWith("event:"))
-      ?.slice(6)
-      .trim();
+    const eventName = lines.find((line) => line.startsWith("event:"))?.slice(6).trim();
 
     let data: any;
-    try { data = JSON.parse(dataText); } catch { return; }
+    try {
+      data = JSON.parse(dataText);
+    } catch (err) {
+      console.warn("[revue] JSON.parse failed for event", eventName, err);
+      if (eventName === "gaia_revue") {
+        errorFromStream = "Le JSON de la revue est incomplet ou invalide.";
+      }
+      return;
+    }
 
     if (eventName === "gaia_start") { handlers.onStart?.(); return; }
     if (eventName === "gaia_sql") {
@@ -117,23 +123,48 @@ async function streamRevue(handlers: {
       errorFromStream = data?.error ? String(data.error) : dataText;
       return;
     }
-    // heartbeats (":gaia-heartbeat …") sont filtrés en amont (pas d'event:/data:)
-    // gaia_memoire / autres : ignorés silencieusement pour la revue.
+    // Unknown events: ignore silently.
   };
 
-  while (true) {
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value, { stream: !done });
-    const events = buffer.split(/\r?\n\r?\n/);
-    buffer = events.pop() ?? "";
-    events.forEach(consumeEvent);
-    if (done) break;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      buffer += decoder.decode(value, { stream: !done });
+      const events = buffer.split(/\r?\n\r?\n/);
+      buffer = events.pop() ?? "";
+      events.forEach(consumeEvent);
+      if (done) break;
+    }
+    if (buffer.trim()) consumeEvent(buffer);
+  } catch (err) {
+    throw new Error(
+      `Flux interrompu : ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
-  if (buffer.trim()) consumeEvent(buffer);
 
   if (errorFromStream) throw new Error(errorFromStream);
-  if (!revueData) throw new Error("HTTP 200 mais aucune donnée de revue reçue.");
-  return revueData;
+  if (!revueData) throw new Error("Génération interrompue avant l'envoi de la revue.");
+  return normalizeRevue(revueData);
+}
+
+function normalizeRevue(raw: any): RevueData {
+  const r = raw && typeof raw === "object" ? raw : {};
+  const sante = r.sante && typeof r.sante === "object" ? r.sante : {};
+  const mouvements = r.mouvements && typeof r.mouvements === "object" ? r.mouvements : {};
+  return {
+    sante: {
+      commentaire: typeof sante.commentaire === "string" ? sante.commentaire : "",
+      annees: Array.isArray(sante.annees) ? sante.annees : [],
+      tendance_mensuelle: Array.isArray(sante.tendance_mensuelle) ? sante.tendance_mensuelle : [],
+    },
+    mouvements: {
+      familles: Array.isArray(mouvements.familles) ? mouvements.familles : [],
+      clients_hausse: Array.isArray(mouvements.clients_hausse) ? mouvements.clients_hausse : [],
+      clients_baisse: Array.isArray(mouvements.clients_baisse) ? mouvements.clients_baisse : [],
+    },
+    risques: Array.isArray(r.risques) ? r.risques : [],
+    actions: Array.isArray(r.actions) ? r.actions : [],
+  };
 }
 
 // ─────────── Main component ───────────

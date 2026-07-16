@@ -776,7 +776,16 @@ export default function GaiaClientFiche() {
               <div className="mb-3 rounded border border-border/60 bg-muted/30 p-3 text-xs text-muted-foreground italic">
                 {copilotQuestion}
               </div>
-              {copilotLoading ? (
+              {copilotSteps.length > 0 && (
+                <div className="mb-3 space-y-1">
+                  {copilotSteps.map((s, i) => (
+                    <div key={i} className="rounded border border-border/40 bg-background/40 px-2 py-1 text-[11px] text-muted-foreground">
+                      <span className="text-primary">▸</span> {s.summary}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {copilotLoading && !copilotAnswer ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" /> Analyse en cours…
                 </div>

@@ -1,5 +1,6 @@
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { requireRole } from '../_shared/require-role.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -14,7 +15,7 @@ const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
 
 const CACHE_MINUTES = 15;
 const CACHE_VERSION = 1;
-const ANTHROPIC_MODEL = 'claude-sonnet-4-5';
+const ANTHROPIC_MODEL = 'claude-sonnet-5';
 
 function authHeader() {
   return `Basic ${btoa(`${EMAIL}/token:${TOKEN}`)}`;

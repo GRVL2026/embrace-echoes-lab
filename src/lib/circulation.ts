@@ -376,11 +376,15 @@ function getDoorWorldPosition(door: Door, rooms: Room[]): Point | null {
   };
 }
 
-/** 
- * Build wall-sweep waypoints by detecting which wall each equipment is placed against.
- * For each wall with equipment, creates waypoints at the extremes of the equipment row,
- * positioned at a safe distance from the wall (well within the A* free zone).
- * For center-placement (island) equipment, creates individual front waypoints.
+/**
+ * Build wall-sweep waypoints:
+ *  - Groups equipment placed against the same wall.
+ *  - Places ONE waypoint per equipment, aligned on a straight line parallel
+ *    to the wall at a constant distance (the max front-face distance in the
+ *    group + HALF_CORRIDOR + margin), sorted along the wall.
+ *  - The forward direction of each equipment uses its real rotation
+ *    (front = rotate((0,1), rotation)) and its real depth.
+ *  - Center-placement (island) equipment get an individual front waypoint.
  */
 function buildWallSweepWaypoints(
   equipments: PlacedEquipment[],
@@ -391,14 +395,11 @@ function buildWallSweepWaypoints(
   const pts = room.points;
   const edgeCount = room.isClosed ? pts.length : pts.length - 1;
 
-  // For each equipment, find which wall edge it's closest to (back side)
   type WallGroup = { edgeIdx: number; equipment: PlacedEquipment[] };
   const wallGroups = new Map<number, WallGroup>();
 
   for (const eq of equipments) {
-    if (eq.centerPlacement) continue; // islands handled separately
-
-    // Find nearest wall edge
+    if (eq.centerPlacement) continue;
     let bestEdge = 0;
     let bestDist = Infinity;
     for (let i = 0; i < edgeCount; i++) {
@@ -406,98 +407,73 @@ function buildWallSweepWaypoints(
       const dist = ptSegDist(eq.position.x, eq.position.y, a.x, a.y, b.x, b.y);
       if (dist < bestDist) { bestDist = dist; bestEdge = i; }
     }
-
-    if (!wallGroups.has(bestEdge)) {
-      wallGroups.set(bestEdge, { edgeIdx: bestEdge, equipment: [] });
-    }
+    if (!wallGroups.has(bestEdge)) wallGroups.set(bestEdge, { edgeIdx: bestEdge, equipment: [] });
     wallGroups.get(bestEdge)!.equipment.push(eq);
   }
 
   const waypoints: { id: string; point: Point }[] = [];
+  const frontMargin = HALF_CORRIDOR + 2;
 
-  // For each wall with equipment, create sweep waypoints
   for (const [edgeIdx, group] of wallGroups) {
     const a = pts[edgeIdx], b = pts[(edgeIdx + 1) % pts.length];
     const dx = b.x - a.x, dy = b.y - a.y;
     const wallLen = Math.sqrt(dx * dx + dy * dy);
     if (wallLen === 0) continue;
 
-    // Wall unit vector and inward normal
     const ux = dx / wallLen, uy = dy / wallLen;
-    // Determine which normal points inward
     let nx = -uy, ny = ux;
     const testPt = { x: (a.x + b.x) / 2 + nx * 50, y: (a.y + b.y) / 2 + ny * 50 };
-    if (!pointInPolygon(testPt, pts)) {
-      nx = -nx; ny = -ny;
-    }
+    if (!pointInPolygon(testPt, pts)) { nx = -nx; ny = -ny; }
 
-    // Waypoint placed just in front of equipment face (not relative to wall)
-    // Equipment front face = center + depth/2 in inward direction
-    // Waypoint = front face + HALF_CORRIDOR + small margin
-    const frontMargin = HALF_CORRIDOR + 2; // corridor center 2cm from equipment face
-
-    // Project each equipment onto wall axis to get position along wall
+    // Compute per-equipment along/frontDist using real rotation + real depth.
     const projections = group.equipment.map(eq => {
       const px = eq.position.x - a.x, py = eq.position.y - a.y;
-      const along = px * ux + py * uy; // position along wall
-      // Distance from equipment center to its front face (in inward normal direction)
-      const eqHalfDepth = Math.max(eq.depth, eq.width) / 2;
-      return { eq, along, eqHalfDepth };
+      const along = px * ux + py * uy;                    // pos along wall
+      const eqDistFromWall = px * nx + py * ny;           // signed distance from wall (inward)
+      const rad = (eq.rotation || 0) * Math.PI / 180;
+      // Local +Y is the front direction; rotate it by eq.rotation.
+      const frontX = -Math.sin(rad), frontY = Math.cos(rad);
+      const frontProj = frontX * nx + frontY * ny;        // -1..1: how much front points inward
+      // Signed distance from wall to the front face of the equipment.
+      const frontFaceDist = eqDistFromWall + frontProj * (eq.depth / 2);
+      // Also account for possibly-rotated side (width) if the game faces sideways.
+      const sideProj = Math.abs(-Math.cos(rad) * nx + -Math.sin(rad) * ny); // |right·n|
+      const bboxFrontDist = eqDistFromWall
+        + Math.abs(frontProj) * (eq.depth / 2)
+        + sideProj * (eq.width / 2);
+      const clearance = Math.max(frontFaceDist, bboxFrontDist);
+      return { eq, along, clearance };
     });
-    projections.sort((a, b) => a.along - b.along);
+    projections.sort((p, q) => p.along - q.along);
 
-    // Create waypoint in front of a specific equipment
-    const makeWaypointForEq = (proj: typeof projections[0]): Point => {
-      const clamped = Math.max(HALF_CORRIDOR + 30, Math.min(wallLen - HALF_CORRIDOR - 30, proj.along));
-      const distFromWall = proj.eqHalfDepth + frontMargin;
-      // Use equipment's actual position projected onto the wall normal for depth
-      // but use wall-relative positioning for the along-axis
-      const eqDistFromWall = (proj.eq.position.x - a.x) * nx + (proj.eq.position.y - a.y) * ny;
-      const wpDist = eqDistFromWall + proj.eqHalfDepth + frontMargin;
-      return {
-        x: a.x + ux * clamped + nx * wpDist,
-        y: a.y + uy * clamped + ny * wpDist,
-      };
-    };
+    // Straight corridor line parallel to wall at constant distance.
+    const wallLineDist = Math.max(
+      HALF_CORRIDOR + 10,
+      ...projections.map(p => p.clearance + frontMargin),
+    );
 
-    const leftProj = projections[0];
-    const rightProj = projections[projections.length - 1];
-
-    // Left extreme waypoint
-    waypoints.push({ id: leftProj.eq.id, point: makeWaypointForEq(leftProj) });
-
-    // Right extreme waypoint (if different from left)
-    if (projections.length > 1) {
-      waypoints.push({ id: rightProj.eq.id, point: makeWaypointForEq(rightProj) });
-    }
-
-    // Middle waypoint for large groups
-    if (projections.length > 4) {
-      const midProj = projections[Math.floor(projections.length / 2)];
-      waypoints.push({ id: midProj.eq.id, point: makeWaypointForEq(midProj) });
-    }
-
-    // Map remaining equipment to nearest extreme (for unreachable tracking)
     for (const proj of projections) {
-      if (proj.eq.id === leftProj.eq.id || proj.eq.id === rightProj.eq.id) continue;
-      if (projections.length > 4 && proj.eq === projections[Math.floor(projections.length / 2)].eq) continue;
-      const nearestProj = Math.abs(proj.along - leftProj.along) < Math.abs(proj.along - rightProj.along) 
-        ? leftProj : rightProj;
-      waypoints.push({ id: proj.eq.id, point: makeWaypointForEq(nearestProj) });
+      const clamped = Math.max(HALF_CORRIDOR + 30, Math.min(wallLen - HALF_CORRIDOR - 30, proj.along));
+      waypoints.push({
+        id: proj.eq.id,
+        point: {
+          x: a.x + ux * clamped + nx * wallLineDist,
+          y: a.y + uy * clamped + ny * wallLineDist,
+        },
+      });
     }
   }
 
-  // Handle center-placement (island) equipment with individual waypoints
+  // Island / center-placement equipment: one front waypoint each.
   for (const eq of equipments) {
     if (!eq.centerPlacement) continue;
     const rad = (eq.rotation || 0) * Math.PI / 180;
-    const cos = Math.cos(rad), sin = Math.sin(rad);
     const frontOffset = eq.depth / 2 + HALF_CORRIDOR + 2;
     waypoints.push({
       id: eq.id,
       point: {
-        x: eq.position.x + (-sin) * frontOffset,
-        y: eq.position.y + cos * frontOffset,
+        x: eq.position.x + (-Math.sin(rad)) * frontOffset,
+        y: eq.position.y + Math.cos(rad) * frontOffset,
       },
     });
   }

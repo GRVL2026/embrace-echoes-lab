@@ -682,14 +682,23 @@ async function forceFinalText(
     role: 'user' as const,
     content: instruction,
   }];
-  const resp = await anthropicCall({
-    model,
-    max_tokens: 16000,
-    thinking: { type: 'adaptive' },
-    output_config: { effort: 'high' },
-    system: systemBlocks(system, dynamicSuffix),
-    messages: withCacheOnLastMessage(forced),
-  });
+  const tools = [SQL_TOOL, MEMORISE_TOOL, OUBLIER_TOOL, CHART_TOOL];
+  let resp: any;
+  try {
+    resp = await anthropicCall({
+      model,
+      max_tokens: 16000,
+      thinking: { type: 'adaptive' },
+      output_config: { effort: 'high' },
+      system: systemBlocks(system, dynamicSuffix),
+      messages: withCacheOnLastMessage(sanitizeMessagesForApi(forced)),
+      tools,
+      tool_choice: { type: 'none' },
+    });
+  } catch (e: any) {
+    console.log(`[gaia-copilot] forceFinalText${reinforced ? ':retry' : ''} Anthropic error body: ${e?.message ?? e}`);
+    throw e;
+  }
   logUsage(`forceFinalText${reinforced ? ':retry' : ''}`, resp?.usage);
   const content = Array.isArray(resp?.content) ? resp.content : [];
   const blockTypes = content.map((b: any) => b?.type ?? 'unknown');

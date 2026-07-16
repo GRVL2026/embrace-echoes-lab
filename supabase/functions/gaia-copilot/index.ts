@@ -570,14 +570,23 @@ async function toolLoop(params: {
     const sys = isLastRound
       ? `${system}\n\nTu as atteint la limite de ${MAX_TOOL_ROUNDS} appels d'outils. Réponds maintenant avec les informations dont tu disposes.`
       : system;
+    const extraOutputConfig = (extraPayload as any)?.output_config;
     const payload: Record<string, unknown> = {
       model,
       max_tokens: isLastRound ? 16000 : MAX_TOKENS_PER_TURN,
       system: systemBlocks(sys, dynamicSuffix),
       messages: withCacheOnLastMessage(sanitizeMessagesForApi(messages)),
       tools,
-      ...(isLastRound ? { thinking: { type: 'adaptive' }, output_config: { effort: 'high' }, tool_choice: { type: 'none' } } : {}),
+      // thinking adaptive requis pour opus-4-8 (omission = désactivé). Sans effet sur sonnet-5 (déjà adaptive par défaut).
+      thinking: { type: 'adaptive' },
       ...(extraPayload ?? {}),
+      ...(isLastRound
+        ? {
+            tool_choice: { type: 'none' },
+            // Préserve l'effort venant de extraPayload (ex: 'xhigh' pour la revue) au dernier tour.
+            output_config: extraOutputConfig ?? { effort: 'high' },
+          }
+        : {}),
     };
     if (!isLastRound && toolChoice) payload.tool_choice = toolChoice;
 
@@ -723,6 +732,8 @@ async function streamFinalRevue(
     model,
     max_tokens: 16000,
     stream: true,
+    // thinking adaptive requis pour opus-4-8 (omission = désactivé).
+    thinking: { type: 'adaptive' },
     system: systemBlocks(system, dynamicSuffix),
     messages: withCacheOnLastMessage(messages),
     tools: [REVUE_TOOL],

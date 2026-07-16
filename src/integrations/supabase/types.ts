@@ -1458,6 +1458,33 @@ export type Database = {
         }
         Relationships: []
       }
+      zendesk_ticket_summaries: {
+        Row: {
+          created_at: string
+          model: string | null
+          resume: Json
+          ticket_id: number
+          ticket_updated_at: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          model?: string | null
+          resume: Json
+          ticket_id: number
+          ticket_updated_at: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          model?: string | null
+          resume?: Json
+          ticket_id?: number
+          ticket_updated_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       v_gaia_articles: {

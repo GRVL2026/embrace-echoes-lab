@@ -167,6 +167,42 @@ function normalizeRevue(raw: any): RevueData {
   };
 }
 
+class RevueRenderBoundary extends Component<
+  { onRetry: () => void; children: ReactNode },
+  { hasError: boolean; message?: string }
+> {
+  state = { hasError: false, message: undefined as string | undefined };
+  static getDerivedStateFromError(err: unknown) {
+    return { hasError: true, message: err instanceof Error ? err.message : String(err) };
+  }
+  componentDidCatch(err: unknown) {
+    console.error("[revue] render error", err);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-start gap-3 rounded border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+          <div className="font-semibold text-amber-300">Génération interrompue, réessayez.</div>
+          <div className="text-xs text-muted-foreground">
+            La revue est arrivée incomplète et n'a pas pu être affichée.
+            {this.state.message ? ` (${this.state.message})` : ""}
+          </div>
+          <Button
+            size="sm"
+            onClick={() => {
+              this.setState({ hasError: false, message: undefined });
+              this.props.onRetry();
+            }}
+          >
+            <RotateCcw className="mr-2 h-3.5 w-3.5" /> Réessayer
+          </Button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // ─────────── Main component ───────────
 
 export function GaiaCopilot() {

@@ -227,8 +227,18 @@ export function BulkModel3DDialog({ open, onOpenChange, catalog, setCatalog }: P
         const { data: urlData } = supabase.storage.from("models-3d").getPublicUrl(filePath);
         const url = urlData.publicUrl;
 
-        await updateCatalogProduct(eq.id, { model3d: url });
-        setCatalog((prev) => prev.map((c) => (c.id === eq.id ? { ...c, model3d: url } : c)));
+        const dbPatch: Record<string, any> = { model3d: url };
+        const localPatch: Partial<GameEquipment> = { model3d: url };
+        if (r.adoptDims && r.modelDims) {
+          dbPatch.width = r.modelDims.width;
+          dbPatch.depth = r.modelDims.depth;
+          dbPatch.height = r.modelDims.height;
+          localPatch.width = r.modelDims.width;
+          localPatch.depth = r.modelDims.depth;
+          localPatch.height = r.modelDims.height;
+        }
+        await updateCatalogProduct(eq.id, dbPatch);
+        setCatalog((prev) => prev.map((c) => (c.id === eq.id ? { ...c, ...localPatch } : c)));
 
         updateRow(i, { status: "done", progress: 100 });
         ok++;

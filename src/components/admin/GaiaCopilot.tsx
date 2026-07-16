@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, Component, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { CopiloteMarkdown } from "./CopiloteMarkdown";
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -681,9 +680,7 @@ export function GaiaCopilot() {
                   {/* Blocs de réponse : texte / graphique dans l'ordre */}
                   {m.parts.map((part, j) =>
                     part.type === "text" ? (
-                      <div key={j} className="chat-markdown">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{part.text}</ReactMarkdown>
-                      </div>
+                      <CopiloteMarkdown key={j} markdown={part.text} />
                     ) : (
                       <CopilotChart key={j} payload={part.chart} />
                     )

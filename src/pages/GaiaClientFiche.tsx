@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { CopiloteMarkdown } from "@/components/admin/CopiloteMarkdown";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserMenu } from "@/components/UserMenu";
@@ -760,7 +759,7 @@ export default function GaiaClientFiche() {
       {copilotOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-background/80 backdrop-blur-sm p-0 sm:p-6" onClick={() => setCopilotOpen(false)}>
           <div
-            className="w-full sm:max-w-2xl max-h-[85vh] flex flex-col rounded-t-lg sm:rounded-lg border border-border bg-card shadow-2xl"
+            className="w-full sm:max-w-3xl max-h-[85vh] flex flex-col rounded-t-lg sm:rounded-lg border border-border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-border p-4">
@@ -777,22 +776,32 @@ export default function GaiaClientFiche() {
                 {copilotQuestion}
               </div>
               {copilotSteps.length > 0 && (
-                <div className="mb-3 space-y-1">
-                  {copilotSteps.map((s, i) => (
-                    <div key={i} className="rounded border border-border/40 bg-background/40 px-2 py-1 text-[11px] text-muted-foreground">
-                      <span className="text-primary">▸</span> {s.summary}
-                    </div>
-                  ))}
-                </div>
+                <Accordion type="single" collapsible className="mb-3">
+                  <AccordionItem value="steps" className="rounded border border-border/40 bg-background/40 px-2">
+                    <AccordionTrigger className="py-1.5 text-[11px] text-muted-foreground">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Database className="h-3 w-3 text-primary" />
+                        Lecture base — {copilotSteps.length} étape{copilotSteps.length > 1 ? "s" : ""}
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <ul className="space-y-1 pb-2">
+                        {copilotSteps.map((s, i) => (
+                          <li key={i} className="text-[11px] text-muted-foreground">
+                            <span className="text-primary">▸</span> {s.summary}
+                          </li>
+                        ))}
+                      </ul>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
               )}
               {copilotLoading && !copilotAnswer ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" /> Analyse en cours…
                 </div>
               ) : (
-                <div className="prose prose-invert prose-sm max-w-none">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{copilotAnswer}</ReactMarkdown>
-                </div>
+                <CopiloteMarkdown markdown={copilotAnswer} />
               )}
             </div>
           </div>

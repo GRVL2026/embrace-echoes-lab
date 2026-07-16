@@ -660,7 +660,8 @@ async function forceFinalText(
   const resp = await anthropicCall({
     model,
     max_tokens: 16000,
-    thinking: { type: 'enabled', budget_tokens: 6000 },
+    thinking: { type: 'adaptive' },
+    output_config: { effort: 'high' },
     system: systemBlocks(system, dynamicSuffix),
     messages: withCacheOnLastMessage(forced),
   });

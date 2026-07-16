@@ -7,6 +7,9 @@ const CLIENT_ID = Deno.env.get("SHOPIFY_CLIENT_ID") || "";
 const CLIENT_SECRET = Deno.env.get("SHOPIFY_CLIENT_SECRET") || "";
 const API_VERSION = "2026-01";
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 min
+// Bump on every structural change to the returned stats payload to invalidate stale cache entries.
+const CACHE_VERSION = 2;
+const cacheKey = (p: string) => `v${CACHE_VERSION}:${p}`;
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -363,11 +366,19 @@ Deno.serve(async (req) => {
     const rawPeriod = (url.searchParams.get("period") || "30d") as PeriodKey;
     const period: PeriodKey = ["7d", "30d", "90d", "12m", "all"].includes(rawPeriod) ? rawPeriod : "30d";
 
+    const key = cacheKey(period);
+
+    // Purge obsolete cache entries (previous CACHE_VERSION or legacy raw period keys).
+    await supabase
+      .from("shopify_stats_cache")
+      .delete()
+      .not("period", "like", `v${CACHE_VERSION}:%`);
+
     if (!force) {
       const { data: cached } = await supabase
         .from("shopify_stats_cache")
         .select("data,fetched_at")
-        .eq("period", period)
+        .eq("period", key)
         .order("fetched_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -381,8 +392,8 @@ Deno.serve(async (req) => {
 
     const stats = await buildStats(period);
     const fetched_at = new Date().toISOString();
-    await supabase.from("shopify_stats_cache").delete().eq("period", period);
-    await supabase.from("shopify_stats_cache").insert({ data: stats, fetched_at, period });
+    await supabase.from("shopify_stats_cache").delete().eq("period", key);
+    await supabase.from("shopify_stats_cache").insert({ data: stats, fetched_at, period: key });
 
     return new Response(
       JSON.stringify({ ...stats, fetched_at, cached: false }),

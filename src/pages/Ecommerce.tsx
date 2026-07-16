@@ -109,6 +109,39 @@ function monthLabel(m: string) {
   return d.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" });
 }
 
+/** Defensive normalization: guarantees every field exists even if the payload came from an older shape. */
+function normalizeStats(j: any): Stats {
+  const k = j?.kpi ?? {};
+  const c = j?.customers ?? {};
+  return {
+    currency: j?.currency ?? "EUR",
+    period: j?.period ?? { key: "30d", days: 30, since: new Date().toISOString() },
+    kpi: {
+      ca30: Number(k.ca30 ?? 0),
+      caPrev: Number(k.caPrev ?? 0),
+      evolCA: Number(k.evolCA ?? 0),
+      count30: Number(k.count30 ?? 0),
+      countPrev: Number(k.countPrev ?? 0),
+      evolCount: Number(k.evolCount ?? 0),
+      aov: Number(k.aov ?? 0),
+      aovPrev: Number(k.aovPrev ?? 0),
+      evolAov: Number(k.evolAov ?? 0),
+      returningShare: Number(k.returningShare ?? 0),
+    },
+    salesByDay: Array.isArray(j?.salesByDay) ? j.salesByDay : [],
+    salesByMonth: Array.isArray(j?.salesByMonth) ? j.salesByMonth : [],
+    topProducts: Array.isArray(j?.topProducts) ? j.topProducts : [],
+    customers: { new: Number(c.new ?? 0), returning: Number(c.returning ?? 0) },
+    latestOrders: Array.isArray(j?.latestOrders) ? j.latestOrders : [],
+    lowStock: Array.isArray(j?.lowStock) ? j.lowStock : [],
+    traffic: j?.traffic
+      ? { sessions: Number(j.traffic.sessions ?? 0), conversion: Number(j.traffic.conversion ?? 0) }
+      : null,
+    fetched_at: j?.fetched_at ?? new Date().toISOString(),
+    cached: Boolean(j?.cached),
+  };
+}
+
 export default function Ecommerce() {
   const { canAccessGaia, isLoading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -132,7 +165,7 @@ export default function Ecommerce() {
       });
       const j = await r.json();
       if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`);
-      setStats(j);
+      setStats(normalizeStats(j));
     } catch (e: any) {
       toast.error("Erreur Shopify", { description: e?.message || String(e) });
     } finally {

@@ -551,7 +551,7 @@ async function toolLoop(params: {
       system: systemBlocks(sys, dynamicSuffix),
       messages: withCacheOnLastMessage(messages),
       tools: isLastRound ? extraTools : tools,
-      ...(isLastRound ? { thinking: { type: 'enabled', budget_tokens: 6000 } } : {}),
+      ...(isLastRound ? { thinking: { type: 'adaptive' }, output_config: { effort: 'high' } } : {}),
       ...(extraPayload ?? {}),
     };
     if (toolChoice) payload.tool_choice = toolChoice;
@@ -660,7 +660,8 @@ async function forceFinalText(
   const resp = await anthropicCall({
     model,
     max_tokens: 16000,
-    thinking: { type: 'enabled', budget_tokens: 6000 },
+    thinking: { type: 'adaptive' },
+    output_config: { effort: 'high' },
     system: systemBlocks(system, dynamicSuffix),
     messages: withCacheOnLastMessage(forced),
   });

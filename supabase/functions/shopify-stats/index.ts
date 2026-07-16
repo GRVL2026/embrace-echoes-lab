@@ -1,6 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { requireRole } from "../_shared/require-role.ts";
 
 const SHOP = Deno.env.get("SHOPIFY_SHOP_DOMAIN") || "";
 const CLIENT_ID = Deno.env.get("SHOPIFY_CLIENT_ID") || "";
@@ -352,6 +353,9 @@ async function buildStats(period: PeriodKey) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  const gate = await requireRole(req, ['admin', 'direction']);
+  if (!gate.ok) return gate.response;
 
   try {
     if (!SHOP || !CLIENT_ID || !CLIENT_SECRET) {

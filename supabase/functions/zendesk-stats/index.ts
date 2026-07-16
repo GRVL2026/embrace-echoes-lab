@@ -1,5 +1,6 @@
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { requireRole } from '../_shared/require-role.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -14,7 +15,7 @@ const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
 
 const CACHE_MINUTES = 15;
 const CACHE_VERSION = 1;
-const ANTHROPIC_MODEL = 'claude-sonnet-4-5';
+const ANTHROPIC_MODEL = 'claude-sonnet-5';
 
 function authHeader() {
   return `Basic ${btoa(`${EMAIL}/token:${TOKEN}`)}`;
@@ -134,6 +135,57 @@ async function fetchTicket(id: string) {
   };
 }
 
+async function fetchSideConversations(ticketId: string): Promise<any[]> {
+  const listUrl = `/api/v2/tickets/${ticketId}/side_conversations`;
+  let listJson: any;
+  try {
+    listJson = await zd(listUrl);
+  } catch (e: any) {
+    const msg = String(e?.message || e);
+    // Degrade softly if plan doesn't include Side Conversations
+    if (/\b(402|403|404)\b/.test(msg)) return [];
+    throw e;
+  }
+  const scs = listJson.side_conversations ?? [];
+  const results = await Promise.all(
+    scs.map(async (sc: any) => {
+      const scId = sc.id;
+      let events: any[] = [];
+      try {
+        const evJson = await zd(`/api/v2/tickets/${ticketId}/side_conversations/${scId}/events`);
+        events = (evJson.events ?? [])
+          .filter((ev: any) => ev.type === 'message' || ev.message)
+          .map((ev: any) => {
+            const m = ev.message || {};
+            return {
+              id: ev.id,
+              created_at: ev.created_at,
+              author_name: m.from?.name || m.from?.email || 'Fournisseur',
+              author_email: m.from?.email || null,
+              to: (m.to || []).map((t: any) => t?.email || t?.name).filter(Boolean),
+              cc: (m.cc || []).map((t: any) => t?.email || t?.name).filter(Boolean),
+              subject: m.subject || sc.subject || '',
+              body: m.body || m.plain_body || m.html_body || '',
+            };
+          });
+      } catch { /* skip broken event fetch */ }
+      return {
+        id: sc.id,
+        subject: sc.subject || '(sans sujet)',
+        state: sc.state,
+        created_at: sc.created_at,
+        updated_at: sc.updated_at,
+        participants: (sc.participants ?? []).map((p: any) => ({
+          name: p.name || p.email || 'Participant',
+          email: p.email || null,
+        })),
+        events,
+      };
+    }),
+  );
+  return results;
+}
+
 async function proxyAttachment(rawUrl: string): Promise<Response> {
   let url: URL;
   try { url = new URL(rawUrl); }
@@ -141,8 +193,7 @@ async function proxyAttachment(rawUrl: string): Promise<Response> {
   const host = url.hostname.toLowerCase();
   const allowed =
     host === `${SUB}.zendesk.com` ||
-    host.endsWith('.zdusercontent.com') ||
-    host.endsWith('.zendesk.com');
+    host.endsWith('.zdusercontent.com');
   if (!allowed) return new Response('forbidden host', { status: 403, headers: corsHeaders });
 
   const r = await fetch(url.toString(), { headers: { Authorization: authHeader() } });
@@ -161,7 +212,10 @@ async function proxyAttachment(rawUrl: string): Promise<Response> {
 async function buildResume(ticketId: string) {
   if (!ANTHROPIC_KEY) throw new Error('ANTHROPIC_API_KEY manquant');
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
-  const { ticket, comments } = await fetchTicket(ticketId);
+  const [{ ticket, comments }, side_conversations] = await Promise.all([
+    fetchTicket(ticketId),
+    fetchSideConversations(ticketId),
+  ]);
 
   // Cache check
   const { data: cached } = await supabase
@@ -174,10 +228,21 @@ async function buildResume(ticketId: string) {
   }
 
   // Compose conversation transcript
-  const transcript = comments.map((c: any) => {
+  const mainTranscript = comments.map((c: any) => {
     const role = c.author_role === 'end-user' ? 'CLIENT' : 'AGENT';
-    return `[${role} — ${c.author_name} — ${new Date(c.created_at).toLocaleString('fr-FR')}]\n${c.plain_body}`;
+    const flag = c.public === false ? ' (note interne)' : '';
+    return `[${role}${flag} — ${c.author_name} — ${new Date(c.created_at).toLocaleString('fr-FR')}]\n${c.plain_body}`;
   }).join('\n\n---\n\n');
+
+  const supplierTranscript = (side_conversations || []).flatMap((sc: any) =>
+    (sc.events || []).map((ev: any) =>
+      `[FOURNISSEUR — ${ev.author_name} — ${new Date(ev.created_at).toLocaleString('fr-FR')}]\nSujet: ${ev.subject}\n${(ev.body || '').replace(/<[^>]+>/g, ' ')}`,
+    ),
+  ).join('\n\n---\n\n');
+
+  const transcript = supplierTranscript
+    ? `${mainTranscript}\n\n=== ÉCHANGES FOURNISSEURS ===\n\n${supplierTranscript}`
+    : mainTranscript;
 
   const tool = {
     name: 'build_resume',
@@ -248,6 +313,11 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const action = url.searchParams.get('action') || 'stats';
 
+    // Auth gate: every action requires admin/direction. JWT via Authorization
+    // header, or via ?token= query param for <img>/<a> attachment tags.
+    const gate = await requireRole(req, ['admin', 'direction']);
+    if (!gate.ok) return gate.response;
+
     if (action === 'attachment') {
       const src = url.searchParams.get('url');
       if (!src) return new Response('missing url', { status: 400, headers: corsHeaders });
@@ -259,8 +329,11 @@ Deno.serve(async (req) => {
       if (!id) return new Response(JSON.stringify({ error: 'missing id' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
-      const payload = await fetchTicket(id);
-      return new Response(JSON.stringify(payload), {
+      const [core, side_conversations] = await Promise.all([
+        fetchTicket(id),
+        fetchSideConversations(id),
+      ]);
+      return new Response(JSON.stringify({ ...core, side_conversations }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

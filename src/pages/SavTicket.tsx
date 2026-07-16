@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Loader2, ArrowLeft, ExternalLink, Wrench, Sparkles, RefreshCw,
-  Download, User, Headset, AlertCircle, Wrench as WrenchIcon,
+  Download, User, Headset, AlertCircle, Wrench as WrenchIcon, Truck, Mail,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,7 +29,16 @@ type Ticket = {
   requester_name: string; requester_email: string | null;
   assignee_name: string | null; tags: string[];
 };
-type TicketPayload = { ticket: Ticket; comments: Comment[] };
+type SideEvent = {
+  id: number | string; created_at: string; author_name: string; author_email: string | null;
+  to: string[]; cc: string[]; subject: string; body: string;
+};
+type SideConversation = {
+  id: number | string; subject: string; state: string; created_at: string; updated_at: string;
+  participants: { name: string; email: string | null }[];
+  events: SideEvent[];
+};
+type TicketPayload = { ticket: Ticket; comments: Comment[]; side_conversations?: SideConversation[] };
 type Resume = {
   probleme_rencontre: string; diagnostic: string; resolution: string;
   pieces_detachees: string[]; machine_concernee: string;
@@ -79,7 +88,8 @@ function fmtSize(n: number) {
 
 function proxyUrl(url: string, token: string | undefined) {
   const p = new URLSearchParams({ action: "attachment", url });
-  return `${FN_URL}?${p.toString()}${token ? `&_t=${encodeURIComponent(token.slice(0, 8))}` : ""}`;
+  if (token) p.set("token", token);
+  return `${FN_URL}?${p.toString()}`;
 }
 
 function isImage(type: string) {
@@ -311,9 +321,11 @@ export default function SavTicket() {
                         {isClient ? <User className="h-4 w-4" /> : <Headset className="h-4 w-4" />}
                       </div>
                       <div className={`flex-1 min-w-0 rounded-2xl border p-4 ${
-                        isClient
-                          ? "border-secondary/30 bg-secondary/5"
-                          : "border-primary/30 bg-primary/5"
+                        !c.public
+                          ? "border-amber-500/40 bg-amber-500/5"
+                          : isClient
+                            ? "border-secondary/30 bg-secondary/5"
+                            : "border-primary/30 bg-primary/5"
                       }`}>
                         <div className="flex flex-wrap items-center gap-2 text-xs mb-2">
                           <span className="font-medium">{c.author_name}</span>
@@ -321,7 +333,7 @@ export default function SavTicket() {
                             {isClient ? "Client" : "Agent"}
                           </Badge>
                           {!c.public && (
-                            <Badge variant="outline" className="text-[9px] uppercase bg-yellow-500/15 text-yellow-500 border-yellow-500/40">
+                            <Badge variant="outline" className="text-[9px] uppercase bg-amber-500/15 text-amber-500 border-amber-500/40">
                               Note interne
                             </Badge>
                           )}
@@ -345,6 +357,77 @@ export default function SavTicket() {
                 })}
               </div>
             </Card>
+
+            {/* Supplier side conversations */}
+            {data!.side_conversations && data!.side_conversations.length > 0 && (
+              <Card className="p-4 sm:p-6 bg-card/60 border-border">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-500/15 text-orange-400">
+                    <Truck className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h2 className="font-display text-lg font-semibold">
+                      Conversations fournisseurs ({data!.side_conversations.length})
+                    </h2>
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Échanges annexes Zendesk
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  {data!.side_conversations.map((sc) => (
+                    <div key={sc.id} className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-4">
+                      <div className="mb-3">
+                        <div className="font-medium text-sm">{sc.subject}</div>
+                        {sc.participants.length > 0 && (
+                          <div className="mt-1 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                            <Mail className="h-3 w-3" />
+                            {sc.participants.map((p, i) => (
+                              <span key={i}>
+                                {p.name}{p.email ? ` <${p.email}>` : ""}{i < sc.participants.length - 1 ? "," : ""}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {sc.events.length === 0 ? (
+                        <div className="text-xs text-muted-foreground italic">Aucun message.</div>
+                      ) : (
+                        <div className="space-y-3">
+                          {sc.events.map((ev) => (
+                            <div key={ev.id} className="rounded-lg border border-border bg-background/40 p-3">
+                              <div className="flex flex-wrap items-center gap-2 text-xs mb-2">
+                                <span className="font-medium">{ev.author_name}</span>
+                                {ev.author_email && (
+                                  <span className="text-muted-foreground">&lt;{ev.author_email}&gt;</span>
+                                )}
+                                <span className="text-muted-foreground">
+                                  {new Date(ev.created_at).toLocaleString("fr-FR")}
+                                </span>
+                              </div>
+                              {ev.to.length > 0 && (
+                                <div className="text-[10px] text-muted-foreground mb-2">
+                                  À : {ev.to.join(", ")}
+                                  {ev.cc.length > 0 && ` · Cc : ${ev.cc.join(", ")}`}
+                                </div>
+                              )}
+                              <div
+                                className="whitespace-pre-wrap text-sm text-foreground/90 leading-relaxed break-words"
+                                dangerouslySetInnerHTML={{
+                                  __html: ev.body.includes("<")
+                                    ? ev.body.replace(/<script[\s\S]*?<\/script>/gi, "")
+                                    : ev.body.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br/>"),
+                                }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
           </>
         )}
       </main>

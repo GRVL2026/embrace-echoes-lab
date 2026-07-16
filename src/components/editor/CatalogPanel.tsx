@@ -915,10 +915,10 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
               <span className="text-xs text-primary font-medium flex-1">
                 {totalSelectedCount} jeu{totalSelectedCount > 1 ? "x" : ""} ({selectedQuantities.size} type{selectedQuantities.size > 1 ? "s" : ""})
               </span>
-              <Button size="sm" className="h-7 gap-1 text-xs" onClick={handleAutoPlace}>
-                <Play className="h-3 w-3" />
-                Placer
-              </Button>
+              <AutoPlaceOptionsPopover
+                onLaunch={handleAutoPlace}
+                defaultPreserveExisting={layoutLocked}
+              />
               <Button
                 variant="ghost"
                 size="icon"

@@ -12,6 +12,7 @@ import DossierEdit from "./pages/DossierEdit";
 import AdminDossiers from "./pages/AdminDossiers";
 import AdminCatalogErp from "./pages/AdminCatalogErp";
 import AdminGaia from "./pages/AdminGaia";
+import AdminVeille from "./pages/AdminVeille";
 import GaiaClientFiche from "./pages/GaiaClientFiche";
 import GaiaRevueView from "./pages/GaiaRevueView";
 import NotFound from "./pages/NotFound";

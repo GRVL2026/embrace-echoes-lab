@@ -275,6 +275,8 @@ export default function Ecommerce() {
                 evol={stats.kpi.evolCA}
                 sub={`vs ${fmtMoney(stats.kpi.caPrev, stats.currency)}`}
                 accent="primary"
+                onClick={() => document.getElementById("ec-sales-month")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                ariaLabel="Voir les ventes par mois"
               />
               <KpiTile
                 label={`Commandes ${currentPeriodMeta.kpiLabel}`}
@@ -282,6 +284,8 @@ export default function Ecommerce() {
                 evol={stats.kpi.evolCount}
                 sub={`vs ${stats.kpi.countPrev}`}
                 accent="secondary"
+                onClick={() => document.getElementById("ec-latest-orders")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                ariaLabel="Voir les dernières commandes"
               />
               <KpiTile
                 label="Panier moyen"
@@ -289,20 +293,27 @@ export default function Ecommerce() {
                 evol={stats.kpi.evolAov}
                 sub={`vs ${fmtMoney(stats.kpi.aovPrev, stats.currency)}`}
                 accent="primary"
+                onClick={() => document.getElementById("ec-top-products")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                ariaLabel="Voir les top produits"
               />
               <KpiTile
                 label="Clients récurrents"
                 value={`${(stats.kpi.returningShare ?? 0).toFixed(0)}%`}
                 sub={`${stats.customers.returning} / ${stats.customers.new + stats.customers.returning} cmd`}
                 accent="primary"
+                onClick={() => document.getElementById("ec-latest-orders")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                ariaLabel="Voir les commandes clients"
               />
               <KpiTile
                 label="Clients période"
                 value={String(stats.customers.new + stats.customers.returning)}
                 sub={`${stats.customers.new} nouveaux · ${stats.customers.returning} récurrents`}
                 accent="secondary"
+                onClick={() => document.getElementById("ec-latest-orders")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                ariaLabel="Voir les commandes clients"
               />
             </div>
+
 
             {stats.traffic && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

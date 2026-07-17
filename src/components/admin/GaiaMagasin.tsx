@@ -496,28 +496,29 @@ export function GaiaMagasin() {
                       </Bar>
                     </BarChart>
                   ) : (
-                    <PieChart>
-                      <Pie
-                        data={sousFamStats}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={100}
-                        innerRadius={55}
-                        paddingAngle={2}
-                        onClick={(d: any) => d?.name && setOpenSousFam(String(d.name))}
-                        className="cursor-pointer outline-none"
-                      >
-                        {sousFamStats.map((_, i) => (
-                          <Cell key={i} fill={SOUS_FAM_COLORS[i % SOUS_FAM_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        content={<ChartTooltipContent formatter={(v: any, n: any) => [eur(Number(v)), n]} />}
-                      />
-                      <Legend />
-                    </PieChart>
+                    (() => {
+                      const total = sousFamStats.reduce((n, r) => n + Number(r.value || 0), 0);
+                      const data = sousFamStats.map((r, i) => ({
+                        name: r.name,
+                        value: Number(r.value || 0),
+                        color: SOUS_FAM_COLORS[i % SOUS_FAM_COLORS.length],
+                      }));
+                      return (
+                        <DonutHoverCenter
+                          data={data}
+                          total={eur(total)}
+                          totalLabel={exShort(yearSousFam)}
+                          innerRadius={55}
+                          outerRadius={100}
+                          paddingAngle={2}
+                          formatValue={(v) => {
+                            const p = total > 0 ? ((v / total) * 100).toFixed(1) : "0";
+                            return `${eur(v)} (${p} %)`;
+                          }}
+                          onSegmentClick={(d) => d?.name && setOpenSousFam(String(d.name))}
+                        />
+                      );
+                    })()
                   )}
                 </ResponsiveContainer>
               </div>

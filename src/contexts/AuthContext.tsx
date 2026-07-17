@@ -96,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (async () => {
       const [{ data, error }, { data: profile }] = await Promise.all([
         (supabase as any).from("user_roles").select("role").eq("user_id", userId),
-        (supabase as any).from("profiles").select("copilote_enabled").eq("id", userId).maybeSingle(),
+        (supabase as any).from("profiles").select("copilote_enabled, dashboard_enabled").eq("id", userId).maybeSingle(),
       ]);
 
       if (!active) return;
@@ -108,6 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setRoles(((data ?? []) as { role: AppRole }[]).map((r) => r.role));
       setCopilotEnabled(profile?.copilote_enabled !== false);
+      setDashboardEnabled(profile?.dashboard_enabled === true);
       setRolesResolvedFor(userId);
     })();
 

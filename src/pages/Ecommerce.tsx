@@ -609,14 +609,25 @@ export default function Ecommerce() {
 }
 
 function KpiTile({
-  label, value, sub, evol, accent = "primary",
+  label, value, sub, evol, accent = "primary", onClick, ariaLabel,
 }: {
-  label: string; value: string; sub?: string; evol?: number; accent?: "primary" | "secondary";
+  label: string; value: string; sub?: string; evol?: number;
+  accent?: "primary" | "secondary";
+  onClick?: () => void;
+  ariaLabel?: string;
 }) {
   const color = accent === "primary" ? "text-primary text-glow-purple" : "text-secondary text-glow-green";
   const border = accent === "primary" ? "border-primary/30" : "border-secondary/30";
+  const interactive = typeof onClick === "function";
   return (
-    <Card className={`p-4 bg-card/60 border ${border}`}>
+    <Card
+      onClick={onClick}
+      role={interactive ? "button" : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      onKeyDown={interactive ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(); } } : undefined}
+      aria-label={ariaLabel}
+      className={`p-4 bg-card/60 border ${border} ${interactive ? "cursor-pointer transition-colors hover:border-primary/60 hover:bg-card/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 active:translate-y-[1px]" : ""}`}
+    >
       <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className={`mt-1 font-display text-2xl font-bold ${color}`}>{value}</div>
       <div className="mt-1 flex items-center gap-2 text-xs">

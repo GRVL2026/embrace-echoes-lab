@@ -2,6 +2,7 @@ import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
 } from "recharts";
+import { ChartTooltipContent, barTooltipCursor } from "./chartTooltip";
 
 export type ChartPayload = {
   type: "ligne" | "barres" | "donut";
@@ -47,8 +48,7 @@ export function CopilotChart({ payload }: { payload: ChartPayload }) {
               <XAxis dataKey="x" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
               <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => formatValue(Number(v))} />
               <Tooltip
-                contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 12 }}
-                formatter={(v: any) => formatValue(Number(v), unite)}
+                content={<ChartTooltipContent formatter={(v: any) => formatValue(Number(v), unite)} />}
               />
               <Line type="monotone" dataKey="y" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
             </LineChart>
@@ -58,8 +58,8 @@ export function CopilotChart({ payload }: { payload: ChartPayload }) {
               <XAxis dataKey="x" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
               <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => formatValue(Number(v))} />
               <Tooltip
-                contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 12 }}
-                formatter={(v: any) => formatValue(Number(v), unite)}
+                cursor={barTooltipCursor}
+                content={<ChartTooltipContent formatter={(v: any) => formatValue(Number(v), unite)} />}
               />
               <Bar dataKey="y" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -71,8 +71,7 @@ export function CopilotChart({ payload }: { payload: ChartPayload }) {
                 ))}
               </Pie>
               <Tooltip
-                contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 12 }}
-                formatter={(v: any, n: any) => [formatValue(Number(v), unite), n]}
+                content={<ChartTooltipContent formatter={(v: any, n: any) => [formatValue(Number(v), unite), n]} />}
               />
               <Legend wrapperStyle={{ fontSize: 11 }} />
             </PieChart>

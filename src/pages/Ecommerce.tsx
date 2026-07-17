@@ -19,6 +19,7 @@ import { DetailPageHeader } from "@/components/DetailPageHeader";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
+import { ChartTooltipContent, barTooltipCursor } from "@/components/admin/chartTooltip";
 
 type OrderLine = { title: string; variant: string | null; quantity: number; unitPrice: number; total: number };
 type OrderDetail = {
@@ -324,13 +325,17 @@ export default function Ecommerce() {
                     <YAxis yAxisId="left" stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={(v) => fmtMoney(Number(v), stats.currency)} />
                     <YAxis yAxisId="right" orientation="right" stroke="hsl(var(--secondary))" fontSize={11} allowDecimals={false} />
                     <Tooltip
-                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
-                      formatter={(v: any, _name, item: any) => {
-                        const key = item?.dataKey;
-                        if (key === "amount") return [fmtMoney(Number(v), stats.currency), "CA"];
-                        return [`${Math.round(Number(v))} commandes`, "Commandes"];
-                      }}
-                      labelFormatter={monthLabel}
+                      cursor={barTooltipCursor}
+                      content={
+                        <ChartTooltipContent
+                          formatter={(v: any, _name: any, item: any) => {
+                            const key = item?.dataKey;
+                            if (key === "amount") return [fmtMoney(Number(v), stats.currency), "CA"];
+                            return [`${Math.round(Number(v))} commandes`, "Commandes"];
+                          }}
+                          labelFormatter={monthLabel}
+                        />
+                      }
                     />
                     <Bar yAxisId="left" dataKey="amount" name="CA" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
                     <Bar yAxisId="right" dataKey="count" name="Commandes" fill="hsl(var(--secondary))" radius={[6, 6, 0, 0]} />
@@ -356,9 +361,13 @@ export default function Ecommerce() {
                     />
                     <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={(v) => fmtMoney(Number(v), stats.currency)} />
                     <Tooltip
-                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
-                      formatter={(v: any) => [fmtMoney(Number(v), stats.currency), "CA"]}
-                      labelFormatter={(d) => new Date(d).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "short" })}
+                      cursor={barTooltipCursor}
+                      content={
+                        <ChartTooltipContent
+                          formatter={(v: any) => [fmtMoney(Number(v), stats.currency), "CA"]}
+                          labelFormatter={(d: any) => new Date(d).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "short" })}
+                        />
+                      }
                     />
                     <Bar dataKey="amount" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
                   </BarChart>

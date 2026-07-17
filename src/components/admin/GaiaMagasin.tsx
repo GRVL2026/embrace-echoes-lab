@@ -12,6 +12,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid,
   PieChart, Pie, Cell,
 } from "recharts";
+import { ChartTooltipContent, barTooltipCursor } from "./chartTooltip";
 
 type Mensuel = { mois: string | null; annee: number | null; ca_ht: number | string | null; lignes: number | string | null; clients: number | string | null };
 type TopClient = { annee: number | null; client: string | null; code_client: string | null; ca_ht: number | string | null; lignes: number | string | null };
@@ -414,10 +415,8 @@ export function GaiaMagasin() {
                 tickFormatter={(v) => (v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)} M€` : v >= 1000 ? `${Math.round(v / 1000)} k€` : String(v))}
               />
               <Tooltip
-                contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, color: "hsl(var(--foreground))" }}
-                itemStyle={{ color: "hsl(var(--foreground))" }}
-                labelStyle={{ color: "hsl(var(--foreground))" }}
-                formatter={(v: number) => eur(Number(v))}
+                cursor={barTooltipCursor}
+                content={<ChartTooltipContent formatter={(v: any) => eur(Number(v))} />}
               />
               <Legend />
               {years.map((y, i) => (
@@ -472,8 +471,8 @@ export function GaiaMagasin() {
                         tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)} k€` : String(v))} />
                       <YAxis type="category" dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={11} width={130} />
                       <Tooltip
-                        contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
-                        formatter={(v: number) => eur(Number(v))}
+                        cursor={barTooltipCursor}
+                        content={<ChartTooltipContent formatter={(v: any, n: any) => [eur(Number(v)), n]} />}
                       />
                       <Bar dataKey="value" radius={[0, 4, 4, 0]}>
                         {sousFamStats.map((_, i) => (
@@ -498,8 +497,7 @@ export function GaiaMagasin() {
                         ))}
                       </Pie>
                       <Tooltip
-                        contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
-                        formatter={(v: number) => eur(Number(v))}
+                        content={<ChartTooltipContent formatter={(v: any, n: any) => [eur(Number(v)), n]} />}
                       />
                       <Legend />
                     </PieChart>

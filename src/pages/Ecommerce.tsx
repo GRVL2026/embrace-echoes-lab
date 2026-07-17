@@ -323,7 +323,7 @@ export default function Ecommerce() {
             )}
 
             {/* Monthly chart */}
-            <Card className="p-4 sm:p-6 bg-card/60 border-border">
+            <Card id="ec-sales-month" className="p-4 sm:p-6 bg-card/60 border-border scroll-mt-20">
               <h2 className="font-display text-lg font-semibold mb-4 flex items-center gap-2">
                 <ShoppingBag className="h-4 w-4 text-primary" /> Ventes par mois
                 <span className="text-xs text-muted-foreground font-normal">({stats.salesByMonth.length} mois)</span>

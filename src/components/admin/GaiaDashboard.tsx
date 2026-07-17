@@ -21,6 +21,7 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import { ChartTooltipContent, barTooltipCursor } from "./chartTooltip";
 
 const FAMILY_COLORS = ["#9B5CFF", "#ADFF00", "#00D4FF", "#FF8A00", "#FF4FA3"];
 const OTHERS_COLOR = "#6B7280";
@@ -441,8 +442,8 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
                 tickFormatter={(v) => (v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)} M€` : v >= 1000 ? `${Math.round(v / 1000)} k€` : String(v))}
               />
               <Tooltip
-                contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, color: "hsl(var(--foreground))" }} itemStyle={{ color: "hsl(var(--foreground))" }} labelStyle={{ color: "hsl(var(--foreground))" }}
-                formatter={(v: number) => eur(Number(v))}
+                cursor={barTooltipCursor}
+                content={<ChartTooltipContent formatter={(v: any, n: any) => [eur(Number(v)), n]} />}
               />
               <Legend />
               {years.map((y, i) => (
@@ -473,8 +474,8 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
                 />
                 <YAxis type="category" dataKey="client" stroke="hsl(var(--muted-foreground))" fontSize={11} width={140} />
                 <Tooltip
-                  contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, color: "hsl(var(--foreground))" }} itemStyle={{ color: "hsl(var(--foreground))" }} labelStyle={{ color: "hsl(var(--foreground))" }}
-                  formatter={(v: number) => eur(Number(v))}
+                  cursor={barTooltipCursor}
+                  content={<ChartTooltipContent formatter={(v: any, n: any) => [eur(Number(v)), n]} />}
                 />
                 <Bar dataKey="ca" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
               </BarChart>
@@ -571,8 +572,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
                         ))}
                       </Pie>
                       <Tooltip
-                        contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, color: "hsl(var(--foreground))" }} itemStyle={{ color: "hsl(var(--foreground))" }} labelStyle={{ color: "hsl(var(--foreground))" }}
-                        formatter={(v: number) => eur(Number(v))}
+                        content={<ChartTooltipContent formatter={(v: any, n: any) => [eur(Number(v)), n]} />}
                       />
                     </PieChart>
                   </ResponsiveContainer>
@@ -619,8 +619,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
                         tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : String(v))}
                       />
                       <Tooltip
-                        contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, color: "hsl(var(--foreground))" }} itemStyle={{ color: "hsl(var(--foreground))" }} labelStyle={{ color: "hsl(var(--foreground))" }}
-                        formatter={(v: number) => eur(Number(v))}
+                        content={<ChartTooltipContent formatter={(v: any, n: any) => [eur(Number(v)), n]} />}
                       />
                       <Line type="monotone" dataKey="value" stroke="hsl(var(--secondary))" strokeWidth={2} dot={false} />
                     </LineChart>

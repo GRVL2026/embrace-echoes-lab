@@ -471,8 +471,8 @@ export function GaiaMagasin() {
                         tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)} k€` : String(v))} />
                       <YAxis type="category" dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={11} width={130} />
                       <Tooltip
-                        contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
-                        formatter={(v: number) => eur(Number(v))}
+                        cursor={barTooltipCursor}
+                        content={<ChartTooltipContent formatter={(v: any, n: any) => [eur(Number(v)), n]} />}
                       />
                       <Bar dataKey="value" radius={[0, 4, 4, 0]}>
                         {sousFamStats.map((_, i) => (
@@ -497,8 +497,7 @@ export function GaiaMagasin() {
                         ))}
                       </Pie>
                       <Tooltip
-                        contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
-                        formatter={(v: number) => eur(Number(v))}
+                        content={<ChartTooltipContent formatter={(v: any, n: any) => [eur(Number(v)), n]} />}
                       />
                       <Legend />
                     </PieChart>

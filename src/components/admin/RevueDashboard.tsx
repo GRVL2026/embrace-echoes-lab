@@ -8,6 +8,7 @@ import {
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Cell, Tooltip,
 } from "recharts";
+import { ChartTooltipContent, barTooltipCursor } from "./chartTooltip";
 
 export type PlanActionHorizon = "cette_semaine" | "ce_mois" | "ce_trimestre";
 
@@ -174,17 +175,17 @@ function MonthlySparkline({ data }: { data: { mois: string; evolution_pct: numbe
           />
           <YAxis hide domain={[-50, 50]} />
           <Tooltip
-            cursor={{ fill: "hsl(var(--muted) / 0.3)" }}
-            contentStyle={{
-              background: "hsl(var(--popover))",
-              border: "1px solid hsl(var(--border))",
-              borderRadius: 8,
-              fontSize: 12,
-            }}
-            formatter={(_v: any, _n, item: any) => [
-              `${pct(item?.payload?.raw ?? 0)}${item?.payload?.commentaire ? ` — ${item.payload.commentaire}` : ""}`,
-              "Évolution",
-            ]}
+          <Tooltip
+            cursor={barTooltipCursor}
+            content={
+              <ChartTooltipContent
+                hideLabel={false}
+                formatter={(_v: any, _n: any, item: any) => [
+                  `${pct(item?.payload?.raw ?? 0)}${item?.payload?.commentaire ? ` — ${item.payload.commentaire}` : ""}`,
+                  "Évolution",
+                ]}
+              />
+            }
           />
           <Bar dataKey="evo" radius={[3, 3, 0, 0]}>
             {chart.map((d, i) => (

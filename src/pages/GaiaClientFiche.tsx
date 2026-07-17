@@ -10,6 +10,14 @@ import { AppTopNav } from "@/components/AppTopNav";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DetailPageHeader } from "@/components/DetailPageHeader";
+import { OrigineBadge, type Origine } from "@/components/admin/OrigineBadge";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import {
   Accordion,
   AccordionContent,
@@ -43,6 +51,23 @@ type ParcRow = { client: string; code_client: string; code_article: string; desc
 type Commande = { n_cde: string | null; code_client: string; code_article: string | null; invoice_date: string | null; qty: number | null; montant_ht: number | string | null; statut: string | null; date_liv: string | null };
 type Vente = { code_client: string; n_fact: string | null; code_article: string | null; invoice_date: string | null; qty: number | null; montant_ht: number | string | null; classe_article?: string | null };
 type ReparationDoc = { n_cde: string | null; statut: string | null; code_client: string | null; date_document: string | null; age_mois: number | null; total_ht: number | null };
+
+type PipelineDoc = {
+  n_cde: string | null;
+  order_type: string | null;
+  categorie: string | null;
+  statut: string | null;
+  code_client: string | null;
+  client: string | null;
+  date_document: string | null;
+  age_mois: number | null;
+  nb_lignes: number | null;
+  total_ht: number | null;
+  sfa: boolean | null;
+  origine: Origine;
+};
+type ReparationDoc = PipelineDoc;
+type Vente = { code_client: string; n_fact: string | null; code_article: string | null; invoice_date: string | null; qty: number | null; montant_ht: number | string | null; classe_article?: string | null };
 
 const eur = (n: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);

@@ -376,7 +376,7 @@ const REVUE_TOOL = {
       },
       actions: {
         type: 'array',
-        description: 'TOP 5 actions priorisées par impact en euros.',
+        description: 'TOP 5 actions priorisées par impact en euros (legacy — conserver pour compat).',
         items: {
           type: 'object',
           properties: {
@@ -390,8 +390,40 @@ const REVUE_TOOL = {
           required: ['rang', 'titre', 'qui', 'cible', 'impact_eur', 'pourquoi'],
         },
       },
+      plan_actions: {
+        type: 'array',
+        description: 'PLAN D\'ACTION STRATÉGIQUE : 4 à 8 actions priorisées par impact, chacune ancrée dans des données précises (numéros de devis, noms de clients, montants). JAMAIS de généralités.',
+        items: {
+          type: 'object',
+          properties: {
+            titre: { type: 'string', description: 'Action concrète et directe (ex: "Relancer devis DV-12345 CLIENT X").' },
+            constat: { type: 'string', description: 'Les chiffres précis qui justifient l\'action (devis N°, client, montant, ancienneté…).' },
+            impact_potentiel_eur: { type: 'number', description: 'Impact financier estimé en € HT.' },
+            responsable_suggere: { type: 'string', description: 'Ex: "Valérie", "commercial X", "Tristan", "ADV".' },
+            horizon: { type: 'string', enum: ['cette_semaine', 'ce_mois', 'ce_trimestre'] },
+            premieres_etapes: {
+              type: 'array',
+              description: '2 à 3 étapes concrètes de démarrage.',
+              items: { type: 'string' },
+            },
+          },
+          required: ['titre', 'constat', 'impact_potentiel_eur', 'responsable_suggere', 'horizon', 'premieres_etapes'],
+        },
+      },
+      signaux_vigilance: {
+        type: 'array',
+        description: '3 à 5 points de risque chiffrés à surveiller (dépendance client, marge, cash, calendrier, parc vieillissant, clients en déclin…).',
+        items: {
+          type: 'object',
+          properties: {
+            titre: { type: 'string' },
+            detail: { type: 'string', description: '1 phrase chiffrée.' },
+          },
+          required: ['titre', 'detail'],
+        },
+      },
     },
-    required: ['sante', 'mouvements', 'risques', 'actions'],
+    required: ['sante', 'mouvements', 'risques', 'plan_actions'],
   },
 };
 

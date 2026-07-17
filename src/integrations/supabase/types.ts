@@ -1081,18 +1081,21 @@ export type Database = {
       }
       profiles: {
         Row: {
+          copilote_enabled: boolean
           created_at: string
           email: string | null
           full_name: string | null
           id: string
         }
         Insert: {
+          copilote_enabled?: boolean
           created_at?: string
           email?: string | null
           full_name?: string | null
           id: string
         }
         Update: {
+          copilote_enabled?: boolean
           created_at?: string
           email?: string | null
           full_name?: string | null

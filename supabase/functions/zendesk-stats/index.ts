@@ -539,6 +539,12 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (e: any) {
+    if (isAnthropicOverload(e)) {
+      return new Response(
+        JSON.stringify({ error: e.userMessage, code: 'overload' }),
+        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
     const msg = String(e?.message || e);
     const isAuth = /401|403|Couldn't authenticate/i.test(msg);
     return new Response(

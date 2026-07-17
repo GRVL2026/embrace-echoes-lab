@@ -327,7 +327,8 @@ export default function AdminGaia() {
 
         <Tabs defaultValue="dashboard" className="w-full">
           <TabsList className="mb-6 flex-wrap">
-            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            <TabsTrigger value="dashboard">AA</TabsTrigger>
+            <TabsTrigger value="magasin">Magasin</TabsTrigger>
             <TabsTrigger value="copilot">Copilote</TabsTrigger>
             <TabsTrigger value="sync">Synchronisation</TabsTrigger>
           </TabsList>
@@ -342,6 +343,11 @@ export default function AdminGaia() {
               trigger?.click();
             }} />
           </TabsContent>
+
+          <TabsContent value="magasin">
+            <GaiaMagasin />
+          </TabsContent>
+
 
           <TabsContent value="sync">
         <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">

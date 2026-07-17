@@ -17,6 +17,7 @@ import {
 } from "recharts";
 import { ChartTooltipContent, barTooltipCursor } from "./chartTooltip";
 import { DonutHoverCenter } from "./DonutHoverCenter";
+import { MargeInfoSheet } from "./MargeInfoSheet";
 
 type Mensuel = { mois: string | null; annee: number | null; ca_ht: number | string | null; lignes: number | string | null; clients: number | string | null };
 type TopClient = { annee: number | null; client: string | null; code_client: string | null; ca_ht: number | string | null; lignes: number | string | null };

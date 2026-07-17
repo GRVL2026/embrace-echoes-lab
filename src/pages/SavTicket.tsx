@@ -278,10 +278,18 @@ export default function SavTicket() {
           )
         }
       />
-      <main className="flex-1 mx-auto w-full max-w-5xl px-4 sm:px-6 py-6 space-y-6">
-        <Link to="/sav" className="text-xs text-muted-foreground inline-flex items-center gap-1 hover:text-foreground">
-          <ArrowLeft className="h-3 w-3" /> Retour aux tickets
-        </Link>
+      <main className="flex-1 mx-auto w-full max-w-5xl px-4 sm:px-6 py-4 sm:py-6 space-y-6">
+        <Button
+          asChild
+          variant="ghost"
+          size="sm"
+          className="-ml-2 h-11 min-w-11 px-2 text-muted-foreground hover:text-foreground"
+        >
+          <Link to="/sav" aria-label="Retour aux tickets">
+            <ArrowLeft className="mr-1 h-4 w-4" /> Retour aux tickets
+          </Link>
+        </Button>
+
 
         {loading || !t ? (
           <div className="flex items-center justify-center py-24">

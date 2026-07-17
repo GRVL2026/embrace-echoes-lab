@@ -456,6 +456,27 @@ export default function GaiaCarnet() {
   );
 }
 
+function StatutChip({
+  label, count, active, onClick,
+}: { label: string; count: number; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition ${
+        active
+          ? "border-primary/60 bg-primary/15 text-primary"
+          : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+      }`}
+    >
+      <span>{label}</span>
+      <span className={`tabular-nums rounded-full px-1.5 py-0.5 text-[10px] ${active ? "bg-primary/20" : "bg-background/60"}`}>
+        {count}
+      </span>
+    </button>
+  );
+}
+
 function AgeCard({
   active, onClick, label, tone, total, nb, totalAvec,
 }: {

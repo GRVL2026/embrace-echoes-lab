@@ -26,6 +26,7 @@ import { toast } from "@/hooks/use-toast";
 import { ArrowLeft, Plus, Shield, Trash2, Database, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { MobileNav } from "@/components/MobileNav";
+import { AppTopNav } from "@/components/AppTopNav";
 import { Badge } from "@/components/ui/badge";
 import logoImg from "@/assets/logo.png";
 

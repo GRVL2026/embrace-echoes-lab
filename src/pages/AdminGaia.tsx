@@ -13,6 +13,7 @@ import logoImg from "@/assets/logo.png";
 import { GaiaDashboard } from "@/components/admin/GaiaDashboard";
 import { GaiaCopilot } from "@/components/admin/GaiaCopilot";
 import { MobileNav } from "@/components/MobileNav";
+import { AppTopNav } from "@/components/AppTopNav";
 
 type TokenStep = {
   ok: boolean;

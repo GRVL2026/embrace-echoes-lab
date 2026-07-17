@@ -17,6 +17,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { Loader2, Shield, Database, Link2 } from "lucide-react";
 import { MobileNav } from "@/components/MobileNav";
+import { AppTopNav } from "@/components/AppTopNav";
 import logoImg from "@/assets/logo.png";
 
 type Brand = { id: string; name: string };

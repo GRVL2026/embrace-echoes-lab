@@ -85,8 +85,22 @@ export function revueToText(r: RevueData): string {
   r.sante.tendance_mensuelle.forEach((m) =>
     lines.push(`- ${m.mois} : ${pct(m.evolution_pct)}${m.commentaire ? ` — ${m.commentaire}` : ""}`)
   );
-  lines.push(`\n## Actions prioritaires`);
-  r.actions.forEach((a) => lines.push(`${a.rang}. ${a.titre} (${eur(a.impact_eur)}) — ${a.qui} · ${a.cible} · ${a.pourquoi}`));
+  if (r.plan_actions?.length) {
+    lines.push(`\n## Plan d'action stratégique`);
+    r.plan_actions.forEach((a, i) => {
+      lines.push(`${i + 1}. [${horizonLabel(a.horizon)}] ${a.titre} — impact ${eur(a.impact_potentiel_eur)} · ${a.responsable_suggere}`);
+      lines.push(`   Constat : ${a.constat}`);
+      (a.premieres_etapes ?? []).forEach((e) => lines.push(`   • ${e}`));
+    });
+  }
+  if (r.signaux_vigilance?.length) {
+    lines.push(`\n## Signaux de vigilance`);
+    r.signaux_vigilance.forEach((s) => lines.push(`- ${s.titre} — ${s.detail}`));
+  }
+  if (r.actions?.length) {
+    lines.push(`\n## Actions prioritaires (héritage)`);
+    r.actions.forEach((a) => lines.push(`${a.rang}. ${a.titre} (${eur(a.impact_eur)}) — ${a.qui} · ${a.cible} · ${a.pourquoi}`));
+  }
   lines.push(`\n## Mouvements`);
   lines.push(`### Familles`);
   r.mouvements.familles.forEach((f) => lines.push(`- ${f.sens === "hausse" ? "↗" : "↘"} ${f.nom} — ${f.detail}`));

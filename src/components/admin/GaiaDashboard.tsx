@@ -28,6 +28,7 @@ type CaMensuel = { mois: string; annee: number; mois_fiscal?: number; mois_calen
 type CaClient = { annee: number; code_client: string; client: string; ca_ht: number };
 type CaFamille = { annee: number; famille: string; ca_ht: number };
 type CommandesEtat = { etat: "signee" | "devis"; nb_commandes: number; total_ht: number };
+type PipelineRow = { categorie: "devis" | "commande"; statut: string; nb: number; total_ht: number | string };
 type StockValeur = { depot: string; quantite: number; valeur_achat: number; valeur_vente: number };
 type EcotaxeMensuel = { mois: number; ecotaxe_ht: number };
 type CaPeriodeEgale = { annee: number; ca_ht: number | string };

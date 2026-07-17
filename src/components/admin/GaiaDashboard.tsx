@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, TrendingUp, TrendingDown, FileText, FileSignature, Package, Leaf, RefreshCw, ArrowRight, Search, Info } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, FileText, FileSignature, Package, Leaf, RefreshCw, ArrowRight, ArrowDown, Search, Info, Truck, PackageCheck, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -28,6 +28,7 @@ type CaMensuel = { mois: string; annee: number; mois_fiscal?: number; mois_calen
 type CaClient = { annee: number; code_client: string; client: string; ca_ht: number };
 type CaFamille = { annee: number; famille: string; ca_ht: number };
 type CommandesEtat = { etat: "signee" | "devis"; nb_commandes: number; total_ht: number };
+type PipelineRow = { categorie: "devis" | "commande"; statut: string; nb: number; total_ht: number | string };
 type StockValeur = { depot: string; quantite: number; valeur_achat: number; valeur_vente: number };
 type EcotaxeMensuel = { mois: number; ecotaxe_ht: number };
 type CaPeriodeEgale = { annee: number; ca_ht: number | string };
@@ -60,6 +61,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
   const [caClient, setCaClient] = useState<CaClient[]>([]);
   const [caFamille, setCaFamille] = useState<CaFamille[]>([]);
   const [cmdEtat, setCmdEtat] = useState<CommandesEtat[]>([]);
+  const [pipeline, setPipeline] = useState<PipelineRow[]>([]);
   const [stock, setStock] = useState<StockValeur[]>([]);
   const [ecotaxe, setEcotaxe] = useState<EcotaxeMensuel[]>([]);
   const [caPeriodeEgale, setCaPeriodeEgale] = useState<CaPeriodeEgale[]>([]);
@@ -77,7 +79,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
     (async () => {
       setLoading(true);
       const client: any = supabase;
-      const [m, c, f, e, s, ec, pe, sfa, mf, mc, sl] = await Promise.all([
+      const [m, c, f, e, s, ec, pe, sfa, mf, mc, sl, pip] = await Promise.all([
         client.from("v_gaia_ca_mensuel").select("*"),
         client.from("v_gaia_ca_client").select("*"),
         client.from("v_gaia_ca_famille").select("*"),
@@ -89,6 +91,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
         client.from("v_gaia_marge_famille").select("*"),
         client.from("v_gaia_marge_client").select("*"),
         client.from("gaia_sync_log").select("finished_at").order("finished_at", { ascending: false }).limit(1).maybeSingle(),
+        client.from("v_gaia_pipeline").select("*"),
       ]);
       setCaMensuel((m.data as CaMensuel[]) ?? []);
       setCaClient((c.data as CaClient[]) ?? []);
@@ -100,6 +103,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
       setRetroSfa((sfa.data as RetrocessionSfa[]) ?? []);
       setMargeFamille((mf.data as MargeFamille[]) ?? []);
       setMargeClient((mc.data as MargeClient[]) ?? []);
+      setPipeline((pip.data as PipelineRow[]) ?? []);
       setLastSync(sl.data?.finished_at ?? null);
       setLoading(false);
     })();
@@ -119,8 +123,23 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
     [retroSfa, currentYear]
   );
 
-  const signees = cmdEtat.find((r) => r.etat === "signee") ?? { nb_commandes: 0, total_ht: 0, etat: "signee" as const };
-  const devis = cmdEtat.find((r) => r.etat === "devis") ?? { nb_commandes: 0, total_ht: 0, etat: "devis" as const };
+  // Pipeline commercial (agrégats)
+  const pipeStats = useMemo(() => {
+    const pick = (cat: "devis" | "commande", statuts: string[]) => {
+      const rows = pipeline.filter((r) => r.categorie === cat && statuts.includes(r.statut));
+      return {
+        total: rows.reduce((n, r) => n + Number(r.total_ht || 0), 0),
+        nb: rows.reduce((n, r) => n + Number(r.nb || 0), 0),
+      };
+    };
+    return {
+      devis: pick("devis", ["Brouillon", "Ouvert"]),
+      signee: pick("commande", ["Ouvert"]),
+      expedition: pick("commande", ["Expédition en cours"]),
+      reliquat: pick("commande", ["Reliquat"]),
+    };
+  }, [pipeline]);
+
   const stockTotal = stock.reduce(
     (acc, r) => ({ achat: acc.achat + Number(r.valeur_achat || 0), vente: acc.vente + Number(r.valeur_vente || 0) }),
     { achat: 0, vente: 0 }
@@ -367,8 +386,11 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
         </div>
       </div>
 
+      {/* Pipeline commercial */}
+      <PipelineBanner stats={pipeStats} />
+
       {/* KPI cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <KpiCard
           title="CA exercice en cours"
           value={eur(caCurrent)}
@@ -391,18 +413,6 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
             </div>
           }
           icon={<TrendingUp className="h-4 w-4 text-primary" />}
-        />
-        <KpiCard
-          title="Commandes signées"
-          value={eur(Number(signees.total_ht))}
-          hint={<span className="text-muted-foreground">{num(Number(signees.nb_commandes))} commandes</span>}
-          icon={<FileSignature className="h-4 w-4 text-secondary" />}
-        />
-        <KpiCard
-          title="Devis en cours"
-          value={eur(Number(devis.total_ht))}
-          hint={<span className="text-muted-foreground">{num(Number(devis.nb_commandes))} devis</span>}
-          icon={<FileText className="h-4 w-4 text-primary" />}
         />
         <KpiCard
           title="Stock"
@@ -864,3 +874,125 @@ function YearSelect({ value, years, onChange }: { value: number; years: number[]
     </Select>
   );
 }
+
+type PipeAgg = { total: number; nb: number };
+type PipeStats = { devis: PipeAgg; signee: PipeAgg; expedition: PipeAgg; reliquat: PipeAgg };
+
+function PipelineBanner({ stats }: { stats: PipeStats }) {
+  const Arrow = () => (
+    <>
+      <ArrowRight className="hidden h-6 w-6 shrink-0 text-muted-foreground/50 md:block" />
+      <ArrowDown className="mx-auto h-5 w-5 shrink-0 text-muted-foreground/50 md:hidden" />
+    </>
+  );
+  return (
+    <div className="rounded-lg border border-border bg-card/40 p-4">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <h3 className="font-display text-lg font-semibold">Pipeline commercial</h3>
+          <p className="text-xs text-muted-foreground">Cycle de vie Cegid — du devis à la facturation</p>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 items-stretch gap-3 md:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr]">
+        <PipelineStep
+          color="primary"
+          icon={<FileText className="h-5 w-5" />}
+          label="Devis en cours"
+          value={eur(stats.devis.total)}
+          count={`${num(stats.devis.nb)} devis`}
+          tooltip="Statuts Cegid Brouillon + Ouvert d'un devis (QT) : documents non encore validés en commande. C'est du potentiel commercial."
+        />
+        <Arrow />
+        <PipelineStep
+          color="blue"
+          icon={<FileSignature className="h-5 w-5" />}
+          label="Commandes signées"
+          value={eur(stats.signee.total)}
+          count={`${num(stats.signee.nb)} commandes`}
+          subtitle="Stock réservé, en attente d'expédition"
+          tooltip="Statut Cegid Ouvert d'une commande : le client a validé, le stock est réservé mais rien n'est encore parti."
+        />
+        <Arrow />
+        <PipelineStep
+          color="orange"
+          icon={<Truck className="h-5 w-5" />}
+          label="En livraison"
+          value={eur(stats.expedition.total + stats.reliquat.total)}
+          count={`${num(stats.expedition.nb + stats.reliquat.nb)} commandes`}
+          tooltip="Commandes physiquement en train d'être livrées ou livrées partiellement (reliquat)."
+          extra={
+            <div className="mt-2 space-y-1 text-[11px]">
+              <div className="flex items-center justify-between gap-2 rounded border border-orange-500/20 bg-orange-500/5 px-2 py-1">
+                <span className="text-muted-foreground">Expédition en cours</span>
+                <span className="tabular-nums text-foreground">{eur(stats.expedition.total)} · {num(stats.expedition.nb)}</span>
+              </div>
+              <div
+                className="flex items-center justify-between gap-2 rounded border border-orange-500/20 bg-orange-500/5 px-2 py-1"
+                title="Commande partiellement expédiée : la part déjà livrée est déjà facturée. Montant affiché = total de la commande (le reste-à-facturer précis arrive bientôt)."
+              >
+                <span className="flex items-center gap-1 text-muted-foreground">
+                  Reliquat
+                  <Info className="h-3 w-3" />
+                </span>
+                <span className="tabular-nums text-foreground">{eur(stats.reliquat.total)} · {num(stats.reliquat.nb)}</span>
+              </div>
+            </div>
+          }
+        />
+        <Arrow />
+        <PipelineStep
+          color="green"
+          icon={<Receipt className="h-5 w-5" />}
+          label="Traité = facturé"
+          value="→ CA"
+          count="Bascule dans le chiffre d'affaires"
+          tooltip="Statut Cegid Traité : la commande est facturée. Le montant sort du pipeline et rejoint le chiffre d'affaires."
+          isFinal
+        />
+      </div>
+    </div>
+  );
+}
+
+const PIPE_COLORS: Record<string, { border: string; bg: string; text: string; icon: string }> = {
+  primary: { border: "border-primary/40", bg: "bg-primary/10", text: "text-primary", icon: "text-primary" },
+  blue: { border: "border-sky-500/40", bg: "bg-sky-500/10", text: "text-sky-400", icon: "text-sky-400" },
+  orange: { border: "border-orange-500/40", bg: "bg-orange-500/10", text: "text-orange-400", icon: "text-orange-400" },
+  green: { border: "border-emerald-500/40", bg: "bg-emerald-500/10", text: "text-emerald-400", icon: "text-emerald-400" },
+};
+
+function PipelineStep({
+  color, icon, label, value, count, subtitle, tooltip, extra, isFinal,
+}: {
+  color: "primary" | "blue" | "orange" | "green";
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  count: string;
+  subtitle?: string;
+  tooltip: string;
+  extra?: React.ReactNode;
+  isFinal?: boolean;
+}) {
+  const c = PIPE_COLORS[color];
+  return (
+    <div
+      className={`group relative flex flex-col rounded-lg border ${c.border} ${c.bg} p-3 transition hover:shadow-lg`}
+      title={tooltip}
+    >
+      <div className="mb-2 flex items-center gap-2">
+        <span className={`inline-flex h-8 w-8 items-center justify-center rounded-md bg-background/40 ${c.icon}`}>
+          {icon}
+        </span>
+        <div className="min-w-0">
+          <div className="truncate text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</div>
+        </div>
+      </div>
+      <div className={`font-display text-2xl font-bold tabular-nums ${isFinal ? c.text : "text-foreground"}`}>{value}</div>
+      <div className="mt-0.5 text-xs text-muted-foreground">{count}</div>
+      {subtitle && <div className="mt-1 text-[11px] italic text-muted-foreground/80">{subtitle}</div>}
+      {extra}
+    </div>
+  );
+}
+

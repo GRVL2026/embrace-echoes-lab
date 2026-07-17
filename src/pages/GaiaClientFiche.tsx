@@ -903,6 +903,7 @@ function ActionCard({
     : tone === "success" ? "text-secondary"
     : "text-primary";
 
+  const { copilotEnabled } = useAuth();
   return (
     <div className={`rounded-lg border p-4 ${toneClass}`}>
       <div className="flex items-start justify-between gap-3">
@@ -915,7 +916,7 @@ function ActionCard({
           <div className="mt-2 font-display text-2xl font-bold">{amount}</div>
         </div>
       </div>
-      {onAsk && (
+      {onAsk && copilotEnabled && (
         <Button size="sm" variant="outline" className="mt-3 w-full" onClick={onAsk}>
           <Sparkles className="mr-2 h-3.5 w-3.5" /> Analyser avec le copilote
         </Button>
@@ -923,4 +924,5 @@ function ActionCard({
     </div>
   );
 }
+
 

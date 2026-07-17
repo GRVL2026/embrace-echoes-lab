@@ -79,7 +79,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
     (async () => {
       setLoading(true);
       const client: any = supabase;
-      const [m, c, f, e, s, ec, pe, sfa, mf, mc, sl] = await Promise.all([
+      const [m, c, f, e, s, ec, pe, sfa, mf, mc, sl, pip] = await Promise.all([
         client.from("v_gaia_ca_mensuel").select("*"),
         client.from("v_gaia_ca_client").select("*"),
         client.from("v_gaia_ca_famille").select("*"),
@@ -91,6 +91,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
         client.from("v_gaia_marge_famille").select("*"),
         client.from("v_gaia_marge_client").select("*"),
         client.from("gaia_sync_log").select("finished_at").order("finished_at", { ascending: false }).limit(1).maybeSingle(),
+        client.from("v_gaia_pipeline").select("*"),
       ]);
       setCaMensuel((m.data as CaMensuel[]) ?? []);
       setCaClient((c.data as CaClient[]) ?? []);

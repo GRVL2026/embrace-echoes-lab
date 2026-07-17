@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Info, BarChart3, BookOpen, Layers, Scale } from "lucide-react";
+import { Info, BarChart3, BookOpen, Layers, Scale, AlertTriangle } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 
 type Reference = {
   exercice_clos: string;
+  /** Année de clôture (ex. 2025 pour bilan clos au 31/08/2025 = exercice 2024-2025) */
+  exercice?: number;
   marge_marchandises: number;
   ventes_marchandises: number;
   marges_totales: number;
@@ -17,6 +19,7 @@ type Reference = {
 
 const FALLBACK: Reference = {
   exercice_clos: "31/08/2025",
+  exercice: 2025,
   marge_marchandises: 2122462,
   ventes_marchandises: 11062089,
   marges_totales: 2379985,
@@ -30,6 +33,9 @@ const FALLBACK: Reference = {
 const eur = (n: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);
 
+/** "2024-25" pour exercice 2025 (clôture 31/08/2025) */
+const exerciceLabel = (year: number) => `${year - 1}-${String(year).slice(-2)}`;
+
 type Props = {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -37,9 +43,11 @@ type Props = {
   tauxErp?: number | null;
   /** Libellé de la source (ex. "Dashboard AA" ou "Magasin") */
   source?: string;
+  /** Exercice actuellement affiché par la carte Marge appelante (année de clôture) */
+  currentExercice?: number;
 };
 
-export function MargeInfoSheet({ open, onOpenChange, tauxErp, source }: Props) {
+export function MargeInfoSheet({ open, onOpenChange, tauxErp, source, currentExercice }: Props) {
   const { data: ref = FALLBACK } = useQuery({
     queryKey: ["gaia_config", "marge_reference_bilan"],
     queryFn: async () => {
@@ -58,6 +66,16 @@ export function MargeInfoSheet({ open, onOpenChange, tauxErp, source }: Props) {
     staleTime: 60 * 60 * 1000,
   });
 
+  const refYear =
+    ref.exercice ??
+    (() => {
+      const m = /(\d{4})/.exec(ref.exercice_clos || "");
+      return m ? Number(m[1]) : 2025;
+    })();
+  const refLabel = exerciceLabel(refYear);
+  const isFuturExercice = typeof currentExercice === "number" && currentExercice > refYear;
+  const nextCloture = `31/08/${refYear + 1}`;
+
   const cards = [
     {
       icon: BarChart3,
@@ -72,6 +90,7 @@ export function MargeInfoSheet({ open, onOpenChange, tauxErp, source }: Props) {
         "Utilisez-la pour comparer clients, familles et tendances. C'est le chiffre affiché par le dashboard.",
       accent: "border-primary/40 bg-primary/5",
       valueColor: "text-primary text-glow-purple",
+      accounting: false,
     },
     {
       icon: BookOpen,
@@ -83,6 +102,7 @@ export function MargeInfoSheet({ open, onOpenChange, tauxErp, source }: Props) {
         "C'est le chiffre du bilan, la référence officielle pour la banque et les associés.",
       accent: "border-border bg-card/40",
       valueColor: "text-foreground",
+      accounting: true,
     },
     {
       icon: Layers,
@@ -94,6 +114,7 @@ export function MargeInfoSheet({ open, onOpenChange, tauxErp, source }: Props) {
         "Vision comptable élargie incluant les prestations de services.",
       accent: "border-border bg-card/40",
       valueColor: "text-foreground",
+      accounting: true,
     },
     {
       icon: Scale,
@@ -105,6 +126,7 @@ export function MargeInfoSheet({ open, onOpenChange, tauxErp, source }: Props) {
         "C'est la ligne à comparer directement au chiffre ERP ci-dessus. L'écart résiduel (~1 point) vient de la casse, de la démarque, des écarts d'inventaire et des charges directes d'achat que seule la compta voit.",
       accent: "border-secondary/40 bg-secondary/5",
       valueColor: "text-secondary",
+      accounting: true,
     },
   ];
 
@@ -123,13 +145,32 @@ export function MargeInfoSheet({ open, onOpenChange, tauxErp, source }: Props) {
         </SheetHeader>
 
         <div className="mt-4 space-y-3">
+          {isFuturExercice && (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-100">
+              <div className="mb-1 inline-flex items-center gap-2 text-sm font-medium text-amber-200">
+                <AlertTriangle className="h-4 w-4" />
+                Bilan {exerciceLabel(currentExercice!)} pas encore disponible
+              </div>
+              Le rapprochement comptable de cet exercice ne pourra se faire qu'à la clôture ({nextCloture}).
+              Les références ci-dessous proviennent du dernier bilan clos ({ref.exercice_clos}) et ne sont
+              données qu'à titre de repère de structure.
+            </div>
+          )}
+
           {cards.map((c) => (
             <div key={c.title} className={`rounded-lg border p-4 ${c.accent}`}>
               <div className="flex items-start gap-3">
                 <c.icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-3">
-                    <div className="text-sm font-medium text-foreground">{c.title}</div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-medium text-foreground">{c.title}</div>
+                      {c.accounting && (
+                        <span className="rounded border border-border/60 bg-background/60 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Bilan {refLabel}
+                        </span>
+                      )}
+                    </div>
                     <div className={`font-display text-2xl font-bold ${c.valueColor}`}>{c.value}</div>
                   </div>
                   <div className="mt-2 rounded border border-border/60 bg-background/40 px-3 py-2 text-xs text-muted-foreground">
@@ -149,7 +190,7 @@ export function MargeInfoSheet({ open, onOpenChange, tauxErp, source }: Props) {
           </div>
 
           <div className="text-[11px] text-muted-foreground">
-            Référence : bilan clos {ref.exercice_clos}.
+            Référence : bilan clos {ref.exercice_clos} (exercice {refLabel}).
           </div>
         </div>
       </SheetContent>

@@ -684,6 +684,7 @@ export function GaiaMagasin() {
         onOpenChange={setMargeInfoOpen}
         tauxErp={margeCur?.taux ?? null}
         source="Magasin"
+        currentExercice={currentYear}
       />
     </div>
 

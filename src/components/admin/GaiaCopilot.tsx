@@ -871,7 +871,13 @@ export function GaiaCopilot() {
         {revueData && !isRevueEmpty(revueData) && (
           <div className="rounded border border-border/60 bg-background/40 p-4">
             <RevueRenderBoundary onRetry={generateRevue}>
-              <RevueDashboard data={revueData} />
+              <RevueDashboard
+                data={revueData}
+                onAskCopilot={(prompt) => {
+                  setChatInput(prompt);
+                  document.getElementById("gaia-copilot-chat")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+              />
             </RevueRenderBoundary>
           </div>
         )}

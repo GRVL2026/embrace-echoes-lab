@@ -2,27 +2,37 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, TrendingUp, TrendingDown, Users, ShoppingCart, Wrench } from "lucide-react";
+import {
+  Loader2, TrendingUp, TrendingDown, Users, ShoppingCart, Wrench,
+  FileText, FileSignature, Truck, ArrowRight, ArrowDown, Info,
+  Package, AlertOctagon, ChevronDown, Layers, PieChart as PieIcon,
+} from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid,
+  PieChart, Pie, Cell,
 } from "recharts";
 
 type Mensuel = { mois: string | null; annee: number | null; ca_ht: number | string | null; lignes: number | string | null; clients: number | string | null };
 type TopClient = { annee: number | null; client: string | null; code_client: string | null; ca_ht: number | string | null; lignes: number | string | null };
 type TopArticle = { annee: number | null; code_article: string | null; description: string | null; quantite: number | string | null; ca_ht: number | string | null };
+type CarnetRow = { categorie: "devis" | "commande" | string | null; statut: string | null; nb: number | string | null; total_ht: number | string | null; sfa: boolean | null };
+type StockRow = { refs: number | string | null; quantite: number | string | null; valeur_achat: number | string | null; valeur_vente: number | string | null };
+type RuptureRow = { code: string | null; description: string | null; sous_famille: string | null; qty_disponible: number | string | null; qte_vendue_6m: number | string | null; ca_6m: number | string | null };
+type MargeRow = { annee: number | null; ca_ht: number | string | null; ca_avec_cout: number | string | null; marge_estimee: number | string | null };
+type SousFamRow = { annee: number | null; sous_famille: string | null; refs: number | string | null; ca_ht: number | string | null };
 
 const eur = (n: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);
 const num = (n: number) => new Intl.NumberFormat("fr-FR").format(n || 0);
 const MOIS_FISCAL = ["Sept","Oct","Nov","Déc","Jan","Fév","Mar","Avr","Mai","Juin","Juil","Août"];
 const COLORS = ["#9B5CFF","#ADFF00","#5CC8FF","#FF6B9D","#FFB800"];
+const SOUS_FAM_COLORS = ["#9B5CFF","#ADFF00","#5CC8FF","#FF6B9D","#FFB800","#B0B0B0"];
 const exShort = (a: number) => `Ex. ${a}`;
 
 function currentFiscalYear(d: Date = new Date()) {
   return d.getMonth() >= 8 ? d.getFullYear() + 1 : d.getFullYear();
 }
 
-// mois fiscal (1 = sept … 12 = août) à partir d'une date ISO ou d'un mois numérique
 function toMoisFiscal(moisStr: string | null): number | null {
   if (!moisStr) return null;
   const cal = parseInt(moisStr.slice(5, 7), 10);
@@ -30,23 +40,51 @@ function toMoisFiscal(moisStr: string | null): number | null {
   return cal >= 9 ? cal - 8 : cal + 4;
 }
 
+const SIGNEE_STATUTS = ["Brouillon", "Ouvert"];
+const LIVRAISON_STATUTS = ["Expédition en cours", "Reliquat"];
+
+type PipeAgg = { total: number; nb: number; totalAvec: number; nbAvec: number };
+
+function aggregate(rows: CarnetRow[], cat: "devis" | "commande", statuts?: string[]): PipeAgg {
+  const filtered = rows.filter((r) => (r.categorie ?? "") === cat && (!statuts || (r.statut ? statuts.includes(r.statut) : false)));
+  const hors = filtered.filter((r) => !r.sfa);
+  return {
+    total: hors.reduce((n, r) => n + Number(r.total_ht || 0), 0),
+    nb: hors.reduce((n, r) => n + Number(r.nb || 0), 0),
+    totalAvec: filtered.reduce((n, r) => n + Number(r.total_ht || 0), 0),
+    nbAvec: filtered.reduce((n, r) => n + Number(r.nb || 0), 0),
+  };
+}
+
 export function GaiaMagasin() {
   const currentYear = currentFiscalYear();
   const [yearArticles, setYearArticles] = useState<number>(currentYear);
+  const [yearSousFam, setYearSousFam] = useState<number>(currentYear);
+  const [chartMode, setChartMode] = useState<"bar" | "pie">("bar");
 
   const { data, isPending: loading } = useQuery({
     queryKey: ["gaia-magasin"],
     queryFn: async () => {
       const c: any = supabase;
-      const [m, tc, ta] = await Promise.all([
+      const [m, tc, ta, carnet, stock, ruptures, marge, sousFam] = await Promise.all([
         c.from("v_gaia_magasin_mensuel").select("*"),
         c.from("v_gaia_magasin_top_clients").select("*"),
         c.from("v_gaia_magasin_top_articles").select("*"),
+        c.from("v_gaia_magasin_carnet").select("*"),
+        c.from("v_gaia_magasin_stock_valeur").select("*"),
+        c.from("v_gaia_magasin_ruptures").select("*"),
+        c.from("v_gaia_magasin_marge").select("*"),
+        c.from("v_gaia_magasin_sous_familles").select("*"),
       ]);
       return {
         mensuel: (m.data as Mensuel[]) ?? [],
         topClients: (tc.data as TopClient[]) ?? [],
         topArticles: (ta.data as TopArticle[]) ?? [],
+        carnet: (carnet.data as CarnetRow[]) ?? [],
+        stock: (stock.data as StockRow[]) ?? [],
+        ruptures: (ruptures.data as RuptureRow[]) ?? [],
+        marge: (marge.data as MargeRow[]) ?? [],
+        sousFam: (sousFam.data as SousFamRow[]) ?? [],
       };
     },
   });
@@ -54,6 +92,11 @@ export function GaiaMagasin() {
   const mensuel = data?.mensuel ?? [];
   const topClients = data?.topClients ?? [];
   const topArticles = data?.topArticles ?? [];
+  const carnet = data?.carnet ?? [];
+  const stock = data?.stock ?? [];
+  const ruptures = data?.ruptures ?? [];
+  const marge = data?.marge ?? [];
+  const sousFam = data?.sousFam ?? [];
 
   const years = useMemo(() => {
     const s = new Set<number>();
@@ -67,7 +110,60 @@ export function GaiaMagasin() {
     return Array.from(s).sort((a, b) => b - a);
   }, [topArticles]);
 
-  // KPIs exercice en cours vs N-1
+  const yearsSousFam = useMemo(() => {
+    const s = new Set<number>();
+    sousFam.forEach((r) => r.annee && s.add(Number(r.annee)));
+    return Array.from(s).sort((a, b) => b - a);
+  }, [sousFam]);
+
+  // Mini-pipeline pièces
+  const pipeStats = useMemo(() => ({
+    devis: aggregate(carnet, "devis"),
+    signee: aggregate(carnet, "commande", SIGNEE_STATUTS),
+    livraison: aggregate(carnet, "commande", LIVRAISON_STATUTS),
+  }), [carnet]);
+
+  // Stock magasin
+  const stockAgg = useMemo(() => {
+    return stock.reduce(
+      (acc, r) => ({
+        refs: acc.refs + Number(r.refs || 0),
+        quantite: acc.quantite + Number(r.quantite || 0),
+        achat: acc.achat + Number(r.valeur_achat || 0),
+        vente: acc.vente + Number(r.valeur_vente || 0),
+      }),
+      { refs: 0, quantite: 0, achat: 0, vente: 0 },
+    );
+  }, [stock]);
+
+  const rupturesSorted = useMemo(
+    () => [...ruptures].sort((a, b) => Number(b.ca_6m || 0) - Number(a.ca_6m || 0)),
+    [ruptures],
+  );
+
+  // Marge estimée magasin
+  const margeCurrent = useMemo(() => marge.find((r) => Number(r.annee) === currentYear), [marge, currentYear]);
+  const margePrev = useMemo(() => marge.find((r) => Number(r.annee) === currentYear - 1), [marge, currentYear]);
+
+  const computeTaux = (row: MargeRow | undefined) => {
+    if (!row) return null;
+    const caCout = Number(row.ca_avec_cout || 0);
+    const marg = Number(row.marge_estimee || 0);
+    const caHt = Number(row.ca_ht || 0);
+    if (caCout <= 0) return null;
+    return {
+      taux: (marg / caCout) * 100,
+      marge: marg,
+      caCout,
+      caHt,
+      couverture: caHt > 0 ? (caCout / caHt) * 100 : 0,
+    };
+  };
+  const margeCur = computeTaux(margeCurrent);
+  const margePre = computeTaux(margePrev);
+  const margeEvol = margeCur && margePre ? margeCur.taux - margePre.taux : null;
+
+  // KPI
   const kpi = useMemo(() => {
     const sum = (year: number) => {
       const rows = mensuel.filter((r) => Number(r.annee) === year);
@@ -78,18 +174,15 @@ export function GaiaMagasin() {
     };
     const cur = sum(currentYear);
     const prev = sum(currentYear - 1);
-
-    // clients uniques exercice courant via top_clients
     const clientsCurYear = new Set(
       topClients.filter((r) => Number(r.annee) === currentYear && r.client).map((r) => r.client),
     ).size;
-
     const evol = prev.ca > 0 ? ((cur.ca - prev.ca) / prev.ca) * 100 : null;
     const panierMoyen = cur.lignes > 0 ? cur.ca / cur.lignes : 0;
     return { cur, prev, evol, clients: clientsCurYear || cur.clientsMax, panierMoyen };
   }, [mensuel, topClients, currentYear]);
 
-  // Chart CA mensuel par exercice (calendrier fiscal)
+  // CA mensuel par exercice
   const chart = useMemo(() => {
     const idx = new Map<number, Map<number, number>>();
     for (const r of mensuel) {
@@ -106,6 +199,21 @@ export function GaiaMagasin() {
       return row;
     });
   }, [mensuel, years]);
+
+  // Ventilation sous-familles
+  const sousFamStats = useMemo(() => {
+    const cur = sousFam.filter((r) => Number(r.annee) === yearSousFam);
+    const prev = sousFam.filter((r) => Number(r.annee) === yearSousFam - 1);
+    const prevMap = new Map(prev.map((r) => [r.sous_famille ?? "—", Number(r.ca_ht || 0)]));
+    const rows = cur.map((r) => {
+      const name = r.sous_famille ?? "—";
+      const value = Number(r.ca_ht || 0);
+      const prevVal = prevMap.get(name) ?? 0;
+      const evol = prevVal > 0 ? ((value - prevVal) / prevVal) * 100 : null;
+      return { name, value, prev: prevVal, evol };
+    });
+    return rows.sort((a, b) => b.value - a.value);
+  }, [sousFam, yearSousFam]);
 
   const topClientsCur = useMemo(() => {
     return [...topClients]
@@ -137,11 +245,14 @@ export function GaiaMagasin() {
           <div>
             <h3 className="font-display text-lg font-semibold">Magasin — pièces détachées</h3>
             <p className="text-xs text-muted-foreground">
-              Pilotage du magasin interne (classe Cegid MAGASIN) — exercice fiscal sept. → août.
+              Pilotage du magasin interne (classe Cegid MAGASIN, entrepôt PIECES) — exercice fiscal sept. → août.
             </p>
           </div>
         </div>
       </div>
+
+      {/* Mini-pipeline pièces */}
+      <MiniPipeline stats={pipeStats} />
 
       {/* KPI */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -182,6 +293,113 @@ export function GaiaMagasin() {
         </div>
       </div>
 
+      {/* Stock magasin + Marge estimée */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {/* Stock */}
+        <div className="rounded-lg border border-border bg-card/40 p-4 lg:col-span-2">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Package className="h-5 w-5 text-primary" />
+              <h3 className="font-display text-lg font-semibold">Stock magasin (entrepôt PIECES)</h3>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <StockTile label="Valeur d'achat" value={eur(stockAgg.achat)} hint="Prix de revient stocké" tone="primary" />
+            <StockTile label="Valeur de vente" value={eur(stockAgg.vente)} hint="Valorisé au prix de vente" tone="secondary" />
+            <StockTile label="Références" value={num(stockAgg.refs)} hint={`${num(stockAgg.quantite)} pièces au total`} tone="neutral" />
+          </div>
+
+          <details className="mt-4 rounded border border-rose-500/30 bg-rose-500/5 group">
+            <summary className="flex cursor-pointer items-center justify-between gap-2 rounded px-3 py-2 text-sm font-semibold text-rose-300 hover:bg-rose-500/10">
+              <span className="flex items-center gap-2">
+                <AlertOctagon className="h-4 w-4" />
+                Pièces en rupture qui se vendent
+                <span className="rounded bg-rose-500/20 px-1.5 py-0.5 text-[11px] font-medium text-rose-200">
+                  {num(rupturesSorted.length)}
+                </span>
+              </span>
+              <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="border-t border-rose-500/20 p-2">
+              <p className="mb-2 px-1 text-[11px] text-muted-foreground">
+                Alerte réassort — références en rupture (stock ≤ 0) qui ont généré du CA sur les 6 derniers mois, triées par CA 6 mois décroissant.
+              </p>
+              <div className="max-h-72 overflow-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-xs uppercase text-muted-foreground">
+                    <tr className="border-b border-rose-500/20">
+                      <th className="px-2 py-2 text-left">Code</th>
+                      <th className="px-2 py-2 text-left">Description</th>
+                      <th className="px-2 py-2 text-left">Sous-famille</th>
+                      <th className="px-2 py-2 text-right">Qté vendue 6 m</th>
+                      <th className="px-2 py-2 text-right">CA 6 m</th>
+                      <th className="px-2 py-2 text-center">Stock</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rupturesSorted.map((r, i) => (
+                      <tr key={(r.code ?? "") + i} className="border-b border-rose-500/10 hover:bg-rose-500/5">
+                        <td className="px-2 py-2 font-mono text-xs">{r.code ?? "—"}</td>
+                        <td className="px-2 py-2 truncate max-w-[220px]" title={r.description ?? undefined}>{r.description ?? "—"}</td>
+                        <td className="px-2 py-2 text-xs text-muted-foreground">{r.sous_famille ?? "—"}</td>
+                        <td className="px-2 py-2 text-right tabular-nums">{num(Number(r.qte_vendue_6m || 0))}</td>
+                        <td className="px-2 py-2 text-right tabular-nums font-medium">{eur(Number(r.ca_6m || 0))}</td>
+                        <td className="px-2 py-2 text-center">
+                          <span className="inline-flex items-center rounded bg-rose-500/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-rose-300">
+                            Rupture
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {rupturesSorted.length === 0 && (
+                      <tr><td colSpan={6} className="px-2 py-6 text-center text-muted-foreground">Aucune rupture critique détectée.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        {/* Marge estimée */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-4">
+          <div className="mb-1 flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground">
+            <span>Taux de marque pièces — {exShort(currentYear)}</span>
+            <span
+              title="Taux de marque = marge estimée ÷ prix de vente, calculé sur la part du CA pour laquelle un coût d'achat est connu."
+              className="inline-flex cursor-help"
+            >
+              <Info className="h-3.5 w-3.5 text-muted-foreground/70" />
+            </span>
+          </div>
+          {margeCur ? (
+            <>
+              <div className="font-display text-3xl font-bold text-primary text-glow-purple">
+                {margeCur.taux.toFixed(1)}%
+              </div>
+              {margeEvol !== null && (
+                <div className={`mt-1 text-xs ${margeEvol >= 0 ? "text-secondary" : "text-destructive"}`}>
+                  {margeEvol >= 0 ? <TrendingUp className="mr-1 inline h-3 w-3" /> : <TrendingDown className="mr-1 inline h-3 w-3" />}
+                  {margeEvol >= 0 ? "+" : ""}{margeEvol.toFixed(1)} pts vs {exShort(currentYear - 1)}
+                  {margePre && ` (${margePre.taux.toFixed(1)}%)`}
+                </div>
+              )}
+              <div className="mt-2 text-xs text-muted-foreground">
+                Marge estimée : <span className="text-foreground">{eur(margeCur.marge)}</span> sur{" "}
+                <span className="text-foreground">{eur(margeCur.caCout)}</span> de CA analysé
+              </div>
+              <div className="mt-1 text-[11px] text-muted-foreground">
+                estimé sur {margeCur.couverture.toFixed(0)}% du CA ({eur(margeCur.caCout)} / {eur(margeCur.caHt)})
+              </div>
+            </>
+          ) : (
+            <div className="flex h-32 items-center text-sm text-muted-foreground">
+              Aucune donnée de marge pour {exShort(currentYear)}.
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* CA mensuel par exercice */}
       <div className="rounded-lg border border-border bg-card/40 p-4">
         <h3 className="mb-3 font-display text-lg font-semibold">CA magasin — comparaison par exercice (sept. → août)</h3>
@@ -208,6 +426,122 @@ export function GaiaMagasin() {
             </BarChart>
           </ResponsiveContainer>
         </div>
+      </div>
+
+      {/* Ventilation par sous-famille */}
+      <div className="rounded-lg border border-border bg-card/40 p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Layers className="h-5 w-5 text-primary" />
+            <h3 className="font-display text-lg font-semibold">Ventilation par sous-famille</h3>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setChartMode(chartMode === "bar" ? "pie" : "bar")}
+              className="inline-flex items-center gap-1 rounded-md border border-border bg-background/40 px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+              title="Basculer barres / donut"
+            >
+              <PieIcon className="h-3.5 w-3.5" />
+              {chartMode === "bar" ? "Donut" : "Barres"}
+            </button>
+            <Select value={String(yearSousFam)} onValueChange={(v) => setYearSousFam(Number(v))}>
+              <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {(yearsSousFam.length ? yearsSousFam : [currentYear]).map((y) => (
+                  <SelectItem key={y} value={String(y)}>{exShort(y)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {sousFamStats.length === 0 ? (
+          <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+            Aucune donnée pour {exShort(yearSousFam)}.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+            <div className="lg:col-span-3">
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  {chartMode === "bar" ? (
+                    <BarChart data={sousFamStats} layout="vertical" margin={{ left: 20, right: 40 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={11}
+                        tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)} k€` : String(v))} />
+                      <YAxis type="category" dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={11} width={130} />
+                      <Tooltip
+                        contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+                        formatter={(v: number) => eur(Number(v))}
+                      />
+                      <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                        {sousFamStats.map((_, i) => (
+                          <Cell key={i} fill={SOUS_FAM_COLORS[i % SOUS_FAM_COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  ) : (
+                    <PieChart>
+                      <Pie
+                        data={sousFamStats}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={100}
+                        innerRadius={55}
+                        paddingAngle={2}
+                      >
+                        {sousFamStats.map((_, i) => (
+                          <Cell key={i} fill={SOUS_FAM_COLORS[i % SOUS_FAM_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+                        formatter={(v: number) => eur(Number(v))}
+                      />
+                      <Legend />
+                    </PieChart>
+                  )}
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className="lg:col-span-2">
+              <div className="rounded border border-border/60 bg-background/40 p-3">
+                <div className="mb-1 text-xs uppercase tracking-wider text-muted-foreground">
+                  Évolution vs {exShort(yearSousFam - 1)}
+                </div>
+                <ul className="divide-y divide-border/40">
+                  {sousFamStats.map((r, i) => (
+                    <li key={r.name} className="flex items-center justify-between gap-2 py-2 text-sm">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="inline-block h-3 w-3 shrink-0 rounded"
+                          style={{ background: SOUS_FAM_COLORS[i % SOUS_FAM_COLORS.length] }} />
+                        <span className="truncate font-medium">{r.name}</span>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="tabular-nums text-muted-foreground">{eur(r.value)}</span>
+                        {r.evol === null ? (
+                          <span className="text-[11px] text-muted-foreground">—</span>
+                        ) : (
+                          <span
+                            className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold tabular-nums ${
+                              r.evol >= 0 ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300"
+                            }`}
+                          >
+                            {r.evol >= 0 ? <TrendingUp className="mr-0.5 h-3 w-3" /> : <TrendingDown className="mr-0.5 h-3 w-3" />}
+                            {r.evol >= 0 ? "+" : ""}{r.evol.toFixed(0)}%
+                          </span>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Top 10 clients + Top 10 articles */}
@@ -291,6 +625,116 @@ export function GaiaMagasin() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ============ Mini-pipeline pièces ============ */
+
+const PIPE_COLORS: Record<string, { border: string; bg: string; text: string; icon: string }> = {
+  primary: { border: "border-primary/40", bg: "bg-primary/10", text: "text-primary", icon: "text-primary" },
+  blue: { border: "border-sky-500/40", bg: "bg-sky-500/10", text: "text-sky-400", icon: "text-sky-400" },
+  orange: { border: "border-orange-500/40", bg: "bg-orange-500/10", text: "text-orange-400", icon: "text-orange-400" },
+};
+
+function MiniPipelineStep({
+  color, icon, label, value, count, tooltip, withSfa,
+}: {
+  color: "primary" | "blue" | "orange";
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  count: string;
+  tooltip: string;
+  withSfa?: string;
+}) {
+  const c = PIPE_COLORS[color];
+  return (
+    <div className={`group relative flex flex-col rounded-lg border ${c.border} ${c.bg} p-3`} title={tooltip}>
+      <div className="mb-2 flex items-center gap-2">
+        <span className={`inline-flex h-8 w-8 items-center justify-center rounded-md bg-background/40 ${c.icon}`}>
+          {icon}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</div>
+        </div>
+        <Info className="h-3.5 w-3.5 text-muted-foreground/60" />
+      </div>
+      <div className="font-display text-2xl font-bold tabular-nums text-foreground">{value}</div>
+      <div className="mt-0.5 text-xs text-muted-foreground">{count}</div>
+      {withSfa && (
+        <div
+          className="mt-1 inline-flex items-center gap-1 rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-500 tabular-nums"
+          title="Total incluant les clients SFA (rétrocession) — exclus du CA officiel"
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+          avec SFA : {withSfa}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MiniPipeline({ stats }: { stats: { devis: PipeAgg; signee: PipeAgg; livraison: PipeAgg } }) {
+  const Arrow = () => (
+    <>
+      <ArrowRight className="hidden h-6 w-6 shrink-0 self-center text-muted-foreground/50 md:block" />
+      <ArrowDown className="mx-auto h-5 w-5 shrink-0 text-muted-foreground/50 md:hidden" />
+    </>
+  );
+  return (
+    <div className="rounded-lg border border-border bg-card/40 p-4">
+      <div className="mb-3">
+        <h3 className="font-display text-lg font-semibold">Pipeline pièces</h3>
+        <p className="text-xs text-muted-foreground">Cycle magasin — du devis à la livraison, montants hors clients SFA</p>
+      </div>
+      <div className="grid grid-cols-1 items-stretch gap-3 md:grid-cols-[1fr_auto_1fr_auto_1fr]">
+        <MiniPipelineStep
+          color="primary"
+          icon={<FileText className="h-5 w-5" />}
+          label="Devis pièces"
+          value={eur(stats.devis.total)}
+          count={`${num(stats.devis.nb)} devis`}
+          withSfa={stats.devis.totalAvec !== stats.devis.total ? eur(stats.devis.totalAvec) : undefined}
+          tooltip="Devis pièces détachées non encore validés en commande (statuts Brouillon + Ouvert d'un devis Cegid). Potentiel commercial magasin. Montant hors clients SFA (rétrocession, exclu du CA officiel)."
+        />
+        <Arrow />
+        <MiniPipelineStep
+          color="blue"
+          icon={<FileSignature className="h-5 w-5" />}
+          label="Commandes signées"
+          value={eur(stats.signee.total)}
+          count={`${num(stats.signee.nb)} commandes`}
+          withSfa={stats.signee.totalAvec !== stats.signee.total ? eur(stats.signee.totalAvec) : undefined}
+          tooltip="Commandes pièces validées ou en préparation (statuts Brouillon + Ouvert d'une commande), stock réservé, en attente d'expédition. Montant hors clients SFA."
+        />
+        <Arrow />
+        <MiniPipelineStep
+          color="orange"
+          icon={<Truck className="h-5 w-5" />}
+          label="En livraison"
+          value={eur(stats.livraison.total)}
+          count={`${num(stats.livraison.nb)} commandes`}
+          withSfa={stats.livraison.totalAvec !== stats.livraison.total ? eur(stats.livraison.totalAvec) : undefined}
+          tooltip="Commandes pièces en cours d'expédition ou partiellement livrées (Expédition en cours + Reliquat). Montant hors clients SFA."
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ============ Stock tile ============ */
+
+function StockTile({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone: "primary" | "secondary" | "neutral" }) {
+  const toneCls =
+    tone === "primary" ? "border-primary/40 bg-primary/5 text-primary"
+    : tone === "secondary" ? "border-secondary/40 bg-secondary/5 text-secondary"
+    : "border-border bg-background/40 text-foreground";
+  return (
+    <div className={`rounded-lg border p-3 ${toneCls}`}>
+      <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="mt-1 font-display text-xl font-bold tabular-nums">{value}</div>
+      {hint && <div className="mt-0.5 text-[11px] text-muted-foreground">{hint}</div>}
     </div>
   );
 }

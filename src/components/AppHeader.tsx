@@ -37,7 +37,7 @@ const NAV: NavItem[] = [
   },
   {
     to: "/admin/gaia",
-    label: "Gaia",
+    label: "Dashboard",
     icon: Database,
     show: ({ canAccessGaia }) => canAccessGaia,
     match: (p) => p.startsWith("/admin/gaia"),

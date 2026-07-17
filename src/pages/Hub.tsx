@@ -19,7 +19,7 @@ const CARDS: EnvCard[] = [
   {
     key: "commerce",
     title: "Commerce",
-    description: "Dossiers commerciaux, planner arcade, catalogue et pilotage Gaia.",
+    description: "Dossiers commerciaux, planner arcade, catalogue et Dashboard.",
     Icon: ShoppingCart,
     to: "/dossiers",
     available: true,

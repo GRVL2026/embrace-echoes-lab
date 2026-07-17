@@ -206,7 +206,7 @@ export default function DossiersList() {
                 to="/admin/gaia"
                 className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center gap-1"
               >
-                <Database className="h-3 w-3" /> Gaia
+                <Database className="h-3 w-3" /> Dashboard
               </Link>
             )}
             {isAdmin && (

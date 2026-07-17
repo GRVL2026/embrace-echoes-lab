@@ -351,7 +351,7 @@ export default function GaiaClientFiche() {
               <Shield className="h-3 w-3" /> Admin
             </Link>
             <Link to="/admin/gaia" className="rounded-md bg-primary/15 border border-primary/40 text-primary px-3 py-1 text-xs font-medium inline-flex items-center gap-1">
-              <Database className="h-3 w-3" /> Gaia
+              <Database className="h-3 w-3" /> Dashboard
             </Link>
           </nav>
         </div>
@@ -361,7 +361,7 @@ export default function GaiaClientFiche() {
       <main className="mx-auto max-w-6xl px-4 sm:px-6 py-6 sm:py-8">
         <Button asChild variant="ghost" size="sm" className="mb-4">
           <Link to="/admin/gaia">
-            <ArrowLeft className="mr-2 h-4 w-4" /> Retour au dashboard Gaia
+            <ArrowLeft className="mr-2 h-4 w-4" /> Retour au dashboard
           </Link>
         </Button>
 

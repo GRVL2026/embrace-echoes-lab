@@ -324,7 +324,7 @@ export default function AdminGaia() {
 
       <main className="mx-auto max-w-7xl px-4 sm:px-6 py-6 sm:py-8">
         <div className="mb-6">
-          <h2 className="font-display text-xl sm:text-2xl font-bold">Dashboard Gaia — Avranches Automatic</h2>
+          <h2 className="font-display text-xl sm:text-2xl font-bold">Dashboard — Avranches Automatic</h2>
           <p className="text-sm text-muted-foreground">
             Pilotage financier et synchronisation des flux Cegid XRP Flex.
           </p>

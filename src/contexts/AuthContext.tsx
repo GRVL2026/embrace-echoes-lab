@@ -126,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshRoles = () => setRoleRefresh((value) => value + 1);
 
   const isAdmin = roles.includes("admin");
-  const isDirection = roles.includes("direction");
+  const isDirection = roles.includes("admin") || roles.includes("direction");
   const canAccessGaia = isAdmin || isDirection;
   const canAccessDashboard = canAccessGaia || dashboardEnabled;
 

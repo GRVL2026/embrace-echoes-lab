@@ -1502,6 +1502,13 @@ export type Database = {
       }
     }
     Views: {
+      v_gaia_article_famille: {
+        Row: {
+          code: string | null
+          famille: string | null
+        }
+        Relationships: []
+      }
       v_gaia_articles: {
         Row: {
           code: string | null

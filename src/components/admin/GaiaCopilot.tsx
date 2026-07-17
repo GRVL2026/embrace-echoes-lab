@@ -518,6 +518,7 @@ export function GaiaCopilot() {
       let finalMarkdown = "";
       let sqlUsed: string[] = [];
       let errorFromStream: string | null = null;
+      let errorCodeFromStream: string | null = null;
 
       const consume = (event: string) => {
         const dataText = event
@@ -538,6 +539,7 @@ export function GaiaCopilot() {
           sqlUsed = Array.isArray(data.sql_used) ? data.sql_used : [];
         } else if (evtName === "gaia_error") {
           errorFromStream = data.error ?? "Erreur inconnue";
+          errorCodeFromStream = typeof data.code === "string" ? data.code : null;
         }
       };
 
@@ -551,12 +553,24 @@ export function GaiaCopilot() {
       }
       if (buffer.trim()) consume(buffer);
 
-      if (errorFromStream) throw new Error(errorFromStream);
+      if (errorFromStream) {
+        const err: any = new Error(errorFromStream);
+        if (errorCodeFromStream) err.code = errorCodeFromStream;
+        throw err;
+      }
       if (!finalMarkdown) throw new Error("Réponse vide");
       finalizeAssistant(assistantIdx, finalMarkdown, sqlUsed);
     } catch (e: unknown) {
-      const msg = await formatFunctionError(e);
-      toast({ title: "Erreur", description: msg.slice(0, 200), variant: "destructive" });
+      const rawMsg = await formatFunctionError(e);
+      const isOverload =
+        (e as any)?.code === "overload" ||
+        /overloaded_error|"?529"?|momentanément saturés/i.test(rawMsg);
+      const displayMsg = isOverload
+        ? "Les serveurs d'IA sont momentanément saturés. Réessaie dans quelques instants."
+        : rawMsg;
+      if (!isOverload) {
+        toast({ title: "Erreur", description: displayMsg.slice(0, 200), variant: "destructive" });
+      }
       setChat((c) => {
         const next = c.slice();
         const m = next[assistantIdx];
@@ -564,7 +578,8 @@ export function GaiaCopilot() {
           next[assistantIdx] = {
             ...m,
             streaming: false,
-            parts: [{ type: "text", text: `⚠️ ${msg}` }],
+            overloaded: isOverload,
+            parts: [{ type: "text", text: isOverload ? displayMsg : `⚠️ ${displayMsg}` }],
           };
         }
         return next;

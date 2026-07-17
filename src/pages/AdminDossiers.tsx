@@ -72,7 +72,7 @@ export default function AdminDossiers() {
           .select("id, brand_id, client_name, offer, status, updated_at, owner_id")
           .order("updated_at", { ascending: false }),
         (supabase as any).from("brands").select("id, name"),
-        (supabase as any).from("profiles").select("id, email, full_name"),
+        (supabase as any).from("profiles").select("id, email, full_name, copilote_enabled"),
       ]);
       if (pe) toast({ title: "Erreur", description: pe.message, variant: "destructive" });
       setProjects((p as Project[]) ?? []);

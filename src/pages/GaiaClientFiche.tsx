@@ -47,7 +47,7 @@ import logoImg from "@/assets/logo.png";
 import { toast } from "@/hooks/use-toast";
 
 type CaClient = { annee: number; code_client: string; client: string; ca_ht: number | string };
-type MargeClient = { annee: number; client: string; ca_ht: number | string; ca_avec_cout: number | string; marge_estimee: number | string };
+type MargeClient = { annee: number; client: string; ca_ht: number | string; ca_avec_cout: number | string; marge_estimee: number | string; part_reelle?: number | string | null };
 type ParcRow = { client: string; code_client: string; code_article: string; description: string | null; famille: string | null; derniere_vente: string | null; quantite: number };
 
 type PipelineDoc = {
@@ -415,7 +415,9 @@ export default function GaiaClientFiche() {
             {/* Marge estimée — admin/direction uniquement */}
             {isDirection && (
             <div className="rounded-lg border border-border/60 bg-background/40 p-3">
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Marge est. {currentYear?.[0] ?? ""}</div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Marge {Number(margeCurrent?.part_reelle ?? 0) > 90 ? "réelle" : "est."} {currentYear?.[0] ?? ""}
+              </div>
               <div className="mt-1 font-display text-xl font-bold">{eur(Number(margeCurrent?.marge_estimee ?? 0))}</div>
               {margeCurrent && Number(margeCurrent.ca_avec_cout) > 0 && (
                 <div className="mt-1 text-[11px] text-primary">

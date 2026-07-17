@@ -40,8 +40,8 @@ type StockValeur = { depot: string; quantite: number; valeur_achat: number; vale
 type EcotaxeMensuel = { mois: number; ecotaxe_ht: number };
 type CaPeriodeEgale = { annee: number; ca_ht: number | string };
 type RetrocessionSfa = { annee: number; mois?: number; montant_ht: number | string };
-type MargeFamille = { annee: number; famille: string | null; ca_ht: number | string; ca_avec_cout: number | string; cout_estime: number | string; marge_estimee: number | string };
-type MargeClient = { annee: number; client: string | null; ca_ht: number | string; ca_avec_cout: number | string; marge_estimee: number | string };
+type MargeFamille = { annee: number; famille: string | null; ca_ht: number | string; ca_avec_cout: number | string; cout_estime: number | string; marge_estimee: number | string; part_reelle?: number | string | null };
+type MargeClient = { annee: number; client: string | null; ca_ht: number | string; ca_avec_cout: number | string; marge_estimee: number | string; part_reelle?: number | string | null };
 
 const eur = (n: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);
@@ -269,18 +269,22 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
     const caCout = margeFamilleYear.reduce((n, r) => n + Number(r.ca_avec_cout || 0), 0);
     const marge = margeFamilleYear.reduce((n, r) => n + Number(r.marge_estimee || 0), 0);
     const cout = Math.max(0, caCout - marge);
+    // Part du CA couverte par la marge réelle (pondérée par le CA de la ligne)
+    const partReelle = caHt > 0
+      ? margeFamilleYear.reduce((n, r) => n + Number(r.part_reelle || 0) * Number(r.ca_ht || 0), 0) / caHt
+      : 0;
     return {
       caHt,
       caCout,
       cout,
       marge,
-      // Taux de marque = marge / prix de vente
       taux: caCout > 0 ? (marge / caCout) * 100 : 0,
-      // Taux de marge = marge / coût d'achat
       tauxMarge: cout > 0 ? (marge / cout) * 100 : 0,
       couverture: caHt > 0 ? (caCout / caHt) * 100 : 0,
+      partReelle,
     };
   }, [margeFamilleYear]);
+  const margeIsReelle = margeGlobal.partReelle > 90;
 
   const margeFamilleTable = useMemo(() => {
     return [...margeFamilleYear]
@@ -653,7 +657,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
       {/* ===== Marge (estimée) — admin/direction uniquement ===== */}
       {isDirection && (
       <Panel
-        title="Marge (estimée)"
+        title={margeIsReelle ? "Marge (réelle)" : "Marge (estimée)"}
         action={
           <YearSelect
             value={yearMarge}
@@ -687,7 +691,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
                   <span className="text-foreground">{margeGlobal.tauxMarge.toFixed(1)}%</span>
                 </div>
                 <div className="mt-2 text-xs text-muted-foreground">
-                  Marge estimée : <span className="text-foreground">{eur(margeGlobal.marge)}</span> sur{" "}
+                  {margeIsReelle ? "Marge réelle" : "Marge estimée"} : <span className="text-foreground">{eur(margeGlobal.marge)}</span> sur{" "}
                   <span className="text-foreground">{eur(margeGlobal.caCout)}</span> de CA analysé
                 </div>
                 <div className="mt-1 text-[11px] text-muted-foreground">

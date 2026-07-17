@@ -240,25 +240,44 @@ const MAPPERS: Record<string, { table: string; map: Mapper; pk?: string }> = {
   },
   'BD-Ventes': {
     table: 'gaia_ventes',
-    map: (r) => ({
-      code_client: str(r.CodeClient),
-      n_fact: str(r.NFactAvoir),
-      code_article: trim(r.CodeArticle),
-      invoice_date: date(r.InvoiceDate),
-      qty: num(r.Qte),
-      pu_rem: num(r.PURem),
-      montant_ht: num(r.MontantHTRemTot),
-      tran_type: str(r.TranType),
-      reference_nbr: str(r.ReferenceNbr),
-      line_nbr: intNum(r.LineNbr),
-      classe_client: str(r.ClassID),
-      classe_article: trim(r.ClassID_2),
-      vendeur: str(r.SalespersonID),
-      branch: str(r.BranchID),
-      inventory_id: trim(r.InventoryID),
-      devise: str(r.CuryID),
-    }),
+    map: (r) => {
+      // Tolerant key lookup for the new margin columns added by Romain.
+      // Cegid OData renames français en supprimant espaces/accents ; on tente
+      // toutes les variantes plausibles.
+      const pickKey = (obj: any, candidates: string[]): any => {
+        if (!obj || typeof obj !== 'object') return undefined;
+        for (const k of candidates) if (k in obj) return obj[k];
+        const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '').toLowerCase();
+        const target = candidates.map(norm);
+        for (const key of Object.keys(obj)) {
+          if (target.includes(norm(key))) return obj[key];
+        }
+        return undefined;
+      };
+      return {
+        code_client: str(r.CodeClient),
+        n_fact: str(r.NFactAvoir),
+        code_article: trim(r.CodeArticle),
+        invoice_date: date(r.InvoiceDate),
+        qty: num(r.Qte),
+        pu_rem: num(r.PURem),
+        montant_ht: num(r.MontantHTRemTot),
+        tran_type: str(r.TranType),
+        reference_nbr: str(r.ReferenceNbr),
+        line_nbr: intNum(r.LineNbr),
+        classe_client: str(r.ClassID),
+        classe_article: trim(r.ClassID_2),
+        vendeur: str(r.SalespersonID),
+        branch: str(r.BranchID),
+        inventory_id: trim(r.InventoryID),
+        devise: str(r.CuryID),
+        cout_total: num(pickKey(r, ['CoutTotal', 'CoûtTotal', 'Coûttotal', 'Couttotal', 'Cout total', 'Coût total'])),
+        marge_ligne: num(pickKey(r, ['MargeEnLigne', 'Margeenligne', 'Marge en ligne', 'MargeLigne'])),
+        taux_marque: num(pickKey(r, ['TauxDeMarque', 'Tauxdemarque', 'Taux de marque', 'TauxMarque'])),
+      };
+    },
   },
+
   'BD-Historique': {
     table: 'gaia_historique',
     map: (r) => ({

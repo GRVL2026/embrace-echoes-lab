@@ -24,7 +24,7 @@ type TopArticle = { annee: number | null; code_article: string | null; descripti
 type CarnetRow = { categorie: "devis" | "commande" | string | null; statut: string | null; nb: number | string | null; total_ht: number | string | null; sfa: boolean | null };
 type StockRow = { refs: number | string | null; quantite: number | string | null; valeur_achat: number | string | null; valeur_vente: number | string | null };
 type RuptureRow = { code: string | null; description: string | null; sous_famille: string | null; qty_disponible: number | string | null; qte_vendue_6m: number | string | null; ca_6m: number | string | null };
-type MargeRow = { annee: number | null; ca_ht: number | string | null; ca_avec_cout: number | string | null; marge_estimee: number | string | null };
+type MargeRow = { annee: number | null; ca_ht: number | string | null; ca_avec_cout: number | string | null; marge_estimee: number | string | null; part_reelle?: number | string | null };
 type SousFamRow = { annee: number | null; sous_famille: string | null; refs: number | string | null; ca_ht: number | string | null };
 
 const eur = (n: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);
@@ -171,6 +171,7 @@ export function GaiaMagasin() {
       caCout,
       caHt,
       couverture: caHt > 0 ? (caCout / caHt) * 100 : 0,
+      partReelle: Number(row.part_reelle || 0),
     };
   };
   const margeCur = computeTaux(margeCurrent);
@@ -380,7 +381,7 @@ export function GaiaMagasin() {
           <div className="mb-1 flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground">
             <span>Taux de marque pièces — {exShort(currentYear)}</span>
             <span
-              title="Taux de marque = marge estimée ÷ prix de vente, calculé sur la part du CA pour laquelle un coût d'achat est connu."
+              title="Taux de marque = marge ÷ prix de vente, calculé sur la part du CA pour laquelle un coût est connu."
               className="inline-flex cursor-help"
             >
               <Info className="h-3.5 w-3.5 text-muted-foreground/70" />
@@ -399,11 +400,11 @@ export function GaiaMagasin() {
                 </div>
               )}
               <div className="mt-2 text-xs text-muted-foreground">
-                Marge estimée : <span className="text-foreground">{eur(margeCur.marge)}</span> sur{" "}
+                {margeCur.partReelle > 90 ? "Marge réelle" : "Marge estimée"} : <span className="text-foreground">{eur(margeCur.marge)}</span> sur{" "}
                 <span className="text-foreground">{eur(margeCur.caCout)}</span> de CA analysé
               </div>
               <div className="mt-1 text-[11px] text-muted-foreground">
-                estimé sur {margeCur.couverture.toFixed(0)}% du CA ({eur(margeCur.caCout)} / {eur(margeCur.caHt)})
+                {margeCur.partReelle > 90 ? "réelle" : "estimée"} sur {margeCur.couverture.toFixed(0)}% du CA ({eur(margeCur.caCout)} / {eur(margeCur.caHt)})
               </div>
             </>
           ) : (

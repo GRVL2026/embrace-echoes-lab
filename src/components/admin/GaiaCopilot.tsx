@@ -651,8 +651,21 @@ export function GaiaCopilot() {
 
   const dateShort = (s: string | null) => (s ? new Date(s).toLocaleDateString("fr-FR") : "—");
 
+  if (!copilotEnabled) {
+    return (
+      <div className="rounded-lg border border-border bg-card/40 p-8 text-center">
+        <Sparkles className="mx-auto h-8 w-8 text-muted-foreground" />
+        <h3 className="mt-3 font-display text-lg font-semibold">Copilote non actif</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Le copilote n'est pas encore ouvert à votre compte.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+
       {/* 1. Chat — priorité visuelle */}
       <div id="gaia-copilot-chat" className="rounded-lg border border-border bg-card/40 p-4">
 

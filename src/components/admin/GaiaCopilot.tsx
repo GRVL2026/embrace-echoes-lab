@@ -35,6 +35,7 @@ type ChatMsg =
       question?: string;
       sqlUsed?: string[];
       feedback?: 1 | -1 | null;
+      overloaded?: boolean;
     };
 
 const SUGGESTIONS = [

@@ -128,6 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = roles.includes("admin");
   const isDirection = roles.includes("direction");
   const canAccessGaia = isAdmin || isDirection;
+  const canAccessDashboard = canAccessGaia || dashboardEnabled;
 
   const signIn: AuthContextValue["signIn"] = async (email, password) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });

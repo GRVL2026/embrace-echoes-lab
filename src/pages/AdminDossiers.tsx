@@ -229,7 +229,69 @@ export default function AdminDossiers() {
             ))
           )}
         </div>
+        {/* Utilisateurs & accès copilote */}
+        <section className="mt-10">
+          <div className="mb-3 flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary" />
+            <h3 className="font-display text-lg font-semibold">Utilisateurs — Accès copilote</h3>
+          </div>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Activer/désactiver l'accès au copilote pour chaque utilisateur. Par défaut, tous les comptes sont actifs.
+          </p>
+          <div className="rounded-lg border border-border bg-card/40 overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Utilisateur</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead className="text-right">Accès copilote</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {Object.values(profiles).length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3} className="py-6 text-center text-muted-foreground">
+                      Aucun utilisateur.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  Object.values(profiles)
+                    .sort((a, b) => (a.full_name || a.email || "").localeCompare(b.full_name || b.email || ""))
+                    .map((p) => (
+                      <TableRow key={p.id}>
+                        <TableCell className="font-medium">{p.full_name?.trim() || "—"}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{p.email || "—"}</TableCell>
+                        <TableCell className="text-right">
+                          <Switch
+                            checked={p.copilote_enabled !== false}
+                            onCheckedChange={async (checked) => {
+                              const prev = p.copilote_enabled !== false;
+                              setProfiles((s) => ({ ...s, [p.id]: { ...p, copilote_enabled: checked } }));
+                              const { error } = await (supabase as any)
+                                .from("profiles")
+                                .update({ copilote_enabled: checked })
+                                .eq("id", p.id);
+                              if (error) {
+                                setProfiles((s) => ({ ...s, [p.id]: { ...p, copilote_enabled: prev } }));
+                                toast({ title: "Erreur", description: error.message, variant: "destructive" });
+                              } else {
+                                toast({
+                                  title: checked ? "Copilote activé" : "Copilote désactivé",
+                                  description: p.full_name?.trim() || p.email || "",
+                                });
+                              }
+                            }}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </section>
       </main>
     </div>
   );
 }
+

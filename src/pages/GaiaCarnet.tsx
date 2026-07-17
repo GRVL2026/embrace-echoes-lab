@@ -336,14 +336,53 @@ export default function GaiaCarnet() {
           />
         </div>
 
-        {ageFilter !== "all" && (
-          <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
-            <span>Filtre actif : ancienneté</span>
-            <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setAgeFilter("all")}>
-              <X className="mr-1 h-3 w-3" /> tout afficher
-            </Button>
+        {/* Barre de filtres */}
+        <div className="mb-3 rounded-lg border border-border bg-card/30 p-3 space-y-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Rechercher un client ou un numéro (ex. 4513)…"
+              className="pl-9 pr-9"
+            />
+            {searchInput && (
+              <button
+                type="button"
+                onClick={() => setSearchInput("")}
+                aria-label="Effacer la recherche"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
-        )}
+          <div className="flex flex-wrap items-center gap-2">
+            <StatutChip label="Tous" count={statutCounts.all ?? 0} active={statutFilter === "all"} onClick={() => setStatutFilter("all")} />
+            {STATUTS.map((s) => (
+              <StatutChip
+                key={s}
+                label={s}
+                count={statutCounts[s] ?? 0}
+                active={statutFilter === s}
+                onClick={() => setStatutFilter(statutFilter === s ? "all" : s)}
+              />
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+            <div className="tabular-nums">
+              <span className="font-medium text-foreground">{num(visibleDocs.length)}</span> document{visibleDocs.length > 1 ? "s" : ""}
+              {" — "}
+              <span className="font-medium text-foreground">{eur(visibleTotal)}</span>
+              <span className="ml-1 opacity-70">(hors SFA)</span>
+            </div>
+            {anyFilterActive && (
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={resetFilters}>
+                <X className="mr-1 h-3 w-3" /> Réinitialiser les filtres
+              </Button>
+            )}
+          </div>
+        </div>
 
         {/* Liste */}
         {loading ? (
@@ -351,8 +390,17 @@ export default function GaiaCarnet() {
             <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Chargement du carnet…
           </div>
         ) : visibleDocs.length === 0 ? (
-          <div className="rounded border border-dashed border-border/60 p-10 text-center text-sm text-muted-foreground">
-            Aucun document dans cette catégorie.
+          <div className="rounded-lg border border-dashed border-border/60 p-10 text-center text-sm text-muted-foreground">
+            {anyFilterActive ? (
+              <div className="space-y-2">
+                <div>Aucun document ne correspond à vos filtres.</div>
+                <Button size="sm" variant="outline" onClick={resetFilters}>
+                  <X className="mr-1 h-3 w-3" /> Réinitialiser les filtres
+                </Button>
+              </div>
+            ) : (
+              <>Aucun document dans cette catégorie.</>
+            )}
           </div>
         ) : (
           <div className="rounded-lg border border-border bg-card/30 overflow-hidden">

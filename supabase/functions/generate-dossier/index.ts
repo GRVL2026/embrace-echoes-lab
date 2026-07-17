@@ -5,6 +5,7 @@
 // de dossier structuré généré par Claude (API Anthropic directe).
 // =====================================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { anthropicJson, isAnthropicOverload } from "../_shared/anthropic-fetch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

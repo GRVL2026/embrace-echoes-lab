@@ -843,6 +843,8 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
           </div>
         )}
       </Panel>
+      )}
+
 
       {/* Sheet : détail du stock par dépôt */}
       <Sheet open={stockOpen} onOpenChange={setStockOpen}>

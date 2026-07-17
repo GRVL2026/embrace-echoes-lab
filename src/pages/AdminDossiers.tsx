@@ -12,13 +12,15 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { UserMenu } from "@/components/UserMenu";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, Shield, Database, Link2 } from "lucide-react";
+import { Loader2, Shield, Database, Link2, Sparkles } from "lucide-react";
 import { MobileNav } from "@/components/MobileNav";
 import { AppTopNav } from "@/components/AppTopNav";
 import logoImg from "@/assets/logo.png";
+
 
 type Brand = { id: string; name: string };
 type Profile = { id: string; email: string | null; full_name: string | null };

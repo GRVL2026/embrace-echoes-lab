@@ -500,7 +500,7 @@ export default function GaiaClientFiche() {
                 const cards: JSX.Element[] = [];
 
                 for (const { c, age } of devisOld.slice(0, 3)) {
-                  const question = `Analyse le devis n°${c.n_cde} du client "${clientName}" pour un montant de ${eur(Number(c.montant_ht ?? 0))} en attente depuis ${age} jours. Que faire pour le convertir ?`;
+                  const question = `Analyse le devis n°${c.n_cde} du client "${clientName}" pour un montant de ${eur(Number(c.total_ht ?? 0))} en attente depuis ${age} jours. Que faire pour le convertir ?`;
                   cards.push(
                     <ActionCard
                       key={`old-${c.n_cde}`}
@@ -508,14 +508,14 @@ export default function GaiaClientFiche() {
                       icon={<Send className="h-4 w-4" />}
                       title={`Relancer le devis N°${c.n_cde ?? "—"}`}
                       subtitle={`En attente depuis ${age} jours`}
-                      amount={eur(Number(c.montant_ht ?? 0))}
+                      amount={eur(Number(c.total_ht ?? 0))}
                       onAsk={() => askCopilot(question)}
                     />,
                   );
                 }
 
                 for (const { c, age } of devisFresh.slice(0, 2)) {
-                  const question = `Le client "${clientName}" a reçu le devis n°${c.n_cde} il y a ${age} jours pour ${eur(Number(c.montant_ht ?? 0))}. Comment le convertir à chaud ?`;
+                  const question = `Le client "${clientName}" a reçu le devis n°${c.n_cde} il y a ${age} jours pour ${eur(Number(c.total_ht ?? 0))}. Comment le convertir à chaud ?`;
                   cards.push(
                     <ActionCard
                       key={`fresh-${c.n_cde}`}
@@ -523,7 +523,7 @@ export default function GaiaClientFiche() {
                       icon={<Flame className="h-4 w-4" />}
                       title={`Convertir à chaud : devis N°${c.n_cde ?? "—"}`}
                       subtitle={`Émis il y a ${age} j`}
-                      amount={eur(Number(c.montant_ht ?? 0))}
+                      amount={eur(Number(c.total_ht ?? 0))}
                       onAsk={() => askCopilot(question)}
                     />,
                   );

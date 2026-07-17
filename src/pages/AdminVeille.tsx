@@ -273,14 +273,7 @@ export default function AdminVeille() {
               <span className="text-secondary text-glow-green">OS</span>
             </h1>
           </Link>
-          <nav className="ml-4 hidden md:flex items-center gap-1">
-            <Link to="/dossiers" className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted">Dossiers</Link>
-            <Link to="/planner" className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted">Arcade Planner</Link>
-            <Link to="/catalogue" className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted">Catalogue</Link>
-            <Link to="/admin/gaia" className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center gap-1"><Database className="h-3 w-3" /> Gaia</Link>
-            <Link to="/admin/veille" className="rounded-md bg-primary/15 border border-primary/40 text-primary px-3 py-1 text-xs font-medium inline-flex items-center gap-1"><Radar className="h-3 w-3" /> Veille</Link>
-            {isAdmin && <Link to="/admin" className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center gap-1"><Shield className="h-3 w-3" /> Admin</Link>}
-          </nav>
+          <AppTopNav />
         </div>
         <UserMenu />
       </header>

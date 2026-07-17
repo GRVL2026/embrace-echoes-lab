@@ -792,73 +792,7 @@ export default function GaiaClientFiche() {
               })()}
             </section>
 
-            {/* 5) PARC INSTALLÉ — vue synthétique par famille (barres cliquables) */}
-            <section className="rounded-lg border border-border bg-card/40 p-4 sm:p-6">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <h3 className="font-display text-lg font-semibold inline-flex items-center gap-2">
-                  <Package className="h-5 w-5 text-primary" /> Parc installé
-                </h3>
-                <Badge variant="outline">{parcTotal} machine{parcTotal > 1 ? "s" : ""}</Badge>
-              </div>
-
-              {parcByFamille.length === 0 ? (
-                <div className="rounded border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
-                  Aucune machine référencée pour ce client.
-                </div>
-              ) : (
-                <>
-                  <ul className="space-y-2">
-                    {[...parcByFamille]
-                      .map(([famille, rows]) => {
-                        const qty = rows.reduce((n, r) => n + Number(r.quantite || 0), 0);
-                        return { famille, rows, qty };
-                      })
-                      .sort((a, b) => b.qty - a.qty)
-                      .map(({ famille, rows, qty }) => {
-                        const pct = parcTotal > 0 ? (qty / parcTotal) * 100 : 0;
-                        const hasOld = rows.some((r) => {
-                          const y = yearOf(r.derniere_vente);
-                          return y !== null && new Date().getFullYear() - y > 5;
-                        });
-                        return (
-                          <li key={famille}>
-                            <button
-                              type="button"
-                              onClick={() => setOpenParcFamille(famille)}
-                              className="group block w-full rounded-lg border border-border/60 bg-background/40 p-3 text-left transition hover:border-primary/50 hover:bg-background/60"
-                            >
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="inline-flex items-center gap-2 min-w-0">
-                                  <Gamepad2 className="h-4 w-4 text-primary flex-shrink-0" />
-                                  <div className="font-medium truncate">{famille}</div>
-                                  {hasOld && (
-                                    <span className="inline-flex items-center gap-1 text-[10px] text-destructive">
-                                      <RefreshCw className="h-3 w-3" /> à renouveler
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-3 flex-shrink-0 text-xs">
-                                  <span className="tabular-nums font-semibold">{qty}</span>
-                                  <span className="tabular-nums text-muted-foreground w-10 text-right">{pct.toFixed(0)}%</span>
-                                </div>
-                              </div>
-                              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted/40">
-                                <div
-                                  className="h-full rounded-full bg-gradient-to-r from-primary/70 to-primary transition-all group-hover:from-primary group-hover:to-primary"
-                                  style={{ width: `${Math.max(2, pct)}%` }}
-                                />
-                              </div>
-                            </button>
-                          </li>
-                        );
-                      })}
-                  </ul>
-                  <p className="mt-3 text-[11px] text-muted-foreground">
-                    Cliquez une famille pour voir le détail des machines.
-                  </p>
-                </>
-              )}
-            </section>
+            {/* placeholder — Parc déplacé en haut de la colonne droite */}
             </div>
 
             <p className="text-[11px] text-muted-foreground md:col-span-2">

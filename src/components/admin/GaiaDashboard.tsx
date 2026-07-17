@@ -134,7 +134,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
     };
     return {
       devis: pick("devis", ["Brouillon", "Ouvert"]),
-      signee: pick("commande", ["Ouvert"]),
+      signee: pick("commande", ["Brouillon", "Ouvert"]),
       expedition: pick("commande", ["Expédition en cours"]),
       reliquat: pick("commande", ["Reliquat"]),
     };
@@ -910,7 +910,7 @@ function PipelineBanner({ stats }: { stats: PipeStats }) {
           value={eur(stats.signee.total)}
           count={`${num(stats.signee.nb)} commandes`}
           subtitle="Stock réservé, en attente d'expédition"
-          tooltip="Statut Cegid Ouvert d'une commande : le client a validé, le stock est réservé mais rien n'est encore parti."
+          tooltip="Statuts Cegid Brouillon + Ouvert d'une commande : commandes en cours de préparation ou validées, stock réservé, en attente d'expédition."
         />
         <Arrow />
         <PipelineStep

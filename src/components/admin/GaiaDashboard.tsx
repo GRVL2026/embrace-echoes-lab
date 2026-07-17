@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, TrendingUp, TrendingDown, FileText, FileSignature, Package, Leaf, RefreshCw, ArrowRight, ArrowDown, Search, Info, Truck, PackageCheck, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,6 +62,7 @@ function currentFiscalYear(d: Date = new Date()) {
 
 export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
   const navigate = useNavigate();
+  const { canAccessGaia } = useAuth();
   const [clientQuery, setClientQuery] = useState("");
   const currentYear = currentFiscalYear();
   const [yearClient, setYearClient] = useState<number>(currentYear);
@@ -648,7 +650,8 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
         </div>
       </div>
 
-      {/* ===== Marge (estimée) ===== */}
+      {/* ===== Marge (estimée) — admin/direction uniquement ===== */}
+      {canAccessGaia && (
       <Panel
         title="Marge (estimée)"
         action={
@@ -840,6 +843,8 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
           </div>
         )}
       </Panel>
+      )}
+
 
       {/* Sheet : détail du stock par dépôt */}
       <Sheet open={stockOpen} onOpenChange={setStockOpen}>

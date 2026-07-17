@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Loader2, TrendingUp, TrendingDown, Users, ShoppingCart, Wrench,
   FileText, FileSignature, Truck, ArrowRight, ArrowDown, Info,
@@ -62,6 +63,7 @@ function aggregate(rows: CarnetRow[], cat: "devis" | "commande", statuts?: strin
 
 export function GaiaMagasin() {
   const currentYear = currentFiscalYear();
+  const { canAccessGaia } = useAuth();
   const [yearArticles, setYearArticles] = useState<number>(currentYear);
   const [yearSousFam, setYearSousFam] = useState<number>(currentYear);
   const [chartMode, setChartMode] = useState<"bar" | "pie">("bar");
@@ -304,10 +306,10 @@ export function GaiaMagasin() {
       </div>
 
 
-      {/* Stock magasin + Marge estimée */}
+      {/* Stock magasin + Marge estimée (marge = admin/direction uniquement) */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Stock */}
-        <div className="rounded-lg border border-border bg-card/40 p-4 lg:col-span-2">
+        <div className={`rounded-lg border border-border bg-card/40 p-4 ${canAccessGaia ? "lg:col-span-2" : "lg:col-span-3"}`}>
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Package className="h-5 w-5 text-primary" />
@@ -372,7 +374,8 @@ export function GaiaMagasin() {
           </details>
         </div>
 
-        {/* Marge estimée */}
+        {/* Marge estimée — admin/direction uniquement */}
+        {canAccessGaia && (
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-4">
           <div className="mb-1 flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground">
             <span>Taux de marque pièces — {exShort(currentYear)}</span>
@@ -409,7 +412,9 @@ export function GaiaMagasin() {
             </div>
           )}
         </div>
+        )}
       </div>
+
 
       {/* CA mensuel par exercice */}
       <div id="magasin-ca-mensuel" className="rounded-lg border border-border bg-card/40 p-4 scroll-mt-20">

@@ -489,19 +489,10 @@ async function oublier(admin: any, id: string): Promise<unknown> {
 async function anthropicCall(payload: Record<string, unknown>) {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY manquant');
-  const res = await fetch(ANTHROPIC_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': ANTHROPIC_VERSION,
-    },
-    body: JSON.stringify(payload),
+  return await anthropicJson(apiKey, payload, {
+    url: ANTHROPIC_URL,
+    extraHeaders: { 'anthropic-version': ANTHROPIC_VERSION },
   });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`Anthropic HTTP ${res.status} ${res.statusText}. Body: ${text}`);
-  try { return JSON.parse(text); }
-  catch { throw new Error(`Anthropic 200 mais JSON invalide. Body: ${text.slice(0, 1500)}`); }
 }
 
 type TurnLog = {

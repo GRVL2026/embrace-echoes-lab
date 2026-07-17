@@ -23,7 +23,7 @@ import logoImg from "@/assets/logo.png";
 
 
 type Brand = { id: string; name: string };
-type Profile = { id: string; email: string | null; full_name: string | null; copilote_enabled?: boolean };
+type Profile = { id: string; email: string | null; full_name: string | null; copilote_enabled?: boolean; dashboard_enabled?: boolean };
 type Project = {
   id: string;
   brand_id: string | null;
@@ -72,7 +72,7 @@ export default function AdminDossiers() {
           .select("id, brand_id, client_name, offer, status, updated_at, owner_id")
           .order("updated_at", { ascending: false }),
         (supabase as any).from("brands").select("id, name"),
-        (supabase as any).from("profiles").select("id, email, full_name, copilote_enabled"),
+        (supabase as any).from("profiles").select("id, email, full_name, copilote_enabled, dashboard_enabled"),
       ]);
       if (pe) toast({ title: "Erreur", description: pe.message, variant: "destructive" });
       setProjects((p as Project[]) ?? []);
@@ -233,10 +233,10 @@ export default function AdminDossiers() {
         <section className="mt-10">
           <div className="mb-3 flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary" />
-            <h3 className="font-display text-lg font-semibold">Utilisateurs — Accès copilote</h3>
+            <h3 className="font-display text-lg font-semibold">Utilisateurs — Accès copilote & dashboard</h3>
           </div>
           <p className="mb-4 text-sm text-muted-foreground">
-            Activer/désactiver l'accès au copilote pour chaque utilisateur. Par défaut, tous les comptes sont actifs.
+            Activer/désactiver l'accès au copilote et au Dashboard (AA + Magasin) pour chaque utilisateur. Par défaut, le copilote est actif, le dashboard est réservé aux admins/direction.
           </p>
           <div className="rounded-lg border border-border bg-card/40 overflow-x-auto">
             <Table>
@@ -245,12 +245,13 @@ export default function AdminDossiers() {
                   <TableHead>Utilisateur</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead className="text-right">Accès copilote</TableHead>
+                  <TableHead className="text-right">Accès Dashboard (AA + Magasin)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {Object.values(profiles).length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="py-6 text-center text-muted-foreground">
+                    <TableCell colSpan={4} className="py-6 text-center text-muted-foreground">
                       Aucun utilisateur.
                     </TableCell>
                   </TableRow>
@@ -277,6 +278,28 @@ export default function AdminDossiers() {
                               } else {
                                 toast({
                                   title: checked ? "Copilote activé" : "Copilote désactivé",
+                                  description: p.full_name?.trim() || p.email || "",
+                                });
+                              }
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Switch
+                            checked={p.dashboard_enabled === true}
+                            onCheckedChange={async (checked) => {
+                              const prev = p.dashboard_enabled === true;
+                              setProfiles((s) => ({ ...s, [p.id]: { ...p, dashboard_enabled: checked } }));
+                              const { error } = await (supabase as any)
+                                .from("profiles")
+                                .update({ dashboard_enabled: checked })
+                                .eq("id", p.id);
+                              if (error) {
+                                setProfiles((s) => ({ ...s, [p.id]: { ...p, dashboard_enabled: prev } }));
+                                toast({ title: "Erreur", description: error.message, variant: "destructive" });
+                              } else {
+                                toast({
+                                  title: checked ? "Dashboard activé" : "Dashboard désactivé",
                                   description: p.full_name?.trim() || p.email || "",
                                 });
                               }

@@ -65,7 +65,7 @@ type SyncLogRow = {
 };
 
 export default function AdminGaia() {
-  const { isAdmin, canAccessGaia, loading: authLoading } = useAuth();
+  const { isAdmin, canAccessGaia, canAccessDashboard, copilotEnabled, loading: authLoading } = useAuth();
   const [running, setRunning] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [diag, setDiag] = useState<Diagnostic | null>(null);
@@ -211,8 +211,8 @@ export default function AdminGaia() {
   };
 
   useEffect(() => {
-    if (canAccessGaia) loadLogs();
-  }, [canAccessGaia]);
+    if (isAdmin) loadLogs();
+  }, [isAdmin]);
 
   if (authLoading) {
     return (
@@ -221,7 +221,7 @@ export default function AdminGaia() {
       </div>
     );
   }
-  if (!canAccessGaia) return <Navigate to="/dossiers" replace />;
+  if (!canAccessDashboard) return <Navigate to="/dossiers" replace />;
 
   const runDiscover = async () => {
     setRunning(true);
@@ -329,13 +329,15 @@ export default function AdminGaia() {
           <TabsList className="mb-6 flex-wrap">
             <TabsTrigger value="dashboard">AA</TabsTrigger>
             <TabsTrigger value="magasin">Magasin</TabsTrigger>
-            <TabsTrigger value="copilot">Copilote</TabsTrigger>
-            <TabsTrigger value="sync">Synchronisation</TabsTrigger>
+            {(canAccessGaia && copilotEnabled) && <TabsTrigger value="copilot">Copilote</TabsTrigger>}
+            {isAdmin && <TabsTrigger value="sync">Synchronisation</TabsTrigger>}
           </TabsList>
 
-          <TabsContent value="copilot">
-            <GaiaCopilot />
-          </TabsContent>
+          {(canAccessGaia && copilotEnabled) && (
+            <TabsContent value="copilot">
+              <GaiaCopilot />
+            </TabsContent>
+          )}
 
           <TabsContent value="dashboard">
             <GaiaDashboard onGoToSync={() => {
@@ -349,6 +351,7 @@ export default function AdminGaia() {
           </TabsContent>
 
 
+          {isAdmin && (
           <TabsContent value="sync">
         <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div>
@@ -631,6 +634,7 @@ export default function AdminGaia() {
         )}
 
           </TabsContent>
+          )}
         </Tabs>
       </main>
     </div>

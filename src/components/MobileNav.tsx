@@ -7,7 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 
 export function MobileNav() {
-  const { isAdmin, canAccessGaia, user, signOut } = useAuth();
+  const { isAdmin, canAccessGaia, canAccessDashboard, user, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
   const navigate = useNavigate();
@@ -56,7 +56,7 @@ export function MobileNav() {
           {isAdmin && item("/logistique", "Logistique", Truck)}
           {canAccessGaia && item("/ecommerce", "E-commerce", Globe)}
           {canAccessGaia && item("/sav", "SAV", Wrench)}
-          {canAccessGaia && item("/admin/gaia", "Dashboard", Database)}
+          {canAccessDashboard && item("/admin/gaia", "Dashboard", Database)}
           {canAccessGaia && item("/admin/veille", "Veille marché", Radar)}
           {isAdmin && item("/admin", "Admin", Shield)}
         </div>

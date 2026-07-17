@@ -338,39 +338,34 @@ function AgeCard({
 }
 
 function DocSheet({ doc, onClose }: { doc: CarnetDoc | null; onClose: () => void }) {
-  const [loading, setLoading] = useState(false);
-  const [lignes, setLignes] = useState<CommandeLigne[]>([]);
-  const [articles, setArticles] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    if (!doc?.n_cde) return;
-    (async () => {
-      setLoading(true);
+  const { data, isPending } = useQuery({
+    queryKey: ["gaia-carnet-doc", doc?.n_cde],
+    enabled: !!doc?.n_cde,
+    queryFn: async () => {
       const client: any = supabase;
       const { data: ligRows } = await client
         .from("gaia_commandes")
         .select("n_cde,code_article,qty,pu_rem,montant_ht,statut")
-        .eq("n_cde", doc.n_cde)
+        .eq("n_cde", doc!.n_cde)
         .limit(500);
       const ligs: CommandeLigne[] = (ligRows as CommandeLigne[]) ?? [];
-      setLignes(ligs);
       const codes = Array.from(new Set(ligs.map((l) => l.code_article).filter((c): c is string => !!c)));
+      let articles: Record<string, string> = {};
       if (codes.length > 0) {
         const { data: artRows } = await client
           .from("v_gaia_articles")
           .select("code,description")
           .in("code", codes);
-        const map: Record<string, string> = {};
         for (const a of ((artRows as Article[]) ?? [])) {
-          if (a.code) map[a.code] = a.description ?? "";
+          if (a.code) articles[a.code] = a.description ?? "";
         }
-        setArticles(map);
-      } else {
-        setArticles({});
       }
-      setLoading(false);
-    })();
-  }, [doc?.n_cde]);
+      return { lignes: ligs, articles };
+    },
+  });
+  const lignes = data?.lignes ?? [];
+  const articles = data?.articles ?? {};
+  const loading = !!doc?.n_cde && isPending;
 
   const total = lignes.reduce((n, l) => n + Number(l.montant_ht ?? 0), 0);
 

@@ -61,6 +61,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
   const [caClient, setCaClient] = useState<CaClient[]>([]);
   const [caFamille, setCaFamille] = useState<CaFamille[]>([]);
   const [cmdEtat, setCmdEtat] = useState<CommandesEtat[]>([]);
+  const [pipeline, setPipeline] = useState<PipelineRow[]>([]);
   const [stock, setStock] = useState<StockValeur[]>([]);
   const [ecotaxe, setEcotaxe] = useState<EcotaxeMensuel[]>([]);
   const [caPeriodeEgale, setCaPeriodeEgale] = useState<CaPeriodeEgale[]>([]);

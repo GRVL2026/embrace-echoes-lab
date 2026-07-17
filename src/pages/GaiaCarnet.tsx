@@ -112,21 +112,19 @@ export default function GaiaCarnet() {
   const { categorie } = useParams<{ categorie: string }>();
   const cat = (categorie as Categorie) in CONFIG ? (categorie as Categorie) : null;
 
-  const [loading, setLoading] = useState(true);
-  const [docs, setDocs] = useState<CarnetDoc[]>([]);
   const [ageFilter, setAgeFilter] = useState<AgeFilter>("all");
   const [openDoc, setOpenDoc] = useState<CarnetDoc | null>(null);
 
-  useEffect(() => {
-    if (!isAdmin || !cat) return;
-    (async () => {
-      setLoading(true);
+  const { data: docs = [], isPending } = useQuery({
+    queryKey: ["gaia-carnet-documents"],
+    enabled: !!isAdmin && !!cat,
+    queryFn: async () => {
       const client: any = supabase;
       const { data } = await client.from("v_gaia_carnet_documents").select("*");
-      setDocs((data as CarnetDoc[]) ?? []);
-      setLoading(false);
-    })();
-  }, [isAdmin, cat]);
+      return (data as CarnetDoc[]) ?? [];
+    },
+  });
+  const loading = isPending;
 
   const filtered = useMemo(() => {
     if (!cat) return [];

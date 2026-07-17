@@ -909,6 +909,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
         onOpenChange={setMargeInfoOpen}
         tauxErp={margeGlobal.taux}
         source="Dashboard AA"
+        currentExercice={yearMarge}
       />
 
 

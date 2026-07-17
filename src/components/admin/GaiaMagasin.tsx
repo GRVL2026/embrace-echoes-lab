@@ -63,7 +63,7 @@ function aggregate(rows: CarnetRow[], cat: "devis" | "commande", statuts?: strin
 
 export function GaiaMagasin() {
   const currentYear = currentFiscalYear();
-  const { canAccessGaia } = useAuth();
+  const { isDirection } = useAuth();
   const [yearArticles, setYearArticles] = useState<number>(currentYear);
   const [yearSousFam, setYearSousFam] = useState<number>(currentYear);
   const [chartMode, setChartMode] = useState<"bar" | "pie">("bar");
@@ -309,7 +309,7 @@ export function GaiaMagasin() {
       {/* Stock magasin + Marge estimée (marge = admin/direction uniquement) */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Stock */}
-        <div className={`rounded-lg border border-border bg-card/40 p-4 ${canAccessGaia ? "lg:col-span-2" : "lg:col-span-3"}`}>
+        <div className={`rounded-lg border border-border bg-card/40 p-4 ${isDirection ? "lg:col-span-2" : "lg:col-span-3"}`}>
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Package className="h-5 w-5 text-primary" />
@@ -375,7 +375,7 @@ export function GaiaMagasin() {
         </div>
 
         {/* Marge estimée — admin/direction uniquement */}
-        {canAccessGaia && (
+        {isDirection && (
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-4">
           <div className="mb-1 flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground">
             <span>Taux de marque pièces — {exShort(currentYear)}</span>

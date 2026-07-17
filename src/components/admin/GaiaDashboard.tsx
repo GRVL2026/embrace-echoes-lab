@@ -62,7 +62,7 @@ function currentFiscalYear(d: Date = new Date()) {
 
 export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
   const navigate = useNavigate();
-  const { canAccessGaia } = useAuth();
+  const { canAccessGaia, isDirection } = useAuth();
   const [clientQuery, setClientQuery] = useState("");
   const currentYear = currentFiscalYear();
   const [yearClient, setYearClient] = useState<number>(currentYear);
@@ -651,7 +651,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
       </div>
 
       {/* ===== Marge (estimée) — admin/direction uniquement ===== */}
-      {canAccessGaia && (
+      {isDirection && (
       <Panel
         title="Marge (estimée)"
         action={

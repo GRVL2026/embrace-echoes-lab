@@ -650,7 +650,8 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
         </div>
       </div>
 
-      {/* ===== Marge (estimée) ===== */}
+      {/* ===== Marge (estimée) — admin/direction uniquement ===== */}
+      {canAccessGaia && (
       <Panel
         title="Marge (estimée)"
         action={

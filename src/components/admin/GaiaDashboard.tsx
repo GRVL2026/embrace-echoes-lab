@@ -928,7 +928,7 @@ function PipelineBanner({ stats }: { stats: PipeStats }) {
               </div>
               <div
                 className="flex items-center justify-between gap-2 rounded border border-orange-500/20 bg-orange-500/5 px-2 py-1"
-                title="Commande partiellement expédiée : la part déjà livrée est déjà facturée. Montant affiché = total de la commande (le reste-à-facturer précis arrive bientôt)."
+                title="Commande partiellement expédiée : la part déjà livrée est déjà facturée et sortie du carnet — le montant affiché est exactement ce qui reste à livrer et facturer."
               >
                 <span className="flex items-center gap-1 text-muted-foreground">
                   Reliquat

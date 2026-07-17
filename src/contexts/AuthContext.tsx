@@ -77,24 +77,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) {
       setRoles([]);
+      setCopilotEnabled(true);
       setRolesResolvedFor(null);
       setRoleError(null);
       return;
     }
 
     const userId = user.id;
-    // If roles are already resolved for this exact user, do nothing (avoids
-    // wiping roles/rolesResolvedFor on background token refreshes).
     if (rolesResolvedFor === userId && roleRefresh === 0) return;
 
     let active = true;
     setRoleError(null);
 
     (async () => {
-      const { data, error } = await (supabase as any)
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId);
+      const [{ data, error }, { data: profile }] = await Promise.all([
+        (supabase as any).from("user_roles").select("role").eq("user_id", userId),
+        (supabase as any).from("profiles").select("copilote_enabled").eq("id", userId).maybeSingle(),
+      ]);
 
       if (!active) return;
       if (error) {
@@ -104,8 +103,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       setRoles(((data ?? []) as { role: AppRole }[]).map((r) => r.role));
+      setCopilotEnabled(profile?.copilote_enabled !== false);
       setRolesResolvedFor(userId);
     })();
+
 
     return () => {
       active = false;

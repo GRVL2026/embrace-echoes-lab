@@ -15,7 +15,9 @@ type AuthContextValue = {
   isAdmin: boolean;
   isDirection: boolean;
   canAccessGaia: boolean;
+  canAccessDashboard: boolean;
   copilotEnabled: boolean;
+  dashboardEnabled: boolean;
   refreshRoles: () => void;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (

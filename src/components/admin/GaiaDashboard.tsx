@@ -56,8 +56,12 @@ function currentFiscalYear(d: Date = new Date()) {
 
 export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
   const [clientQuery, setClientQuery] = useState("");
+  const currentYear = currentFiscalYear();
+  const [yearClient, setYearClient] = useState<number>(currentYear);
+  const [yearFamille, setYearFamille] = useState<number>(currentYear);
+  const [yearMarge, setYearMarge] = useState<number>(currentYear);
+
 
   const { data, isPending: loading } = useQuery({
     queryKey: ["gaia-dashboard"],

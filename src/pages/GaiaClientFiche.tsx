@@ -882,21 +882,26 @@ function ActionCard({
   amount,
   onAsk,
 }: {
-  tone: "danger" | "warn" | "info";
+  tone: "danger" | "warn" | "info" | "success";
   icon: React.ReactNode;
   title: string;
   subtitle: string;
   amount: string;
-  onAsk: () => void;
+  onAsk?: () => void;
 }) {
   const toneClass =
     tone === "danger"
       ? "border-destructive/40 bg-destructive/5"
       : tone === "warn"
       ? "border-orange-500/40 bg-orange-500/5"
+      : tone === "success"
+      ? "border-secondary/40 bg-secondary/5"
       : "border-primary/40 bg-primary/5";
   const iconClass =
-    tone === "danger" ? "text-destructive" : tone === "warn" ? "text-orange-400" : "text-primary";
+    tone === "danger" ? "text-destructive"
+    : tone === "warn" ? "text-orange-400"
+    : tone === "success" ? "text-secondary"
+    : "text-primary";
 
   return (
     <div className={`rounded-lg border p-4 ${toneClass}`}>
@@ -910,9 +915,12 @@ function ActionCard({
           <div className="mt-2 font-display text-2xl font-bold">{amount}</div>
         </div>
       </div>
-      <Button size="sm" variant="outline" className="mt-3 w-full" onClick={onAsk}>
-        <Sparkles className="mr-2 h-3.5 w-3.5" /> Analyser avec le copilote
-      </Button>
+      {onAsk && (
+        <Button size="sm" variant="outline" className="mt-3 w-full" onClick={onAsk}>
+          <Sparkles className="mr-2 h-3.5 w-3.5" /> Analyser avec le copilote
+        </Button>
+      )}
     </div>
   );
 }
+

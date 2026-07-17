@@ -31,6 +31,7 @@ type CarnetDoc = {
   age_mois: number | null;
   nb_lignes: number | null;
   total_ht: number | null;
+  sfa: boolean | null;
 };
 
 type CommandeLigne = {
@@ -132,21 +133,31 @@ export default function GaiaCarnet() {
   }, [docs, cat]);
 
   const buckets = useMemo(() => {
-    const b = { lt6: { total: 0, nb: 0 }, m6to12: { total: 0, nb: 0 }, gt12: { total: 0, nb: 0 } };
+    const mk = () => ({ total: 0, nb: 0, totalAvec: 0, nbAvec: 0 });
+    const b = { lt6: mk(), m6to12: mk(), gt12: mk() };
     for (const d of filtered) {
       const m = d.age_mois ?? 0;
       const t = Number(d.total_ht ?? 0);
-      if (m < 6) { b.lt6.total += t; b.lt6.nb += 1; }
-      else if (m < 12) { b.m6to12.total += t; b.m6to12.nb += 1; }
-      else { b.gt12.total += t; b.gt12.nb += 1; }
+      const bucket = m < 6 ? b.lt6 : m < 12 ? b.m6to12 : b.gt12;
+      bucket.totalAvec += t;
+      bucket.nbAvec += 1;
+      if (!d.sfa) {
+        bucket.total += t;
+        bucket.nb += 1;
+      }
     }
     return b;
   }, [filtered]);
 
-  const totals = useMemo(() => ({
-    total: filtered.reduce((n, d) => n + Number(d.total_ht ?? 0), 0),
-    nb: filtered.length,
-  }), [filtered]);
+  const totals = useMemo(() => {
+    const hors = filtered.filter((d) => !d.sfa);
+    return {
+      total: hors.reduce((n, d) => n + Number(d.total_ht ?? 0), 0),
+      nb: hors.length,
+      totalAvec: filtered.reduce((n, d) => n + Number(d.total_ht ?? 0), 0),
+      nbAvec: filtered.length,
+    };
+  }, [filtered]);
 
   const visibleDocs = useMemo(() => {
     const rows = filtered.filter((d) => inAge(d.age_mois, ageFilter));

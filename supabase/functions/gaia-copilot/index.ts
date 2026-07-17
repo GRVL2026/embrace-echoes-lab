@@ -303,6 +303,8 @@ const REVUE_TOOL = {
           commentaire: { type: 'string', description: '2 phrases max sur la santé globale.' },
           annees: {
             type: 'array',
+            description: 'CA à période égale par exercice fiscal (sept→août), MINIMUM 2 exercices (idéalement 3 : N, N-1, N-2). Champ OBLIGATOIRE et NON VIDE.',
+            minItems: 2,
             items: {
               type: 'object',
               properties: {
@@ -875,7 +877,7 @@ Deno.serve(async (req) => {
         role: 'user' as const,
         content: `Voici les données commerciales agrégées (JSON) :\n\n\`\`\`json\n${dataJson}\n\`\`\`\n\nProduis une VRAIE REVUE STRATÉGIQUE via l'outil build_revue — pas un rapport de chiffres, mais une analyse d'exploitation avec un plan d'action concret et priorisé.\n\n### CONCEPTS MÉTIER À MOBILISER EXPLICITEMENT\n- **Pipeline VIVANT vs dormant** : devis < 6 mois = vivant, 6-12 mois = **gisement de relances** (lister les plus gros par numéro + client + montant via v_gaia_carnet_documents), > 12 mois = **à annuler** (hygiène commerciale).\n- **Commandes fermes anciennes** : à élucider (livraison, blocage, annulation ?).\n- **Carnet de commandes** = reste à livrer exact, **aucun chevauchement avec le CA facturé**.\n- **Comparaison N-1 à PÉRIODE ÉGALE** : mêmes mois de l'exercice fiscal (sept → août), jamais 12 mois vs 7.\n- **CA officiel** : hors éco-taxe et hors SFA (rétrocession).\n- **MAGASIN pièces détachées** (~750-900 k€/exercice, récurrent) : tendance, top clients pièces, à intégrer aux constats.\n- **Signaux clients croisés** : réparations RP sans achats de jeux = client à visiter ; parc vieillissant ; clients en déclin vs N-1.\n- **Marge / taux de marque** quand pertinent (arbitrage prix vs volume).\n\n### CONSIGNES DE SORTIE\n- santé : CA à période égale N/N-1/N-2 + évolution % ; tendance mensuelle % vs N-1 ; commentaire 2 phrases max.\n- mouvements : familles + clients qui montent/descendent (top mouvements chiffrés).\n- risques (marge, dépendance, stock, cash, calendrier) avec gravité.\n- **plan_actions** : entre **4 et 8 actions** PRIORISÉES par impact €, chacune ancrée dans des **données précises** (numéros de devis, noms de clients exacts, montants exacts). Chaque action précise horizon (cette_semaine / ce_mois / ce_trimestre), responsable suggéré (Valérie / commercial / Tristan / ADV) et 2-3 **premieres_etapes** concrètes. **JAMAIS de généralités** type "améliorer la communication" ou "développer le portefeuille".\n- **signaux_vigilance** : 3 à 5 points de risque **chiffrés** à surveiller.\n- Chaque champ texte : 1-2 phrases max, ton direct.${suivisBlock}\n\nAvant d'appeler build_revue, utilise executer_sql autant de fois que nécessaire pour vérifier/enrichir tes chiffres (notamment lister les devis 6-12 mois par montant via v_gaia_carnet_documents, extraire les tops clients pièces MAGASIN, identifier les clients avec RP sans achat jeux 12 mois, etc.), et "memoriser" pour consigner les nouvelles décisions/plans que la revue implique.`,
       }];
-      const revueSystem = `${SYSTEM_PROMPT}\n\n${SUIVI_INSTRUCTION}\n\nTu peux utiliser executer_sql pour vérifier des chiffres, "memoriser"/"oublier" pour gérer la mémoire, avant de construire la revue. Ta réponse FINALE doit être un unique appel à l'outil build_revue avec des données structurées, sans texte libre. Le champ plan_actions doit contenir des actions ancrées dans des données précises (numéros de devis, clients, montants) — jamais de généralités.`;
+      const revueSystem = `${SYSTEM_PROMPT}\n\n${SUIVI_INSTRUCTION}\n\nTu peux utiliser executer_sql pour vérifier des chiffres, "memoriser"/"oublier" pour gérer la mémoire, avant de construire la revue.\n\nCONTRAINTES ABSOLUES DE LA REVUE :\n1. N'appelle build_revue qu'APRÈS avoir vérifié tes chiffres clés via executer_sql (au minimum : CA à période égale N/N-1/N-2 via v_gaia_ca_periode_egale, tendance mensuelle via v_gaia_ca_mensuel, top devis 6-12 mois via v_gaia_carnet_documents).\n2. La section \`sante\` est OBLIGATOIRE et NON VIDE : elle DOIT contenir \`commentaire\` (2 phrases min), \`annees\` (au moins 2 exercices — idéalement 3 — chacun avec annee et ca_ht à période égale) et \`tendance_mensuelle\` (au moins 3 mois avec évolution % vs N-1). Une revue sans santé remplie sera REJETÉE.\n3. \`plan_actions\` : 4 à 8 actions ancrées dans des données précises (numéros de devis, clients, montants) — jamais de généralités.\n\nTa réponse FINALE doit être un unique appel à l'outil build_revue avec des données structurées, sans texte libre.`;
       const revueExtra = { output_config: { effort: 'xhigh' } };
 
       const encoder = new TextEncoder();
@@ -912,13 +914,40 @@ Deno.serve(async (req) => {
       };
 
       // Effectue l'appel build_revue final ; renvoie l'input structuré ou lève.
+      // Si `previousFailed` est fourni, on renvoie au modèle son propre tool_use raté
+      // + un tool_result d'erreur pour qu'il corrige précisément au lieu de retenter à l'aveugle.
       const callBuildRevue = async (
         agenticMessages: Array<{ role: 'user' | 'assistant'; content: any }>,
         extraInstruction: string | null,
+        previousFailed: { input: any; reason: string } | null = null,
       ): Promise<{ input: any; stopReason: string | null }> => {
         const tail = extraInstruction
           ? `Appelle maintenant l'outil build_revue avec la revue finale structurée. ${extraInstruction}`
           : `Appelle maintenant l'outil build_revue avec la revue finale structurée.`;
+
+        const messagesForCall = agenticMessages.slice();
+        if (previousFailed) {
+          const failedId = `revue_retry_${Date.now()}`;
+          messagesForCall.push({
+            role: 'assistant',
+            content: [
+              { type: 'tool_use', id: failedId, name: 'build_revue', input: previousFailed.input },
+            ],
+          });
+          messagesForCall.push({
+            role: 'user',
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: failedId,
+                is_error: true,
+                content: `Revue REJETÉE : ${previousFailed.reason}. Reprends TON PROPRE tool_use ci-dessus et corrige uniquement les champs défaillants — en particulier la section \`sante\` : commentaire (2 phrases), annees (au moins 2 exercices à période égale avec ca_ht issus de v_gaia_ca_periode_egale du dataJson) et tendance_mensuelle (au moins 3 mois avec evolution_pct issus de v_gaia_ca_mensuel). Conserve les autres sections déjà correctement remplies.`,
+              },
+            ],
+          });
+        }
+        messagesForCall.push({ role: 'user', content: tail });
+
         const finalPayload: Record<string, unknown> = {
           model: REVUE_MODEL,
           // ↑ 32000 : la revue peut être volumineuse et on streame les heartbeats,
@@ -926,9 +955,7 @@ Deno.serve(async (req) => {
           max_tokens: 32000,
           thinking: { type: 'adaptive' },
           system: systemBlocks(revueSystem, memorySuffix),
-          messages: withCacheOnLastMessage(sanitizeMessagesForApi(
-            agenticMessages.concat([{ role: 'user', content: tail }]),
-          )),
+          messages: withCacheOnLastMessage(sanitizeMessagesForApi(messagesForCall)),
           tools: [REVUE_TOOL],
           tool_choice: { type: 'tool', name: 'build_revue' },
           ...revueExtra,
@@ -939,7 +966,10 @@ Deno.serve(async (req) => {
         const finalContent = Array.isArray(finalResp?.content) ? finalResp.content : [];
         const toolUse = finalContent.find((b: any) => b?.type === 'tool_use' && b?.name === 'build_revue');
         const inputSize = toolUse?.input ? JSON.stringify(toolUse.input).length : 0;
-        console.log(`[gaia-copilot] build_revue${extraInstruction ? ':retry' : ''} stop_reason=${stopReason} tool_input_size=${inputSize}`);
+        const santeKeys = toolUse?.input?.sante && typeof toolUse.input.sante === 'object'
+          ? Object.keys(toolUse.input.sante).join(',')
+          : '(absente)';
+        console.log(`[gaia-copilot] build_revue${extraInstruction ? ':retry' : ''} stop_reason=${stopReason} tool_input_size=${inputSize} sante_keys=${santeKeys}`);
         if (!toolUse || !toolUse.input || typeof toolUse.input !== 'object') {
           const blocks = finalContent.map((b: any) => b?.type ?? 'unknown');
           throw new Error(`build_revue non renvoyé par le modèle. stop_reason=${stopReason} blocks=${JSON.stringify(blocks)}`);
@@ -1018,7 +1048,7 @@ Deno.serve(async (req) => {
                 console.log(`[gaia-copilot] build_revue invalide (${validation.reason}) — retry`);
                 safeSend('gaia_sql', { summary: 'Nouvelle tentative (revue trop courte)…', query: '' });
                 const retryInstruction = `La précédente tentative a rendu une revue vide ou incomplète (${validation.reason}). REMPLIS OBLIGATOIREMENT sante.commentaire (2 phrases), sante.annees (au moins 2 exercices avec ca_ht), plan_actions (4 à 8 actions concrètes ancrées dans des chiffres) et AU MOINS UNE section parmi mouvements, risques ou signaux_vigilance. Sois concis : chaque champ texte = 1-2 phrases maximum, maximum 8 items par liste.`;
-                const retry = await callBuildRevue(agenticMessages, retryInstruction);
+                const retry = await callBuildRevue(agenticMessages, retryInstruction, { input: revueInput, reason: validation.reason });
                 revueInput = retry.input;
                 stopReason = retry.stopReason;
                 validation = validateRevue(revueInput);

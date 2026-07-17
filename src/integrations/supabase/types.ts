@@ -1627,6 +1627,25 @@ export type Database = {
         }
         Relationships: []
       }
+      v_gaia_magasin_carnet: {
+        Row: {
+          categorie: string | null
+          nb: number | null
+          sfa: boolean | null
+          statut: string | null
+          total_ht: number | null
+        }
+        Relationships: []
+      }
+      v_gaia_magasin_marge: {
+        Row: {
+          annee: number | null
+          ca_avec_cout: number | null
+          ca_ht: number | null
+          marge_estimee: number | null
+        }
+        Relationships: []
+      }
       v_gaia_magasin_mensuel: {
         Row: {
           annee: number | null
@@ -1634,6 +1653,35 @@ export type Database = {
           clients: number | null
           lignes: number | null
           mois: string | null
+        }
+        Relationships: []
+      }
+      v_gaia_magasin_ruptures: {
+        Row: {
+          ca_6m: number | null
+          code: string | null
+          description: string | null
+          qte_vendue_6m: number | null
+          qty_disponible: number | null
+          sous_famille: string | null
+        }
+        Relationships: []
+      }
+      v_gaia_magasin_sous_familles: {
+        Row: {
+          annee: number | null
+          ca_ht: number | null
+          refs: number | null
+          sous_famille: string | null
+        }
+        Relationships: []
+      }
+      v_gaia_magasin_stock_valeur: {
+        Row: {
+          quantite: number | null
+          refs: number | null
+          valeur_achat: number | null
+          valeur_vente: number | null
         }
         Relationships: []
       }

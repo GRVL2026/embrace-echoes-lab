@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -8,6 +8,8 @@ import {
   Package, AlertOctagon, ChevronDown, Layers, PieChart as PieIcon,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { KpiTile } from "@/components/ui/kpi-tile";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid,
   PieChart, Pie, Cell,
@@ -62,6 +64,14 @@ export function GaiaMagasin() {
   const [yearArticles, setYearArticles] = useState<number>(currentYear);
   const [yearSousFam, setYearSousFam] = useState<number>(currentYear);
   const [chartMode, setChartMode] = useState<"bar" | "pie">("bar");
+  const [openArticle, setOpenArticle] = useState<{ code: string; description: string | null } | null>(null);
+  const [openSousFam, setOpenSousFam] = useState<string | null>(null);
+
+  const scrollToId = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
 
   const { data, isPending: loading } = useQuery({
     queryKey: ["gaia-magasin"],
@@ -257,42 +267,41 @@ export function GaiaMagasin() {
 
       {/* KPI */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-lg border border-border bg-card/40 p-4">
-          <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
-            <span>CA pièces — {exShort(currentYear)}</span>
-            <TrendingUp className="h-4 w-4 text-primary" />
-          </div>
-          <div className="font-display text-2xl font-bold">{eur(kpi.cur.ca)}</div>
-          <div className="mt-1 text-xs">
-            {kpi.evol === null ? (
+        <KpiTile
+          title={`CA pièces — ${exShort(currentYear)}`}
+          icon={<TrendingUp className="h-4 w-4 text-primary" />}
+          value={eur(kpi.cur.ca)}
+          onClick={() => scrollToId("magasin-ca-mensuel")}
+          ariaLabel="Voir le CA magasin mensuel"
+          hint={
+            kpi.evol === null ? (
               <span className="text-muted-foreground">Pas de comparatif</span>
             ) : (
               <span className={kpi.evol >= 0 ? "text-secondary" : "text-destructive"}>
                 {kpi.evol >= 0 ? <TrendingUp className="mr-1 inline h-3 w-3" /> : <TrendingDown className="mr-1 inline h-3 w-3" />}
                 {kpi.evol >= 0 ? "+" : ""}{kpi.evol.toFixed(1)}% vs {exShort(currentYear - 1)} ({eur(kpi.prev.ca)})
               </span>
-            )}
-          </div>
-        </div>
-        <div className="rounded-lg border border-border bg-card/40 p-4">
-          <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
-            <span>Clients acheteurs</span>
-            <Users className="h-4 w-4 text-secondary" />
-          </div>
-          <div className="font-display text-2xl font-bold">{num(kpi.clients)}</div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            {num(kpi.cur.lignes)} lignes sur l'exercice
-          </div>
-        </div>
-        <div className="rounded-lg border border-border bg-card/40 p-4">
-          <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
-            <span>Panier moyen / ligne</span>
-            <ShoppingCart className="h-4 w-4 text-primary" />
-          </div>
-          <div className="font-display text-2xl font-bold">{eur(kpi.panierMoyen)}</div>
-          <div className="mt-1 text-xs text-muted-foreground">Ticket moyen d'une ligne de facture pièce</div>
-        </div>
+            )
+          }
+        />
+        <KpiTile
+          title="Clients acheteurs"
+          icon={<Users className="h-4 w-4 text-secondary" />}
+          value={num(kpi.clients)}
+          onClick={() => scrollToId("magasin-top-clients")}
+          ariaLabel="Voir le top clients pièces"
+          hint={<span className="text-muted-foreground">{num(kpi.cur.lignes)} lignes sur l'exercice</span>}
+        />
+        <KpiTile
+          title="Panier moyen / ligne"
+          icon={<ShoppingCart className="h-4 w-4 text-primary" />}
+          value={eur(kpi.panierMoyen)}
+          onClick={() => scrollToId("magasin-top-articles")}
+          ariaLabel="Voir le top articles pièces"
+          hint={<span className="text-muted-foreground">Ticket moyen d'une ligne · voir top articles</span>}
+        />
       </div>
+
 
       {/* Stock magasin + Marge estimée */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -402,7 +411,7 @@ export function GaiaMagasin() {
       </div>
 
       {/* CA mensuel par exercice */}
-      <div className="rounded-lg border border-border bg-card/40 p-4">
+      <div id="magasin-ca-mensuel" className="rounded-lg border border-border bg-card/40 p-4 scroll-mt-20">
         <h3 className="mb-3 font-display text-lg font-semibold">CA magasin — comparaison par exercice (sept. → août)</h3>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
@@ -474,7 +483,12 @@ export function GaiaMagasin() {
                         cursor={barTooltipCursor}
                         content={<ChartTooltipContent formatter={(v: any, n: any) => [eur(Number(v)), n]} />}
                       />
-                      <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                      <Bar
+                        dataKey="value"
+                        radius={[0, 4, 4, 0]}
+                        onClick={(d: any) => d?.name && setOpenSousFam(String(d.name))}
+                        className="cursor-pointer"
+                      >
                         {sousFamStats.map((_, i) => (
                           <Cell key={i} fill={SOUS_FAM_COLORS[i % SOUS_FAM_COLORS.length]} />
                         ))}
@@ -491,6 +505,8 @@ export function GaiaMagasin() {
                         outerRadius={100}
                         innerRadius={55}
                         paddingAngle={2}
+                        onClick={(d: any) => d?.name && setOpenSousFam(String(d.name))}
+                        className="cursor-pointer outline-none"
                       >
                         {sousFamStats.map((_, i) => (
                           <Cell key={i} fill={SOUS_FAM_COLORS[i % SOUS_FAM_COLORS.length]} />
@@ -512,27 +528,34 @@ export function GaiaMagasin() {
                 </div>
                 <ul className="divide-y divide-border/40">
                   {sousFamStats.map((r, i) => (
-                    <li key={r.name} className="flex items-center justify-between gap-2 py-2 text-sm">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="inline-block h-3 w-3 shrink-0 rounded"
-                          style={{ background: SOUS_FAM_COLORS[i % SOUS_FAM_COLORS.length] }} />
-                        <span className="truncate font-medium">{r.name}</span>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <span className="tabular-nums text-muted-foreground">{eur(r.value)}</span>
-                        {r.evol === null ? (
-                          <span className="text-[11px] text-muted-foreground">—</span>
-                        ) : (
-                          <span
-                            className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold tabular-nums ${
-                              r.evol >= 0 ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300"
-                            }`}
-                          >
-                            {r.evol >= 0 ? <TrendingUp className="mr-0.5 h-3 w-3" /> : <TrendingDown className="mr-0.5 h-3 w-3" />}
-                            {r.evol >= 0 ? "+" : ""}{r.evol.toFixed(0)}%
-                          </span>
-                        )}
-                      </div>
+                    <li key={r.name}>
+                      <button
+                        type="button"
+                        onClick={() => setOpenSousFam(r.name)}
+                        aria-label={`Voir les articles de la sous-famille ${r.name}`}
+                        className="flex w-full items-center justify-between gap-2 py-2 text-sm text-left transition-colors hover:bg-muted/40 rounded px-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="inline-block h-3 w-3 shrink-0 rounded"
+                            style={{ background: SOUS_FAM_COLORS[i % SOUS_FAM_COLORS.length] }} />
+                          <span className="truncate font-medium">{r.name}</span>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className="tabular-nums text-muted-foreground">{eur(r.value)}</span>
+                          {r.evol === null ? (
+                            <span className="text-[11px] text-muted-foreground">—</span>
+                          ) : (
+                            <span
+                              className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold tabular-nums ${
+                                r.evol >= 0 ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300"
+                              }`}
+                            >
+                              {r.evol >= 0 ? <TrendingUp className="mr-0.5 h-3 w-3" /> : <TrendingDown className="mr-0.5 h-3 w-3" />}
+                              {r.evol >= 0 ? "+" : ""}{r.evol.toFixed(0)}%
+                            </span>
+                          )}
+                        </div>
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -541,6 +564,7 @@ export function GaiaMagasin() {
           </div>
         )}
       </div>
+
 
       {/* Top 10 clients + Top 10 articles */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

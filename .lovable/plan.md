@@ -1,54 +1,77 @@
-## Volet 1 — Restriction d'accès au copilote
 
-### Données
-- Migration : ajouter `copilote_enabled boolean not null default true` à `public.profiles` (plus simple que nouvelle table, profils déjà auto-créés par `handle_new_user`).
-- RLS :
-  - SELECT : utilisateur peut lire son propre profil ; admins lisent tout (policy existante déjà + on ajoute admin si absente).
-  - UPDATE de `copilote_enabled` : admins uniquement (nouvelle policy dédiée).
-- Par défaut TOUS les users actifs.
+# Interactivité "chaque chiffre mène à son détail"
 
-### Serveur
-- Dans `supabase/functions/gaia-copilot/index.ts`, juste après l'auth existante : lire `profiles.copilote_enabled` du user. Si `false` → 403 JSON `{ error: "Accès au copilote non actif pour votre compte" }`. Couvre chat, revue, askCopilot fiche 360 (toutes passent par cette function).
+Règle permanente : toute tuile KPI, ligne de liste ou segment de graphique doit être cliquable et ouvrir le détail correspondant (section ciblée, panneau latéral, page 360, ou liste filtrée). Curseur pointer + effet hover discret. Un élément sans détail pertinent reste non-cliquable, sans hover trompeur.
 
-### UI
-- `AuthContext` : exposer `copilotEnabled: boolean` (chargé en parallèle des rôles, défaut `true` pendant chargement pour éviter flash).
-- `AppHeader` / `MobileNav` : masquer l'entrée "Copilote" si `!copilotEnabled` (actuellement pas d'onglet dédié — vérifier ; sinon masquer le bouton dans `GaiaCopilot` shell).
-- `RevueDashboard` : masquer bouton "Générer la revue du mois" si `!copilotEnabled`.
-- `GaiaClientFiche` : masquer bouton "Demander au copilote" si `!copilotEnabled`.
-- `GaiaCopilot` composant : si `!copilotEnabled`, afficher message doux "Le copilote n'est pas encore ouvert à votre compte" à la place du chat.
-- Page `/admin` (`AdminDossiers.tsx`) : ajouter une section "Utilisateurs" (admins only) avec table des profiles + Switch `Accès copilote` qui update `profiles.copilote_enabled` via supabase.
+## Convention technique partagée
 
-## Volet 2 — Audit UI mobile (navigation retour)
+Introduire deux petits utilitaires réutilisés partout :
 
-### Nouveau composant partagé
-- `src/components/DetailPageHeader.tsx` : header sticky (`sticky top-0 z-50 backdrop-blur bg-background/85 border-b`) avec :
-  - Bouton retour (ArrowLeft) 44×44px min à gauche (`h-11 w-11`), toujours visible (`flex-shrink-0`).
-  - Titre au centre : `flex-1 min-w-0 truncate`.
-  - Slot actions à droite regroupables (menu `...` si >2 sur mobile — simple pass-through props pour l'instant).
-  - Prop `backTo` (string) ou `onBack`.
+- `<KpiTile onClick title value hint>` — carte KPI cliquable (rôle `button`, `aria-label`, focus visible, hover `border-primary/60`, active `translate-y-[1px]`). Fallback statique quand `onClick` absent (aucun hover).
+- Helper `scrollToId(id)` pour cibler une section de la même page (KPI → section correspondante) + `useState` local pour panneaux latéraux.
 
-### Pages à migrer vers le nouveau header sticky
-- `src/pages/GaiaCarnet.tsx`
-- `src/pages/SavTicket.tsx`
-- `src/pages/GaiaClientFiche.tsx`
-- `src/pages/GaiaRevueView.tsx`
-- (Détail commande e-commerce : c'est un panneau/modal, pas une route dédiée → vérifier, ajuster si route existe.)
-- (Veille : pas de page détail dédiée à ce jour.)
+Chaque section ciblable reçoit un `id` stable (`id="ca-mensuel"`, `id="stock-detail"`, etc.). Les tuiles KPI en haut deviennent des ancres cliquables vers ces sections. Les segments de graphiques recharts reçoivent `onClick` sur `<Bar>` / `<Pie>` (déjà supporté par recharts).
 
-### Corrections responsive additionnelles
-- Toutes ces pages : envelopper tables dans `<div className="overflow-x-auto">`, s'assurer pas de scroll horizontal, KPIs `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4`.
-- Bandeau Pipeline (`GaiaDashboard`) : passer les étapes en `flex-col md:flex-row` sans overflow.
-- Ne pas toucher au design desktop.
+## Portée par page
 
-### Hors scope
-- Aucune autre modification (business logic, styles desktop, contenu du copilote).
+### Dashboard AA (`GaiaDashboard.tsx`)
+- Tuile "CA exercice" → scroll vers section CA mensuel.
+- Tuile "Stock" → ouvre panneau latéral "Stock par dépôt" (agrégation `gaia_stock` par `depot`, valeur + quantité).
+- Tuile "Éco-taxe" → scroll vers détail mensuel éco-taxe (créer sous-section si absente).
+- Carte "Marge" → panneau "Comment est calculée la marge" (formule + composants, texte statique).
+- Lignes du palmarès clients (top CA) → `Link` vers `/admin/gaia/client/:nom` (fiche 360) — vérifier/compléter.
+- Segments donut familles → panneau latéral listant les ventes de la famille cliquée (top articles + top clients de la famille sur l'exercice).
 
-## Fichiers modifiés (récap)
-- Migration SQL (profiles + RLS)
-- `supabase/functions/gaia-copilot/index.ts`
-- `src/contexts/AuthContext.tsx`
-- `src/components/DetailPageHeader.tsx` (nouveau)
-- `src/pages/AdminDossiers.tsx` (section users + toggle)
-- `src/pages/GaiaCarnet.tsx`, `src/pages/SavTicket.tsx`, `src/pages/GaiaClientFiche.tsx`, `src/pages/GaiaRevueView.tsx`
-- `src/components/admin/GaiaCopilot.tsx`, `src/components/admin/RevueDashboard.tsx`, `src/components/admin/GaiaDashboard.tsx`
-- `src/integrations/supabase/types.ts` (regen auto)
+### Onglet Magasin (`GaiaMagasin.tsx`)
+- Tuiles KPI (CA magasin, marge, panier moyen, nb factures) → scroll vers section correspondante (CA mensuel magasin, top articles, top clients).
+- Lignes top clients magasin → fiche 360 (Link).
+- Lignes top articles → panneau latéral "Historique de ventes de l'article" (dernières factures, top clients de l'article, courbe CA mensuel).
+- Sous-familles → panneau latéral "Articles de la sous-famille" (liste des `code_article` avec CA, qté, dernière vente).
+
+### SAV (`Sav.tsx`)
+- Tuiles KPI (ouverts, en attente, résolus 30j, backlog) → applique le filtre statut correspondant sur la liste principale + scroll vers la liste.
+- Lignes top clients SAV → recherche/filtre déjà en place à vérifier ; sinon appliquer le nom au filtre de recherche + scroll.
+
+### E-commerce (`Ecommerce.tsx`)
+- Tuiles KPI (CA, commandes, panier moyen, nouveaux clients) → filtre + scroll vers la liste correspondante.
+- Lignes top produits → panneau détail produit (dernières commandes).
+- Lignes top clients → fiche client si existante, sinon panneau récap.
+
+### Hub (`Hub.tsx`)
+- Cartes environnements déjà cliquables — vérifier hover + aria-label uniformes.
+
+### Fiches (client, dossier, revue)
+- Vérification passive : tuiles KPI existantes cliquables ou explicitement statiques. Aucun changement fonctionnel si déjà fait.
+
+## Règles UX appliquées
+
+- Curseur `cursor-pointer` uniquement si `onClick` réel.
+- Hover : `hover:border-primary/60 hover:bg-card/70` + `transition-colors`.
+- Focus clavier : `focus-visible:ring-2 ring-primary/50`.
+- Tap-target mobile ≥ 44px pour KPI et lignes de liste.
+- `aria-label` explicite ("Voir CA mensuel", "Ouvrir la fiche de X", "Filtrer sur tickets en attente").
+- Éléments sans détail (ex : petites étiquettes info) : pas de hover, pas de pointer.
+
+## Non-régressions
+
+- Aucune route existante modifiée, aucun endpoint changé.
+- Les composants existants gardent leur signature ; l'ajout se fait via wrappers ou props optionnelles.
+- Panneaux latéraux : `Sheet` shadcn (déjà utilisé), safe-area et header sticky déjà en place.
+- React Query, badges origine, `DetailPageHeader` conservés.
+
+## Détails techniques
+
+- `src/components/ui/KpiTile.tsx` (nouveau) : `button` accessible ou `div` statique selon `onClick`.
+- Extension `chartTooltip.tsx` déjà présent — ajouter `onClick` sur `<Bar>`/`<Cell>` pour donuts (segment → panneau).
+- Panneaux Sheet : réutiliser le pattern `useState<string | null>` (comme `openParcFamille` de la fiche client).
+- Requêtes ajoutées limitées à `LIMIT 50` pour les listes latérales (ventes article, ventes famille, articles sous-famille, stock par dépôt).
+- Aucune migration DB nécessaire : réutilisation des vues existantes (`v_gaia_lignes`, `gaia_stock`, `gaia_commandes`, tickets Zendesk cache).
+
+## Livrable
+
+1. `KpiTile` partagé + convention hover.
+2. Câblage Dashboard AA (KPI + palmarès + donut familles + panneau stock/marge).
+3. Câblage Magasin (KPI + top clients/articles + sous-familles).
+4. Câblage SAV (KPI → filtres liste).
+5. Câblage E-commerce (KPI → listes filtrées + panneau produit).
+6. Vérification Hub + fiches (hover/aria seulement).

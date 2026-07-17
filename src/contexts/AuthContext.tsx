@@ -37,15 +37,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [roleRefresh, setRoleRefresh] = useState(0);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+    let currentUserId: string | null = null;
+
+    const applySession = (s: Session | null) => {
+      const nextId = s?.user?.id ?? null;
+      if (nextId === currentUserId) {
+        // Simple token refresh with the same user — just update the session
+        // silently, DO NOT touch the user reference (would remount the tree).
+        setSession((prev) => (prev === s ? prev : s));
+        return;
+      }
+      currentUserId = nextId;
       setSession(s);
       setUser(s?.user ?? null);
+    };
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+      // TOKEN_REFRESHED / USER_UPDATED with the same user must not trigger a
+      // full app re-render (skeletons on tab-refocus bug).
+      if (event === "TOKEN_REFRESHED" && s?.user?.id === currentUserId) {
+        setSession((prev) => (prev === s ? prev : s));
+        return;
+      }
+      applySession(s);
     });
+
     supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
+      applySession(data.session);
       setAuthLoading(false);
     });
+
     return () => subscription.unsubscribe();
   }, []);
 
@@ -57,10 +78,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    let active = true;
     const userId = user.id;
-    setRoles([]);
-    setRolesResolvedFor(null);
+    // If roles are already resolved for this exact user, do nothing (avoids
+    // wiping roles/rolesResolvedFor on background token refreshes).
+    if (rolesResolvedFor === userId && roleRefresh === 0) return;
+
+    let active = true;
     setRoleError(null);
 
     (async () => {
@@ -83,7 +106,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [user, roleRefresh]);
+    // Depend on user.id (not user reference) so a new user object with the
+    // same id doesn't retrigger the fetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, roleRefresh]);
 
   const rolesLoaded = !user || rolesResolvedFor === user.id;
   const isLoading = authLoading || !rolesLoaded;

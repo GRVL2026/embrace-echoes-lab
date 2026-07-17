@@ -455,7 +455,7 @@ export default function Sav() {
             </Card>
 
             {/* Tickets + search + filters */}
-            <Card className="p-4 sm:p-6 bg-card/60 border-border">
+            <Card id="sav-tickets-list" className="p-4 sm:p-6 bg-card/60 border-border scroll-mt-20">
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <h2 className="font-display text-lg font-semibold">
                   {searchResults ? `Résultats (${filteredList.length})` : "20 derniers tickets"}

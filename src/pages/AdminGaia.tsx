@@ -11,6 +11,7 @@ import { toast } from "@/hooks/use-toast";
 import { Loader2, Shield, Database, CheckCircle2, XCircle, RefreshCw, Radar } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { GaiaDashboard } from "@/components/admin/GaiaDashboard";
+import { GaiaMagasin } from "@/components/admin/GaiaMagasin";
 import { GaiaCopilot } from "@/components/admin/GaiaCopilot";
 import { MobileNav } from "@/components/MobileNav";
 import { AppTopNav } from "@/components/AppTopNav";

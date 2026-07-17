@@ -886,9 +886,11 @@ export default function GaiaClientFiche() {
             {/* placeholder — Parc déplacé en haut de la colonne droite */}
             </div>
 
+            {canAccessGaia && (
             <p className="text-[11px] text-muted-foreground md:col-span-2">
               Marge estimée sur la base du dernier coût d'achat connu.
             </p>
+            )}
           </div>
         )}
       </main>

@@ -528,7 +528,18 @@ export default function GaiaClientFiche() {
                   );
                 }
 
-                if (missingConso) {
+                if (consoLast12) {
+                  cards.push(
+                    <ActionCard
+                      key="pieces-info"
+                      tone="success"
+                      icon={<Wrench className="h-4 w-4" />}
+                      title="Pièces détachées (12 mois)"
+                      subtitle={`${consoVentes12.length} achat${consoVentes12.length > 1 ? "s" : ""} classe MAGASIN / entretien`}
+                      amount={eur(consoMontant)}
+                    />,
+                  );
+                } else if (missingConso) {
                   const question = `Le client "${clientName}" possède ${parcTotal} machines mais n'a acheté aucun consommable ni pièce détachée sur les 12 derniers mois. Propose une offre d'entretien / consommables.`;
                   cards.push(
                     <ActionCard
@@ -542,6 +553,7 @@ export default function GaiaClientFiche() {
                     />,
                   );
                 }
+
 
                 if (cards.length === 0) {
                   return (

@@ -914,13 +914,40 @@ Deno.serve(async (req) => {
       };
 
       // Effectue l'appel build_revue final ; renvoie l'input structuré ou lève.
+      // Si `previousFailed` est fourni, on renvoie au modèle son propre tool_use raté
+      // + un tool_result d'erreur pour qu'il corrige précisément au lieu de retenter à l'aveugle.
       const callBuildRevue = async (
         agenticMessages: Array<{ role: 'user' | 'assistant'; content: any }>,
         extraInstruction: string | null,
+        previousFailed: { input: any; reason: string } | null = null,
       ): Promise<{ input: any; stopReason: string | null }> => {
         const tail = extraInstruction
           ? `Appelle maintenant l'outil build_revue avec la revue finale structurée. ${extraInstruction}`
           : `Appelle maintenant l'outil build_revue avec la revue finale structurée.`;
+
+        const messagesForCall = agenticMessages.slice();
+        if (previousFailed) {
+          const failedId = `revue_retry_${Date.now()}`;
+          messagesForCall.push({
+            role: 'assistant',
+            content: [
+              { type: 'tool_use', id: failedId, name: 'build_revue', input: previousFailed.input },
+            ],
+          });
+          messagesForCall.push({
+            role: 'user',
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: failedId,
+                is_error: true,
+                content: `Revue REJETÉE : ${previousFailed.reason}. Reprends TON PROPRE tool_use ci-dessus et corrige uniquement les champs défaillants — en particulier la section \`sante\` : commentaire (2 phrases), annees (au moins 2 exercices à période égale avec ca_ht issus de v_gaia_ca_periode_egale du dataJson) et tendance_mensuelle (au moins 3 mois avec evolution_pct issus de v_gaia_ca_mensuel). Conserve les autres sections déjà correctement remplies.`,
+              },
+            ],
+          });
+        }
+        messagesForCall.push({ role: 'user', content: tail });
+
         const finalPayload: Record<string, unknown> = {
           model: REVUE_MODEL,
           // ↑ 32000 : la revue peut être volumineuse et on streame les heartbeats,
@@ -928,9 +955,7 @@ Deno.serve(async (req) => {
           max_tokens: 32000,
           thinking: { type: 'adaptive' },
           system: systemBlocks(revueSystem, memorySuffix),
-          messages: withCacheOnLastMessage(sanitizeMessagesForApi(
-            agenticMessages.concat([{ role: 'user', content: tail }]),
-          )),
+          messages: withCacheOnLastMessage(sanitizeMessagesForApi(messagesForCall)),
           tools: [REVUE_TOOL],
           tool_choice: { type: 'tool', name: 'build_revue' },
           ...revueExtra,
@@ -941,7 +966,10 @@ Deno.serve(async (req) => {
         const finalContent = Array.isArray(finalResp?.content) ? finalResp.content : [];
         const toolUse = finalContent.find((b: any) => b?.type === 'tool_use' && b?.name === 'build_revue');
         const inputSize = toolUse?.input ? JSON.stringify(toolUse.input).length : 0;
-        console.log(`[gaia-copilot] build_revue${extraInstruction ? ':retry' : ''} stop_reason=${stopReason} tool_input_size=${inputSize}`);
+        const santeKeys = toolUse?.input?.sante && typeof toolUse.input.sante === 'object'
+          ? Object.keys(toolUse.input.sante).join(',')
+          : '(absente)';
+        console.log(`[gaia-copilot] build_revue${extraInstruction ? ':retry' : ''} stop_reason=${stopReason} tool_input_size=${inputSize} sante_keys=${santeKeys}`);
         if (!toolUse || !toolUse.input || typeof toolUse.input !== 'object') {
           const blocks = finalContent.map((b: any) => b?.type ?? 'unknown');
           throw new Error(`build_revue non renvoyé par le modèle. stop_reason=${stopReason} blocks=${JSON.stringify(blocks)}`);

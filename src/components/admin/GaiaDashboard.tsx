@@ -903,52 +903,14 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
         </SheetContent>
       </Sheet>
 
-      {/* Sheet : comment est calculée la marge */}
-      <Sheet open={margeInfoOpen} onOpenChange={setMargeInfoOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle className="font-display inline-flex items-center gap-2">
-              <Info className="h-4 w-4 text-primary" /> Comment est calculée la marge
-            </SheetTitle>
-            <SheetDescription>
-              Marge estimée sur la base du dernier coût d'achat connu par article.
-            </SheetDescription>
-          </SheetHeader>
-          <div className="mt-4 space-y-4 text-sm">
-            <div className="rounded-lg border border-border/60 bg-background/40 p-3">
-              <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">
-                Formule
-              </div>
-              <ul className="space-y-1 text-muted-foreground">
-                <li>
-                  <span className="text-foreground">Marge estimée</span> = Σ (prix de vente HT − dernier coût d'achat connu) × quantité vendue
-                </li>
-                <li>
-                  <span className="text-foreground">Taux de marque</span> = Marge ÷ prix de vente HT
-                </li>
-                <li>
-                  <span className="text-foreground">Taux de marge</span> = Marge ÷ coût d'achat
-                </li>
-              </ul>
-            </div>
-            <div className="rounded-lg border border-border/60 bg-background/40 p-3 space-y-1.5">
-              <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">
-                Chiffres — {exShort(yearMarge)}
-              </div>
-              <div className="flex justify-between"><span className="text-muted-foreground">CA analysé</span><span className="tabular-nums font-medium">{eur(margeGlobal.caCout)}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Coût d'achat estimé</span><span className="tabular-nums font-medium">{eur(margeGlobal.cout)}</span></div>
-              <div className="flex justify-between border-t border-border/60 pt-1.5"><span className="text-foreground font-medium">Marge estimée</span><span className="tabular-nums font-semibold text-primary">{eur(margeGlobal.marge)}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Taux de marque</span><span className="tabular-nums">{margeGlobal.taux.toFixed(1)}%</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Taux de marge</span><span className="tabular-nums">{margeGlobal.tauxMarge.toFixed(1)}%</span></div>
-            </div>
-            <div className="rounded border border-border/60 bg-background/40 p-3 text-xs text-muted-foreground">
-              Couverture du calcul : {margeGlobal.couverture.toFixed(0)}% du CA HT
-              ({eur(margeGlobal.caCout)} sur {eur(margeGlobal.caHt)}). Les articles sans coût d'achat connu
-              sont exclus du calcul.
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
+      {/* Sheet : comprendre les différentes lectures de la marge */}
+      <MargeInfoSheet
+        open={margeInfoOpen}
+        onOpenChange={setMargeInfoOpen}
+        tauxErp={margeGlobal.taux}
+        source="Dashboard AA"
+      />
+
 
       {/* Sheet : détail d'une famille (top articles + top clients) */}
       <FamilleDetailSheet

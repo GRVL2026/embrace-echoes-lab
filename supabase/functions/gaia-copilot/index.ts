@@ -965,7 +965,7 @@ Deno.serve(async (req) => {
                   console.log(`[gaia-copilot] revue update erreur failed: ${persistErr?.message ?? persistErr}`);
                 }
               }
-              safeSend('gaia_error', { error: msg, id: revueId });
+              safeSend('gaia_error', { error: msg, id: revueId, code: isAnthropicOverload(e) ? 'overload' : undefined });
             } finally {
               if (heartbeat !== undefined) clearInterval(heartbeat);
               safeClose();

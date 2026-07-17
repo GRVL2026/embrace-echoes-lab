@@ -138,6 +138,7 @@ CHARTE DE L'ANALYSTE — règles SQL OBLIGATOIRES (aucune exception sans justifi
    • Commandes signées en cours = statut IN ('Ouvert', 'Expédition en cours', 'Reliquat') ET completed = false.
    • EXCLURE systématiquement 'Historique', 'Annulé' ET 'Traité' des analyses opérationnelles : le statut 'Traité' correspond à des commandes déjà facturées (donc déjà comptées dans le CA via v_gaia_lignes) — la vue v_gaia_commandes_etat les exclut à juste titre du portefeuille de commandes signées en cours.
    • Pour compter des commandes : COUNT(DISTINCT n_cde) (une commande = plusieurs lignes).
+   • CARNET vs CA — pas de chevauchement : gaia_commandes ne contient QUE les lignes restant à livrer. Dès qu'une ligne est expédiée/facturée, elle sort du carnet (même pour une commande en 'Reliquat' : la part déjà livrée est retirée, seul le reste-à-livrer subsiste). Donc SUM(montant_ht) sur une commande en cours = reste à livrer et à facturer exact, sans double-comptage avec le CA. gaia_ventes = uniquement du livré/facturé.
 
 
 4. AGRÉGER DANS LE SQL : gaia_query renvoie 200 lignes MAX. Ne calcule JAMAIS un total en récupérant des lignes brutes puis en sommant côté modèle. Utilise SUM/COUNT/AVG/GROUP BY dans la requête, et ORDER BY + LIMIT pour tout classement (Top N).

@@ -1635,6 +1635,15 @@ export type Database = {
         }
         Relationships: []
       }
+      v_gaia_pipeline: {
+        Row: {
+          categorie: string | null
+          nb: number | null
+          statut: string | null
+          total_ht: number | null
+        }
+        Relationships: []
+      }
       v_gaia_retrocession_sfa: {
         Row: {
           annee: number | null

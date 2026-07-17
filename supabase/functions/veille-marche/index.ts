@@ -1,5 +1,6 @@
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { anthropicJson, isAnthropicOverload } from "../_shared/anthropic-fetch.ts";
 
 const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -87,20 +88,7 @@ const BUILD_VEILLE_TOOL = {
 const WEB_SEARCH_TOOL = { type: "web_search_20260209", name: "web_search", max_uses: 10 } as any;
 
 async function callAnthropic(payload: any) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": ANTHROPIC_KEY,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Anthropic ${res.status}: ${body.slice(0, 800)}`);
-  }
-  return await res.json();
+  return await anthropicJson(ANTHROPIC_KEY, payload);
 }
 
 function extractSources(content: any[]): { title?: string; url: string }[] {
@@ -231,6 +219,11 @@ Concentre-toi exclusivement sur les informations publiées ou survenues ${window
     });
   } catch (e: any) {
     console.error("[veille-marche]", e?.message ?? e);
+    if (isAnthropicOverload(e)) {
+      return new Response(JSON.stringify({ error: e.userMessage, code: 'overload' }), {
+        status: 503, headers: { ...corsHeaders, "content-type": "application/json" },
+      });
+    }
     return new Response(JSON.stringify({ error: e?.message ?? String(e) }), {
       status: 500, headers: { ...corsHeaders, "content-type": "application/json" },
     });

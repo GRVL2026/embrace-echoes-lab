@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+import { anthropicJson, isAnthropicOverload } from '../_shared/anthropic-fetch.ts';
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const CHAT_MODEL = 'claude-sonnet-5';
@@ -489,19 +490,10 @@ async function oublier(admin: any, id: string): Promise<unknown> {
 async function anthropicCall(payload: Record<string, unknown>) {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY manquant');
-  const res = await fetch(ANTHROPIC_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': ANTHROPIC_VERSION,
-    },
-    body: JSON.stringify(payload),
+  return await anthropicJson(apiKey, payload, {
+    url: ANTHROPIC_URL,
+    extraHeaders: { 'anthropic-version': ANTHROPIC_VERSION },
   });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`Anthropic HTTP ${res.status} ${res.statusText}. Body: ${text}`);
-  try { return JSON.parse(text); }
-  catch { throw new Error(`Anthropic 200 mais JSON invalide. Body: ${text.slice(0, 1500)}`); }
 }
 
 type TurnLog = {
@@ -973,7 +965,7 @@ Deno.serve(async (req) => {
                   console.log(`[gaia-copilot] revue update erreur failed: ${persistErr?.message ?? persistErr}`);
                 }
               }
-              safeSend('gaia_error', { error: msg, id: revueId });
+              safeSend('gaia_error', { error: msg, id: revueId, code: isAnthropicOverload(e) ? 'overload' : undefined });
             } finally {
               if (heartbeat !== undefined) clearInterval(heartbeat);
               safeClose();
@@ -1096,7 +1088,8 @@ Deno.serve(async (req) => {
             }
           } catch (e: any) {
             console.log(`[gaia-copilot] chat stream fatal: ${e?.message ?? e}`);
-            send('gaia_error', { error: e?.message ?? String(e) });
+            const overload = isAnthropicOverload(e);
+            send('gaia_error', { error: e?.message ?? String(e), code: overload ? 'overload' : undefined });
           } finally {
             if (heartbeat !== undefined) clearInterval(heartbeat);
             try { controller.close(); } catch { /* already closed */ }

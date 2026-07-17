@@ -1,6 +1,7 @@
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { requireRole } from '../_shared/require-role.ts';
+import { anthropicJson, isAnthropicOverload } from '../_shared/anthropic-fetch.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -391,26 +392,13 @@ async function buildResume(ticketId: string) {
     `Sujet: ${ticket.subject}\nStatut Zendesk: ${ticket.status}\nPriorité: ${ticket.priority || 'n/a'}\n` +
     `Client: ${ticket.requester_name}\n\n=== FIL DE CONVERSATION ===\n\n${transcript}`;
 
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: ANTHROPIC_MODEL,
-      max_tokens: 1024,
-      tools: [tool],
-      tool_choice: { type: 'tool', name: 'build_resume' },
-      messages: [{ role: 'user', content: prompt.slice(0, 60000) }],
-    }),
+  const j = await anthropicJson(ANTHROPIC_KEY, {
+    model: ANTHROPIC_MODEL,
+    max_tokens: 1024,
+    tools: [tool],
+    tool_choice: { type: 'tool', name: 'build_resume' },
+    messages: [{ role: 'user', content: prompt.slice(0, 60000) }],
   });
-  if (!r.ok) {
-    const body = await r.text();
-    throw new Error(`Anthropic ${r.status}: ${body.slice(0, 300)}`);
-  }
-  const j = await r.json();
   const use = (j.content || []).find((b: any) => b.type === 'tool_use');
   if (!use?.input) throw new Error('Réponse Anthropic invalide (pas de tool_use).');
   const resume = use.input;
@@ -551,6 +539,12 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (e: any) {
+    if (isAnthropicOverload(e)) {
+      return new Response(
+        JSON.stringify({ error: e.userMessage, code: 'overload' }),
+        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
     const msg = String(e?.message || e);
     const isAuth = /401|403|Couldn't authenticate/i.test(msg);
     return new Response(

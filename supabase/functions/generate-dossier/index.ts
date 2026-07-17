@@ -5,6 +5,7 @@
 // de dossier structuré généré par Claude (API Anthropic directe).
 // =====================================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { anthropicJson, isAnthropicOverload } from "../_shared/anthropic-fetch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -153,30 +154,24 @@ Deno.serve(async (req: Request) => {
       `MODULES MARQUE DISPONIBLES (utilise ces module_id uniquement) :\n${modulesText || "(vide)"}`;
 
     // --- Appel Claude (API Anthropic) ---
-    const aiResp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
+    let data: any;
+    try {
+      data = await anthropicJson(ANTHROPIC_API_KEY, {
         model: MODEL,
         max_tokens: 2000,
         system: SYSTEM_PROMPT,
         tools: [TOOL],
         tool_choice: { type: "tool", name: "build_dossier" },
         messages: [{ role: "user", content: userContent }],
-      }),
-    });
-
-    if (!aiResp.ok) {
-      const body = await aiResp.text();
-      console.error("Anthropic error:", aiResp.status, body);
-      return json({ error: "Erreur du modèle", detail: body }, 502);
+      });
+    } catch (e: any) {
+      if (isAnthropicOverload(e)) {
+        return json({ error: e.userMessage, code: "overload" }, 503);
+      }
+      console.error("Anthropic error:", e?.message ?? e);
+      return json({ error: "Erreur du modèle", detail: e?.message ?? String(e) }, 502);
     }
 
-    const data = await aiResp.json();
     const toolUse = (data.content ?? []).find((b: any) => b.type === "tool_use");
     if (!toolUse) return json({ error: "Réponse du modèle sans dossier structuré" }, 502);
 

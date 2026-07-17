@@ -151,6 +151,26 @@ function normalizeRevue(raw: any): RevueData {
   const r = raw && typeof raw === "object" ? raw : {};
   const sante = r.sante && typeof r.sante === "object" ? r.sante : {};
   const mouvements = r.mouvements && typeof r.mouvements === "object" ? r.mouvements : {};
+  const validHorizons = ["cette_semaine", "ce_mois", "ce_trimestre"] as const;
+  const planActions = Array.isArray(r.plan_actions)
+    ? r.plan_actions
+        .filter((a: any) => a && typeof a === "object")
+        .map((a: any) => ({
+          titre: String(a.titre ?? ""),
+          constat: String(a.constat ?? ""),
+          impact_potentiel_eur: Number(a.impact_potentiel_eur) || 0,
+          responsable_suggere: String(a.responsable_suggere ?? ""),
+          horizon: (validHorizons as readonly string[]).includes(a.horizon) ? a.horizon : "ce_mois",
+          premieres_etapes: Array.isArray(a.premieres_etapes)
+            ? a.premieres_etapes.map((e: any) => String(e)).filter(Boolean)
+            : [],
+        }))
+    : [];
+  const signauxVigilance = Array.isArray(r.signaux_vigilance)
+    ? r.signaux_vigilance
+        .filter((s: any) => s && typeof s === "object")
+        .map((s: any) => ({ titre: String(s.titre ?? ""), detail: String(s.detail ?? "") }))
+    : [];
   return {
     sante: {
       commentaire: typeof sante.commentaire === "string" ? sante.commentaire : "",
@@ -164,6 +184,8 @@ function normalizeRevue(raw: any): RevueData {
     },
     risques: Array.isArray(r.risques) ? r.risques : [],
     actions: Array.isArray(r.actions) ? r.actions : [],
+    plan_actions: planActions,
+    signaux_vigilance: signauxVigilance,
   };
 }
 

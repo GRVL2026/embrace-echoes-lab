@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, Component, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+
 import { CopiloteMarkdown } from "./CopiloteMarkdown";
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -228,8 +230,11 @@ class RevueRenderBoundary extends Component<
 // ─────────── Main component ───────────
 
 export function GaiaCopilot() {
+  const { copilotEnabled } = useAuth();
   const [revueLoading, setRevueLoading] = useState(false);
   const [revueData, setRevueData] = useState<RevueData | null>(null);
+
+
   const [revueError, setRevueError] = useState<string | null>(null);
   const [revueSteps, setRevueSteps] = useState<RevueStep[]>([]);
 
@@ -646,8 +651,21 @@ export function GaiaCopilot() {
 
   const dateShort = (s: string | null) => (s ? new Date(s).toLocaleDateString("fr-FR") : "—");
 
+  if (!copilotEnabled) {
+    return (
+      <div className="rounded-lg border border-border bg-card/40 p-8 text-center">
+        <Sparkles className="mx-auto h-8 w-8 text-muted-foreground" />
+        <h3 className="mt-3 font-display text-lg font-semibold">Copilote non actif</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Le copilote n'est pas encore ouvert à votre compte.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+
       {/* 1. Chat — priorité visuelle */}
       <div id="gaia-copilot-chat" className="rounded-lg border border-border bg-card/40 p-4">
 

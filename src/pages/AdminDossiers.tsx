@@ -12,16 +12,18 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { UserMenu } from "@/components/UserMenu";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, Shield, Database, Link2 } from "lucide-react";
+import { Loader2, Shield, Database, Link2, Sparkles } from "lucide-react";
 import { MobileNav } from "@/components/MobileNav";
 import { AppTopNav } from "@/components/AppTopNav";
 import logoImg from "@/assets/logo.png";
 
+
 type Brand = { id: string; name: string };
-type Profile = { id: string; email: string | null; full_name: string | null };
+type Profile = { id: string; email: string | null; full_name: string | null; copilote_enabled?: boolean };
 type Project = {
   id: string;
   brand_id: string | null;
@@ -31,6 +33,7 @@ type Project = {
   updated_at: string;
   owner_id: string | null;
 };
+
 
 const OFFER_LABEL: Record<string, string> = {
   vente: "Vente",
@@ -69,7 +72,7 @@ export default function AdminDossiers() {
           .select("id, brand_id, client_name, offer, status, updated_at, owner_id")
           .order("updated_at", { ascending: false }),
         (supabase as any).from("brands").select("id, name"),
-        (supabase as any).from("profiles").select("id, email, full_name"),
+        (supabase as any).from("profiles").select("id, email, full_name, copilote_enabled"),
       ]);
       if (pe) toast({ title: "Erreur", description: pe.message, variant: "destructive" });
       setProjects((p as Project[]) ?? []);
@@ -226,7 +229,69 @@ export default function AdminDossiers() {
             ))
           )}
         </div>
+        {/* Utilisateurs & accès copilote */}
+        <section className="mt-10">
+          <div className="mb-3 flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary" />
+            <h3 className="font-display text-lg font-semibold">Utilisateurs — Accès copilote</h3>
+          </div>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Activer/désactiver l'accès au copilote pour chaque utilisateur. Par défaut, tous les comptes sont actifs.
+          </p>
+          <div className="rounded-lg border border-border bg-card/40 overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Utilisateur</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead className="text-right">Accès copilote</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {Object.values(profiles).length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3} className="py-6 text-center text-muted-foreground">
+                      Aucun utilisateur.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  Object.values(profiles)
+                    .sort((a, b) => (a.full_name || a.email || "").localeCompare(b.full_name || b.email || ""))
+                    .map((p) => (
+                      <TableRow key={p.id}>
+                        <TableCell className="font-medium">{p.full_name?.trim() || "—"}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{p.email || "—"}</TableCell>
+                        <TableCell className="text-right">
+                          <Switch
+                            checked={p.copilote_enabled !== false}
+                            onCheckedChange={async (checked) => {
+                              const prev = p.copilote_enabled !== false;
+                              setProfiles((s) => ({ ...s, [p.id]: { ...p, copilote_enabled: checked } }));
+                              const { error } = await (supabase as any)
+                                .from("profiles")
+                                .update({ copilote_enabled: checked })
+                                .eq("id", p.id);
+                              if (error) {
+                                setProfiles((s) => ({ ...s, [p.id]: { ...p, copilote_enabled: prev } }));
+                                toast({ title: "Erreur", description: error.message, variant: "destructive" });
+                              } else {
+                                toast({
+                                  title: checked ? "Copilote activé" : "Copilote désactivé",
+                                  description: p.full_name?.trim() || p.email || "",
+                                });
+                              }
+                            }}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </section>
       </main>
     </div>
   );
 }
+

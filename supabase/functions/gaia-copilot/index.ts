@@ -832,6 +832,20 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, error: 'Forbidden: admin or direction only' }, 403);
     }
 
+    // Vérification du drapeau copilote_enabled (peut être désactivé par un admin)
+    {
+      const admin0 = createClient(supabaseUrl, serviceKey);
+      const { data: profile } = await admin0
+        .from('profiles')
+        .select('copilote_enabled')
+        .eq('id', userData.user.id)
+        .maybeSingle();
+      if (profile && profile.copilote_enabled === false) {
+        return jsonResponse({ ok: false, error: 'Accès au copilote non actif pour votre compte' }, 403);
+      }
+    }
+
+
     let body: any = {};
     try { body = await req.json(); } catch { body = {}; }
     const action = body?.action;

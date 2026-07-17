@@ -15,6 +15,7 @@ type AuthContextValue = {
   isAdmin: boolean;
   isDirection: boolean;
   canAccessGaia: boolean;
+  copilotEnabled: boolean;
   refreshRoles: () => void;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (
@@ -25,6 +26,7 @@ type AuthContextValue = {
   signOut: () => Promise<void>;
 };
 
+
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -32,9 +34,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [roles, setRoles] = useState<AppRole[]>([]);
+  const [copilotEnabled, setCopilotEnabled] = useState<boolean>(true);
   const [rolesResolvedFor, setRolesResolvedFor] = useState<string | null>(null);
   const [roleError, setRoleError] = useState<string | null>(null);
   const [roleRefresh, setRoleRefresh] = useState(0);
+
 
   useEffect(() => {
     let currentUserId: string | null = null;
@@ -73,24 +77,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) {
       setRoles([]);
+      setCopilotEnabled(true);
       setRolesResolvedFor(null);
       setRoleError(null);
       return;
     }
 
     const userId = user.id;
-    // If roles are already resolved for this exact user, do nothing (avoids
-    // wiping roles/rolesResolvedFor on background token refreshes).
     if (rolesResolvedFor === userId && roleRefresh === 0) return;
 
     let active = true;
     setRoleError(null);
 
     (async () => {
-      const { data, error } = await (supabase as any)
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId);
+      const [{ data, error }, { data: profile }] = await Promise.all([
+        (supabase as any).from("user_roles").select("role").eq("user_id", userId),
+        (supabase as any).from("profiles").select("copilote_enabled").eq("id", userId).maybeSingle(),
+      ]);
 
       if (!active) return;
       if (error) {
@@ -100,8 +103,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       setRoles(((data ?? []) as { role: AppRole }[]).map((r) => r.role));
+      setCopilotEnabled(profile?.copilote_enabled !== false);
       setRolesResolvedFor(userId);
     })();
+
 
     return () => {
       active = false;
@@ -153,7 +158,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAdmin,
         isDirection,
         canAccessGaia,
+        copilotEnabled,
         refreshRoles,
+
         signIn,
         signUp,
         signOut,

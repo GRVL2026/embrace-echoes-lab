@@ -63,24 +63,37 @@ export default function GaiaRevueView() {
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground">
-      <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-3 sm:px-6 gap-2 print:hidden">
-        <div className="flex items-center gap-2 min-w-0">
+      <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-border bg-background/85 backdrop-blur px-3 sm:px-6 gap-2 print:hidden">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           <MobileNav />
-          <Link to={isAdmin ? "/" : "/dossiers"} className="flex items-center gap-2 min-w-0">
+          <Button
+            asChild
+            variant="ghost"
+            size="icon"
+            aria-label="Retour au copilote"
+            className="h-11 w-11 flex-shrink-0 md:hidden -ml-1"
+          >
+            <Link to="/admin/gaia"><ArrowLeft className="h-5 w-5" /></Link>
+          </Button>
+          <Link to={isAdmin ? "/" : "/dossiers"} className="hidden md:flex items-center gap-2 min-w-0">
             <img src={logoImg} alt="Arcade OS logo" className="h-7 w-auto object-contain flex-shrink-0" />
             <h1 className="font-display text-base sm:text-xl font-bold tracking-tight truncate">
               <span className="text-primary text-glow-purple">Arcade</span>{" "}
               <span className="text-secondary text-glow-green">OS</span>
             </h1>
           </Link>
+          <div className="md:hidden flex-1 min-w-0">
+            <div className="truncate font-display text-sm font-semibold">{row?.titre ?? "Revue"}</div>
+            <div className="truncate text-[11px] text-muted-foreground">Revue commerciale</div>
+          </div>
         </div>
         <UserMenu />
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 sm:px-6 py-6 sm:py-8 revue-print-root">
+      <main className="mx-auto max-w-6xl px-4 sm:px-6 py-4 sm:py-8 revue-print-root">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between print:hidden">
           <div>
-            <Link to="/admin/gaia" className="mb-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+            <Link to="/admin/gaia" className="mb-2 hidden md:inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
               <ArrowLeft className="h-3 w-3" /> Retour au copilote
             </Link>
             <h2 className="font-display text-xl sm:text-2xl font-bold">
@@ -104,6 +117,7 @@ export default function GaiaRevueView() {
             </Button>
           </div>
         </div>
+
 
         {/* Print-only header */}
         {row && (

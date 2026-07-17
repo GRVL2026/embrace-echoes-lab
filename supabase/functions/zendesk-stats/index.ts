@@ -391,26 +391,13 @@ async function buildResume(ticketId: string) {
     `Sujet: ${ticket.subject}\nStatut Zendesk: ${ticket.status}\nPriorité: ${ticket.priority || 'n/a'}\n` +
     `Client: ${ticket.requester_name}\n\n=== FIL DE CONVERSATION ===\n\n${transcript}`;
 
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: ANTHROPIC_MODEL,
-      max_tokens: 1024,
-      tools: [tool],
-      tool_choice: { type: 'tool', name: 'build_resume' },
-      messages: [{ role: 'user', content: prompt.slice(0, 60000) }],
-    }),
+  const j = await anthropicJson(ANTHROPIC_KEY, {
+    model: ANTHROPIC_MODEL,
+    max_tokens: 1024,
+    tools: [tool],
+    tool_choice: { type: 'tool', name: 'build_resume' },
+    messages: [{ role: 'user', content: prompt.slice(0, 60000) }],
   });
-  if (!r.ok) {
-    const body = await r.text();
-    throw new Error(`Anthropic ${r.status}: ${body.slice(0, 300)}`);
-  }
-  const j = await r.json();
   const use = (j.content || []).find((b: any) => b.type === 'tool_use');
   if (!use?.input) throw new Error('Réponse Anthropic invalide (pas de tool_use).');
   const resume = use.input;

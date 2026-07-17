@@ -7,7 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 
 export function MobileNav() {
-  const { isAdmin, canAccessGaia, user, signOut } = useAuth();
+  const { isAdmin, canAccessGaia, canAccessDashboard, user, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
   const navigate = useNavigate();

@@ -3,6 +3,7 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
 } from "recharts";
 import { ChartTooltipContent, barTooltipCursor } from "./chartTooltip";
+import { DonutHoverCenter } from "./DonutHoverCenter";
 
 export type ChartPayload = {
   type: "ligne" | "barres" | "donut";

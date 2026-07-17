@@ -118,7 +118,7 @@ export default function GaiaClientFiche() {
         ),
       );
 
-      let commandesRows: Commande[] = [];
+      let pipelineRows: PipelineDoc[] = [];
       let ventesRows: Vente[] = [];
       let ventes12mRows: Vente[] = [];
       let firstSaleValue: string | null = null;
@@ -129,14 +129,12 @@ export default function GaiaClientFiche() {
         since.setMonth(since.getMonth() - 12);
         const sinceIso = since.toISOString().slice(0, 10);
 
-        const [cmd_r, v_r, v12_r, vfirst_r, rep_r] = await Promise.all([
+        const [carnet_r, v_r, v12_r, vfirst_r] = await Promise.all([
           client
-            .from("gaia_commandes")
-            .select("n_cde,code_client,code_article,invoice_date,qty,montant_ht,statut,date_liv")
+            .from("v_gaia_carnet_documents")
+            .select("n_cde,order_type,categorie,statut,code_client,client,date_document,age_mois,nb_lignes,total_ht,sfa,origine")
             .in("code_client", codes)
-            .in("statut", STATUTS_OUVERTS as unknown as string[])
-            .order("invoice_date", { ascending: false })
-            .limit(200),
+            .limit(500),
           client
             .from("gaia_ventes")
             .select("code_client,n_fact,code_article,invoice_date,qty,montant_ht")
@@ -155,25 +153,24 @@ export default function GaiaClientFiche() {
             .in("code_client", codes)
             .order("invoice_date", { ascending: true })
             .limit(1),
-          client
-            .from("v_gaia_carnet_documents")
-            .select("n_cde,statut,code_client,date_document,age_mois,total_ht,categorie")
-            .in("code_client", codes)
-            .eq("categorie", "reparation")
-            .limit(200),
         ]);
-        commandesRows = (cmd_r.data as Commande[]) ?? [];
+        const carnetRows = (carnet_r.data as PipelineDoc[]) ?? [];
+        pipelineRows = carnetRows.filter(
+          (d) =>
+            (d.categorie === "devis" || d.categorie === "commande") &&
+            !!d.statut && (STATUTS_OUVERTS as readonly string[]).includes(d.statut),
+        );
+        reparationsRows = carnetRows.filter((d) => d.categorie === "reparation");
         ventesRows = (v_r.data as Vente[]) ?? [];
         ventes12mRows = (v12_r.data as Vente[]) ?? [];
         firstSaleValue = (vfirst_r.data as Array<{ invoice_date: string | null }>)?.[0]?.invoice_date ?? null;
-        reparationsRows = (rep_r.data as ReparationDoc[]) ?? [];
       }
 
       return {
         ca: caRows,
         marge: margeRows,
         parc: parcRows,
-        commandes: commandesRows,
+        commandes: pipelineRows,
         ventes: ventesRows,
         ventes12m: ventes12mRows,
         firstSale: firstSaleValue,

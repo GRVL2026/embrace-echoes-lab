@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+import { anthropicJson, isAnthropicOverload } from '../_shared/anthropic-fetch.ts';
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const CHAT_MODEL = 'claude-sonnet-5';

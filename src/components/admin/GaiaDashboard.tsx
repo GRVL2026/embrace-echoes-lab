@@ -26,6 +26,7 @@ import {
 } from "recharts";
 import { ChartTooltipContent, barTooltipCursor } from "./chartTooltip";
 import { DonutHoverCenter } from "./DonutHoverCenter";
+import { MargeInfoSheet } from "./MargeInfoSheet";
 
 
 const FAMILY_COLORS = ["#9B5CFF", "#ADFF00", "#00D4FF", "#FF8A00", "#FF4FA3"];

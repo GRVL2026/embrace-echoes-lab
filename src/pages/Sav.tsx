@@ -98,12 +98,23 @@ async function callFn(params: URLSearchParams) {
   return j;
 }
 
-function KpiTile({ label, value, sub, Icon, accent = "primary" }: {
-  label: string; value: string | number; sub?: string; Icon: any; accent?: "primary" | "secondary" | "destructive";
+function KpiTile({ label, value, sub, Icon, accent = "primary", onClick, ariaLabel }: {
+  label: string; value: string | number; sub?: string; Icon: any;
+  accent?: "primary" | "secondary" | "destructive";
+  onClick?: () => void;
+  ariaLabel?: string;
 }) {
   const color = accent === "destructive" ? "text-destructive" : accent === "secondary" ? "text-secondary" : "text-primary";
+  const interactive = typeof onClick === "function";
   return (
-    <Card className="p-4 bg-card/60 border-border">
+    <Card
+      onClick={onClick}
+      role={interactive ? "button" : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      onKeyDown={interactive ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(); } } : undefined}
+      aria-label={ariaLabel}
+      className={`p-4 bg-card/60 border-border ${interactive ? "cursor-pointer transition-colors hover:border-primary/60 hover:bg-card/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 active:translate-y-[1px]" : ""}`}
+    >
       <div className="flex items-center justify-between">
         <div className="text-xs uppercase text-muted-foreground tracking-wider">{label}</div>
         <Icon className={`h-4 w-4 ${color}`} />

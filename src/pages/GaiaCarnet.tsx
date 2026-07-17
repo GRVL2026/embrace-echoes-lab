@@ -223,6 +223,9 @@ export default function GaiaCarnet() {
             <div className="text-right">
               <div className="font-display text-2xl sm:text-3xl font-bold tabular-nums">{eur(totals.total)}</div>
               <div className="text-xs text-muted-foreground">{num(totals.nb)} document{totals.nb > 1 ? "s" : ""}</div>
+              {totals.totalAvec !== totals.total && (
+                <div className="mt-0.5 text-[10px] text-muted-foreground/70 tabular-nums">avec SFA : {eur(totals.totalAvec)}</div>
+              )}
             </div>
           </div>
         </div>
@@ -236,6 +239,7 @@ export default function GaiaCarnet() {
             tone="green"
             total={buckets.lt6.total}
             nb={buckets.lt6.nb}
+            totalAvec={buckets.lt6.totalAvec}
           />
           <AgeCard
             active={ageFilter === "6to12"}
@@ -244,6 +248,7 @@ export default function GaiaCarnet() {
             tone="orange"
             total={buckets.m6to12.total}
             nb={buckets.m6to12.nb}
+            totalAvec={buckets.m6to12.totalAvec}
           />
           <AgeCard
             active={ageFilter === "gt12"}
@@ -252,6 +257,7 @@ export default function GaiaCarnet() {
             tone="red"
             total={buckets.gt12.total}
             nb={buckets.gt12.nb}
+            totalAvec={buckets.gt12.totalAvec}
           />
         </div>
 

@@ -11,6 +11,7 @@ import { toast } from "@/hooks/use-toast";
 import { Loader2, Shield, Database, CheckCircle2, XCircle, RefreshCw, Radar } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { GaiaDashboard } from "@/components/admin/GaiaDashboard";
+import { GaiaMagasin } from "@/components/admin/GaiaMagasin";
 import { GaiaCopilot } from "@/components/admin/GaiaCopilot";
 import { MobileNav } from "@/components/MobileNav";
 import { AppTopNav } from "@/components/AppTopNav";
@@ -326,7 +327,8 @@ export default function AdminGaia() {
 
         <Tabs defaultValue="dashboard" className="w-full">
           <TabsList className="mb-6 flex-wrap">
-            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            <TabsTrigger value="dashboard">AA</TabsTrigger>
+            <TabsTrigger value="magasin">Magasin</TabsTrigger>
             <TabsTrigger value="copilot">Copilote</TabsTrigger>
             <TabsTrigger value="sync">Synchronisation</TabsTrigger>
           </TabsList>
@@ -341,6 +343,11 @@ export default function AdminGaia() {
               trigger?.click();
             }} />
           </TabsContent>
+
+          <TabsContent value="magasin">
+            <GaiaMagasin />
+          </TabsContent>
+
 
           <TabsContent value="sync">
         <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">

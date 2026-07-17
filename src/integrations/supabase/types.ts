@@ -1618,6 +1618,36 @@ export type Database = {
         }
         Relationships: []
       }
+      v_gaia_magasin_mensuel: {
+        Row: {
+          annee: number | null
+          ca_ht: number | null
+          clients: number | null
+          lignes: number | null
+          mois: string | null
+        }
+        Relationships: []
+      }
+      v_gaia_magasin_top_articles: {
+        Row: {
+          annee: number | null
+          ca_ht: number | null
+          code_article: string | null
+          description: string | null
+          quantite: number | null
+        }
+        Relationships: []
+      }
+      v_gaia_magasin_top_clients: {
+        Row: {
+          annee: number | null
+          ca_ht: number | null
+          client: string | null
+          code_client: string | null
+          lignes: number | null
+        }
+        Relationships: []
+      }
       v_gaia_marge_client: {
         Row: {
           annee: number | null

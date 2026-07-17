@@ -49,7 +49,7 @@ const dateShort = (d: string | null) =>
   d ? new Date(d).toLocaleDateString("fr-FR") : "—";
 
 const STATUTS_OUVERTS = ["Brouillon", "Ouvert", "Expédition en cours", "Reliquat"] as const;
-const CONSO_KEYWORDS = ["consommable", "consommables", "pièce", "piece", "pièces", "pieces", "entretien", "sav"];
+const CONSO_KEYWORDS = ["consommable", "consommables", "pièce", "piece", "pièces", "pieces", "entretien", "sav", "magasin"];
 
 const daysBetween = (a: Date, b: Date) => Math.floor((a.getTime() - b.getTime()) / (1000 * 60 * 60 * 24));
 
@@ -239,12 +239,14 @@ export default function GaiaClientFiche() {
     })
     .filter((x) => x.count > 0);
 
-  // Consommables : ventes des 12 derniers mois avec famille consommable
+  // Consommables / pièces détachées (classe MAGASIN, entretien, SAV) sur 12 mois
   const hasParc = parc.length > 0;
-  const consoLast12 = ventes12m.some((v) => {
+  const consoVentes12 = ventes12m.filter((v) => {
     const fam = (v.classe_article || "").toLowerCase();
     return CONSO_KEYWORDS.some((k) => fam.includes(k));
   });
+  const consoLast12 = consoVentes12.length > 0;
+  const consoMontant = consoVentes12.reduce((n, v) => n + Number(v.montant_ht ?? 0), 0);
   const missingConso = hasParc && !consoLast12 && ventes12m.length > 0;
 
   // ===== Copilote =====
@@ -526,7 +528,18 @@ export default function GaiaClientFiche() {
                   );
                 }
 
-                if (missingConso) {
+                if (consoLast12) {
+                  cards.push(
+                    <ActionCard
+                      key="pieces-info"
+                      tone="success"
+                      icon={<Wrench className="h-4 w-4" />}
+                      title="Pièces détachées (12 mois)"
+                      subtitle={`${consoVentes12.length} achat${consoVentes12.length > 1 ? "s" : ""} classe MAGASIN / entretien`}
+                      amount={eur(consoMontant)}
+                    />,
+                  );
+                } else if (missingConso) {
                   const question = `Le client "${clientName}" possède ${parcTotal} machines mais n'a acheté aucun consommable ni pièce détachée sur les 12 derniers mois. Propose une offre d'entretien / consommables.`;
                   cards.push(
                     <ActionCard
@@ -540,6 +553,7 @@ export default function GaiaClientFiche() {
                     />,
                   );
                 }
+
 
                 if (cards.length === 0) {
                   return (
@@ -868,21 +882,26 @@ function ActionCard({
   amount,
   onAsk,
 }: {
-  tone: "danger" | "warn" | "info";
+  tone: "danger" | "warn" | "info" | "success";
   icon: React.ReactNode;
   title: string;
   subtitle: string;
   amount: string;
-  onAsk: () => void;
+  onAsk?: () => void;
 }) {
   const toneClass =
     tone === "danger"
       ? "border-destructive/40 bg-destructive/5"
       : tone === "warn"
       ? "border-orange-500/40 bg-orange-500/5"
+      : tone === "success"
+      ? "border-secondary/40 bg-secondary/5"
       : "border-primary/40 bg-primary/5";
   const iconClass =
-    tone === "danger" ? "text-destructive" : tone === "warn" ? "text-orange-400" : "text-primary";
+    tone === "danger" ? "text-destructive"
+    : tone === "warn" ? "text-orange-400"
+    : tone === "success" ? "text-secondary"
+    : "text-primary";
 
   return (
     <div className={`rounded-lg border p-4 ${toneClass}`}>
@@ -896,9 +915,12 @@ function ActionCard({
           <div className="mt-2 font-display text-2xl font-bold">{amount}</div>
         </div>
       </div>
-      <Button size="sm" variant="outline" className="mt-3 w-full" onClick={onAsk}>
-        <Sparkles className="mr-2 h-3.5 w-3.5" /> Analyser avec le copilote
-      </Button>
+      {onAsk && (
+        <Button size="sm" variant="outline" className="mt-3 w-full" onClick={onAsk}>
+          <Sparkles className="mr-2 h-3.5 w-3.5" /> Analyser avec le copilote
+        </Button>
+      )}
     </div>
   );
 }
+

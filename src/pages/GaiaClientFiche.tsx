@@ -227,7 +227,7 @@ export default function GaiaClientFiche() {
   const parcTotal = parc.reduce((n, r) => n + Number(r.quantite || 0), 0);
 
   const commandesTri = useMemo(
-    () => [...commandes].sort((a, b) => Number(b.montant_ht ?? 0) - Number(a.montant_ht ?? 0)),
+    () => [...commandes].sort((a, b) => Number(b.total_ht ?? 0) - Number(a.total_ht ?? 0)),
     [commandes],
   );
 
@@ -236,16 +236,17 @@ export default function GaiaClientFiche() {
   const caN1 = previousYear?.[1] ?? 0;
 
   // Devis
-  const devisOld: Array<{ c: Commande; age: number }> = [];
-  const devisFresh: Array<{ c: Commande; age: number }> = [];
+  const devisOld: Array<{ c: PipelineDoc; age: number }> = [];
+  const devisFresh: Array<{ c: PipelineDoc; age: number }> = [];
   for (const c of commandes) {
-    if (!c.invoice_date) continue;
-    const age = daysBetween(now, new Date(c.invoice_date));
+    if (c.categorie !== "devis") continue;
+    if (!c.date_document) continue;
+    const age = daysBetween(now, new Date(c.date_document));
     if (age > 30) devisOld.push({ c, age });
     else if (age < 15) devisFresh.push({ c, age });
   }
-  devisOld.sort((a, b) => Number(b.c.montant_ht ?? 0) - Number(a.c.montant_ht ?? 0));
-  devisFresh.sort((a, b) => Number(b.c.montant_ht ?? 0) - Number(a.c.montant_ht ?? 0));
+  devisOld.sort((a, b) => Number(b.c.total_ht ?? 0) - Number(a.c.total_ht ?? 0));
+  devisFresh.sort((a, b) => Number(b.c.total_ht ?? 0) - Number(a.c.total_ht ?? 0));
 
   const decrochage = daysSinceLastInvoice !== null && daysSinceLastInvoice > 180 && caN1 > 5000;
 

@@ -42,6 +42,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RTooltip } from "recharts";
 import logoImg from "@/assets/logo.png";
 import { toast } from "@/hooks/use-toast";
 

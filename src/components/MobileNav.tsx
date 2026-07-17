@@ -56,7 +56,7 @@ export function MobileNav() {
           {isAdmin && item("/logistique", "Logistique", Truck)}
           {canAccessGaia && item("/ecommerce", "E-commerce", Globe)}
           {canAccessGaia && item("/sav", "SAV", Wrench)}
-          {canAccessGaia && item("/admin/gaia", "Gaia", Database)}
+          {canAccessGaia && item("/admin/gaia", "Dashboard", Database)}
           {canAccessGaia && item("/admin/veille", "Veille marché", Radar)}
           {isAdmin && item("/admin", "Admin", Shield)}
         </div>

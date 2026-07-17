@@ -1003,7 +1003,7 @@ Deno.serve(async (req) => {
               if (!validation.ok) {
                 console.log(`[gaia-copilot] build_revue invalide (${validation.reason}) — retry`);
                 safeSend('gaia_sql', { summary: 'Nouvelle tentative (revue trop courte)…', query: '' });
-                const retryInstruction = `La précédente tentative a rendu une revue vide ou incomplète (${validation.reason}). REMPLIS OBLIGATOIREMENT sante.commentaire (2 phrases), sante.annees (au moins 2 exercices avec ca_ht) et AU MOINS UNE section parmi mouvements.familles, mouvements.clients_hausse/baisse, risques ou actions. Sois concis : chaque champ texte = 1-2 phrases maximum, maximum 5 items par liste.`;
+                const retryInstruction = `La précédente tentative a rendu une revue vide ou incomplète (${validation.reason}). REMPLIS OBLIGATOIREMENT sante.commentaire (2 phrases), sante.annees (au moins 2 exercices avec ca_ht), plan_actions (4 à 8 actions concrètes ancrées dans des chiffres) et AU MOINS UNE section parmi mouvements, risques ou signaux_vigilance. Sois concis : chaque champ texte = 1-2 phrases maximum, maximum 8 items par liste.`;
                 const retry = await callBuildRevue(agenticMessages, retryInstruction);
                 revueInput = retry.input;
                 stopReason = retry.stopReason;

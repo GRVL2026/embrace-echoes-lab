@@ -222,31 +222,127 @@
 .chat-markdown th { font-weight: 600; }
 .chat-markdown tbody tr:nth-child(even) { background: hsl(var(--muted) / 0.15); }
 
-/* ============ Revue PDF / Print ============ */
+/* ============ Revue PDF / Print — reproduit fidèlement le rendu sombre à l'écran ============ */
 @media print {
-  @page { size: A4 portrait; margin: 14mm 12mm; }
-  html, body { background: #ffffff !important; color: #111 !important; }
-  header, nav, footer, .print\:hidden { display: none !important; }
-  .revue-print-root { max-width: none !important; padding: 0 !important; }
-  .revue-dashboard { color: #111 !important; }
-  .revue-section { break-inside: avoid; page-break-inside: avoid; margin-bottom: 12px; }
-  .revue-card { break-inside: avoid; page-break-inside: avoid; background: #ffffff !important; border-color: rgba(0,0,0,0.2) !important; box-shadow: none !important; color: #111 !important; }
-  .revue-dashboard h4, .revue-dashboard .font-display { color: #111 !important; }
-  .revue-dashboard .text-muted-foreground, .revue-dashboard .text-foreground\/80, .revue-dashboard .text-foreground\/90, .revue-dashboard .text-foreground\/70 { color: #333 !important; }
-  .revue-dashboard .bg-primary\/5 { background: #f4f0ff !important; border-color: #b39dff !important; }
-  .revue-dashboard .bg-emerald-500\/5 { background: #ecfdf5 !important; border-color: #34d399 !important; }
-  .revue-dashboard .bg-rose-500\/5 { background: #fff1f2 !important; border-color: #fb7185 !important; }
-  .revue-dashboard .bg-rose-500\/10 { background: #ffe4e6 !important; border-color: #f43f5e !important; }
-  .revue-dashboard .bg-amber-500\/10 { background: #fef3c7 !important; border-color: #f59e0b !important; }
-  .revue-dashboard .text-emerald-400, .revue-dashboard .text-emerald-300 { color: #059669 !important; }
-  .revue-dashboard .text-rose-400, .revue-dashboard .text-rose-300 { color: #e11d48 !important; }
-  .revue-dashboard .text-amber-300 { color: #b45309 !important; }
-  .revue-dashboard .text-primary { color: #6d28d9 !important; }
-  .revue-dashboard .bg-primary { background: #6d28d9 !important; color: #ffffff !important; }
-  .revue-pill { border-color: rgba(0,0,0,0.2) !important; }
-  /* Grids: force multi-column layout to stay compact on paper */
+  @page {
+    size: A4 portrait;
+    margin: 18mm 12mm 16mm 12mm;
+    background: hsl(var(--background));
+    @top-left {
+      content: string(revueTitle);
+      font-family: "Inter", system-ui, sans-serif;
+      font-size: 9pt;
+      color: #a1a1aa;
+      padding-bottom: 4mm;
+    }
+    @top-right {
+      content: string(revueDate);
+      font-family: "Inter", system-ui, sans-serif;
+      font-size: 9pt;
+      color: #a1a1aa;
+      padding-bottom: 4mm;
+    }
+    @bottom-right {
+      content: counter(page) " / " counter(pages);
+      font-family: "Inter", system-ui, sans-serif;
+      font-size: 9pt;
+      color: #a1a1aa;
+      padding-top: 4mm;
+    }
+    @bottom-left {
+      content: "Revue commerciale — Arcade OS";
+      font-family: "Inter", system-ui, sans-serif;
+      font-size: 9pt;
+      color: #a1a1aa;
+      padding-top: 4mm;
+    }
+  }
+
+  /* Force la conservation exacte des couleurs / dégradés / ombres sur TOUT */
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  html, body {
+    background: hsl(var(--background)) !important;
+    color: hsl(var(--foreground)) !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Chrome navigation / éléments hors revue */
+  body > header,
+  body > nav,
+  body > footer,
+  .print\:hidden { display: none !important; }
+
+  /* Racine de la revue : pleine largeur, pas de padding parasite */
+  .revue-print-root {
+    max-width: none !important;
+    padding: 0 !important;
+    background: transparent !important;
+  }
+  .revue-print-root > .revue-print-frame {
+    background: transparent !important;
+    border: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* En-tête d'impression : alimente les string() du @page */
+  .revue-print-header { display: block !important; margin-bottom: 8mm; page-break-after: avoid; break-after: avoid; }
+  .revue-print-title { string-set: revueTitle content(text); font-size: 18pt; font-weight: 700; color: hsl(var(--foreground)); }
+  .revue-print-date  { string-set: revueDate  content(text); font-size: 10pt; color: #a1a1aa; margin-top: 2mm; }
+
+  /* Sections & cartes : pas de coupure au milieu */
+  .revue-dashboard section,
+  .revue-section,
+  .revue-card,
+  .revue-action-card {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+  .revue-dashboard section { margin-bottom: 6mm; }
+
+  /* Le sticky anchor bar ne doit jamais rester visible en impression */
+  .revue-dashboard nav.sticky { display: none !important; }
+
+  /* Grilles : conserver le multi-colonnes compact du bureau */
   .revue-dashboard .xl\:grid-cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; }
   .revue-dashboard .lg\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
   .revue-dashboard .lg\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
   .revue-dashboard .sm\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+  .revue-dashboard .sm\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+
+  /* Graphique Recharts : forcer une hauteur fixe (sinon ResponsiveContainer peut collapser en impression) */
+  .revue-dashboard .recharts-responsive-container,
+  .revue-dashboard .recharts-wrapper,
+  .revue-dashboard .recharts-surface {
+    width: 100% !important;
+  }
+  .revue-dashboard .recharts-responsive-container { min-height: 110px !important; }
+  .revue-dashboard .recharts-surface { overflow: visible !important; }
+  /* Fond du conteneur de graphe visible sur le dark */
+  .revue-dashboard .recharts-tooltip-wrapper { display: none !important; }
+
+  /* Bandeau Signaux de vigilance : contraste renforcé, texte lisible sur ambre */
+  .revue-dashboard .bg-amber-500\/10 {
+    background: rgba(245, 158, 11, 0.18) !important;
+    border-color: rgba(245, 158, 11, 0.6) !important;
+  }
+  .revue-dashboard .text-amber-100 { color: #fde68a !important; }
+  .revue-dashboard .text-amber-100\/80 { color: #fcd34d !important; }
+  .revue-dashboard .text-amber-300 { color: #fbbf24 !important; }
+
+  /* Assurer la lisibilité globale */
+  .revue-dashboard { color: hsl(var(--foreground)) !important; }
+  .revue-pill { color: inherit; }
+
+  /* Liens : sans soulignement en PDF */
+  .revue-dashboard a { text-decoration: none !important; color: inherit !important; }
+
+  /* Éviter les scrollbars imprimées */
+  .revue-dashboard * { overflow: visible !important; }
 }
+

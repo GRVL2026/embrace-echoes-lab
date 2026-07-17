@@ -70,6 +70,7 @@ export function GaiaMagasin() {
   const [chartMode, setChartMode] = useState<"bar" | "pie">("bar");
   const [openArticle, setOpenArticle] = useState<{ code: string; description: string | null } | null>(null);
   const [openSousFam, setOpenSousFam] = useState<string | null>(null);
+  const [margeInfoOpen, setMargeInfoOpen] = useState(false);
 
   const scrollToId = (id: string) => {
     const el = document.getElementById(id);

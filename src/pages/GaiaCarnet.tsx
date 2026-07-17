@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,6 +8,7 @@ import { MobileNav } from "@/components/MobileNav";
 import { AppTopNav } from "@/components/AppTopNav";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import {
   ArrowLeft,
@@ -15,6 +16,7 @@ import {
   FileText,
   FileSignature,
   Loader2,
+  Search,
   Shield,
   Truck,
   X,
@@ -112,12 +114,30 @@ const inAge = (m: number | null, f: AgeFilter) => {
   return v >= 12;
 };
 
+const STATUTS = ["Brouillon", "Ouvert", "Expédition en cours", "Reliquat"] as const;
+type StatutFilter = "all" | (typeof STATUTS)[number];
+
+const normalize = (s: string) =>
+  s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+function useDebounced<T>(value: T, delay = 200): T {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return v;
+}
+
 export default function GaiaCarnet() {
   const { isAdmin, canAccessGaia, loading: authLoading } = useAuth();
   const { categorie } = useParams<{ categorie: string }>();
   const cat = (categorie as Categorie) in CONFIG ? (categorie as Categorie) : null;
 
   const [ageFilter, setAgeFilter] = useState<AgeFilter>("all");
+  const [statutFilter, setStatutFilter] = useState<StatutFilter>("all");
+  const [searchInput, setSearchInput] = useState("");
+  const search = useDebounced(searchInput, 200);
   const [openDoc, setOpenDoc] = useState<CarnetDoc | null>(null);
 
   const { data: docs = [], isPending } = useQuery({
@@ -131,6 +151,7 @@ export default function GaiaCarnet() {
   });
   const loading = isPending;
 
+  // Docs de la catégorie (sans filtres UI) — sert au calcul des compteurs et des cartes d'ancienneté
   const filtered = useMemo(() => {
     if (!cat) return [];
     return docs.filter(CONFIG[cat].filter);
@@ -163,12 +184,52 @@ export default function GaiaCarnet() {
     };
   }, [filtered]);
 
+  // Compteurs par statut (indépendants du filtre statut actif, mais sensibles à age + texte)
+  const statutCounts = useMemo(() => {
+    const q = normalize(search.trim());
+    const matchText = (d: CarnetDoc) => {
+      if (!q) return true;
+      const client = normalize(d.client ?? "");
+      const num = (d.n_cde ?? "").toLowerCase();
+      return client.includes(q) || num.includes(q.toLowerCase());
+    };
+    const base = filtered.filter((d) => inAge(d.age_mois, ageFilter) && matchText(d));
+    const counts: Record<string, number> = { all: base.length };
+    for (const s of STATUTS) counts[s] = 0;
+    for (const d of base) {
+      const s = d.statut ?? "";
+      if (s in counts) counts[s] += 1;
+    }
+    return counts;
+  }, [filtered, ageFilter, search]);
+
   const visibleDocs = useMemo(() => {
-    const rows = filtered.filter((d) => inAge(d.age_mois, ageFilter));
-    // du plus ancien au plus récent : age_mois DESC
+    const q = normalize(search.trim());
+    const rows = filtered.filter((d) => {
+      if (!inAge(d.age_mois, ageFilter)) return false;
+      if (statutFilter !== "all" && d.statut !== statutFilter) return false;
+      if (q) {
+        const client = normalize(d.client ?? "");
+        const num = (d.n_cde ?? "").toLowerCase();
+        if (!client.includes(q) && !num.includes(q.toLowerCase())) return false;
+      }
+      return true;
+    });
     rows.sort((a, b) => (b.age_mois ?? 0) - (a.age_mois ?? 0));
     return rows;
-  }, [filtered, ageFilter]);
+  }, [filtered, ageFilter, statutFilter, search]);
+
+  const visibleTotal = useMemo(
+    () => visibleDocs.filter((d) => !d.sfa).reduce((n, d) => n + Number(d.total_ht ?? 0), 0),
+    [visibleDocs],
+  );
+
+  const anyFilterActive = ageFilter !== "all" || statutFilter !== "all" || search.trim().length > 0;
+  const resetFilters = () => {
+    setAgeFilter("all");
+    setStatutFilter("all");
+    setSearchInput("");
+  };
 
   if (authLoading) {
     return (
@@ -275,14 +336,53 @@ export default function GaiaCarnet() {
           />
         </div>
 
-        {ageFilter !== "all" && (
-          <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
-            <span>Filtre actif : ancienneté</span>
-            <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setAgeFilter("all")}>
-              <X className="mr-1 h-3 w-3" /> tout afficher
-            </Button>
+        {/* Barre de filtres */}
+        <div className="mb-3 rounded-lg border border-border bg-card/30 p-3 space-y-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Rechercher un client ou un numéro (ex. 4513)…"
+              className="pl-9 pr-9"
+            />
+            {searchInput && (
+              <button
+                type="button"
+                onClick={() => setSearchInput("")}
+                aria-label="Effacer la recherche"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
-        )}
+          <div className="flex flex-wrap items-center gap-2">
+            <StatutChip label="Tous" count={statutCounts.all ?? 0} active={statutFilter === "all"} onClick={() => setStatutFilter("all")} />
+            {STATUTS.map((s) => (
+              <StatutChip
+                key={s}
+                label={s}
+                count={statutCounts[s] ?? 0}
+                active={statutFilter === s}
+                onClick={() => setStatutFilter(statutFilter === s ? "all" : s)}
+              />
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+            <div className="tabular-nums">
+              <span className="font-medium text-foreground">{num(visibleDocs.length)}</span> document{visibleDocs.length > 1 ? "s" : ""}
+              {" — "}
+              <span className="font-medium text-foreground">{eur(visibleTotal)}</span>
+              <span className="ml-1 opacity-70">(hors SFA)</span>
+            </div>
+            {anyFilterActive && (
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={resetFilters}>
+                <X className="mr-1 h-3 w-3" /> Réinitialiser les filtres
+              </Button>
+            )}
+          </div>
+        </div>
 
         {/* Liste */}
         {loading ? (
@@ -290,8 +390,17 @@ export default function GaiaCarnet() {
             <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Chargement du carnet…
           </div>
         ) : visibleDocs.length === 0 ? (
-          <div className="rounded border border-dashed border-border/60 p-10 text-center text-sm text-muted-foreground">
-            Aucun document dans cette catégorie.
+          <div className="rounded-lg border border-dashed border-border/60 p-10 text-center text-sm text-muted-foreground">
+            {anyFilterActive ? (
+              <div className="space-y-2">
+                <div>Aucun document ne correspond à vos filtres.</div>
+                <Button size="sm" variant="outline" onClick={resetFilters}>
+                  <X className="mr-1 h-3 w-3" /> Réinitialiser les filtres
+                </Button>
+              </div>
+            ) : (
+              <>Aucun document dans cette catégorie.</>
+            )}
           </div>
         ) : (
           <div className="rounded-lg border border-border bg-card/30 overflow-hidden">
@@ -344,6 +453,27 @@ export default function GaiaCarnet() {
 
       <DocSheet doc={openDoc} onClose={() => setOpenDoc(null)} />
     </div>
+  );
+}
+
+function StatutChip({
+  label, count, active, onClick,
+}: { label: string; count: number; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition ${
+        active
+          ? "border-primary/60 bg-primary/15 text-primary"
+          : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+      }`}
+    >
+      <span>{label}</span>
+      <span className={`tabular-nums rounded-full px-1.5 py-0.5 text-[10px] ${active ? "bg-primary/20" : "bg-background/60"}`}>
+        {count}
+      </span>
+    </button>
   );
 }
 

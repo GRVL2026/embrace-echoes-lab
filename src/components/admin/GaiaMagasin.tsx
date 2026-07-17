@@ -568,7 +568,7 @@ export function GaiaMagasin() {
 
       {/* Top 10 clients + Top 10 articles */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-lg border border-border bg-card/40 p-4">
+        <div id="magasin-top-clients" className="rounded-lg border border-border bg-card/40 p-4 scroll-mt-20">
           <h3 className="mb-3 font-display text-lg font-semibold">Top 10 clients pièces — {exShort(currentYear)}</h3>
           <div className="overflow-auto">
             <table className="w-full text-sm">
@@ -606,7 +606,7 @@ export function GaiaMagasin() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-border bg-card/40 p-4">
+        <div id="magasin-top-articles" className="rounded-lg border border-border bg-card/40 p-4 scroll-mt-20">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h3 className="font-display text-lg font-semibold">Top 10 articles pièces</h3>
             <Select value={String(yearArticles)} onValueChange={(v) => setYearArticles(Number(v))}>
@@ -630,15 +630,23 @@ export function GaiaMagasin() {
                 </tr>
               </thead>
               <tbody>
-                {topArticlesYear.map((r, i) => (
-                  <tr key={(r.code_article ?? "") + i} className="border-b border-border/40 hover:bg-muted/30">
-                    <td className="px-2 py-2 font-mono text-xs text-muted-foreground">{i + 1}</td>
-                    <td className="px-2 py-2 font-mono text-xs">{r.code_article ?? "—"}</td>
-                    <td className="px-2 py-2 truncate max-w-[220px]" title={r.description ?? undefined}>{r.description ?? "—"}</td>
-                    <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{num(Number(r.quantite || 0))}</td>
-                    <td className="px-2 py-2 text-right tabular-nums font-medium">{eur(Number(r.ca_ht || 0))}</td>
-                  </tr>
-                ))}
+                {topArticlesYear.map((r, i) => {
+                  const code = r.code_article ?? "";
+                  return (
+                    <tr
+                      key={code + i}
+                      onClick={() => code && setOpenArticle({ code, description: r.description })}
+                      className={`border-b border-border/40 ${code ? "hover:bg-muted/30 cursor-pointer" : ""}`}
+                      aria-label={code ? `Voir l'historique de l'article ${code}` : undefined}
+                    >
+                      <td className="px-2 py-2 font-mono text-xs text-muted-foreground">{i + 1}</td>
+                      <td className="px-2 py-2 font-mono text-xs text-primary">{code || "—"}</td>
+                      <td className="px-2 py-2 truncate max-w-[220px]" title={r.description ?? undefined}>{r.description ?? "—"}</td>
+                      <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{num(Number(r.quantite || 0))}</td>
+                      <td className="px-2 py-2 text-right tabular-nums font-medium">{eur(Number(r.ca_ht || 0))}</td>
+                    </tr>
+                  );
+                })}
                 {topArticlesYear.length === 0 && (
                   <tr><td colSpan={5} className="px-2 py-6 text-center text-muted-foreground">Aucun article sur l'exercice.</td></tr>
                 )}
@@ -647,7 +655,21 @@ export function GaiaMagasin() {
           </div>
         </div>
       </div>
+
+      {/* Sheet : historique d'un article */}
+      <ArticleHistorySheet
+        article={openArticle}
+        onClose={() => setOpenArticle(null)}
+      />
+
+      {/* Sheet : articles d'une sous-famille */}
+      <SousFamilleSheet
+        sousFamille={openSousFam}
+        year={yearSousFam}
+        onClose={() => setOpenSousFam(null)}
+      />
     </div>
+
   );
 }
 

@@ -609,6 +609,10 @@ export default function GaiaClientFiche() {
                 </>
               )}
             </section>
+            </div>
+
+            <div className="space-y-4 md:space-y-5">
+
 
             {/* 3) RÉPARATIONS EN COURS */}
             {reparations.length > 0 && (

@@ -49,7 +49,7 @@ const dateShort = (d: string | null) =>
   d ? new Date(d).toLocaleDateString("fr-FR") : "—";
 
 const STATUTS_OUVERTS = ["Brouillon", "Ouvert", "Expédition en cours", "Reliquat"] as const;
-const CONSO_KEYWORDS = ["consommable", "consommables", "pièce", "piece", "pièces", "pieces", "entretien", "sav"];
+const CONSO_KEYWORDS = ["consommable", "consommables", "pièce", "piece", "pièces", "pieces", "entretien", "sav", "magasin"];
 
 const daysBetween = (a: Date, b: Date) => Math.floor((a.getTime() - b.getTime()) / (1000 * 60 * 60 * 24));
 

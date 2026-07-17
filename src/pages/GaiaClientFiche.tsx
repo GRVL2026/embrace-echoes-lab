@@ -412,7 +412,8 @@ export default function GaiaClientFiche() {
                 </div>
               )}
             </div>
-            {/* Marge estimée */}
+            {/* Marge estimée — admin/direction uniquement */}
+            {canAccessGaia && (
             <div className="rounded-lg border border-border/60 bg-background/40 p-3">
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Marge est. {currentYear?.[0] ?? ""}</div>
               <div className="mt-1 font-display text-xl font-bold">{eur(Number(margeCurrent?.marge_estimee ?? 0))}</div>
@@ -422,6 +423,7 @@ export default function GaiaClientFiche() {
                 </div>
               )}
             </div>
+            )}
             {/* Dernière facture */}
             <div className="rounded-lg border border-border/60 bg-background/40 p-3">
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Dernière facture</div>

@@ -17,14 +17,14 @@ type NavItem = {
  * dans une page (évite les oublis de renommage).
  */
 export function AppTopNav() {
-  const { isAdmin, canAccessGaia } = useAuth();
+  const { isAdmin, canAccessGaia, canAccessDashboard } = useAuth();
   const { pathname } = useLocation();
 
   const items: NavItem[] = [
     { to: "/dossiers", label: "Dossiers", show: true },
     { to: "/planner", label: "Arcade Planner", show: true },
     { to: "/catalogue", label: "Catalogue", show: true },
-    { to: "/admin/gaia", label: "Dashboard", icon: Database, show: canAccessGaia },
+    { to: "/admin/gaia", label: "Dashboard", icon: Database, show: canAccessDashboard },
     { to: "/admin/veille", label: "Veille", icon: Radar, show: canAccessGaia },
     { to: "/admin/catalog-erp", label: "Catalogue ↔ ERP", icon: Link2, show: isAdmin },
     { to: "/admin", label: "Admin", icon: Shield, show: isAdmin },

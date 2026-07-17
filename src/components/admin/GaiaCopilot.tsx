@@ -230,8 +230,21 @@ class RevueRenderBoundary extends Component<
 // ─────────── Main component ───────────
 
 export function GaiaCopilot() {
+  const { copilotEnabled } = useAuth();
+  if (!copilotEnabled) {
+    return (
+      <div className="rounded-lg border border-border bg-card/40 p-8 text-center">
+        <Sparkles className="mx-auto h-8 w-8 text-muted-foreground" />
+        <h3 className="mt-3 font-display text-lg font-semibold">Copilote non actif</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Le copilote n'est pas encore ouvert à votre compte.
+        </p>
+      </div>
+    );
+  }
   const [revueLoading, setRevueLoading] = useState(false);
   const [revueData, setRevueData] = useState<RevueData | null>(null);
+
   const [revueError, setRevueError] = useState<string | null>(null);
   const [revueSteps, setRevueSteps] = useState<RevueStep[]>([]);
 

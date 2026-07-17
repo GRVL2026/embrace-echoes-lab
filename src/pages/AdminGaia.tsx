@@ -329,8 +329,8 @@ export default function AdminGaia() {
           <TabsList className="mb-6 flex-wrap">
             <TabsTrigger value="dashboard">AA</TabsTrigger>
             <TabsTrigger value="magasin">Magasin</TabsTrigger>
-            <TabsTrigger value="copilot">Copilote</TabsTrigger>
-            <TabsTrigger value="sync">Synchronisation</TabsTrigger>
+            {(canAccessGaia && copilotEnabled) && <TabsTrigger value="copilot">Copilote</TabsTrigger>}
+            {isAdmin && <TabsTrigger value="sync">Synchronisation</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="copilot">

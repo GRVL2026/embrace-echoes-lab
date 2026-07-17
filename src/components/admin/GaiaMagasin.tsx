@@ -782,3 +782,268 @@ function StockTile({ label, value, hint, tone }: { label: string; value: string;
     </div>
   );
 }
+
+/* ============ Sheet : historique d'un article ============ */
+
+function ArticleHistorySheet({
+  article,
+  onClose,
+}: {
+  article: { code: string; description: string | null } | null;
+  onClose: () => void;
+}) {
+  const navigate = useNavigate();
+  const { data, isPending } = useQuery({
+    queryKey: ["magasin-article-history", article?.code],
+    enabled: !!article?.code,
+    queryFn: async () => {
+      const c: any = supabase;
+      // Historique récent + agrégats
+      const { data: lignes } = await c
+        .from("v_gaia_lignes")
+        .select("invoice_date,code_client,qty,montant_ht")
+        .or(`code_article.eq.${article!.code},inventory_id.eq.${article!.code}`)
+        .gt("montant_ht", 0)
+        .order("invoice_date", { ascending: false })
+        .limit(200);
+      const rows = ((lignes ?? []) as { invoice_date: string; code_client: string; qty: number | string; montant_ht: number | string }[]);
+
+      // Top clients
+      const map = new Map<string, { code: string; ca: number; qty: number }>();
+      for (const r of rows) {
+        const cur = map.get(r.code_client) ?? { code: r.code_client, ca: 0, qty: 0 };
+        cur.ca += Number(r.montant_ht || 0);
+        cur.qty += Number(r.qty || 0);
+        map.set(r.code_client, cur);
+      }
+      const clientCodes = Array.from(map.keys());
+      const { data: cliNames } = clientCodes.length
+        ? await c.from("gaia_clients").select("customer_id,name").in("customer_id", clientCodes)
+        : { data: [] };
+      const nameOf = new Map<string, string>();
+      ((cliNames ?? []) as { customer_id: string; name: string }[]).forEach((x) => nameOf.set(x.customer_id, x.name));
+      const topClients = Array.from(map.values())
+        .map((r) => ({ ...r, nom: nameOf.get(r.code) || r.code }))
+        .sort((a, b) => b.ca - a.ca)
+        .slice(0, 10);
+
+      const totalCa = rows.reduce((n, r) => n + Number(r.montant_ht || 0), 0);
+      const totalQty = rows.reduce((n, r) => n + Number(r.qty || 0), 0);
+
+      return { rows: rows.slice(0, 50), topClients, totalCa, totalQty, nbLignes: rows.length };
+    },
+  });
+
+  return (
+    <Sheet open={!!article} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle className="font-display inline-flex items-center gap-2">
+            <Package className="h-4 w-4 text-primary" />
+            <span className="font-mono text-sm">{article?.code}</span>
+          </SheetTitle>
+          <SheetDescription className="truncate">{article?.description ?? "—"}</SheetDescription>
+        </SheetHeader>
+        {isPending ? (
+          <div className="flex h-40 items-center justify-center text-muted-foreground">
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Chargement…
+          </div>
+        ) : (
+          <div className="mt-4 space-y-5">
+            <div className="grid grid-cols-3 gap-2 text-sm">
+              <div className="rounded border border-border/60 bg-background/40 p-3">
+                <div className="text-[11px] uppercase text-muted-foreground">CA cumulé</div>
+                <div className="font-display text-lg font-bold">{eur(data?.totalCa || 0)}</div>
+              </div>
+              <div className="rounded border border-border/60 bg-background/40 p-3">
+                <div className="text-[11px] uppercase text-muted-foreground">Qté vendue</div>
+                <div className="font-display text-lg font-bold">{num(data?.totalQty || 0)}</div>
+              </div>
+              <div className="rounded border border-border/60 bg-background/40 p-3">
+                <div className="text-[11px] uppercase text-muted-foreground">Lignes</div>
+                <div className="font-display text-lg font-bold">{num(data?.nbLignes || 0)}</div>
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">Top 10 clients</div>
+              <div className="overflow-auto rounded border border-border/60">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
+                    <tr>
+                      <th className="px-2 py-2 text-left">Client</th>
+                      <th className="px-2 py-2 text-right">Qté</th>
+                      <th className="px-2 py-2 text-right">CA HT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(data?.topClients ?? []).map((r) => (
+                      <tr
+                        key={r.code}
+                        onClick={() => {
+                          onClose();
+                          navigate(`/admin/gaia/client/${encodeURIComponent(r.nom)}`);
+                        }}
+                        className="border-t border-border/60 cursor-pointer hover:bg-muted/30 transition-colors"
+                      >
+                        <td className="px-2 py-2 truncate max-w-[220px] text-primary hover:underline">{r.nom}</td>
+                        <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{num(r.qty)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums font-medium">{eur(r.ca)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">
+                50 dernières lignes
+              </div>
+              <div className="overflow-auto rounded border border-border/60 max-h-96">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/40 text-xs uppercase text-muted-foreground sticky top-0">
+                    <tr>
+                      <th className="px-2 py-2 text-left">Date</th>
+                      <th className="px-2 py-2 text-left">Client</th>
+                      <th className="px-2 py-2 text-right">Qté</th>
+                      <th className="px-2 py-2 text-right">CA HT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(data?.rows ?? []).map((r, i) => (
+                      <tr key={i} className="border-t border-border/60">
+                        <td className="px-2 py-2 text-xs text-muted-foreground whitespace-nowrap">
+                          {new Date(r.invoice_date).toLocaleDateString("fr-FR")}
+                        </td>
+                        <td className="px-2 py-2 font-mono text-xs">{r.code_client}</td>
+                        <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{num(Number(r.qty || 0))}</td>
+                        <td className="px-2 py-2 text-right tabular-nums font-medium">{eur(Number(r.montant_ht || 0))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+/* ============ Sheet : articles d'une sous-famille ============ */
+
+function SousFamilleSheet({
+  sousFamille,
+  year,
+  onClose,
+}: {
+  sousFamille: string | null;
+  year: number;
+  onClose: () => void;
+}) {
+  const { data, isPending } = useQuery({
+    queryKey: ["magasin-sous-famille", sousFamille, year],
+    enabled: !!sousFamille,
+    queryFn: async () => {
+      const c: any = supabase;
+      // 1) Références de la sous-famille depuis gaia_stock
+      const filter = sousFamille === "(sans)" ? null : sousFamille;
+      let q = c.from("gaia_stock").select("inventory_id,description,qty_on_hand,prix_vente,magasin_famille2").limit(2000);
+      if (filter) q = q.eq("magasin_famille2", filter);
+      else q = q.or("magasin_famille2.is.null,magasin_famille2.eq.");
+      const { data: refs } = await q;
+      const rows = ((refs ?? []) as { inventory_id: string; description: string | null; qty_on_hand: number | string; prix_vente: number | string }[])
+        .filter((r) => r.inventory_id);
+
+      // 2) Agréger le CA sur l'exercice pour ces refs
+      const ids = rows.map((r) => r.inventory_id.trim());
+      const start = `${year - 1}-09-01`;
+      const end = `${year}-09-01`;
+      const salesMap = new Map<string, { qty: number; ca: number }>();
+      // batch par 500
+      for (let i = 0; i < ids.length; i += 500) {
+        const chunk = ids.slice(i, i + 500);
+        const { data: lg } = await c
+          .from("v_gaia_lignes")
+          .select("code_article,inventory_id,qty,montant_ht")
+          .or(`code_article.in.(${chunk.join(",")}),inventory_id.in.(${chunk.join(",")})`)
+          .gte("invoice_date", start)
+          .lt("invoice_date", end);
+        for (const r of ((lg ?? []) as { code_article: string; inventory_id: string; qty: number | string; montant_ht: number | string }[])) {
+          const key = (r.code_article || r.inventory_id || "").trim();
+          const cur = salesMap.get(key) ?? { qty: 0, ca: 0 };
+          cur.qty += Number(r.qty || 0);
+          cur.ca += Number(r.montant_ht || 0);
+          salesMap.set(key, cur);
+        }
+      }
+
+      const enriched = rows.map((r) => {
+        const s = salesMap.get(r.inventory_id.trim()) ?? { qty: 0, ca: 0 };
+        return {
+          code: r.inventory_id,
+          description: r.description,
+          stock: Number(r.qty_on_hand || 0),
+          prix: Number(r.prix_vente || 0),
+          qty: s.qty,
+          ca: s.ca,
+        };
+      });
+      return enriched.sort((a, b) => b.ca - a.ca).slice(0, 100);
+    },
+  });
+
+  const totalCa = (data ?? []).reduce((n, r) => n + r.ca, 0);
+
+  return (
+    <Sheet open={!!sousFamille} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle className="font-display inline-flex items-center gap-2">
+            <Layers className="h-4 w-4 text-primary" /> Sous-famille · {sousFamille}
+          </SheetTitle>
+          <SheetDescription>
+            Articles de la sous-famille — {exShort(year)} · CA total {eur(totalCa)}
+          </SheetDescription>
+        </SheetHeader>
+        {isPending ? (
+          <div className="flex h-40 items-center justify-center text-muted-foreground">
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Chargement…
+          </div>
+        ) : (
+          <div className="mt-4 overflow-auto rounded border border-border/60 max-h-[70vh]">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-xs uppercase text-muted-foreground sticky top-0">
+                <tr>
+                  <th className="px-2 py-2 text-left">Code</th>
+                  <th className="px-2 py-2 text-left">Description</th>
+                  <th className="px-2 py-2 text-right">Stock</th>
+                  <th className="px-2 py-2 text-right">Qté vendue</th>
+                  <th className="px-2 py-2 text-right">CA HT</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(data ?? []).map((r) => (
+                  <tr key={r.code} className="border-t border-border/60">
+                    <td className="px-2 py-2 font-mono text-xs text-primary">{r.code}</td>
+                    <td className="px-2 py-2 truncate max-w-[240px]" title={r.description ?? undefined}>{r.description ?? "—"}</td>
+                    <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{num(r.stock)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{num(r.qty)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums font-medium">{eur(r.ca)}</td>
+                  </tr>
+                ))}
+                {(!data || data.length === 0) && (
+                  <tr>
+                    <td colSpan={5} className="px-2 py-6 text-center text-muted-foreground">Aucun article.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}

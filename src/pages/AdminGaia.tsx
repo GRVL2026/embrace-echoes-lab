@@ -65,7 +65,7 @@ type SyncLogRow = {
 };
 
 export default function AdminGaia() {
-  const { isAdmin, canAccessGaia, loading: authLoading } = useAuth();
+  const { isAdmin, canAccessGaia, canAccessDashboard, copilotEnabled, loading: authLoading } = useAuth();
   const [running, setRunning] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [diag, setDiag] = useState<Diagnostic | null>(null);

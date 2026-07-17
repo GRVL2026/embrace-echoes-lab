@@ -613,6 +613,117 @@ export default function GaiaClientFiche() {
 
             <div className="space-y-4 md:space-y-5">
 
+            {/* PARC INSTALLÉ — donut compact + légende cliquable */}
+            <section className="rounded-lg border border-border bg-card/40 p-4 sm:p-5">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h3 className="font-display text-lg font-semibold inline-flex items-center gap-2">
+                  <Package className="h-5 w-5 text-primary" /> Parc installé
+                </h3>
+                <Badge variant="outline">{parcTotal} machine{parcTotal > 1 ? "s" : ""}</Badge>
+              </div>
+              {parcByFamille.length === 0 ? (
+                <div className="rounded border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
+                  Aucune machine référencée pour ce client.
+                </div>
+              ) : (() => {
+                const DONUT_COLORS = [
+                  "hsl(var(--primary))",
+                  "hsl(var(--secondary))",
+                  "hsl(24 95% 60%)",
+                  "hsl(190 90% 55%)",
+                  "hsl(340 82% 60%)",
+                  "hsl(48 96% 60%)",
+                  "hsl(270 70% 65%)",
+                  "hsl(150 60% 55%)",
+                ];
+                const rows = [...parcByFamille]
+                  .map(([famille, rows]) => ({
+                    famille,
+                    rows,
+                    qty: rows.reduce((n, r) => n + Number(r.quantite || 0), 0),
+                  }))
+                  .sort((a, b) => b.qty - a.qty);
+                const data = rows.map((r, i) => ({
+                  name: r.famille,
+                  value: r.qty,
+                  color: DONUT_COLORS[i % DONUT_COLORS.length],
+                }));
+                return (
+                  <div className="grid grid-cols-[minmax(0,140px)_1fr] gap-4 items-center">
+                    <div className="relative h-[140px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={data}
+                            dataKey="value"
+                            nameKey="name"
+                            innerRadius={44}
+                            outerRadius={64}
+                            paddingAngle={2}
+                            stroke="none"
+                            onClick={(d: any) => d?.name && setOpenParcFamille(d.name)}
+                            className="cursor-pointer outline-none"
+                          >
+                            {data.map((d, i) => (
+                              <Cell key={i} fill={d.color} />
+                            ))}
+                          </Pie>
+                          <RTooltip
+                            contentStyle={{
+                              background: "hsl(var(--popover) / 0.95)",
+                              border: "1px solid hsl(var(--border))",
+                              borderRadius: 6,
+                              fontSize: 12,
+                            }}
+                            formatter={(v: any, n: any) => {
+                              const pct = parcTotal > 0 ? ((Number(v) / parcTotal) * 100).toFixed(0) : "0";
+                              return [`${v} · ${pct}%`, n];
+                            }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                        <div className="font-display text-lg font-bold tabular-nums leading-none">{parcTotal}</div>
+                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">machines</div>
+                      </div>
+                    </div>
+                    <ul className="min-w-0 space-y-1">
+                      {rows.map((r, i) => {
+                        const pct = parcTotal > 0 ? (r.qty / parcTotal) * 100 : 0;
+                        const hasOld = r.rows.some((x) => {
+                          const y = yearOf(x.derniere_vente);
+                          return y !== null && new Date().getFullYear() - y > 5;
+                        });
+                        return (
+                          <li key={r.famille}>
+                            <button
+                              type="button"
+                              onClick={() => setOpenParcFamille(r.famille)}
+                              className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-xs hover:bg-background/60"
+                            >
+                              <span
+                                className="inline-block h-2.5 w-2.5 flex-shrink-0 rounded-sm"
+                                style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }}
+                              />
+                              <span className="truncate flex-1 font-medium">{r.famille}</span>
+                              {hasOld && (
+                                <RefreshCw className="h-3 w-3 text-destructive flex-shrink-0" />
+                              )}
+                              <span className="tabular-nums text-muted-foreground">{r.qty}</span>
+                              <span className="tabular-nums text-muted-foreground w-8 text-right">{pct.toFixed(0)}%</span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                );
+              })()}
+            </section>
+
+
+
+
 
             {/* 3) RÉPARATIONS EN COURS */}
             {reparations.length > 0 && (

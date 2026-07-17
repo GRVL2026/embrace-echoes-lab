@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, Link, useParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppHeader } from "@/components/AppHeader";
@@ -121,20 +122,21 @@ function AttachmentTile({ a, token }: { a: Attachment; token: string | undefined
 }
 
 function ResumeCard({ id }: { id: string }) {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [resume, setResume] = useState<Resume | null>(null);
-  const [cached, setCached] = useState(false);
-
-  const load = async () => {
-    setLoading(true); setError(null);
-    try {
+  const queryClient = useQueryClient();
+  const { data, isPending: loading, error: qErr, refetch } = useQuery({
+    queryKey: ["sav-resume", id],
+    queryFn: async () => {
       const j = await callFn(new URLSearchParams({ action: "resume", id }));
-      setResume(j.resume); setCached(Boolean(j.cached));
-    } catch (e: any) { setError(e?.message || String(e)); }
-    finally { setLoading(false); }
+      return { resume: j.resume as Resume, cached: Boolean(j.cached) };
+    },
+  });
+  const resume = data?.resume ?? null;
+  const cached = data?.cached ?? false;
+  const error = qErr ? (qErr as Error).message : null;
+  const load = () => {
+    queryClient.invalidateQueries({ queryKey: ["sav-resume", id] });
+    refetch();
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
 
   return (
     <Card className="p-4 sm:p-6 bg-gradient-to-br from-primary/10 via-card/60 to-card/60 border-primary/30">
@@ -217,29 +219,40 @@ function ResumeCard({ id }: { id: string }) {
 export default function SavTicket() {
   const { canAccessGaia, isLoading: authLoading } = useAuth();
   const { id } = useParams<{ id: string }>();
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<TicketPayload | null>(null);
   const [token, setToken] = useState<string | undefined>(undefined);
-  const [subdomain, setSubdomain] = useState<string>("");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setToken(data.session?.access_token));
   }, []);
 
-  useEffect(() => {
-    if (!id) return;
-    setLoading(true);
-    callFn(new URLSearchParams({ action: "ticket", id }))
-      .then((j) => {
-        setData(j);
-        // Fetch subdomain lazily from stats cache
-        callFn(new URLSearchParams({ action: "stats" }))
-          .then((s) => setSubdomain(s.subdomain || ""))
-          .catch(() => {});
-      })
-      .catch((e: any) => toast.error("Erreur", { description: e?.message || String(e) }))
-      .finally(() => setLoading(false));
-  }, [id]);
+  const { data, isPending: loadingTicket } = useQuery<TicketPayload | null>({
+    queryKey: ["sav-ticket", id],
+    enabled: !!id,
+    queryFn: async () => {
+      try {
+        return (await callFn(new URLSearchParams({ action: "ticket", id: id! }))) as TicketPayload;
+      } catch (e: any) {
+        toast.error("Erreur", { description: e?.message || String(e) });
+        return null;
+      }
+    },
+  });
+  const loading = loadingTicket;
+
+  const { data: subdomainData } = useQuery({
+    queryKey: ["sav-subdomain"],
+    enabled: !!data,
+    queryFn: async () => {
+      try {
+        const s = await callFn(new URLSearchParams({ action: "stats" }));
+        return (s.subdomain as string) || "";
+      } catch {
+        return "";
+      }
+    },
+  });
+  const subdomain = subdomainData ?? "";
+
 
   if (authLoading) {
     return (

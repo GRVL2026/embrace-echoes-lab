@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppHeader } from "@/components/AppHeader";
@@ -153,9 +154,8 @@ function TicketRow({ t, onClick, ticketUrl }: {
 export default function Sav() {
   const navigate = useNavigate();
   const { canAccessGaia, isLoading: authLoading } = useAuth();
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
-  const [stats, setStats] = useState<Stats | null>(null);
 
   // Filters + search state
   const [filter, setFilter] = useState<FilterKey>("all");
@@ -164,38 +164,39 @@ export default function Sav() {
   const [searching, setSearching] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Top clients
-  const [topClients, setTopClients] = useState<TopClientsPayload | null>(null);
-  const [loadingTop, setLoadingTop] = useState(true);
+  const { data: stats = null, isPending: loadingStats } = useQuery<Stats | null>({
+    queryKey: ["sav-stats"],
+    queryFn: async () => {
+      const j = await callFn(new URLSearchParams());
+      return j as Stats;
+    },
+  });
+  const loading = loadingStats;
 
-  const load = async (force = false) => {
-    if (force) setRefreshing(true); else setLoading(true);
+  const { data: topClients = null, isPending: loadingTop } = useQuery<TopClientsPayload | null>({
+    queryKey: ["sav-top-clients"],
+    queryFn: async () => {
+      const j = await callFn(new URLSearchParams({ action: "top_clients" }));
+      return j as TopClientsPayload;
+    },
+  });
+
+  const refreshAll = async () => {
+    setRefreshing(true);
     try {
-      const j = await callFn(new URLSearchParams(force ? { refresh: "1" } : {}));
-      setStats(j);
+      const [s, tc] = await Promise.all([
+        callFn(new URLSearchParams({ refresh: "1" })),
+        callFn(new URLSearchParams({ action: "top_clients", refresh: "1" })),
+      ]);
+      queryClient.setQueryData(["sav-stats"], s);
+      queryClient.setQueryData(["sav-top-clients"], tc);
     } catch (e: any) {
       toast.error("Erreur Zendesk", { description: e?.message || String(e) });
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
   };
 
-  const loadTop = async (force = false) => {
-    setLoadingTop(true);
-    try {
-      const params = new URLSearchParams({ action: "top_clients" });
-      if (force) params.set("refresh", "1");
-      const j = await callFn(params);
-      setTopClients(j);
-    } catch (e: any) {
-      toast.error("Top clients", { description: e?.message || String(e) });
-    } finally {
-      setLoadingTop(false);
-    }
-  };
-
-  useEffect(() => { load(false); loadTop(false); }, []);
 
   // Debounced search
   const runSearch = async (q: string) => {
@@ -281,7 +282,7 @@ export default function Sav() {
     <div className="min-h-screen w-full bg-background text-foreground flex flex-col">
       <AppHeader
         right={
-          <Button variant="outline" size="sm" onClick={() => { load(true); loadTop(true); }} disabled={refreshing || loading}>
+          <Button variant="outline" size="sm" onClick={refreshAll} disabled={refreshing || loading}>
             {refreshing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
             Actualiser
           </Button>
@@ -354,7 +355,14 @@ export default function Sav() {
                     </div>
                   </div>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => loadTop(true)} disabled={loadingTop}>
+                <Button variant="ghost" size="sm" onClick={async () => {
+                  try {
+                    const tc = await callFn(new URLSearchParams({ action: "top_clients", refresh: "1" }));
+                    queryClient.setQueryData(["sav-top-clients"], tc);
+                  } catch (e: any) {
+                    toast.error("Top clients", { description: e?.message || String(e) });
+                  }
+                }} disabled={loadingTop}>
                   {loadingTop ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                 </Button>
               </div>

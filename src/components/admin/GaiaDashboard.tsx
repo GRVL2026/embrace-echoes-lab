@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, TrendingUp, TrendingDown, FileText, FileSignature, Package, Leaf, RefreshCw, ArrowRight, ArrowDown, Search, Info, Truck, PackageCheck, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -55,29 +56,16 @@ function currentFiscalYear(d: Date = new Date()) {
 
 export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
   const [clientQuery, setClientQuery] = useState("");
-  const [caMensuel, setCaMensuel] = useState<CaMensuel[]>([]);
-  const [caClient, setCaClient] = useState<CaClient[]>([]);
-  const [caFamille, setCaFamille] = useState<CaFamille[]>([]);
-  const [cmdEtat, setCmdEtat] = useState<CommandesEtat[]>([]);
-  const [pipeline, setPipeline] = useState<PipelineRow[]>([]);
-  const [stock, setStock] = useState<StockValeur[]>([]);
-  const [ecotaxe, setEcotaxe] = useState<EcotaxeMensuel[]>([]);
-  const [caPeriodeEgale, setCaPeriodeEgale] = useState<CaPeriodeEgale[]>([]);
-  const [retroSfa, setRetroSfa] = useState<RetrocessionSfa[]>([]);
-  const [margeFamille, setMargeFamille] = useState<MargeFamille[]>([]);
-  const [margeClient, setMargeClient] = useState<MargeClient[]>([]);
-  const [lastSync, setLastSync] = useState<string | null>(null);
-
   const currentYear = currentFiscalYear();
   const [yearClient, setYearClient] = useState<number>(currentYear);
   const [yearFamille, setYearFamille] = useState<number>(currentYear);
   const [yearMarge, setYearMarge] = useState<number>(currentYear);
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
+
+  const { data, isPending: loading } = useQuery({
+    queryKey: ["gaia-dashboard"],
+    queryFn: async () => {
       const client: any = supabase;
       const [m, c, f, e, s, ec, pe, sfa, mf, mc, sl, pip] = await Promise.all([
         client.from("v_gaia_ca_mensuel").select("*"),
@@ -93,21 +81,36 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
         client.from("gaia_sync_log").select("finished_at").order("finished_at", { ascending: false }).limit(1).maybeSingle(),
         client.from("v_gaia_pipeline").select("*"),
       ]);
-      setCaMensuel((m.data as CaMensuel[]) ?? []);
-      setCaClient((c.data as CaClient[]) ?? []);
-      setCaFamille((f.data as CaFamille[]) ?? []);
-      setCmdEtat((e.data as CommandesEtat[]) ?? []);
-      setStock((s.data as StockValeur[]) ?? []);
-      setEcotaxe((ec.data as EcotaxeMensuel[]) ?? []);
-      setCaPeriodeEgale((pe.data as CaPeriodeEgale[]) ?? []);
-      setRetroSfa((sfa.data as RetrocessionSfa[]) ?? []);
-      setMargeFamille((mf.data as MargeFamille[]) ?? []);
-      setMargeClient((mc.data as MargeClient[]) ?? []);
-      setPipeline((pip.data as PipelineRow[]) ?? []);
-      setLastSync(sl.data?.finished_at ?? null);
-      setLoading(false);
-    })();
-  }, []);
+      return {
+        caMensuel: (m.data as CaMensuel[]) ?? [],
+        caClient: (c.data as CaClient[]) ?? [],
+        caFamille: (f.data as CaFamille[]) ?? [],
+        cmdEtat: (e.data as CommandesEtat[]) ?? [],
+        stock: (s.data as StockValeur[]) ?? [],
+        ecotaxe: (ec.data as EcotaxeMensuel[]) ?? [],
+        caPeriodeEgale: (pe.data as CaPeriodeEgale[]) ?? [],
+        retroSfa: (sfa.data as RetrocessionSfa[]) ?? [],
+        margeFamille: (mf.data as MargeFamille[]) ?? [],
+        margeClient: (mc.data as MargeClient[]) ?? [],
+        pipeline: (pip.data as PipelineRow[]) ?? [],
+        lastSync: (sl.data?.finished_at as string | null) ?? null,
+      };
+    },
+  });
+
+  const caMensuel = data?.caMensuel ?? [];
+  const caClient = data?.caClient ?? [];
+  const caFamille = data?.caFamille ?? [];
+  const cmdEtat = data?.cmdEtat ?? [];
+  const pipeline = data?.pipeline ?? [];
+  const stock = data?.stock ?? [];
+  const ecotaxe = data?.ecotaxe ?? [];
+  const caPeriodeEgale = data?.caPeriodeEgale ?? [];
+  const retroSfa = data?.retroSfa ?? [];
+  const margeFamille = data?.margeFamille ?? [];
+  const margeClient = data?.margeClient ?? [];
+  const lastSync = data?.lastSync ?? null;
+
 
   // KPI CA exercice en cours (comparaison à période égale)
   const caPeMap = useMemo(() => {

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { CopiloteMarkdown } from "@/components/admin/CopiloteMarkdown";
 import { supabase } from "@/integrations/supabase/client";
@@ -64,25 +65,15 @@ export default function GaiaClientFiche() {
   const { nom } = useParams<{ nom: string }>();
   const clientName = useMemo(() => (nom ? decodeURIComponent(nom) : ""), [nom]);
 
-  const [loading, setLoading] = useState(true);
-  const [ca, setCa] = useState<CaClient[]>([]);
-  const [marge, setMarge] = useState<MargeClient[]>([]);
-  const [parc, setParc] = useState<ParcRow[]>([]);
-  const [commandes, setCommandes] = useState<Commande[]>([]);
-  const [ventes, setVentes] = useState<Vente[]>([]);
-  const [ventes12m, setVentes12m] = useState<Vente[]>([]);
-  const [firstSale, setFirstSale] = useState<string | null>(null);
-  const [reparations, setReparations] = useState<ReparationDoc[]>([]);
-
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [copilotQuestion, setCopilotQuestion] = useState("");
   const [copilotAnswer, setCopilotAnswer] = useState<string>("");
   const [copilotLoading, setCopilotLoading] = useState(false);
 
-  useEffect(() => {
-    if (!isAdmin || !clientName) return;
-    (async () => {
-      setLoading(true);
+  const { data: fiche, isPending: loading } = useQuery({
+    queryKey: ["gaia-client", clientName],
+    enabled: !!isAdmin && !!clientName,
+    queryFn: async () => {
       const client: any = supabase;
 
       const [ca_r, mg_r, parc_r] = await Promise.all([
@@ -93,9 +84,7 @@ export default function GaiaClientFiche() {
 
       const caRows: CaClient[] = (ca_r.data as CaClient[]) ?? [];
       const parcRows: ParcRow[] = (parc_r.data as ParcRow[]) ?? [];
-      setCa(caRows);
-      setMarge((mg_r.data as MargeClient[]) ?? []);
-      setParc(parcRows);
+      const margeRows: MargeClient[] = (mg_r.data as MargeClient[]) ?? [];
 
       const codes = Array.from(
         new Set(
@@ -104,6 +93,12 @@ export default function GaiaClientFiche() {
           ),
         ),
       );
+
+      let commandesRows: Commande[] = [];
+      let ventesRows: Vente[] = [];
+      let ventes12mRows: Vente[] = [];
+      let firstSaleValue: string | null = null;
+      let reparationsRows: ReparationDoc[] = [];
 
       if (codes.length > 0) {
         const since = new Date();
@@ -143,23 +138,34 @@ export default function GaiaClientFiche() {
             .eq("categorie", "reparation")
             .limit(200),
         ]);
-        setCommandes((cmd_r.data as Commande[]) ?? []);
-        setVentes((v_r.data as Vente[]) ?? []);
-        setVentes12m((v12_r.data as Vente[]) ?? []);
-        const first = (vfirst_r.data as Array<{ invoice_date: string | null }>)?.[0]?.invoice_date ?? null;
-        setFirstSale(first);
-        setReparations((rep_r.data as ReparationDoc[]) ?? []);
-      } else {
-        setCommandes([]);
-        setVentes([]);
-        setVentes12m([]);
-        setFirstSale(null);
-        setReparations([]);
+        commandesRows = (cmd_r.data as Commande[]) ?? [];
+        ventesRows = (v_r.data as Vente[]) ?? [];
+        ventes12mRows = (v12_r.data as Vente[]) ?? [];
+        firstSaleValue = (vfirst_r.data as Array<{ invoice_date: string | null }>)?.[0]?.invoice_date ?? null;
+        reparationsRows = (rep_r.data as ReparationDoc[]) ?? [];
       }
 
-      setLoading(false);
-    })();
-  }, [isAdmin, clientName]);
+      return {
+        ca: caRows,
+        marge: margeRows,
+        parc: parcRows,
+        commandes: commandesRows,
+        ventes: ventesRows,
+        ventes12m: ventes12mRows,
+        firstSale: firstSaleValue,
+        reparations: reparationsRows,
+      };
+    },
+  });
+
+  const ca = fiche?.ca ?? [];
+  const marge = fiche?.marge ?? [];
+  const parc = fiche?.parc ?? [];
+  const commandes = fiche?.commandes ?? [];
+  const ventes = fiche?.ventes ?? [];
+  const ventes12m = fiche?.ventes12m ?? [];
+  const firstSale = fiche?.firstSale ?? null;
+  const reparations = fiche?.reparations ?? [];
 
   const caByYear = useMemo(() => {
     const m = new Map<number, number>();

@@ -211,8 +211,8 @@ export default function AdminGaia() {
   };
 
   useEffect(() => {
-    if (canAccessGaia) loadLogs();
-  }, [canAccessGaia]);
+    if (isAdmin) loadLogs();
+  }, [isAdmin]);
 
   if (authLoading) {
     return (
@@ -221,7 +221,7 @@ export default function AdminGaia() {
       </div>
     );
   }
-  if (!canAccessGaia) return <Navigate to="/dossiers" replace />;
+  if (!canAccessDashboard) return <Navigate to="/dossiers" replace />;
 
   const runDiscover = async () => {
     setRunning(true);

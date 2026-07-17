@@ -1083,6 +1083,7 @@ export type Database = {
         Row: {
           copilote_enabled: boolean
           created_at: string
+          dashboard_enabled: boolean
           email: string | null
           full_name: string | null
           id: string
@@ -1090,6 +1091,7 @@ export type Database = {
         Insert: {
           copilote_enabled?: boolean
           created_at?: string
+          dashboard_enabled?: boolean
           email?: string | null
           full_name?: string | null
           id: string
@@ -1097,6 +1099,7 @@ export type Database = {
         Update: {
           copilote_enabled?: boolean
           created_at?: string
+          dashboard_enabled?: boolean
           email?: string | null
           full_name?: string | null
           id?: string
@@ -1781,6 +1784,7 @@ export type Database = {
       }
     }
     Functions: {
+      can_access_dashboard: { Args: { _uid?: string }; Returns: boolean }
       gaia_query: { Args: { sql_query: string }; Returns: Json }
       is_admin: { Args: never; Returns: boolean }
       is_direction: { Args: never; Returns: boolean }

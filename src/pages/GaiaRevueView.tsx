@@ -9,6 +9,7 @@ import { MobileNav } from "@/components/MobileNav";
 import { Loader2, ArrowLeft, Copy, Printer, Link as LinkIcon } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { RevueDashboard, revueToText, isRevueEmpty, type RevueData } from "@/components/admin/RevueDashboard";
+import { DetailPageHeader } from "@/components/DetailPageHeader";
 
 type RevueRow = { id: string; titre: string | null; created_at: string; data: RevueData };
 
@@ -63,33 +64,26 @@ export default function GaiaRevueView() {
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground">
+      <DetailPageHeader
+        className="md:hidden print:hidden"
+        backTo="/admin/gaia"
+        backLabel="Retour au copilote"
+        title={row?.titre ?? "Revue"}
+        subtitle="Revue commerciale"
+        actions={<div className="flex items-center gap-1"><MobileNav /><UserMenu /></div>}
+      />
       <header
-        className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-background/85 backdrop-blur px-3 sm:px-6 gap-2 print:hidden"
+        className="hidden md:flex sticky top-0 z-40 items-center justify-between border-b border-border bg-background/85 backdrop-blur px-3 sm:px-6 gap-2 print:hidden"
         style={{ paddingTop: "var(--safe-top)", minHeight: "calc(3.5rem + var(--safe-top))" }}
       >
-
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          <MobileNav />
-          <Button
-            asChild
-            variant="ghost"
-            size="icon"
-            aria-label="Retour au copilote"
-            className="h-11 w-11 flex-shrink-0 md:hidden -ml-1"
-          >
-            <Link to="/admin/gaia"><ArrowLeft className="h-5 w-5" /></Link>
-          </Button>
-          <Link to={isAdmin ? "/" : "/dossiers"} className="hidden md:flex items-center gap-2 min-w-0">
+          <Link to={isAdmin ? "/" : "/dossiers"} className="flex items-center gap-2 min-w-0">
             <img src={logoImg} alt="Arcade OS logo" className="h-7 w-auto object-contain flex-shrink-0" />
             <h1 className="font-display text-base sm:text-xl font-bold tracking-tight truncate">
               <span className="text-primary text-glow-purple">Arcade</span>{" "}
               <span className="text-secondary text-glow-green">OS</span>
             </h1>
           </Link>
-          <div className="md:hidden flex-1 min-w-0">
-            <div className="truncate font-display text-sm font-semibold">{row?.titre ?? "Revue"}</div>
-            <div className="truncate text-[11px] text-muted-foreground">Revue commerciale</div>
-          </div>
         </div>
         <UserMenu />
       </header>

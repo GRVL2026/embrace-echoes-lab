@@ -15,6 +15,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import StockSyncPanel from "@/components/ecommerce/StockSyncPanel";
+import { DetailPageHeader } from "@/components/DetailPageHeader";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
@@ -197,14 +198,28 @@ export default function Ecommerce() {
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground flex flex-col">
-      <AppHeader
-        right={
-          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
-            {refreshing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-            Actualiser
+      <DetailPageHeader
+        className="md:hidden"
+        backTo="/"
+        backLabel="Retour au hub"
+        title="E-commerce"
+        subtitle="Boutique Shopify"
+        actions={
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing} className="h-9">
+            {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
           </Button>
         }
       />
+      <div className="hidden md:block">
+        <AppHeader
+          right={
+            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+              {refreshing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+              Actualiser
+            </Button>
+          }
+        />
+      </div>
 
       <main className="flex-1 mx-auto w-full max-w-7xl px-4 sm:px-6 py-6 space-y-6">
         <div className="flex items-center justify-between flex-wrap gap-3">

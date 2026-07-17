@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
+import { DetailPageHeader } from "@/components/DetailPageHeader";
 
 type CarnetDoc = {
   n_cde: string | null;
@@ -181,36 +182,27 @@ export default function GaiaCarnet() {
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground">
+      <DetailPageHeader
+        className="md:hidden"
+        backTo="/admin/gaia"
+        backLabel="Retour au dashboard"
+        title={CONFIG[cat].label}
+        subtitle="Carnet"
+        actions={<div className="flex items-center gap-1"><MobileNav /><UserMenu /></div>}
+      />
       <header
-        className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-background/85 backdrop-blur px-3 sm:px-6 gap-2"
+        className="hidden md:flex sticky top-0 z-40 items-center justify-between border-b border-border bg-background/85 backdrop-blur px-3 sm:px-6 gap-2"
         style={{ paddingTop: "var(--safe-top)", minHeight: "calc(3.5rem + var(--safe-top))" }}
       >
-
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          <MobileNav />
-          <Button
-            asChild
-            variant="ghost"
-            size="icon"
-            aria-label="Retour au dashboard"
-            className="h-11 w-11 flex-shrink-0 md:hidden -ml-1"
-          >
-            <Link to="/admin/gaia">
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
-          </Button>
-          <Link to={isAdmin ? "/" : "/dossiers"} className="hidden md:flex items-center gap-2 min-w-0">
+          <Link to={isAdmin ? "/" : "/dossiers"} className="flex items-center gap-2 min-w-0">
             <img src={logoImg} alt="Arcade OS logo" className="h-7 w-auto object-contain flex-shrink-0" />
             <h1 className="font-display text-base sm:text-xl font-bold tracking-tight truncate">
               <span className="text-primary text-glow-purple">Arcade</span>{" "}
               <span className="text-secondary text-glow-green">OS</span>
             </h1>
           </Link>
-          <div className="md:hidden flex-1 min-w-0">
-            <div className="truncate font-display text-sm font-semibold">{CONFIG[cat].label}</div>
-            <div className="truncate text-[11px] text-muted-foreground">Carnet</div>
-          </div>
-          <div className="hidden md:block"><AppTopNav /></div>
+          <AppTopNav />
         </div>
         <UserMenu />
       </header>

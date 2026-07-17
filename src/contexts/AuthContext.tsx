@@ -164,7 +164,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAdmin,
         isDirection,
         canAccessGaia,
+        canAccessDashboard,
         copilotEnabled,
+        dashboardEnabled,
         refreshRoles,
 
         signIn,

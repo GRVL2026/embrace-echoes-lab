@@ -451,7 +451,8 @@ export default function GaiaClientFiche() {
             <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Chargement de la fiche…
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 items-start">
+            <div className="space-y-4 md:space-y-5">
             {/* 1) HISTORIQUE — bandeau compact en haut */}
             <section className="rounded-lg border border-border bg-card/40 p-4 sm:p-5">
               <div className="mb-3 flex items-center justify-between gap-2">

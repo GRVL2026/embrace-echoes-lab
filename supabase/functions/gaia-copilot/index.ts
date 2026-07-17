@@ -884,7 +884,9 @@ Deno.serve(async (req) => {
         const clientsBaisse = Array.isArray(mvts.clients_baisse) ? mvts.clients_baisse.length : 0;
         const risques = Array.isArray(input.risques) ? input.risques.length : 0;
         const actions = Array.isArray(input.actions) ? input.actions.length : 0;
-        const sectionsFilled = familles + clientsHausse + clientsBaisse + risques + actions;
+        const planActions = Array.isArray(input.plan_actions) ? input.plan_actions.length : 0;
+        const vigilance = Array.isArray(input.signaux_vigilance) ? input.signaux_vigilance.length : 0;
+        const sectionsFilled = familles + clientsHausse + clientsBaisse + risques + actions + planActions + vigilance;
 
         if (!santeFilled) {
           return { ok: false, reason: `santé globale vide (commentaire="${santeCommentaire.slice(0, 40)}", annees=${santeAnnees.length}, tendance=${santeTendance.length})` };

@@ -103,6 +103,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
       setRetroSfa((sfa.data as RetrocessionSfa[]) ?? []);
       setMargeFamille((mf.data as MargeFamille[]) ?? []);
       setMargeClient((mc.data as MargeClient[]) ?? []);
+      setPipeline((pip.data as PipelineRow[]) ?? []);
       setLastSync(sl.data?.finished_at ?? null);
       setLoading(false);
     })();

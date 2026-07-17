@@ -859,8 +859,9 @@ export default function GaiaClientFiche() {
                 </>
               )}
             </section>
+            </div>
 
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground md:col-span-2">
               Marge estimée sur la base du dernier coût d'achat connu.
             </p>
           </div>

@@ -134,7 +134,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
     };
     return {
       devis: pick("devis", ["Brouillon", "Ouvert"]),
-      signee: pick("commande", ["Ouvert"]),
+      signee: pick("commande", ["Brouillon", "Ouvert"]),
       expedition: pick("commande", ["Expédition en cours"]),
       reliquat: pick("commande", ["Reliquat"]),
     };

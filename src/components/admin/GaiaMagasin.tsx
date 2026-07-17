@@ -412,7 +412,9 @@ export function GaiaMagasin() {
             </div>
           )}
         </div>
+        )}
       </div>
+
 
       {/* CA mensuel par exercice */}
       <div id="magasin-ca-mensuel" className="rounded-lg border border-border bg-card/40 p-4 scroll-mt-20">

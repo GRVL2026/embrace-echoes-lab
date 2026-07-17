@@ -153,17 +153,42 @@ Deno.serve(async (req: Request) => {
       `\nCATALOGUE DISPONIBLE (utilise ces product_id uniquement) :\n${catalogText || "(vide)"}\n\n` +
       `MODULES MARQUE DISPONIBLES (utilise ces module_id uniquement) :\n${modulesText || "(vide)"}`;
 
-    // --- Appel Claude (API Anthropic) ---
-    let data: any;
-    try {
-      data = await anthropicJson(ANTHROPIC_API_KEY, {
+    const catalogNotEmpty = (products ?? []).length > 0;
+
+    async function callClaude(system: string): Promise<any> {
+      return await anthropicJson(ANTHROPIC_API_KEY, {
         model: MODEL,
-        max_tokens: 2000,
-        system: SYSTEM_PROMPT,
+        max_tokens: 16000,
+        system,
         tools: [TOOL],
         tool_choice: { type: "tool", name: "build_dossier" },
         messages: [{ role: "user", content: userContent }],
       });
+    }
+
+    function validateDossier(d: any): string | null {
+      if (!d || typeof d !== "object") return "dossier vide";
+      const required = ["client_name", "offer", "context", "solution", "recommended_products", "module_ids", "summary"];
+      for (const k of required) {
+        if (!(k in d)) return `champ manquant: ${k}`;
+      }
+      const ctx = d.context ?? {};
+      for (const k of ["contexte", "objectif", "enjeux", "lecture"]) {
+        if (!ctx[k] || typeof ctx[k] !== "string") return `context.${k} manquant`;
+      }
+      const sol = d.solution ?? {};
+      for (const k of ["selection", "deploiement", "suivi"]) {
+        if (!sol[k] || typeof sol[k] !== "string") return `solution.${k} manquant`;
+      }
+      if (!Array.isArray(d.recommended_products)) return "recommended_products invalide";
+      if (catalogNotEmpty && d.recommended_products.length === 0) return "aucun produit sélectionné";
+      return null;
+    }
+
+    // --- Appel Claude (API Anthropic) ---
+    let data: any;
+    try {
+      data = await callClaude(SYSTEM_PROMPT);
     } catch (e: any) {
       if (isAnthropicOverload(e)) {
         return json({ error: e.userMessage, code: "overload" }, 503);
@@ -172,8 +197,40 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Erreur du modèle", detail: e?.message ?? String(e) }, 502);
     }
 
+    console.log(
+      `[generate-dossier] stop_reason=${data?.stop_reason} content_blocks=${(data?.content ?? []).length} size=${JSON.stringify(data ?? {}).length}`,
+    );
+
+    // Retry si troncature
+    if (data?.stop_reason === "max_tokens") {
+      console.warn("[generate-dossier] réponse tronquée (max_tokens), retry avec consigne de concision");
+      try {
+        data = await callClaude(
+          SYSTEM_PROMPT +
+            "\n\nIMPORTANT : reste synthétique, 140 caractères max par description, phrases courtes.",
+        );
+        console.log(
+          `[generate-dossier] retry stop_reason=${data?.stop_reason} size=${JSON.stringify(data ?? {}).length}`,
+        );
+      } catch (e: any) {
+        if (isAnthropicOverload(e)) {
+          return json({ error: e.userMessage, code: "overload" }, 503);
+        }
+        return json({ error: "Erreur du modèle (retry)", detail: e?.message ?? String(e) }, 502);
+      }
+      if (data?.stop_reason === "max_tokens") {
+        return json({ error: "Génération incomplète, réessayez" }, 502);
+      }
+    }
+
     const toolUse = (data.content ?? []).find((b: any) => b.type === "tool_use");
     if (!toolUse) return json({ error: "Réponse du modèle sans dossier structuré" }, 502);
+
+    const validationError = validateDossier(toolUse.input);
+    if (validationError) {
+      console.warn(`[generate-dossier] validation échouée: ${validationError}`);
+      return json({ error: "Génération incomplète, réessayez", detail: validationError }, 502);
+    }
 
     return json({ dossier: toolUse.input });
   } catch (e) {

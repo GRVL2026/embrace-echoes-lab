@@ -677,7 +677,16 @@ export function GaiaMagasin() {
         year={yearSousFam}
         onClose={() => setOpenSousFam(null)}
       />
+
+      {/* Sheet : comprendre les différentes lectures de la marge */}
+      <MargeInfoSheet
+        open={margeInfoOpen}
+        onOpenChange={setMargeInfoOpen}
+        tauxErp={margeCur?.taux ?? null}
+        source="Magasin"
+      />
     </div>
+
 
   );
 }

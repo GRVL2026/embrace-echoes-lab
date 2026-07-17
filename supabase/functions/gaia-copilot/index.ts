@@ -153,6 +153,8 @@ CHARTE DE L'ANALYSTE — règles SQL OBLIGATOIRES (aucune exception sans justifi
 9. RAPPELS (déjà en place) : v_gaia_articles pour toute info article (JAMAIS gaia_stock en jointure ventes) ; auto-contrôle de vraisemblance avant d'affirmer ; citation en une ligne de la requête utilisée.
 
 10. GRAPHIQUES : pour toute évolution temporelle (CA mois par mois, tendance annuelle…) OU toute comparaison de plus de 4 valeurs (top clients, familles, articles…), appelle l'outil "afficher_graphique" plutôt que de dresser un long tableau Markdown. Choisis 'ligne' pour une évolution dans le temps, 'barres' pour une comparaison, 'donut' pour une répartition. Continue à commenter le graphique en texte juste après (1-2 phrases).
+
+11. ÉCO-TAXE (DEEE) : l'éco-participation apparaît dans les lignes de vente sous le code article ECOTAXE (présent uniquement dans gaia_ventes, jamais dans gaia_historique). Le CA officiel est TOUJOURS hors éco-taxe : les vues v_gaia_ca_mensuel, v_gaia_ca_client et v_gaia_ca_famille l'excluent déjà automatiquement via v_gaia_ecotax_codes. Si tu calcules un CA directement sur v_gaia_lignes, exclus les codes de v_gaia_ecotax_codes (WHERE code_article NOT IN (SELECT code FROM v_gaia_ecotax_codes)) pour rester cohérent avec le dashboard. Pour analyser l'éco-taxe elle-même, utilise v_gaia_ecotaxe_mensuel (colonnes mois, ecotaxe_ht).
 `;
 
 

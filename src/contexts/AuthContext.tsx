@@ -81,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) {
       setRoles([]);
       setCopilotEnabled(true);
+      setDashboardEnabled(false);
       setRolesResolvedFor(null);
       setRoleError(null);
       return;

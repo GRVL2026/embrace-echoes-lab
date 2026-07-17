@@ -680,40 +680,73 @@ export function GaiaCopilot() {
                 ref={(el) => { assistantRefs.current[i] = el; }}
                 className="flex justify-start scroll-mt-2"
               >
-                <div className="w-full max-w-[95%] rounded-lg bg-muted/40 border border-border/60 px-4 py-3 text-sm">
-                  {/* Étapes de progression (grisé, petit) */}
-                  {m.steps.length > 0 && (
-                    <ul className="mb-2 space-y-0.5 text-[11px] text-muted-foreground">
-                      {m.steps.map((s, j) => (
-                        <li key={j} title={s.query} className="flex items-center gap-1.5">
-                          <Search className="h-3 w-3 shrink-0 opacity-70" />
-                          <span className="truncate">Requête : {s.summary}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                  {/* Blocs de réponse : texte / graphique dans l'ordre */}
-                  {m.parts.map((part, j) =>
-                    part.type === "text" ? (
-                      <CopiloteMarkdown key={j} markdown={part.text} />
-                    ) : (
-                      <CopilotChart key={j} payload={part.chart} />
-                    )
-                  )}
-
-                  {m.streaming && m.parts.length === 0 && (
-                    <div className="text-muted-foreground">
-                      <Loader2 className="mr-2 inline h-3 w-3 animate-spin" /> Réflexion…
+                <div className={
+                  m.overloaded
+                    ? "w-full max-w-[95%] rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100"
+                    : "w-full max-w-[95%] rounded-lg bg-muted/40 border border-border/60 px-4 py-3 text-sm"
+                }>
+                  {m.overloaded ? (
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                        <div className="flex-1">
+                          <div className="font-medium text-amber-100">Serveurs d'IA saturés</div>
+                          <div className="text-amber-100/80">
+                            {m.parts.find((p) => p.type === "text")?.text ?? "Réessaie dans quelques instants."}
+                          </div>
+                        </div>
+                      </div>
+                      {m.question && (
+                        <div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-amber-500/40 bg-amber-500/10 text-amber-100 hover:bg-amber-500/20"
+                            disabled={chatLoading}
+                            onClick={() => sendChat(m.question!)}
+                          >
+                            <RotateCcw className="mr-2 h-3 w-3" /> Réessayer
+                          </Button>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  ) : (
+                    <>
+                      {/* Étapes de progression (grisé, petit) */}
+                      {m.steps.length > 0 && (
+                        <ul className="mb-2 space-y-0.5 text-[11px] text-muted-foreground">
+                          {m.steps.map((s, j) => (
+                            <li key={j} title={s.query} className="flex items-center gap-1.5">
+                              <Search className="h-3 w-3 shrink-0 opacity-70" />
+                              <span className="truncate">Requête : {s.summary}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
 
-                  {/* Feedback 👍 / 👎 */}
-                  {!m.streaming && m.parts.some((p) => p.type === "text") && (
-                    <FeedbackControls
-                      current={m.feedback ?? null}
-                      onSubmit={(note, commentaire) => submitFeedback(i, note, commentaire)}
-                    />
+                      {/* Blocs de réponse : texte / graphique dans l'ordre */}
+                      {m.parts.map((part, j) =>
+                        part.type === "text" ? (
+                          <CopiloteMarkdown key={j} markdown={part.text} />
+                        ) : (
+                          <CopilotChart key={j} payload={part.chart} />
+                        )
+                      )}
+
+                      {m.streaming && m.parts.length === 0 && (
+                        <div className="text-muted-foreground">
+                          <Loader2 className="mr-2 inline h-3 w-3 animate-spin" /> Réflexion…
+                        </div>
+                      )}
+
+                      {/* Feedback 👍 / 👎 */}
+                      {!m.streaming && m.parts.some((p) => p.type === "text") && (
+                        <FeedbackControls
+                          current={m.feedback ?? null}
+                          onSubmit={(note, commentaire) => submitFeedback(i, note, commentaire)}
+                        />
+                      )}
+                    </>
                   )}
                 </div>
               </div>

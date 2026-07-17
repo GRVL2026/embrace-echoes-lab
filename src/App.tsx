@@ -17,6 +17,7 @@ import AdminCatalogErp from "./pages/AdminCatalogErp";
 import AdminGaia from "./pages/AdminGaia";
 import AdminVeille from "./pages/AdminVeille";
 import GaiaClientFiche from "./pages/GaiaClientFiche";
+import GaiaCarnet from "./pages/GaiaCarnet";
 import GaiaRevueView from "./pages/GaiaRevueView";
 import NotFound from "./pages/NotFound";
 import PublicDossier from "./pages/PublicDossier";
@@ -61,6 +62,7 @@ const App = () => (
             <Route path="/admin" element={<ProtectedRoute><AdminDossiers /></ProtectedRoute>} />
             <Route path="/admin/catalog-erp" element={<ProtectedRoute><AdminCatalogErp /></ProtectedRoute>} />
             <Route path="/admin/gaia" element={<ProtectedRoute><AdminGaia /></ProtectedRoute>} />
+            <Route path="/admin/gaia/carnet/:categorie" element={<ProtectedRoute><GaiaCarnet /></ProtectedRoute>} />
             <Route path="/admin/veille" element={<ProtectedRoute><AdminVeille /></ProtectedRoute>} />
             <Route path="/admin/gaia/client/:nom" element={<ProtectedRoute><GaiaClientFiche /></ProtectedRoute>} />
             <Route path="/admin/gaia/revue/:id" element={<ProtectedRoute><GaiaRevueView /></ProtectedRoute>} />

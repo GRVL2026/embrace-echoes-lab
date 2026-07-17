@@ -901,6 +901,7 @@ function PipelineBanner({ stats }: { stats: PipeStats }) {
           value={eur(stats.devis.total)}
           count={`${num(stats.devis.nb)} devis`}
           tooltip="Statuts Cegid Brouillon + Ouvert d'un devis (QT) : documents non encore validés en commande. C'est du potentiel commercial."
+          href="/admin/gaia/carnet/devis"
         />
         <Arrow />
         <PipelineStep
@@ -911,6 +912,7 @@ function PipelineBanner({ stats }: { stats: PipeStats }) {
           count={`${num(stats.signee.nb)} commandes`}
           subtitle="Stock réservé, en attente d'expédition"
           tooltip="Statuts Cegid Brouillon + Ouvert d'une commande : commandes en cours de préparation ou validées, stock réservé, en attente d'expédition."
+          href="/admin/gaia/carnet/commande"
         />
         <Arrow />
         <PipelineStep
@@ -920,6 +922,7 @@ function PipelineBanner({ stats }: { stats: PipeStats }) {
           value={eur(stats.expedition.total + stats.reliquat.total)}
           count={`${num(stats.expedition.nb + stats.reliquat.nb)} commandes`}
           tooltip="Commandes physiquement en train d'être livrées ou livrées partiellement (reliquat)."
+          href="/admin/gaia/carnet/livraison"
           extra={
             <div className="mt-2 space-y-1 text-[11px]">
               <div className="flex items-center justify-between gap-2 rounded border border-orange-500/20 bg-orange-500/5 px-2 py-1">
@@ -939,6 +942,7 @@ function PipelineBanner({ stats }: { stats: PipeStats }) {
             </div>
           }
         />
+
         <Arrow />
         <PipelineStep
           color="green"
@@ -962,7 +966,7 @@ const PIPE_COLORS: Record<string, { border: string; bg: string; text: string; ic
 };
 
 function PipelineStep({
-  color, icon, label, value, count, subtitle, tooltip, extra, isFinal,
+  color, icon, label, value, count, subtitle, tooltip, extra, isFinal, href,
 }: {
   color: "primary" | "blue" | "orange" | "green";
   icon: React.ReactNode;
@@ -973,26 +977,39 @@ function PipelineStep({
   tooltip: string;
   extra?: React.ReactNode;
   isFinal?: boolean;
+  href?: string;
 }) {
   const c = PIPE_COLORS[color];
-  return (
-    <div
-      className={`group relative flex flex-col rounded-lg border ${c.border} ${c.bg} p-3 transition hover:shadow-lg`}
-      title={tooltip}
-    >
+  const inner = (
+    <>
       <div className="mb-2 flex items-center gap-2">
         <span className={`inline-flex h-8 w-8 items-center justify-center rounded-md bg-background/40 ${c.icon}`}>
           {icon}
         </span>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="truncate text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</div>
         </div>
+        {href && <ArrowRight className={`h-3.5 w-3.5 ${c.icon} opacity-60 group-hover:opacity-100 transition`} />}
       </div>
       <div className={`font-display text-2xl font-bold tabular-nums ${isFinal ? c.text : "text-foreground"}`}>{value}</div>
       <div className="mt-0.5 text-xs text-muted-foreground">{count}</div>
       {subtitle && <div className="mt-1 text-[11px] italic text-muted-foreground/80">{subtitle}</div>}
       {extra}
+    </>
+  );
+  const cls = `group relative flex flex-col rounded-lg border ${c.border} ${c.bg} p-3 transition hover:shadow-lg text-left ${href ? "cursor-pointer hover:brightness-110" : ""}`;
+  if (href) {
+    return (
+      <Link to={href} className={cls} title={tooltip}>
+        {inner}
+      </Link>
+    );
+  }
+  return (
+    <div className={cls} title={tooltip}>
+      {inner}
     </div>
   );
 }
+
 

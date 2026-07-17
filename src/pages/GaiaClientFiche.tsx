@@ -39,6 +39,7 @@ type MargeClient = { annee: number; client: string; ca_ht: number | string; ca_a
 type ParcRow = { client: string; code_client: string; code_article: string; description: string | null; famille: string | null; derniere_vente: string | null; quantite: number };
 type Commande = { n_cde: string | null; code_client: string; code_article: string | null; invoice_date: string | null; qty: number | null; montant_ht: number | string | null; statut: string | null; date_liv: string | null };
 type Vente = { code_client: string; n_fact: string | null; code_article: string | null; invoice_date: string | null; qty: number | null; montant_ht: number | string | null; classe_article?: string | null };
+type ReparationDoc = { n_cde: string | null; statut: string | null; code_client: string | null; date_document: string | null; age_mois: number | null; total_ht: number | null };
 
 const eur = (n: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);
@@ -71,6 +72,7 @@ export default function GaiaClientFiche() {
   const [ventes, setVentes] = useState<Vente[]>([]);
   const [ventes12m, setVentes12m] = useState<Vente[]>([]);
   const [firstSale, setFirstSale] = useState<string | null>(null);
+  const [reparations, setReparations] = useState<ReparationDoc[]>([]);
 
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [copilotQuestion, setCopilotQuestion] = useState("");
@@ -108,7 +110,7 @@ export default function GaiaClientFiche() {
         since.setMonth(since.getMonth() - 12);
         const sinceIso = since.toISOString().slice(0, 10);
 
-        const [cmd_r, v_r, v12_r, vfirst_r] = await Promise.all([
+        const [cmd_r, v_r, v12_r, vfirst_r, rep_r] = await Promise.all([
           client
             .from("gaia_commandes")
             .select("n_cde,code_client,code_article,invoice_date,qty,montant_ht,statut,date_liv")
@@ -134,17 +136,25 @@ export default function GaiaClientFiche() {
             .in("code_client", codes)
             .order("invoice_date", { ascending: true })
             .limit(1),
+          client
+            .from("v_gaia_carnet_documents")
+            .select("n_cde,statut,code_client,date_document,age_mois,total_ht,categorie")
+            .in("code_client", codes)
+            .eq("categorie", "reparation")
+            .limit(200),
         ]);
         setCommandes((cmd_r.data as Commande[]) ?? []);
         setVentes((v_r.data as Vente[]) ?? []);
         setVentes12m((v12_r.data as Vente[]) ?? []);
         const first = (vfirst_r.data as Array<{ invoice_date: string | null }>)?.[0]?.invoice_date ?? null;
         setFirstSale(first);
+        setReparations((rep_r.data as ReparationDoc[]) ?? []);
       } else {
         setCommandes([]);
         setVentes([]);
         setVentes12m([]);
         setFirstSale(null);
+        setReparations([]);
       }
 
       setLoading(false);
@@ -406,6 +416,45 @@ export default function GaiaClientFiche() {
           </div>
         ) : (
           <div className="space-y-6">
+            {reparations.length > 0 && (
+              <section className="rounded-lg border border-orange-500/40 bg-orange-500/5 p-4 sm:p-5">
+                <div className="flex items-start gap-3">
+                  <span className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md bg-orange-500/15 text-orange-400">
+                    <Wrench className="h-5 w-5" />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <h3 className="font-display text-base font-semibold">Atelier / Réparations en cours</h3>
+                      <div className="font-display text-lg font-bold tabular-nums text-orange-400">
+                        {eur(reparations.reduce((n, r) => n + Number(r.total_ht ?? 0), 0))}
+                      </div>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {reparations.length} dossier{reparations.length > 1 ? "s" : ""} RP · signal commercial : un client qui répare beaucoup mais ne commande plus mérite une visite.
+                    </p>
+                    <ul className="mt-3 space-y-1.5">
+                      {[...reparations]
+                        .sort((a, b) => (b.age_mois ?? 0) - (a.age_mois ?? 0))
+                        .slice(0, 5)
+                        .map((r) => {
+                          const m = r.age_mois ?? 0;
+                          const ageTxt = m <= 0 ? "ce mois-ci" : m === 1 ? "il y a 1 mois" : `il y a ${m} mois`;
+                          return (
+                            <li key={r.n_cde} className="flex items-center justify-between gap-2 rounded border border-orange-500/20 bg-background/40 px-2 py-1.5 text-xs">
+                              <div className="min-w-0">
+                                <span className="font-mono">{r.n_cde ?? "—"}</span>
+                                <span className="ml-2 text-muted-foreground">{r.statut ?? "—"} · {ageTxt}</span>
+                              </div>
+                              <span className="tabular-nums font-medium">{eur(Number(r.total_ht ?? 0))}</span>
+                            </li>
+                          );
+                        })}
+                    </ul>
+                  </div>
+                </div>
+              </section>
+            )}
+
             {/* 2) À FAIRE */}
             <section className="rounded-lg border border-border bg-card/40 p-4 sm:p-6">
               <div className="mb-3 flex items-center gap-2">

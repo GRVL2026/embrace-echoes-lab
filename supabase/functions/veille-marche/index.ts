@@ -219,6 +219,11 @@ Concentre-toi exclusivement sur les informations publiées ou survenues ${window
     });
   } catch (e: any) {
     console.error("[veille-marche]", e?.message ?? e);
+    if (isAnthropicOverload(e)) {
+      return new Response(JSON.stringify({ error: e.userMessage, code: 'overload' }), {
+        status: 503, headers: { ...corsHeaders, "content-type": "application/json" },
+      });
+    }
     return new Response(JSON.stringify({ error: e?.message ?? String(e) }), {
       status: 500, headers: { ...corsHeaders, "content-type": "application/json" },
     });

@@ -388,7 +388,7 @@ export default function Ecommerce() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Top products */}
-              <Card className="p-4 sm:p-6 bg-card/60 border-border">
+              <Card id="ec-top-products" className="p-4 sm:p-6 bg-card/60 border-border scroll-mt-20">
                 <h2 className="font-display text-lg font-semibold mb-4 flex items-center gap-2">
                   <Package className="h-4 w-4 text-primary" /> Top 10 produits ({currentPeriodMeta.kpiLabel})
                 </h2>

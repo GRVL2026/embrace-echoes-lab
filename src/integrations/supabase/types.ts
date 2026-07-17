@@ -814,45 +814,54 @@ export type Database = {
       }
       gaia_stock: {
         Row: {
+          atelier_famille2: string | null
           cout_stock: number | null
           dernier_cout: number | null
           description: string | null
+          divers_famille2: string | null
           famille2: string | null
           famille3: string | null
           id: number
           inventory_id: string | null
           item_class: string | null
           item_status: string | null
+          magasin_famille2: string | null
           prix_vente: number | null
           qty_available: number | null
           qty_on_hand: number | null
           warehouse: string | null
         }
         Insert: {
+          atelier_famille2?: string | null
           cout_stock?: number | null
           dernier_cout?: number | null
           description?: string | null
+          divers_famille2?: string | null
           famille2?: string | null
           famille3?: string | null
           id?: never
           inventory_id?: string | null
           item_class?: string | null
           item_status?: string | null
+          magasin_famille2?: string | null
           prix_vente?: number | null
           qty_available?: number | null
           qty_on_hand?: number | null
           warehouse?: string | null
         }
         Update: {
+          atelier_famille2?: string | null
           cout_stock?: number | null
           dernier_cout?: number | null
           description?: string | null
+          divers_famille2?: string | null
           famille2?: string | null
           famille3?: string | null
           id?: never
           inventory_id?: string | null
           item_class?: string | null
           item_status?: string | null
+          magasin_famille2?: string | null
           prix_vente?: number | null
           qty_available?: number | null
           qty_on_hand?: number | null

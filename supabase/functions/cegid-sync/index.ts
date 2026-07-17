@@ -323,21 +323,36 @@ const MAPPERS: Record<string, { table: string; map: Mapper; pk?: string }> = {
   },
   'BD-Stock': {
     table: 'gaia_stock',
-    map: (r) => ({
-      inventory_id: trim(r.InventoryID),
-      description: str(r.Description),
-      item_status: str(r.ItemStatus),
-      item_class: trim(r.ItemClass),
-      famille2: str(r.Jeuxfamille2),
-      famille3: str(r.Jeuxfamille3),
-      warehouse: trim(r.Warehouse),
-      qty_on_hand: num(r.QtyOnHand),
-      qty_available: num(r.QtyAvailable),
-      cout_stock: num(r['Coûtdustock'] ?? r.Coutdustock),
-      dernier_cout: num(r['DernierCoûtRevient'] ?? r.DernierCoutRevient),
-      prix_vente: num(r.DefaultPrice),
-    }),
+    map: (r) => {
+      // Sous-familles ERP par domaine — les noms techniques Cegid varient selon
+      // la casse et l'espacement du libellé source. On tente plusieurs variantes
+      // pour rester tolérant à un futur renommage du flux.
+      const jeux = str(r.Jeuxfamille2 ?? r['Jeux famille 2'] ?? r.JeuxFamille2);
+      const magasin = str(r.Magasinfamille2 ?? r['Magasin famille 2'] ?? r.MagasinFamille2);
+      const atelier = str(r.Atelierfamille2 ?? r['Atelier famille 2'] ?? r.AtelierFamille2);
+      const divers = str(r.Diversfamille2 ?? r['Divers famille 2'] ?? r.DiversFamille2);
+      // famille2 unifiée : jeux prioritaire, sinon la sous-famille du domaine correspondant
+      const famille2 = jeux || magasin || atelier || divers || '';
+      return {
+        inventory_id: trim(r.InventoryID),
+        description: str(r.Description),
+        item_status: str(r.ItemStatus),
+        item_class: trim(r.ItemClass),
+        famille2,
+        famille3: str(r.Jeuxfamille3),
+        magasin_famille2: magasin,
+        atelier_famille2: atelier,
+        divers_famille2: divers,
+        warehouse: trim(r.Warehouse),
+        qty_on_hand: num(r.QtyOnHand),
+        qty_available: num(r.QtyAvailable),
+        cout_stock: num(r['Coûtdustock'] ?? r.Coutdustock),
+        dernier_cout: num(r['DernierCoûtRevient'] ?? r.DernierCoutRevient),
+        prix_vente: num(r.DefaultPrice),
+      };
+    },
   },
+
 };
 
 async function fetchAllRows(url: string, token: string): Promise<any[]> {

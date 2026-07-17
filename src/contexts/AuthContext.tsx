@@ -15,6 +15,7 @@ type AuthContextValue = {
   isAdmin: boolean;
   isDirection: boolean;
   canAccessGaia: boolean;
+  copilotEnabled: boolean;
   refreshRoles: () => void;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (
@@ -24,6 +25,7 @@ type AuthContextValue = {
   ) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 };
+
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 

@@ -1532,6 +1532,21 @@ export type Database = {
         }
         Relationships: []
       }
+      v_gaia_carnet_documents: {
+        Row: {
+          age_mois: number | null
+          categorie: string | null
+          client: string | null
+          code_client: string | null
+          date_document: string | null
+          n_cde: string | null
+          nb_lignes: number | null
+          order_type: string | null
+          statut: string | null
+          total_ht: number | null
+        }
+        Relationships: []
+      }
       v_gaia_clients_dormants: {
         Row: {
           ca_annee_courante: number | null

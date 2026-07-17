@@ -31,6 +31,7 @@ type CarnetDoc = {
   age_mois: number | null;
   nb_lignes: number | null;
   total_ht: number | null;
+  sfa: boolean | null;
 };
 
 type CommandeLigne = {
@@ -132,21 +133,31 @@ export default function GaiaCarnet() {
   }, [docs, cat]);
 
   const buckets = useMemo(() => {
-    const b = { lt6: { total: 0, nb: 0 }, m6to12: { total: 0, nb: 0 }, gt12: { total: 0, nb: 0 } };
+    const mk = () => ({ total: 0, nb: 0, totalAvec: 0, nbAvec: 0 });
+    const b = { lt6: mk(), m6to12: mk(), gt12: mk() };
     for (const d of filtered) {
       const m = d.age_mois ?? 0;
       const t = Number(d.total_ht ?? 0);
-      if (m < 6) { b.lt6.total += t; b.lt6.nb += 1; }
-      else if (m < 12) { b.m6to12.total += t; b.m6to12.nb += 1; }
-      else { b.gt12.total += t; b.gt12.nb += 1; }
+      const bucket = m < 6 ? b.lt6 : m < 12 ? b.m6to12 : b.gt12;
+      bucket.totalAvec += t;
+      bucket.nbAvec += 1;
+      if (!d.sfa) {
+        bucket.total += t;
+        bucket.nb += 1;
+      }
     }
     return b;
   }, [filtered]);
 
-  const totals = useMemo(() => ({
-    total: filtered.reduce((n, d) => n + Number(d.total_ht ?? 0), 0),
-    nb: filtered.length,
-  }), [filtered]);
+  const totals = useMemo(() => {
+    const hors = filtered.filter((d) => !d.sfa);
+    return {
+      total: hors.reduce((n, d) => n + Number(d.total_ht ?? 0), 0),
+      nb: hors.length,
+      totalAvec: filtered.reduce((n, d) => n + Number(d.total_ht ?? 0), 0),
+      nbAvec: filtered.length,
+    };
+  }, [filtered]);
 
   const visibleDocs = useMemo(() => {
     const rows = filtered.filter((d) => inAge(d.age_mois, ageFilter));
@@ -212,6 +223,9 @@ export default function GaiaCarnet() {
             <div className="text-right">
               <div className="font-display text-2xl sm:text-3xl font-bold tabular-nums">{eur(totals.total)}</div>
               <div className="text-xs text-muted-foreground">{num(totals.nb)} document{totals.nb > 1 ? "s" : ""}</div>
+              {totals.totalAvec !== totals.total && (
+                <div className="mt-0.5 text-[10px] text-muted-foreground/70 tabular-nums">avec SFA : {eur(totals.totalAvec)}</div>
+              )}
             </div>
           </div>
         </div>
@@ -225,6 +239,7 @@ export default function GaiaCarnet() {
             tone="green"
             total={buckets.lt6.total}
             nb={buckets.lt6.nb}
+            totalAvec={buckets.lt6.totalAvec}
           />
           <AgeCard
             active={ageFilter === "6to12"}
@@ -233,6 +248,7 @@ export default function GaiaCarnet() {
             tone="orange"
             total={buckets.m6to12.total}
             nb={buckets.m6to12.nb}
+            totalAvec={buckets.m6to12.totalAvec}
           />
           <AgeCard
             active={ageFilter === "gt12"}
@@ -241,6 +257,7 @@ export default function GaiaCarnet() {
             tone="red"
             total={buckets.gt12.total}
             nb={buckets.gt12.nb}
+            totalAvec={buckets.gt12.totalAvec}
           />
         </div>
 
@@ -287,8 +304,11 @@ export default function GaiaCarnet() {
                         <span className="sm:hidden"> · <span className="tabular-nums">{eur(Number(d.total_ht ?? 0))}</span></span>
                       </div>
                     </div>
-                    <div className="hidden sm:block">
+                    <div className="hidden sm:flex items-center gap-1">
                       <Badge variant="outline" className={statutBadgeClass(d.statut)}>{d.statut ?? "—"}</Badge>
+                      {d.sfa && (
+                        <Badge variant="outline" className="bg-muted/40 text-muted-foreground border-border" title="Client SFA (rétrocession) — exclu des totaux affichés">SFA</Badge>
+                      )}
                     </div>
                     <div className="hidden sm:block text-right tabular-nums font-medium">{eur(Number(d.total_ht ?? 0))}</div>
                     <div className="text-right">
@@ -310,7 +330,7 @@ export default function GaiaCarnet() {
 }
 
 function AgeCard({
-  active, onClick, label, tone, total, nb,
+  active, onClick, label, tone, total, nb, totalAvec,
 }: {
   active: boolean;
   onClick: () => void;
@@ -318,6 +338,7 @@ function AgeCard({
   tone: "green" | "orange" | "red";
   total: number;
   nb: number;
+  totalAvec?: number;
 }) {
   const tones: Record<string, string> = {
     green: "border-emerald-500/40 bg-emerald-500/5 text-emerald-400",
@@ -333,6 +354,9 @@ function AgeCard({
       <div className="text-[11px] uppercase tracking-wider opacity-80">{label}</div>
       <div className="mt-1 font-display text-2xl font-bold tabular-nums text-foreground">{eur(total)}</div>
       <div className="mt-0.5 text-xs text-muted-foreground">{num(nb)} document{nb > 1 ? "s" : ""}</div>
+      {totalAvec !== undefined && totalAvec !== total && (
+        <div className="mt-0.5 text-[10px] text-muted-foreground/70 tabular-nums">avec SFA : {eur(totalAvec)}</div>
+      )}
     </button>
   );
 }

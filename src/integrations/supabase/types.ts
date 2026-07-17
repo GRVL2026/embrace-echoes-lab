@@ -1542,6 +1542,7 @@ export type Database = {
           n_cde: string | null
           nb_lignes: number | null
           order_type: string | null
+          sfa: boolean | null
           statut: string | null
           total_ht: number | null
         }
@@ -1654,6 +1655,7 @@ export type Database = {
         Row: {
           categorie: string | null
           nb: number | null
+          sfa: boolean | null
           statut: string | null
           total_ht: number | null
         }

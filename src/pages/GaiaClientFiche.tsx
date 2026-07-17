@@ -239,12 +239,14 @@ export default function GaiaClientFiche() {
     })
     .filter((x) => x.count > 0);
 
-  // Consommables : ventes des 12 derniers mois avec famille consommable
+  // Consommables / pièces détachées (classe MAGASIN, entretien, SAV) sur 12 mois
   const hasParc = parc.length > 0;
-  const consoLast12 = ventes12m.some((v) => {
+  const consoVentes12 = ventes12m.filter((v) => {
     const fam = (v.classe_article || "").toLowerCase();
     return CONSO_KEYWORDS.some((k) => fam.includes(k));
   });
+  const consoLast12 = consoVentes12.length > 0;
+  const consoMontant = consoVentes12.reduce((n, v) => n + Number(v.montant_ht ?? 0), 0);
   const missingConso = hasParc && !consoLast12 && ventes12m.length > 0;
 
   // ===== Copilote =====

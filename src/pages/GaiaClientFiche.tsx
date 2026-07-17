@@ -72,6 +72,7 @@ export default function GaiaClientFiche() {
   const [ventes, setVentes] = useState<Vente[]>([]);
   const [ventes12m, setVentes12m] = useState<Vente[]>([]);
   const [firstSale, setFirstSale] = useState<string | null>(null);
+  const [reparations, setReparations] = useState<ReparationDoc[]>([]);
 
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [copilotQuestion, setCopilotQuestion] = useState("");

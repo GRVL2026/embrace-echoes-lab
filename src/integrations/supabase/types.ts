@@ -906,16 +906,19 @@ export type Database = {
           classe_client: string | null
           code_article: string | null
           code_client: string | null
+          cout_total: number | null
           devise: string | null
           id: number
           inventory_id: string | null
           invoice_date: string | null
           line_nbr: number | null
+          marge_ligne: number | null
           montant_ht: number | null
           n_fact: string | null
           pu_rem: number | null
           qty: number | null
           reference_nbr: string | null
+          taux_marque: number | null
           tran_type: string | null
           vendeur: string | null
         }
@@ -925,16 +928,19 @@ export type Database = {
           classe_client?: string | null
           code_article?: string | null
           code_client?: string | null
+          cout_total?: number | null
           devise?: string | null
           id?: never
           inventory_id?: string | null
           invoice_date?: string | null
           line_nbr?: number | null
+          marge_ligne?: number | null
           montant_ht?: number | null
           n_fact?: string | null
           pu_rem?: number | null
           qty?: number | null
           reference_nbr?: string | null
+          taux_marque?: number | null
           tran_type?: string | null
           vendeur?: string | null
         }
@@ -944,16 +950,19 @@ export type Database = {
           classe_client?: string | null
           code_article?: string | null
           code_client?: string | null
+          cout_total?: number | null
           devise?: string | null
           id?: never
           inventory_id?: string | null
           invoice_date?: string | null
           line_nbr?: number | null
+          marge_ligne?: number | null
           montant_ht?: number | null
           n_fact?: string | null
           pu_rem?: number | null
           qty?: number | null
           reference_nbr?: string | null
+          taux_marque?: number | null
           tran_type?: string | null
           vendeur?: string | null
         }
@@ -1641,6 +1650,20 @@ export type Database = {
         }
         Relationships: []
       }
+      v_gaia_lignes_marge: {
+        Row: {
+          classe_article: string | null
+          code_article: string | null
+          code_client: string | null
+          cout_total: number | null
+          inventory_id: string | null
+          invoice_date: string | null
+          marge_ligne: number | null
+          montant_ht: number | null
+          qty: number | null
+        }
+        Relationships: []
+      }
       v_gaia_magasin_carnet: {
         Row: {
           categorie: string | null
@@ -1657,6 +1680,7 @@ export type Database = {
           ca_avec_cout: number | null
           ca_ht: number | null
           marge_estimee: number | null
+          part_reelle: number | null
         }
         Relationships: []
       }
@@ -1726,6 +1750,7 @@ export type Database = {
           ca_ht: number | null
           client: string | null
           marge_estimee: number | null
+          part_reelle: number | null
         }
         Relationships: []
       }
@@ -1737,6 +1762,7 @@ export type Database = {
           cout_estime: number | null
           famille: string | null
           marge_estimee: number | null
+          part_reelle: number | null
         }
         Relationships: []
       }

@@ -473,8 +473,8 @@ export function GaiaMagasin() {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
             <div className="lg:col-span-3">
               <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  {chartMode === "bar" ? (
+                {chartMode === "bar" ? (
+                  <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={sousFamStats} layout="vertical" margin={{ left: 20, right: 40 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={11}
@@ -495,32 +495,30 @@ export function GaiaMagasin() {
                         ))}
                       </Bar>
                     </BarChart>
-                  ) : (
-                    (() => {
-                      const total = sousFamStats.reduce((n, r) => n + Number(r.value || 0), 0);
-                      const data = sousFamStats.map((r, i) => ({
-                        name: r.name,
-                        value: Number(r.value || 0),
-                        color: SOUS_FAM_COLORS[i % SOUS_FAM_COLORS.length],
-                      }));
-                      return (
-                        <DonutHoverCenter
-                          data={data}
-                          total={eur(total)}
-                          totalLabel={exShort(yearSousFam)}
-                          innerRadius={55}
-                          outerRadius={100}
-                          paddingAngle={2}
-                          formatValue={(v) => {
-                            const p = total > 0 ? ((v / total) * 100).toFixed(1) : "0";
-                            return `${eur(v)} (${p} %)`;
-                          }}
-                          onSegmentClick={(d) => d?.name && setOpenSousFam(String(d.name))}
-                        />
-                      );
-                    })()
-                  )}
-                </ResponsiveContainer>
+                  </ResponsiveContainer>
+                ) : (() => {
+                  const total = sousFamStats.reduce((n, r) => n + Number(r.value || 0), 0);
+                  const data = sousFamStats.map((r, i) => ({
+                    name: r.name,
+                    value: Number(r.value || 0),
+                    color: SOUS_FAM_COLORS[i % SOUS_FAM_COLORS.length],
+                  }));
+                  return (
+                    <DonutHoverCenter
+                      data={data}
+                      total={eur(total)}
+                      totalLabel={exShort(yearSousFam)}
+                      innerRadius={55}
+                      outerRadius={100}
+                      paddingAngle={2}
+                      formatValue={(v) => {
+                        const p = total > 0 ? ((v / total) * 100).toFixed(1) : "0";
+                        return `${eur(v)} (${p} %)`;
+                      }}
+                      onSegmentClick={(d) => d?.name && setOpenSousFam(String(d.name))}
+                    />
+                  );
+                })()}
               </div>
             </div>
             <div className="lg:col-span-2">

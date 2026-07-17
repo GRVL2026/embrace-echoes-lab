@@ -110,7 +110,7 @@ export default function GaiaClientFiche() {
         since.setMonth(since.getMonth() - 12);
         const sinceIso = since.toISOString().slice(0, 10);
 
-        const [cmd_r, v_r, v12_r, vfirst_r] = await Promise.all([
+        const [cmd_r, v_r, v12_r, vfirst_r, rep_r] = await Promise.all([
           client
             .from("gaia_commandes")
             .select("n_cde,code_client,code_article,invoice_date,qty,montant_ht,statut,date_liv")
@@ -136,17 +136,25 @@ export default function GaiaClientFiche() {
             .in("code_client", codes)
             .order("invoice_date", { ascending: true })
             .limit(1),
+          client
+            .from("v_gaia_carnet_documents")
+            .select("n_cde,statut,code_client,date_document,age_mois,total_ht,categorie")
+            .in("code_client", codes)
+            .eq("categorie", "reparation")
+            .limit(200),
         ]);
         setCommandes((cmd_r.data as Commande[]) ?? []);
         setVentes((v_r.data as Vente[]) ?? []);
         setVentes12m((v12_r.data as Vente[]) ?? []);
         const first = (vfirst_r.data as Array<{ invoice_date: string | null }>)?.[0]?.invoice_date ?? null;
         setFirstSale(first);
+        setReparations((rep_r.data as ReparationDoc[]) ?? []);
       } else {
         setCommandes([]);
         setVentes([]);
         setVentes12m([]);
         setFirstSale(null);
+        setReparations([]);
       }
 
       setLoading(false);

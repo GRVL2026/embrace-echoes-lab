@@ -386,8 +386,11 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
         </div>
       </div>
 
+      {/* Pipeline commercial */}
+      <PipelineBanner stats={pipeStats} />
+
       {/* KPI cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <KpiCard
           title="CA exercice en cours"
           value={eur(caCurrent)}
@@ -410,18 +413,6 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
             </div>
           }
           icon={<TrendingUp className="h-4 w-4 text-primary" />}
-        />
-        <KpiCard
-          title="Commandes signées"
-          value={eur(Number(signees.total_ht))}
-          hint={<span className="text-muted-foreground">{num(Number(signees.nb_commandes))} commandes</span>}
-          icon={<FileSignature className="h-4 w-4 text-secondary" />}
-        />
-        <KpiCard
-          title="Devis en cours"
-          value={eur(Number(devis.total_ht))}
-          hint={<span className="text-muted-foreground">{num(Number(devis.nb_commandes))} devis</span>}
-          icon={<FileText className="h-4 w-4 text-primary" />}
         />
         <KpiCard
           title="Stock"

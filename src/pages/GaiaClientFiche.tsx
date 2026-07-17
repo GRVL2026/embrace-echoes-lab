@@ -10,6 +10,14 @@ import { AppTopNav } from "@/components/AppTopNav";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DetailPageHeader } from "@/components/DetailPageHeader";
+import { OrigineBadge, type Origine } from "@/components/admin/OrigineBadge";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import {
   Accordion,
   AccordionContent,
@@ -40,9 +48,23 @@ import { toast } from "@/hooks/use-toast";
 type CaClient = { annee: number; code_client: string; client: string; ca_ht: number | string };
 type MargeClient = { annee: number; client: string; ca_ht: number | string; ca_avec_cout: number | string; marge_estimee: number | string };
 type ParcRow = { client: string; code_client: string; code_article: string; description: string | null; famille: string | null; derniere_vente: string | null; quantite: number };
-type Commande = { n_cde: string | null; code_client: string; code_article: string | null; invoice_date: string | null; qty: number | null; montant_ht: number | string | null; statut: string | null; date_liv: string | null };
+
+type PipelineDoc = {
+  n_cde: string | null;
+  order_type: string | null;
+  categorie: string | null;
+  statut: string | null;
+  code_client: string | null;
+  client: string | null;
+  date_document: string | null;
+  age_mois: number | null;
+  nb_lignes: number | null;
+  total_ht: number | null;
+  sfa: boolean | null;
+  origine: Origine;
+};
+type ReparationDoc = PipelineDoc;
 type Vente = { code_client: string; n_fact: string | null; code_article: string | null; invoice_date: string | null; qty: number | null; montant_ht: number | string | null; classe_article?: string | null };
-type ReparationDoc = { n_cde: string | null; statut: string | null; code_client: string | null; date_document: string | null; age_mois: number | null; total_ht: number | null };
 
 const eur = (n: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);
@@ -71,6 +93,7 @@ export default function GaiaClientFiche() {
   const [copilotQuestion, setCopilotQuestion] = useState("");
   const [copilotAnswer, setCopilotAnswer] = useState<string>("");
   const [copilotLoading, setCopilotLoading] = useState(false);
+  const [openParcFamille, setOpenParcFamille] = useState<string | null>(null);
 
   const { data: fiche, isPending: loading } = useQuery({
     queryKey: ["gaia-client", clientName],
@@ -96,7 +119,7 @@ export default function GaiaClientFiche() {
         ),
       );
 
-      let commandesRows: Commande[] = [];
+      let pipelineRows: PipelineDoc[] = [];
       let ventesRows: Vente[] = [];
       let ventes12mRows: Vente[] = [];
       let firstSaleValue: string | null = null;
@@ -107,14 +130,12 @@ export default function GaiaClientFiche() {
         since.setMonth(since.getMonth() - 12);
         const sinceIso = since.toISOString().slice(0, 10);
 
-        const [cmd_r, v_r, v12_r, vfirst_r, rep_r] = await Promise.all([
+        const [carnet_r, v_r, v12_r, vfirst_r] = await Promise.all([
           client
-            .from("gaia_commandes")
-            .select("n_cde,code_client,code_article,invoice_date,qty,montant_ht,statut,date_liv")
+            .from("v_gaia_carnet_documents")
+            .select("n_cde,order_type,categorie,statut,code_client,client,date_document,age_mois,nb_lignes,total_ht,sfa,origine")
             .in("code_client", codes)
-            .in("statut", STATUTS_OUVERTS as unknown as string[])
-            .order("invoice_date", { ascending: false })
-            .limit(200),
+            .limit(500),
           client
             .from("gaia_ventes")
             .select("code_client,n_fact,code_article,invoice_date,qty,montant_ht")
@@ -133,25 +154,24 @@ export default function GaiaClientFiche() {
             .in("code_client", codes)
             .order("invoice_date", { ascending: true })
             .limit(1),
-          client
-            .from("v_gaia_carnet_documents")
-            .select("n_cde,statut,code_client,date_document,age_mois,total_ht,categorie")
-            .in("code_client", codes)
-            .eq("categorie", "reparation")
-            .limit(200),
         ]);
-        commandesRows = (cmd_r.data as Commande[]) ?? [];
+        const carnetRows = (carnet_r.data as PipelineDoc[]) ?? [];
+        pipelineRows = carnetRows.filter(
+          (d) =>
+            (d.categorie === "devis" || d.categorie === "commande") &&
+            !!d.statut && (STATUTS_OUVERTS as readonly string[]).includes(d.statut),
+        );
+        reparationsRows = carnetRows.filter((d) => d.categorie === "reparation");
         ventesRows = (v_r.data as Vente[]) ?? [];
         ventes12mRows = (v12_r.data as Vente[]) ?? [];
         firstSaleValue = (vfirst_r.data as Array<{ invoice_date: string | null }>)?.[0]?.invoice_date ?? null;
-        reparationsRows = (rep_r.data as ReparationDoc[]) ?? [];
       }
 
       return {
         ca: caRows,
         marge: margeRows,
         parc: parcRows,
-        commandes: commandesRows,
+        commandes: pipelineRows,
         ventes: ventesRows,
         ventes12m: ventes12mRows,
         firstSale: firstSaleValue,
@@ -208,7 +228,7 @@ export default function GaiaClientFiche() {
   const parcTotal = parc.reduce((n, r) => n + Number(r.quantite || 0), 0);
 
   const commandesTri = useMemo(
-    () => [...commandes].sort((a, b) => Number(b.montant_ht ?? 0) - Number(a.montant_ht ?? 0)),
+    () => [...commandes].sort((a, b) => Number(b.total_ht ?? 0) - Number(a.total_ht ?? 0)),
     [commandes],
   );
 
@@ -217,16 +237,17 @@ export default function GaiaClientFiche() {
   const caN1 = previousYear?.[1] ?? 0;
 
   // Devis
-  const devisOld: Array<{ c: Commande; age: number }> = [];
-  const devisFresh: Array<{ c: Commande; age: number }> = [];
+  const devisOld: Array<{ c: PipelineDoc; age: number }> = [];
+  const devisFresh: Array<{ c: PipelineDoc; age: number }> = [];
   for (const c of commandes) {
-    if (!c.invoice_date) continue;
-    const age = daysBetween(now, new Date(c.invoice_date));
+    if (c.categorie !== "devis") continue;
+    if (!c.date_document) continue;
+    const age = daysBetween(now, new Date(c.date_document));
     if (age > 30) devisOld.push({ c, age });
     else if (age < 15) devisFresh.push({ c, age });
   }
-  devisOld.sort((a, b) => Number(b.c.montant_ht ?? 0) - Number(a.c.montant_ht ?? 0));
-  devisFresh.sort((a, b) => Number(b.c.montant_ht ?? 0) - Number(a.c.montant_ht ?? 0));
+  devisOld.sort((a, b) => Number(b.c.total_ht ?? 0) - Number(a.c.total_ht ?? 0));
+  devisFresh.sort((a, b) => Number(b.c.total_ht ?? 0) - Number(a.c.total_ht ?? 0));
 
   const decrochage = daysSinceLastInvoice !== null && daysSinceLastInvoice > 180 && caN1 > 5000;
 
@@ -430,6 +451,164 @@ export default function GaiaClientFiche() {
           </div>
         ) : (
           <div className="space-y-6">
+            {/* 1) HISTORIQUE — bandeau compact en haut */}
+            <section className="rounded-lg border border-border bg-card/40 p-4 sm:p-5">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h3 className="font-display text-sm font-semibold uppercase tracking-wider text-muted-foreground inline-flex items-center gap-2">
+                  <CalendarClock className="h-4 w-4 text-primary" /> Historique CA
+                </h3>
+                <div className="text-xs text-muted-foreground">
+                  {ventes.length > 0 && <>Dernière facture : <span className="text-foreground">{dateShort(lastInvoiceDate)}</span></>}
+                </div>
+              </div>
+              {caByYear.length === 0 ? (
+                <div className="rounded border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground">
+                  Aucun CA connu.
+                </div>
+              ) : (
+                <>
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {caByYearDesc.map(([year, amount], idx) => {
+                      const prev = caByYearDesc[idx + 1];
+                      const evo = prev && prev[1] > 0 ? ((amount - prev[1]) / prev[1]) * 100 : null;
+                      const isCurrent = idx === 0;
+                      return (
+                        <div
+                          key={year}
+                          className={`flex-shrink-0 rounded-lg border p-2.5 min-w-[120px] ${
+                            isCurrent
+                              ? "border-primary/50 bg-primary/10"
+                              : "border-border/60 bg-background/40"
+                          }`}
+                        >
+                          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Ex. {year}</div>
+                          <div className="mt-0.5 font-display text-base font-bold tabular-nums">{eur(amount)}</div>
+                          {evo !== null && (
+                            <div className={`mt-0.5 inline-flex items-center gap-0.5 text-[10px] font-medium ${evo >= 0 ? "text-secondary" : "text-destructive"}`}>
+                              {evo >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                              {evo >= 0 ? "+" : ""}{evo.toFixed(1)}%
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <Accordion type="single" collapsible className="mt-3">
+                    <AccordionItem value="factures" className="border-border/60">
+                      <AccordionTrigger className="text-xs">10 dernières factures ({ventes.length})</AccordionTrigger>
+                      <AccordionContent>
+                        {ventes.length === 0 ? (
+                          <div className="text-sm text-muted-foreground">Aucune facture récente.</div>
+                        ) : (
+                          <div className="overflow-auto rounded border border-border/60">
+                            <table className="w-full text-sm">
+                              <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
+                                <tr>
+                                  <th className="px-2 py-2 text-left">Date</th>
+                                  <th className="px-2 py-2 text-left">Facture</th>
+                                  <th className="px-2 py-2 text-left">Article</th>
+                                  <th className="px-2 py-2 text-right">Qté</th>
+                                  <th className="px-2 py-2 text-right">Montant HT</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {ventes.map((v, i) => (
+                                  <tr key={(v.n_fact ?? "") + i} className="border-t border-border/60">
+                                    <td className="px-2 py-2 text-xs text-muted-foreground tabular-nums">{dateShort(v.invoice_date)}</td>
+                                    <td className="px-2 py-2 font-mono text-xs">{v.n_fact ?? "—"}</td>
+                                    <td className="px-2 py-2 truncate max-w-[240px]">{v.code_article ?? "—"}</td>
+                                    <td className="px-2 py-2 text-right tabular-nums">{Number(v.qty ?? 0)}</td>
+                                    <td className="px-2 py-2 text-right font-medium tabular-nums">{eur(Number(v.montant_ht ?? 0))}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+                </>
+              )}
+            </section>
+
+            {/* 2) PIPELINE */}
+            <section className="rounded-lg border border-border bg-card/40 p-4 sm:p-6">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h3 className="font-display text-lg font-semibold inline-flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-primary" /> Pipeline
+                </h3>
+                <Badge variant="outline">{commandes.length}</Badge>
+              </div>
+              {commandesTri.length === 0 ? (
+                <div className="rounded border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
+                  Aucun devis ni commande ouverte.
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {commandesTri.slice(0, 5).map((c, i) => {
+                      const age = c.date_document ? daysBetween(now, new Date(c.date_document)) : 0;
+                      return (
+                        <div key={(c.n_cde ?? "") + i} className="rounded-lg border border-border/60 bg-background/40 p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="font-mono text-xs text-muted-foreground truncate">N° {c.n_cde ?? "—"}</div>
+                            <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${ageBadgeClass(age)}`}>
+                              {age} j
+                            </span>
+                          </div>
+                          <div className="mt-1 font-display text-xl font-bold">{eur(Number(c.total_ht ?? 0))}</div>
+                          <div className="mt-1 flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <Badge variant="outline" className="text-[10px]">{c.statut ?? "—"}</Badge>
+                              <OrigineBadge origine={c.origine} showIcon={false} />
+                            </div>
+                            <span className="text-[10px] text-muted-foreground truncate max-w-[140px]">{c.categorie ?? ""}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {commandesTri.length > 5 && (
+                    <Accordion type="single" collapsible className="mt-3">
+                      <AccordionItem value="more" className="border-border/60">
+                        <AccordionTrigger className="text-sm">Voir les {commandesTri.length - 5} autres</AccordionTrigger>
+                        <AccordionContent>
+                          <div className="overflow-auto rounded border border-border/60">
+                            <table className="w-full text-sm">
+                              <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
+                                <tr>
+                                  <th className="px-2 py-2 text-left">N°</th>
+                                  <th className="px-2 py-2 text-left">Origine</th>
+                                  <th className="px-2 py-2 text-left">Statut</th>
+                                  <th className="px-2 py-2 text-right">Date</th>
+                                  <th className="px-2 py-2 text-right">Montant HT</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {commandesTri.slice(5).map((c, i) => (
+                                  <tr key={(c.n_cde ?? "") + i} className="border-t border-border/60">
+                                    <td className="px-2 py-2 font-mono text-xs">{c.n_cde ?? "—"}</td>
+                                    <td className="px-2 py-2"><OrigineBadge origine={c.origine} /></td>
+                                    <td className="px-2 py-2">
+                                      <Badge variant="outline" className="text-[10px]">{c.statut ?? "—"}</Badge>
+                                    </td>
+                                    <td className="px-2 py-2 text-right text-xs text-muted-foreground">{dateShort(c.date_document)}</td>
+                                    <td className="px-2 py-2 text-right font-medium tabular-nums">{eur(Number(c.total_ht ?? 0))}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
+                  )}
+                </>
+              )}
+            </section>
+
+            {/* 3) RÉPARATIONS EN COURS */}
             {reparations.length > 0 && (
               <section className="rounded-lg border border-orange-500/40 bg-orange-500/5 p-4 sm:p-5">
                 <div className="flex items-start gap-3">
@@ -469,7 +648,7 @@ export default function GaiaClientFiche() {
               </section>
             )}
 
-            {/* 2) À FAIRE */}
+            {/* 4) À FAIRE — grille 2 colonnes desktop, triée par importance */}
             <section className="rounded-lg border border-border bg-card/40 p-4 sm:p-6">
               <div className="mb-3 flex items-center gap-2">
                 <Flame className="h-5 w-5 text-primary" />
@@ -477,95 +656,119 @@ export default function GaiaClientFiche() {
               </div>
 
               {(() => {
-                const cards: JSX.Element[] = [];
+                type Card = { key: string; priority: number; node: JSX.Element };
+                const cards: Card[] = [];
 
                 for (const { c, age } of devisOld.slice(0, 3)) {
-                  const question = `Analyse le devis n°${c.n_cde} du client "${clientName}" pour un montant de ${eur(Number(c.montant_ht ?? 0))} en attente depuis ${age} jours. Que faire pour le convertir ?`;
-                  cards.push(
-                    <ActionCard
-                      key={`old-${c.n_cde}`}
-                      tone="danger"
-                      icon={<Send className="h-4 w-4" />}
-                      title={`Relancer le devis N°${c.n_cde ?? "—"}`}
-                      subtitle={`En attente depuis ${age} jours`}
-                      amount={eur(Number(c.montant_ht ?? 0))}
-                      onAsk={() => askCopilot(question)}
-                    />,
-                  );
-                }
-
-                for (const { c, age } of devisFresh.slice(0, 2)) {
-                  const question = `Le client "${clientName}" a reçu le devis n°${c.n_cde} il y a ${age} jours pour ${eur(Number(c.montant_ht ?? 0))}. Comment le convertir à chaud ?`;
-                  cards.push(
-                    <ActionCard
-                      key={`fresh-${c.n_cde}`}
-                      tone="warn"
-                      icon={<Flame className="h-4 w-4" />}
-                      title={`Convertir à chaud : devis N°${c.n_cde ?? "—"}`}
-                      subtitle={`Émis il y a ${age} j`}
-                      amount={eur(Number(c.montant_ht ?? 0))}
-                      onAsk={() => askCopilot(question)}
-                    />,
-                  );
+                  const question = `Analyse le devis n°${c.n_cde} du client "${clientName}" pour un montant de ${eur(Number(c.total_ht ?? 0))} en attente depuis ${age} jours. Que faire pour le convertir ?`;
+                  cards.push({
+                    key: `old-${c.n_cde}`,
+                    priority: 100 + Number(c.total_ht ?? 0) / 1000,
+                    node: (
+                      <ActionCard
+                        key={`old-${c.n_cde}`}
+                        tone="danger"
+                        icon={<Send className="h-4 w-4" />}
+                        title={`Relancer devis N°${c.n_cde ?? "—"}`}
+                        subtitle={`En attente depuis ${age} j`}
+                        amount={eur(Number(c.total_ht ?? 0))}
+                        onAsk={() => askCopilot(question)}
+                      />
+                    ),
+                  });
                 }
 
                 if (decrochage) {
                   const question = `Le client "${clientName}" n'a plus facturé depuis ${daysSinceLastInvoice} jours alors qu'il avait fait ${eur(caN1)} de CA en N-1. Propose un plan de réactivation concret.`;
-                  cards.push(
-                    <ActionCard
-                      key="decrochage"
-                      tone="danger"
-                      icon={<CalendarClock className="h-4 w-4" />}
-                      title="Client en décrochage"
-                      subtitle={`Plan de réactivation — dernière facture il y a ${daysSinceLastInvoice} j`}
-                      amount={`CA N-1 : ${eur(caN1)}`}
-                      onAsk={() => askCopilot(question)}
-                    />,
-                  );
+                  cards.push({
+                    key: "decrochage",
+                    priority: 90 + caN1 / 1000,
+                    node: (
+                      <ActionCard
+                        key="decrochage"
+                        tone="danger"
+                        icon={<CalendarClock className="h-4 w-4" />}
+                        title="Client en décrochage"
+                        subtitle={`Dernière facture il y a ${daysSinceLastInvoice} j`}
+                        amount={`CA N-1 : ${eur(caN1)}`}
+                        onAsk={() => askCopilot(question)}
+                      />
+                    ),
+                  });
+                }
+
+                for (const { c, age } of devisFresh.slice(0, 2)) {
+                  const question = `Le client "${clientName}" a reçu le devis n°${c.n_cde} il y a ${age} jours pour ${eur(Number(c.total_ht ?? 0))}. Comment le convertir à chaud ?`;
+                  cards.push({
+                    key: `fresh-${c.n_cde}`,
+                    priority: 70 + Number(c.total_ht ?? 0) / 1000,
+                    node: (
+                      <ActionCard
+                        key={`fresh-${c.n_cde}`}
+                        tone="warn"
+                        icon={<Flame className="h-4 w-4" />}
+                        title={`Convertir à chaud : N°${c.n_cde ?? "—"}`}
+                        subtitle={`Émis il y a ${age} j`}
+                        amount={eur(Number(c.total_ht ?? 0))}
+                        onAsk={() => askCopilot(question)}
+                      />
+                    ),
+                  });
                 }
 
                 if (parcOld.length > 0) {
                   const familles = parcOld.map((x) => `${x.famille} (${x.count})`).join(", ");
                   const question = `Le client "${clientName}" a des machines de plus de 5 ans dans les familles : ${familles}. Propose une offre de renouvellement.`;
-                  cards.push(
-                    <ActionCard
-                      key="renouv"
-                      tone="info"
-                      icon={<RefreshCw className="h-4 w-4" />}
-                      title="Proposer un renouvellement"
-                      subtitle={familles}
-                      amount={`${parcOld.reduce((n, x) => n + x.count, 0)} machines`}
-                      onAsk={() => askCopilot(question)}
-                    />,
-                  );
+                  cards.push({
+                    key: "renouv",
+                    priority: 50 + parcOld.reduce((n, x) => n + x.count, 0),
+                    node: (
+                      <ActionCard
+                        key="renouv"
+                        tone="info"
+                        icon={<RefreshCw className="h-4 w-4" />}
+                        title="Proposer un renouvellement"
+                        subtitle={familles}
+                        amount={`${parcOld.reduce((n, x) => n + x.count, 0)} machines`}
+                        onAsk={() => askCopilot(question)}
+                      />
+                    ),
+                  });
                 }
 
-                if (consoLast12) {
-                  cards.push(
-                    <ActionCard
-                      key="pieces-info"
-                      tone="success"
-                      icon={<Wrench className="h-4 w-4" />}
-                      title="Pièces détachées (12 mois)"
-                      subtitle={`${consoVentes12.length} achat${consoVentes12.length > 1 ? "s" : ""} classe MAGASIN / entretien`}
-                      amount={eur(consoMontant)}
-                    />,
-                  );
-                } else if (missingConso) {
+                if (missingConso) {
                   const question = `Le client "${clientName}" possède ${parcTotal} machines mais n'a acheté aucun consommable ni pièce détachée sur les 12 derniers mois. Propose une offre d'entretien / consommables.`;
-                  cards.push(
-                    <ActionCard
-                      key="conso"
-                      tone="info"
-                      icon={<Wrench className="h-4 w-4" />}
-                      title="Vendre l'entretien"
-                      subtitle="Aucun consommable ni pièce commandé sur 12 mois"
-                      amount={`${parcTotal} machines`}
-                      onAsk={() => askCopilot(question)}
-                    />,
-                  );
+                  cards.push({
+                    key: "conso",
+                    priority: 40 + parcTotal,
+                    node: (
+                      <ActionCard
+                        key="conso"
+                        tone="info"
+                        icon={<Wrench className="h-4 w-4" />}
+                        title="Vendre l'entretien"
+                        subtitle="Aucun consommable ni pièce sur 12 mois"
+                        amount={`${parcTotal} machines`}
+                        onAsk={() => askCopilot(question)}
+                      />
+                    ),
+                  });
+                } else if (consoLast12) {
+                  cards.push({
+                    key: "pieces-info",
+                    priority: 10,
+                    node: (
+                      <ActionCard
+                        key="pieces-info"
+                        tone="success"
+                        icon={<Wrench className="h-4 w-4" />}
+                        title="Pièces détachées (12 mois)"
+                        subtitle={`${consoVentes12.length} achat${consoVentes12.length > 1 ? "s" : ""} classe MAGASIN / entretien`}
+                        amount={eur(consoMontant)}
+                      />
+                    ),
+                  });
                 }
-
 
                 if (cards.length === 0) {
                   return (
@@ -574,11 +777,16 @@ export default function GaiaClientFiche() {
                     </div>
                   );
                 }
-                return <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{cards}</div>;
+                cards.sort((a, b) => b.priority - a.priority);
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {cards.map((c) => c.node)}
+                  </div>
+                );
               })()}
             </section>
 
-            {/* 3) PARC INSTALLÉ */}
+            {/* 5) PARC INSTALLÉ — vue synthétique par famille (barres cliquables) */}
             <section className="rounded-lg border border-border bg-card/40 p-4 sm:p-6">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <h3 className="font-display text-lg font-semibold inline-flex items-center gap-2">
@@ -593,234 +801,57 @@ export default function GaiaClientFiche() {
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {parcByFamille.map(([famille, rows]) => {
-                      const qty = rows.reduce((n, r) => n + Number(r.quantite || 0), 0);
-                      const hasOld = rows.some((r) => {
-                        const y = yearOf(r.derniere_vente);
-                        return y !== null && new Date().getFullYear() - y > 5;
-                      });
-                      return (
-                        <div key={famille} className="rounded-lg border border-border/60 bg-background/40 p-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="inline-flex items-center gap-2 min-w-0">
-                              <Gamepad2 className="h-4 w-4 text-primary flex-shrink-0" />
-                              <div className="font-medium truncate">{famille}</div>
-                            </div>
-                            <Badge variant="outline">{qty}</Badge>
-                          </div>
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            {rows.slice(0, 6).map((r) => {
-                              const y = yearOf(r.derniere_vente);
-                              const old = y !== null && new Date().getFullYear() - y > 5;
-                              return (
-                                <span
-                                  key={r.code_client + r.code_article}
-                                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${old ? "border-destructive/40 bg-destructive/10 text-destructive" : "border-border/60 bg-muted/40"}`}
-                                  title={r.code_article}
-                                >
-                                  <span className="truncate max-w-[140px]">{r.description || r.code_article}</span>
-                                  <span className="opacity-70">×{Number(r.quantite)}</span>
-                                  {y && <span className="opacity-60">· {y}</span>}
-                                </span>
-                              );
-                            })}
-                            {rows.length > 6 && (
-                              <span className="text-[11px] text-muted-foreground self-center">+{rows.length - 6}</span>
-                            )}
-                          </div>
-                          {hasOld && (
-                            <div className="mt-2 inline-flex items-center gap-1 text-[10px] text-destructive">
-                              <RefreshCw className="h-3 w-3" /> à renouveler ?
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <Accordion type="single" collapsible className="mt-4">
-                    <AccordionItem value="detail" className="border-border/60">
-                      <AccordionTrigger className="text-sm">Détail complet du parc</AccordionTrigger>
-                      <AccordionContent>
-                        <div className="space-y-4">
-                          {parcByFamille.map(([famille, rows]) => (
-                            <div key={famille}>
-                              <div className="mb-1 text-xs uppercase tracking-wider text-muted-foreground">{famille}</div>
-                              <div className="overflow-auto rounded border border-border/60">
-                                <table className="w-full text-sm">
-                                  <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
-                                    <tr>
-                                      <th className="px-2 py-2 text-left">Description</th>
-                                      <th className="px-2 py-2 text-right w-16">Qté</th>
-                                      <th className="px-2 py-2 text-right w-32">Dernière vente</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {rows.map((r) => (
-                                      <tr key={r.code_client + r.code_article} className="border-t border-border/60">
-                                        <td className="px-2 py-2">
-                                          <div className="truncate">{r.description || r.code_article}</div>
-                                          <div className="text-[10px] text-muted-foreground">{r.code_article}</div>
-                                        </td>
-                                        <td className="px-2 py-2 text-right tabular-nums">{Number(r.quantite)}</td>
-                                        <td className="px-2 py-2 text-right text-xs text-muted-foreground">
-                                          {dateShort(r.derniere_vente)}
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
+                  <ul className="space-y-2">
+                    {[...parcByFamille]
+                      .map(([famille, rows]) => {
+                        const qty = rows.reduce((n, r) => n + Number(r.quantite || 0), 0);
+                        return { famille, rows, qty };
+                      })
+                      .sort((a, b) => b.qty - a.qty)
+                      .map(({ famille, rows, qty }) => {
+                        const pct = parcTotal > 0 ? (qty / parcTotal) * 100 : 0;
+                        const hasOld = rows.some((r) => {
+                          const y = yearOf(r.derniere_vente);
+                          return y !== null && new Date().getFullYear() - y > 5;
+                        });
+                        return (
+                          <li key={famille}>
+                            <button
+                              type="button"
+                              onClick={() => setOpenParcFamille(famille)}
+                              className="group block w-full rounded-lg border border-border/60 bg-background/40 p-3 text-left transition hover:border-primary/50 hover:bg-background/60"
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="inline-flex items-center gap-2 min-w-0">
+                                  <Gamepad2 className="h-4 w-4 text-primary flex-shrink-0" />
+                                  <div className="font-medium truncate">{famille}</div>
+                                  {hasOld && (
+                                    <span className="inline-flex items-center gap-1 text-[10px] text-destructive">
+                                      <RefreshCw className="h-3 w-3" /> à renouveler
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3 flex-shrink-0 text-xs">
+                                  <span className="tabular-nums font-semibold">{qty}</span>
+                                  <span className="tabular-nums text-muted-foreground w-10 text-right">{pct.toFixed(0)}%</span>
+                                </div>
                               </div>
-                            </div>
-                          ))}
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  </Accordion>
+                              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted/40">
+                                <div
+                                  className="h-full rounded-full bg-gradient-to-r from-primary/70 to-primary transition-all group-hover:from-primary group-hover:to-primary"
+                                  style={{ width: `${Math.max(2, pct)}%` }}
+                                />
+                              </div>
+                            </button>
+                          </li>
+                        );
+                      })}
+                  </ul>
+                  <p className="mt-3 text-[11px] text-muted-foreground">
+                    Cliquez une famille pour voir le détail des machines.
+                  </p>
                 </>
               )}
-            </section>
-
-            {/* 4) PIPELINE */}
-            <section className="rounded-lg border border-border bg-card/40 p-4 sm:p-6">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <h3 className="font-display text-lg font-semibold inline-flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-primary" /> Pipeline
-                </h3>
-                <Badge variant="outline">{commandes.length}</Badge>
-              </div>
-              {commandesTri.length === 0 ? (
-                <div className="rounded border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
-                  Aucun devis ni commande ouverte.
-                </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {commandesTri.slice(0, 5).map((c, i) => {
-                      const age = c.invoice_date ? daysBetween(now, new Date(c.invoice_date)) : 0;
-                      return (
-                        <div key={(c.n_cde ?? "") + i} className="rounded-lg border border-border/60 bg-background/40 p-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="font-mono text-xs text-muted-foreground truncate">N° {c.n_cde ?? "—"}</div>
-                            <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${ageBadgeClass(age)}`}>
-                              {age} j
-                            </span>
-                          </div>
-                          <div className="mt-1 font-display text-xl font-bold">{eur(Number(c.montant_ht ?? 0))}</div>
-                          <div className="mt-1 flex items-center justify-between gap-2">
-                            <Badge variant="outline" className="text-[10px]">{c.statut ?? "—"}</Badge>
-                            <span className="text-[10px] text-muted-foreground truncate max-w-[140px]">{c.code_article ?? ""}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {commandesTri.length > 5 && (
-                    <Accordion type="single" collapsible className="mt-3">
-                      <AccordionItem value="more" className="border-border/60">
-                        <AccordionTrigger className="text-sm">Voir les {commandesTri.length - 5} autres</AccordionTrigger>
-                        <AccordionContent>
-                          <div className="overflow-auto rounded border border-border/60">
-                            <table className="w-full text-sm">
-                              <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
-                                <tr>
-                                  <th className="px-2 py-2 text-left">N°</th>
-                                  <th className="px-2 py-2 text-left">Article</th>
-                                  <th className="px-2 py-2 text-left">Statut</th>
-                                  <th className="px-2 py-2 text-right">Date</th>
-                                  <th className="px-2 py-2 text-right">Montant HT</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {commandesTri.slice(5).map((c, i) => (
-                                  <tr key={(c.n_cde ?? "") + i} className="border-t border-border/60">
-                                    <td className="px-2 py-2 font-mono text-xs">{c.n_cde ?? "—"}</td>
-                                    <td className="px-2 py-2 truncate max-w-[240px]">{c.code_article ?? "—"}</td>
-                                    <td className="px-2 py-2">
-                                      <Badge variant="outline" className="text-[10px]">{c.statut ?? "—"}</Badge>
-                                    </td>
-                                    <td className="px-2 py-2 text-right text-xs text-muted-foreground">{dateShort(c.invoice_date)}</td>
-                                    <td className="px-2 py-2 text-right font-medium tabular-nums">{eur(Number(c.montant_ht ?? 0))}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </AccordionContent>
-                      </AccordionItem>
-                    </Accordion>
-                  )}
-                </>
-              )}
-            </section>
-
-            {/* 5) HISTORIQUE */}
-            <section className="rounded-lg border border-border bg-card/40 p-4 sm:p-6">
-              <div className="mb-3 flex items-center gap-2">
-                <h3 className="font-display text-lg font-semibold">Historique</h3>
-              </div>
-
-              {caByYear.length === 0 ? (
-                <div className="rounded border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
-                  Aucun CA connu.
-                </div>
-              ) : (
-                <div className="rounded-lg border border-border/60 bg-background/40 p-4">
-                  <div className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">CA par exercice</div>
-                  <div className="flex items-end gap-3 h-40">
-                    {caByYear.map(([year, amount]) => {
-                      const h = Math.max(4, (amount / maxCa) * 100);
-                      return (
-                        <div key={year} className="flex-1 flex flex-col items-center gap-1 min-w-0">
-                          <div className="text-[10px] tabular-nums text-foreground/80 truncate">{eur(amount)}</div>
-                          <div
-                            className="w-full rounded-t bg-gradient-to-t from-primary/70 to-primary"
-                            style={{ height: `${h}%` }}
-                          />
-                          <div className="text-[10px] text-muted-foreground">{year}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              <Accordion type="single" collapsible className="mt-4">
-                <AccordionItem value="factures" className="border-border/60">
-                  <AccordionTrigger className="text-sm">10 dernières factures ({ventes.length})</AccordionTrigger>
-                  <AccordionContent>
-                    {ventes.length === 0 ? (
-                      <div className="text-sm text-muted-foreground">Aucune facture récente.</div>
-                    ) : (
-                      <div className="overflow-auto rounded border border-border/60">
-                        <table className="w-full text-sm">
-                          <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
-                            <tr>
-                              <th className="px-2 py-2 text-left">Date</th>
-                              <th className="px-2 py-2 text-left">Facture</th>
-                              <th className="px-2 py-2 text-left">Article</th>
-                              <th className="px-2 py-2 text-right">Qté</th>
-                              <th className="px-2 py-2 text-right">Montant HT</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {ventes.map((v, i) => (
-                              <tr key={(v.n_fact ?? "") + i} className="border-t border-border/60">
-                                <td className="px-2 py-2 text-xs text-muted-foreground tabular-nums">{dateShort(v.invoice_date)}</td>
-                                <td className="px-2 py-2 font-mono text-xs">{v.n_fact ?? "—"}</td>
-                                <td className="px-2 py-2 truncate max-w-[240px]">{v.code_article ?? "—"}</td>
-                                <td className="px-2 py-2 text-right tabular-nums">{Number(v.qty ?? 0)}</td>
-                                <td className="px-2 py-2 text-right font-medium tabular-nums">{eur(Number(v.montant_ht ?? 0))}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
             </section>
 
             <p className="text-[11px] text-muted-foreground">
@@ -829,6 +860,69 @@ export default function GaiaClientFiche() {
           </div>
         )}
       </main>
+
+      {/* Panneau Détail parc par famille */}
+      <Sheet open={!!openParcFamille} onOpenChange={(o) => !o && setOpenParcFamille(null)}>
+        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="font-display inline-flex items-center gap-2">
+              <Gamepad2 className="h-4 w-4 text-primary" /> {openParcFamille ?? "Famille"}
+            </SheetTitle>
+            <SheetDescription>
+              {(() => {
+                const rows = parcByFamille.find(([f]) => f === openParcFamille)?.[1] ?? [];
+                const qty = rows.reduce((n, r) => n + Number(r.quantite || 0), 0);
+                return `${qty} machine${qty > 1 ? "s" : ""} — ${rows.length} référence${rows.length > 1 ? "s" : ""}`;
+              })()}
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-4">
+            {(() => {
+              const rows = parcByFamille.find(([f]) => f === openParcFamille)?.[1] ?? [];
+              if (rows.length === 0) {
+                return (
+                  <div className="rounded border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
+                    Aucune machine dans cette famille.
+                  </div>
+                );
+              }
+              return (
+                <div className="overflow-auto rounded border border-border/60">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
+                      <tr>
+                        <th className="px-2 py-2 text-left">Description</th>
+                        <th className="px-2 py-2 text-right w-16">Qté</th>
+                        <th className="px-2 py-2 text-right w-32">Dernière vente</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((r) => {
+                        const y = yearOf(r.derniere_vente);
+                        const old = y !== null && new Date().getFullYear() - y > 5;
+                        return (
+                          <tr key={r.code_client + r.code_article} className="border-t border-border/60">
+                            <td className="px-2 py-2">
+                              <div className="truncate">{r.description || r.code_article}</div>
+                              <div className="text-[10px] text-muted-foreground font-mono">{r.code_article}</div>
+                            </td>
+                            <td className="px-2 py-2 text-right tabular-nums">{Number(r.quantite)}</td>
+                            <td className={`px-2 py-2 text-right text-xs tabular-nums ${old ? "text-destructive" : "text-muted-foreground"}`}>
+                              {dateShort(r.derniere_vente)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+          </div>
+        </SheetContent>
+      </Sheet>
+
 
       {/* Panneau copilote */}
       {copilotOpen && (

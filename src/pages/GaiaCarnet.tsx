@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { DetailPageHeader } from "@/components/DetailPageHeader";
+import { OrigineBadge, type Origine } from "@/components/admin/OrigineBadge";
 
 type CarnetDoc = {
   n_cde: string | null;
@@ -34,6 +35,7 @@ type CarnetDoc = {
   nb_lignes: number | null;
   total_ht: number | null;
   sfa: boolean | null;
+  origine: Origine;
 };
 
 type CommandeLigne = {
@@ -310,14 +312,18 @@ export default function GaiaCarnet() {
                   >
                     <div className="font-mono text-xs">{d.n_cde ?? "—"}</div>
                     <div className="min-w-0">
-                      <div className="truncate font-medium">{d.client ?? "—"}</div>
+                      <div className="flex items-center gap-1.5 truncate font-medium">
+                        <span className="truncate">{d.client ?? "—"}</span>
+                        <span className="sm:hidden"><OrigineBadge origine={d.origine} showIcon={false} /></span>
+                      </div>
                       <div className="truncate text-[11px] text-muted-foreground">
                         {d.code_client} · {dateShort(d.date_document)} · {num(Number(d.nb_lignes ?? 0))} ligne{Number(d.nb_lignes ?? 0) > 1 ? "s" : ""}
                         <span className="sm:hidden"> · <span className="tabular-nums">{eur(Number(d.total_ht ?? 0))}</span></span>
                       </div>
                     </div>
-                    <div className="hidden sm:flex items-center gap-1">
+                    <div className="hidden sm:flex items-center gap-1 flex-wrap">
                       <Badge variant="outline" className={statutBadgeClass(d.statut)}>{d.statut ?? "—"}</Badge>
+                      <OrigineBadge origine={d.origine} />
                       {d.sfa && (
                         <Badge variant="outline" className="bg-muted/40 text-muted-foreground border-border" title="Client SFA (rétrocession) — exclu des totaux affichés">SFA</Badge>
                       )}
@@ -422,6 +428,7 @@ function DocSheet({ doc, onClose }: { doc: CarnetDoc | null; onClose: () => void
             <div className="text-sm font-medium text-foreground">{doc?.client ?? "—"}</div>
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <Badge variant="outline" className={statutBadgeClass(doc?.statut ?? null)}>{doc?.statut ?? "—"}</Badge>
+              <OrigineBadge origine={doc?.origine} />
               <span className="text-muted-foreground">{doc?.order_type}</span>
               <span className="text-muted-foreground">· {dateShort(doc?.date_document ?? null)}</span>
               <span className="text-muted-foreground">· {ageLabel(doc?.age_mois ?? null)}</span>

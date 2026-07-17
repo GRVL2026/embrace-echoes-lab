@@ -122,11 +122,10 @@ const normalize = (s: string) =>
 
 function useDebounced<T>(value: T, delay = 200): T {
   const [v, setV] = useState(value);
-  useMemo(() => {
+  useEffect(() => {
     const t = setTimeout(() => setV(value), delay);
     return () => clearTimeout(t);
   }, [value, delay]);
-  // fallback via effect
   return v;
 }
 

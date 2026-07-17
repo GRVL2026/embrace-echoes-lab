@@ -717,7 +717,7 @@ export default function GaiaClientFiche() {
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {commandesTri.slice(0, 5).map((c, i) => {
-                      const age = c.invoice_date ? daysBetween(now, new Date(c.invoice_date)) : 0;
+                      const age = c.date_document ? daysBetween(now, new Date(c.date_document)) : 0;
                       return (
                         <div key={(c.n_cde ?? "") + i} className="rounded-lg border border-border/60 bg-background/40 p-3">
                           <div className="flex items-center justify-between gap-2">
@@ -726,10 +726,13 @@ export default function GaiaClientFiche() {
                               {age} j
                             </span>
                           </div>
-                          <div className="mt-1 font-display text-xl font-bold">{eur(Number(c.montant_ht ?? 0))}</div>
-                          <div className="mt-1 flex items-center justify-between gap-2">
-                            <Badge variant="outline" className="text-[10px]">{c.statut ?? "—"}</Badge>
-                            <span className="text-[10px] text-muted-foreground truncate max-w-[140px]">{c.code_article ?? ""}</span>
+                          <div className="mt-1 font-display text-xl font-bold">{eur(Number(c.total_ht ?? 0))}</div>
+                          <div className="mt-1 flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <Badge variant="outline" className="text-[10px]">{c.statut ?? "—"}</Badge>
+                              <OrigineBadge origine={c.origine} showIcon={false} />
+                            </div>
+                            <span className="text-[10px] text-muted-foreground truncate max-w-[140px]">{c.categorie ?? ""}</span>
                           </div>
                         </div>
                       );
@@ -745,7 +748,7 @@ export default function GaiaClientFiche() {
                               <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
                                 <tr>
                                   <th className="px-2 py-2 text-left">N°</th>
-                                  <th className="px-2 py-2 text-left">Article</th>
+                                  <th className="px-2 py-2 text-left">Origine</th>
                                   <th className="px-2 py-2 text-left">Statut</th>
                                   <th className="px-2 py-2 text-right">Date</th>
                                   <th className="px-2 py-2 text-right">Montant HT</th>
@@ -755,12 +758,12 @@ export default function GaiaClientFiche() {
                                 {commandesTri.slice(5).map((c, i) => (
                                   <tr key={(c.n_cde ?? "") + i} className="border-t border-border/60">
                                     <td className="px-2 py-2 font-mono text-xs">{c.n_cde ?? "—"}</td>
-                                    <td className="px-2 py-2 truncate max-w-[240px]">{c.code_article ?? "—"}</td>
+                                    <td className="px-2 py-2"><OrigineBadge origine={c.origine} /></td>
                                     <td className="px-2 py-2">
                                       <Badge variant="outline" className="text-[10px]">{c.statut ?? "—"}</Badge>
                                     </td>
-                                    <td className="px-2 py-2 text-right text-xs text-muted-foreground">{dateShort(c.invoice_date)}</td>
-                                    <td className="px-2 py-2 text-right font-medium tabular-nums">{eur(Number(c.montant_ht ?? 0))}</td>
+                                    <td className="px-2 py-2 text-right text-xs text-muted-foreground">{dateShort(c.date_document)}</td>
+                                    <td className="px-2 py-2 text-right font-medium tabular-nums">{eur(Number(c.total_ht ?? 0))}</td>
                                   </tr>
                                 ))}
                               </tbody>

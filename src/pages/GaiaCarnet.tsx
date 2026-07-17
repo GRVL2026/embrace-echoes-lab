@@ -304,8 +304,11 @@ export default function GaiaCarnet() {
                         <span className="sm:hidden"> · <span className="tabular-nums">{eur(Number(d.total_ht ?? 0))}</span></span>
                       </div>
                     </div>
-                    <div className="hidden sm:block">
+                    <div className="hidden sm:flex items-center gap-1">
                       <Badge variant="outline" className={statutBadgeClass(d.statut)}>{d.statut ?? "—"}</Badge>
+                      {d.sfa && (
+                        <Badge variant="outline" className="bg-muted/40 text-muted-foreground border-border" title="Client SFA (rétrocession) — exclu des totaux affichés">SFA</Badge>
+                      )}
                     </div>
                     <div className="hidden sm:block text-right tabular-nums font-medium">{eur(Number(d.total_ht ?? 0))}</div>
                     <div className="text-right">
@@ -327,7 +330,7 @@ export default function GaiaCarnet() {
 }
 
 function AgeCard({
-  active, onClick, label, tone, total, nb,
+  active, onClick, label, tone, total, nb, totalAvec,
 }: {
   active: boolean;
   onClick: () => void;
@@ -335,6 +338,7 @@ function AgeCard({
   tone: "green" | "orange" | "red";
   total: number;
   nb: number;
+  totalAvec?: number;
 }) {
   const tones: Record<string, string> = {
     green: "border-emerald-500/40 bg-emerald-500/5 text-emerald-400",
@@ -350,6 +354,9 @@ function AgeCard({
       <div className="text-[11px] uppercase tracking-wider opacity-80">{label}</div>
       <div className="mt-1 font-display text-2xl font-bold tabular-nums text-foreground">{eur(total)}</div>
       <div className="mt-0.5 text-xs text-muted-foreground">{num(nb)} document{nb > 1 ? "s" : ""}</div>
+      {totalAvec !== undefined && totalAvec !== total && (
+        <div className="mt-0.5 text-[10px] text-muted-foreground/70 tabular-nums">avec SFA : {eur(totalAvec)}</div>
+      )}
     </button>
   );
 }

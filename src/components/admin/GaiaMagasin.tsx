@@ -306,10 +306,10 @@ export function GaiaMagasin() {
       </div>
 
 
-      {/* Stock magasin + Marge estimée */}
+      {/* Stock magasin + Marge estimée (marge = admin/direction uniquement) */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Stock */}
-        <div className="rounded-lg border border-border bg-card/40 p-4 lg:col-span-2">
+        <div className={`rounded-lg border border-border bg-card/40 p-4 ${canAccessGaia ? "lg:col-span-2" : "lg:col-span-3"}`}>
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Package className="h-5 w-5 text-primary" />

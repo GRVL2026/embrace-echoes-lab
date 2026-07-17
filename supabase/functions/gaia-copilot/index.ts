@@ -303,6 +303,8 @@ const REVUE_TOOL = {
           commentaire: { type: 'string', description: '2 phrases max sur la santé globale.' },
           annees: {
             type: 'array',
+            description: 'CA à période égale par exercice fiscal (sept→août), MINIMUM 2 exercices (idéalement 3 : N, N-1, N-2). Champ OBLIGATOIRE et NON VIDE.',
+            minItems: 2,
             items: {
               type: 'object',
               properties: {

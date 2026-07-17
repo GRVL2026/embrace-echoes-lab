@@ -376,7 +376,7 @@ const REVUE_TOOL = {
       },
       actions: {
         type: 'array',
-        description: 'TOP 5 actions priorisées par impact en euros.',
+        description: 'TOP 5 actions priorisées par impact en euros (legacy — conserver pour compat).',
         items: {
           type: 'object',
           properties: {
@@ -390,8 +390,40 @@ const REVUE_TOOL = {
           required: ['rang', 'titre', 'qui', 'cible', 'impact_eur', 'pourquoi'],
         },
       },
+      plan_actions: {
+        type: 'array',
+        description: 'PLAN D\'ACTION STRATÉGIQUE : 4 à 8 actions priorisées par impact, chacune ancrée dans des données précises (numéros de devis, noms de clients, montants). JAMAIS de généralités.',
+        items: {
+          type: 'object',
+          properties: {
+            titre: { type: 'string', description: 'Action concrète et directe (ex: "Relancer devis DV-12345 CLIENT X").' },
+            constat: { type: 'string', description: 'Les chiffres précis qui justifient l\'action (devis N°, client, montant, ancienneté…).' },
+            impact_potentiel_eur: { type: 'number', description: 'Impact financier estimé en € HT.' },
+            responsable_suggere: { type: 'string', description: 'Ex: "Valérie", "commercial X", "Tristan", "ADV".' },
+            horizon: { type: 'string', enum: ['cette_semaine', 'ce_mois', 'ce_trimestre'] },
+            premieres_etapes: {
+              type: 'array',
+              description: '2 à 3 étapes concrètes de démarrage.',
+              items: { type: 'string' },
+            },
+          },
+          required: ['titre', 'constat', 'impact_potentiel_eur', 'responsable_suggere', 'horizon', 'premieres_etapes'],
+        },
+      },
+      signaux_vigilance: {
+        type: 'array',
+        description: '3 à 5 points de risque chiffrés à surveiller (dépendance client, marge, cash, calendrier, parc vieillissant, clients en déclin…).',
+        items: {
+          type: 'object',
+          properties: {
+            titre: { type: 'string' },
+            detail: { type: 'string', description: '1 phrase chiffrée.' },
+          },
+          required: ['titre', 'detail'],
+        },
+      },
     },
-    required: ['sante', 'mouvements', 'risques', 'actions'],
+    required: ['sante', 'mouvements', 'risques', 'plan_actions'],
   },
 };
 
@@ -827,9 +859,9 @@ Deno.serve(async (req) => {
 
       const initialMessages = [{
         role: 'user' as const,
-        content: `Voici les données commerciales agrégées (JSON) :\n\n\`\`\`json\n${dataJson}\n\`\`\`\n\nProduis la revue commerciale du mois via l'outil build_revue.\n- santé globale : CA à période égale N/N-1/N-2 + évolution en % ; tendance mensuelle en % vs N-1 pour chaque mois disponible ; commentaire 2 phrases max.\n- mouvements : familles et clients qui montent/descendent (top mouvements chiffrés) ;\n- risques (marge, dépendance client, stock, cash, calendrier) avec gravité ;\n- TOP 5 actions priorisées par impact euros (relances devis nominatives, clients dormants à réactiver, stock à écouler). Chaque champ texte : 1-2 phrases max, ton direct.${suivisBlock}\n\nAvant d'appeler build_revue, utilise executer_sql autant de fois que nécessaire pour vérifier/enrichir tes chiffres, et "memoriser" pour consigner les nouvelles décisions/plans que la revue implique.`,
+        content: `Voici les données commerciales agrégées (JSON) :\n\n\`\`\`json\n${dataJson}\n\`\`\`\n\nProduis une VRAIE REVUE STRATÉGIQUE via l'outil build_revue — pas un rapport de chiffres, mais une analyse d'exploitation avec un plan d'action concret et priorisé.\n\n### CONCEPTS MÉTIER À MOBILISER EXPLICITEMENT\n- **Pipeline VIVANT vs dormant** : devis < 6 mois = vivant, 6-12 mois = **gisement de relances** (lister les plus gros par numéro + client + montant via v_gaia_carnet_documents), > 12 mois = **à annuler** (hygiène commerciale).\n- **Commandes fermes anciennes** : à élucider (livraison, blocage, annulation ?).\n- **Carnet de commandes** = reste à livrer exact, **aucun chevauchement avec le CA facturé**.\n- **Comparaison N-1 à PÉRIODE ÉGALE** : mêmes mois de l'exercice fiscal (sept → août), jamais 12 mois vs 7.\n- **CA officiel** : hors éco-taxe et hors SFA (rétrocession).\n- **MAGASIN pièces détachées** (~750-900 k€/exercice, récurrent) : tendance, top clients pièces, à intégrer aux constats.\n- **Signaux clients croisés** : réparations RP sans achats de jeux = client à visiter ; parc vieillissant ; clients en déclin vs N-1.\n- **Marge / taux de marque** quand pertinent (arbitrage prix vs volume).\n\n### CONSIGNES DE SORTIE\n- santé : CA à période égale N/N-1/N-2 + évolution % ; tendance mensuelle % vs N-1 ; commentaire 2 phrases max.\n- mouvements : familles + clients qui montent/descendent (top mouvements chiffrés).\n- risques (marge, dépendance, stock, cash, calendrier) avec gravité.\n- **plan_actions** : entre **4 et 8 actions** PRIORISÉES par impact €, chacune ancrée dans des **données précises** (numéros de devis, noms de clients exacts, montants exacts). Chaque action précise horizon (cette_semaine / ce_mois / ce_trimestre), responsable suggéré (Valérie / commercial / Tristan / ADV) et 2-3 **premieres_etapes** concrètes. **JAMAIS de généralités** type "améliorer la communication" ou "développer le portefeuille".\n- **signaux_vigilance** : 3 à 5 points de risque **chiffrés** à surveiller.\n- Chaque champ texte : 1-2 phrases max, ton direct.${suivisBlock}\n\nAvant d'appeler build_revue, utilise executer_sql autant de fois que nécessaire pour vérifier/enrichir tes chiffres (notamment lister les devis 6-12 mois par montant via v_gaia_carnet_documents, extraire les tops clients pièces MAGASIN, identifier les clients avec RP sans achat jeux 12 mois, etc.), et "memoriser" pour consigner les nouvelles décisions/plans que la revue implique.`,
       }];
-      const revueSystem = `${SYSTEM_PROMPT}\n\n${SUIVI_INSTRUCTION}\n\nTu peux utiliser executer_sql pour vérifier des chiffres, "memoriser"/"oublier" pour gérer la mémoire, avant de construire la revue. Ta réponse FINALE doit être un unique appel à l'outil build_revue avec des données structurées, sans texte libre.`;
+      const revueSystem = `${SYSTEM_PROMPT}\n\n${SUIVI_INSTRUCTION}\n\nTu peux utiliser executer_sql pour vérifier des chiffres, "memoriser"/"oublier" pour gérer la mémoire, avant de construire la revue. Ta réponse FINALE doit être un unique appel à l'outil build_revue avec des données structurées, sans texte libre. Le champ plan_actions doit contenir des actions ancrées dans des données précises (numéros de devis, clients, montants) — jamais de généralités.`;
       const revueExtra = { output_config: { effort: 'xhigh' } };
 
       const encoder = new TextEncoder();
@@ -852,7 +884,9 @@ Deno.serve(async (req) => {
         const clientsBaisse = Array.isArray(mvts.clients_baisse) ? mvts.clients_baisse.length : 0;
         const risques = Array.isArray(input.risques) ? input.risques.length : 0;
         const actions = Array.isArray(input.actions) ? input.actions.length : 0;
-        const sectionsFilled = familles + clientsHausse + clientsBaisse + risques + actions;
+        const planActions = Array.isArray(input.plan_actions) ? input.plan_actions.length : 0;
+        const vigilance = Array.isArray(input.signaux_vigilance) ? input.signaux_vigilance.length : 0;
+        const sectionsFilled = familles + clientsHausse + clientsBaisse + risques + actions + planActions + vigilance;
 
         if (!santeFilled) {
           return { ok: false, reason: `santé globale vide (commentaire="${santeCommentaire.slice(0, 40)}", annees=${santeAnnees.length}, tendance=${santeTendance.length})` };
@@ -969,7 +1003,7 @@ Deno.serve(async (req) => {
               if (!validation.ok) {
                 console.log(`[gaia-copilot] build_revue invalide (${validation.reason}) — retry`);
                 safeSend('gaia_sql', { summary: 'Nouvelle tentative (revue trop courte)…', query: '' });
-                const retryInstruction = `La précédente tentative a rendu une revue vide ou incomplète (${validation.reason}). REMPLIS OBLIGATOIREMENT sante.commentaire (2 phrases), sante.annees (au moins 2 exercices avec ca_ht) et AU MOINS UNE section parmi mouvements.familles, mouvements.clients_hausse/baisse, risques ou actions. Sois concis : chaque champ texte = 1-2 phrases maximum, maximum 5 items par liste.`;
+                const retryInstruction = `La précédente tentative a rendu une revue vide ou incomplète (${validation.reason}). REMPLIS OBLIGATOIREMENT sante.commentaire (2 phrases), sante.annees (au moins 2 exercices avec ca_ht), plan_actions (4 à 8 actions concrètes ancrées dans des chiffres) et AU MOINS UNE section parmi mouvements, risques ou signaux_vigilance. Sois concis : chaque champ texte = 1-2 phrases maximum, maximum 8 items par liste.`;
                 const retry = await callBuildRevue(agenticMessages, retryInstruction);
                 revueInput = retry.input;
                 stopReason = retry.stopReason;

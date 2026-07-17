@@ -151,6 +151,26 @@ function normalizeRevue(raw: any): RevueData {
   const r = raw && typeof raw === "object" ? raw : {};
   const sante = r.sante && typeof r.sante === "object" ? r.sante : {};
   const mouvements = r.mouvements && typeof r.mouvements === "object" ? r.mouvements : {};
+  const validHorizons = ["cette_semaine", "ce_mois", "ce_trimestre"] as const;
+  const planActions = Array.isArray(r.plan_actions)
+    ? r.plan_actions
+        .filter((a: any) => a && typeof a === "object")
+        .map((a: any) => ({
+          titre: String(a.titre ?? ""),
+          constat: String(a.constat ?? ""),
+          impact_potentiel_eur: Number(a.impact_potentiel_eur) || 0,
+          responsable_suggere: String(a.responsable_suggere ?? ""),
+          horizon: (validHorizons as readonly string[]).includes(a.horizon) ? a.horizon : "ce_mois",
+          premieres_etapes: Array.isArray(a.premieres_etapes)
+            ? a.premieres_etapes.map((e: any) => String(e)).filter(Boolean)
+            : [],
+        }))
+    : [];
+  const signauxVigilance = Array.isArray(r.signaux_vigilance)
+    ? r.signaux_vigilance
+        .filter((s: any) => s && typeof s === "object")
+        .map((s: any) => ({ titre: String(s.titre ?? ""), detail: String(s.detail ?? "") }))
+    : [];
   return {
     sante: {
       commentaire: typeof sante.commentaire === "string" ? sante.commentaire : "",
@@ -164,6 +184,8 @@ function normalizeRevue(raw: any): RevueData {
     },
     risques: Array.isArray(r.risques) ? r.risques : [],
     actions: Array.isArray(r.actions) ? r.actions : [],
+    plan_actions: planActions,
+    signaux_vigilance: signauxVigilance,
   };
 }
 
@@ -627,7 +649,8 @@ export function GaiaCopilot() {
   return (
     <div className="space-y-6">
       {/* 1. Chat — priorité visuelle */}
-      <div className="rounded-lg border border-border bg-card/40 p-4">
+      <div id="gaia-copilot-chat" className="rounded-lg border border-border bg-card/40 p-4">
+
         <div className="mb-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-secondary" />
@@ -849,7 +872,13 @@ export function GaiaCopilot() {
         {revueData && !isRevueEmpty(revueData) && (
           <div className="rounded border border-border/60 bg-background/40 p-4">
             <RevueRenderBoundary onRetry={generateRevue}>
-              <RevueDashboard data={revueData} />
+              <RevueDashboard
+                data={revueData}
+                onAskCopilot={(prompt) => {
+                  setChatInput(prompt);
+                  document.getElementById("gaia-copilot-chat")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+              />
             </RevueRenderBoundary>
           </div>
         )}

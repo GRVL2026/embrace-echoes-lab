@@ -1,12 +1,26 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   TrendingUp, TrendingDown, AlertTriangle, AlertOctagon, Info, Target,
-  ChevronDown, Phone, Moon, Package, Sparkles, ArrowRight,
+  ChevronDown, Phone, Moon, Package, Sparkles, ArrowRight, MessageCircle,
+  CalendarClock, CalendarDays, CalendarRange, CheckCircle2, Circle, User,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Cell, Tooltip,
 } from "recharts";
+
+export type PlanActionHorizon = "cette_semaine" | "ce_mois" | "ce_trimestre";
+
+export type PlanAction = {
+  titre: string;
+  constat: string;
+  impact_potentiel_eur: number;
+  responsable_suggere: string;
+  horizon: PlanActionHorizon;
+  premieres_etapes: string[];
+};
+
+export type SignalVigilance = { titre: string; detail: string };
 
 export type RevueData = {
   sante: {
@@ -20,7 +34,12 @@ export type RevueData = {
     clients_baisse: { client: string; detail: string }[];
   };
   risques: { titre: string; gravite: "haute" | "moyenne" | "basse"; detail: string }[];
+  /** Legacy — TOP 5 actions plates (conservé pour compat des anciennes revues). */
   actions: { rang: number; titre: string; qui: string; cible: string; impact_eur: number; pourquoi: string }[];
+  /** Plan d'action stratégique priorisé par horizon. */
+  plan_actions?: PlanAction[];
+  /** Signaux de vigilance chiffrés. */
+  signaux_vigilance?: SignalVigilance[];
 };
 
 export const eur = (n: number) =>
@@ -47,9 +66,12 @@ export function isRevueEmpty(r: RevueData | null | undefined): boolean {
     (Array.isArray(mvts.clients_hausse) ? mvts.clients_hausse.length : 0) +
     (Array.isArray(mvts.clients_baisse) ? mvts.clients_baisse.length : 0) +
     (Array.isArray(r.risques) ? r.risques.length : 0) +
-    (Array.isArray(r.actions) ? r.actions.length : 0);
+    (Array.isArray(r.actions) ? r.actions.length : 0) +
+    (Array.isArray(r.plan_actions) ? r.plan_actions.length : 0) +
+    (Array.isArray(r.signaux_vigilance) ? r.signaux_vigilance.length : 0);
   return !santeFilled || sectionsFilled === 0;
 }
+
 
 export function revueToText(r: RevueData): string {
   const lines: string[] = [];

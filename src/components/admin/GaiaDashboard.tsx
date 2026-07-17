@@ -901,6 +901,7 @@ function PipelineBanner({ stats }: { stats: PipeStats }) {
           value={eur(stats.devis.total)}
           count={`${num(stats.devis.nb)} devis`}
           tooltip="Statuts Cegid Brouillon + Ouvert d'un devis (QT) : documents non encore validés en commande. C'est du potentiel commercial."
+          href="/admin/gaia/carnet/devis"
         />
         <Arrow />
         <PipelineStep
@@ -911,6 +912,7 @@ function PipelineBanner({ stats }: { stats: PipeStats }) {
           count={`${num(stats.signee.nb)} commandes`}
           subtitle="Stock réservé, en attente d'expédition"
           tooltip="Statuts Cegid Brouillon + Ouvert d'une commande : commandes en cours de préparation ou validées, stock réservé, en attente d'expédition."
+          href="/admin/gaia/carnet/commande"
         />
         <Arrow />
         <PipelineStep
@@ -920,6 +922,7 @@ function PipelineBanner({ stats }: { stats: PipeStats }) {
           value={eur(stats.expedition.total + stats.reliquat.total)}
           count={`${num(stats.expedition.nb + stats.reliquat.nb)} commandes`}
           tooltip="Commandes physiquement en train d'être livrées ou livrées partiellement (reliquat)."
+          href="/admin/gaia/carnet/livraison"
           extra={
             <div className="mt-2 space-y-1 text-[11px]">
               <div className="flex items-center justify-between gap-2 rounded border border-orange-500/20 bg-orange-500/5 px-2 py-1">
@@ -939,6 +942,7 @@ function PipelineBanner({ stats }: { stats: PipeStats }) {
             </div>
           }
         />
+
         <Arrow />
         <PipelineStep
           color="green"

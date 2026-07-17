@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserMenu } from "@/components/UserMenu";
 import { MobileNav } from "@/components/MobileNav";
+import { AppTopNav } from "@/components/AppTopNav";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -346,14 +347,7 @@ export default function GaiaClientFiche() {
               <span className="text-secondary text-glow-green">OS</span>
             </h1>
           </Link>
-          <nav className="ml-4 hidden md:flex items-center gap-1">
-            <Link to="/admin" className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center gap-1">
-              <Shield className="h-3 w-3" /> Admin
-            </Link>
-            <Link to="/admin/gaia" className="rounded-md bg-primary/15 border border-primary/40 text-primary px-3 py-1 text-xs font-medium inline-flex items-center gap-1">
-              <Database className="h-3 w-3" /> Dashboard
-            </Link>
-          </nav>
+          <AppTopNav />
         </div>
         <UserMenu />
       </header>

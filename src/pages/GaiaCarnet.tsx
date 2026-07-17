@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserMenu } from "@/components/UserMenu";
 import { MobileNav } from "@/components/MobileNav";
+import { AppTopNav } from "@/components/AppTopNav";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -190,14 +191,7 @@ export default function GaiaCarnet() {
               <span className="text-secondary text-glow-green">OS</span>
             </h1>
           </Link>
-          <nav className="ml-4 hidden md:flex items-center gap-1">
-            <Link to="/admin" className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center gap-1">
-              <Shield className="h-3 w-3" /> Admin
-            </Link>
-            <Link to="/admin/gaia" className="rounded-md bg-primary/15 border border-primary/40 text-primary px-3 py-1 text-xs font-medium inline-flex items-center gap-1">
-              <Database className="h-3 w-3" /> Dashboard
-            </Link>
-          </nav>
+          <AppTopNav />
         </div>
         <UserMenu />
       </header>
@@ -224,7 +218,13 @@ export default function GaiaCarnet() {
               <div className="font-display text-2xl sm:text-3xl font-bold tabular-nums">{eur(totals.total)}</div>
               <div className="text-xs text-muted-foreground">{num(totals.nb)} document{totals.nb > 1 ? "s" : ""}</div>
               {totals.totalAvec !== totals.total && (
-                <div className="mt-0.5 text-[10px] text-muted-foreground/70 tabular-nums">avec SFA : {eur(totals.totalAvec)}</div>
+                <div
+                  className="mt-1 inline-flex items-center gap-1 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[12px] font-medium text-amber-500 tabular-nums"
+                  title="Total incluant les clients SFA (rétrocession) — exclus du CA officiel"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                  avec SFA : {eur(totals.totalAvec)}
+                </div>
               )}
             </div>
           </div>
@@ -355,7 +355,13 @@ function AgeCard({
       <div className="mt-1 font-display text-2xl font-bold tabular-nums text-foreground">{eur(total)}</div>
       <div className="mt-0.5 text-xs text-muted-foreground">{num(nb)} document{nb > 1 ? "s" : ""}</div>
       {totalAvec !== undefined && totalAvec !== total && (
-        <div className="mt-0.5 text-[10px] text-muted-foreground/70 tabular-nums">avec SFA : {eur(totalAvec)}</div>
+        <div
+          className="mt-1 inline-flex items-center gap-1 rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-500 tabular-nums"
+          title="Total incluant les clients SFA (rétrocession) — exclus du CA officiel"
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+          avec SFA : {eur(totalAvec)}
+        </div>
       )}
     </button>
   );

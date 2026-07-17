@@ -26,6 +26,7 @@ import { toast } from "@/hooks/use-toast";
 import { ArrowLeft, Plus, Shield, Trash2, Database, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { MobileNav } from "@/components/MobileNav";
+import { AppTopNav } from "@/components/AppTopNav";
 import { Badge } from "@/components/ui/badge";
 import logoImg from "@/assets/logo.png";
 
@@ -182,42 +183,7 @@ export default function DossiersList() {
               <span className="text-secondary text-glow-green">OS</span>
             </h1>
           </Link>}
-          <nav className="ml-4 hidden md:flex items-center gap-1">
-            <Link
-              to="/dossiers"
-              className="rounded-md bg-primary/15 border border-primary/40 text-primary px-3 py-1 text-xs font-medium"
-            >
-              Dossiers
-            </Link>
-            <Link
-              to="/planner"
-              className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted"
-            >
-              Arcade Planner
-            </Link>
-            <Link
-              to="/catalogue"
-              className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted"
-            >
-              Catalogue
-            </Link>
-            {canAccessGaia && (
-              <Link
-                to="/admin/gaia"
-                className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center gap-1"
-              >
-                <Database className="h-3 w-3" /> Dashboard
-              </Link>
-            )}
-            {isAdmin && (
-              <Link
-                to="/admin"
-                className="rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center gap-1"
-              >
-                <Shield className="h-3 w-3" /> Admin
-              </Link>
-            )}
-          </nav>
+          <AppTopNav />
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex">

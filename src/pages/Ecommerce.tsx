@@ -275,6 +275,8 @@ export default function Ecommerce() {
                 evol={stats.kpi.evolCA}
                 sub={`vs ${fmtMoney(stats.kpi.caPrev, stats.currency)}`}
                 accent="primary"
+                onClick={() => document.getElementById("ec-sales-month")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                ariaLabel="Voir les ventes par mois"
               />
               <KpiTile
                 label={`Commandes ${currentPeriodMeta.kpiLabel}`}
@@ -282,6 +284,8 @@ export default function Ecommerce() {
                 evol={stats.kpi.evolCount}
                 sub={`vs ${stats.kpi.countPrev}`}
                 accent="secondary"
+                onClick={() => document.getElementById("ec-latest-orders")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                ariaLabel="Voir les dernières commandes"
               />
               <KpiTile
                 label="Panier moyen"
@@ -289,20 +293,27 @@ export default function Ecommerce() {
                 evol={stats.kpi.evolAov}
                 sub={`vs ${fmtMoney(stats.kpi.aovPrev, stats.currency)}`}
                 accent="primary"
+                onClick={() => document.getElementById("ec-top-products")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                ariaLabel="Voir les top produits"
               />
               <KpiTile
                 label="Clients récurrents"
                 value={`${(stats.kpi.returningShare ?? 0).toFixed(0)}%`}
                 sub={`${stats.customers.returning} / ${stats.customers.new + stats.customers.returning} cmd`}
                 accent="primary"
+                onClick={() => document.getElementById("ec-latest-orders")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                ariaLabel="Voir les commandes clients"
               />
               <KpiTile
                 label="Clients période"
                 value={String(stats.customers.new + stats.customers.returning)}
                 sub={`${stats.customers.new} nouveaux · ${stats.customers.returning} récurrents`}
                 accent="secondary"
+                onClick={() => document.getElementById("ec-latest-orders")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                ariaLabel="Voir les commandes clients"
               />
             </div>
+
 
             {stats.traffic && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -312,7 +323,7 @@ export default function Ecommerce() {
             )}
 
             {/* Monthly chart */}
-            <Card className="p-4 sm:p-6 bg-card/60 border-border">
+            <Card id="ec-sales-month" className="p-4 sm:p-6 bg-card/60 border-border scroll-mt-20">
               <h2 className="font-display text-lg font-semibold mb-4 flex items-center gap-2">
                 <ShoppingBag className="h-4 w-4 text-primary" /> Ventes par mois
                 <span className="text-xs text-muted-foreground font-normal">({stats.salesByMonth.length} mois)</span>
@@ -377,7 +388,7 @@ export default function Ecommerce() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Top products */}
-              <Card className="p-4 sm:p-6 bg-card/60 border-border">
+              <Card id="ec-top-products" className="p-4 sm:p-6 bg-card/60 border-border scroll-mt-20">
                 <h2 className="font-display text-lg font-semibold mb-4 flex items-center gap-2">
                   <Package className="h-4 w-4 text-primary" /> Top 10 produits ({currentPeriodMeta.kpiLabel})
                 </h2>
@@ -408,7 +419,7 @@ export default function Ecommerce() {
               </Card>
 
               {/* Latest orders */}
-              <Card className="p-4 sm:p-6 bg-card/60 border-border">
+              <Card id="ec-latest-orders" className="p-4 sm:p-6 bg-card/60 border-border scroll-mt-20">
                 <h2 className="font-display text-lg font-semibold mb-4 flex items-center gap-2">
                   <Users className="h-4 w-4 text-primary" /> Dernières commandes
                 </h2>
@@ -609,14 +620,25 @@ export default function Ecommerce() {
 }
 
 function KpiTile({
-  label, value, sub, evol, accent = "primary",
+  label, value, sub, evol, accent = "primary", onClick, ariaLabel,
 }: {
-  label: string; value: string; sub?: string; evol?: number; accent?: "primary" | "secondary";
+  label: string; value: string; sub?: string; evol?: number;
+  accent?: "primary" | "secondary";
+  onClick?: () => void;
+  ariaLabel?: string;
 }) {
   const color = accent === "primary" ? "text-primary text-glow-purple" : "text-secondary text-glow-green";
   const border = accent === "primary" ? "border-primary/30" : "border-secondary/30";
+  const interactive = typeof onClick === "function";
   return (
-    <Card className={`p-4 bg-card/60 border ${border}`}>
+    <Card
+      onClick={onClick}
+      role={interactive ? "button" : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      onKeyDown={interactive ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(); } } : undefined}
+      aria-label={ariaLabel}
+      className={`p-4 bg-card/60 border ${border} ${interactive ? "cursor-pointer transition-colors hover:border-primary/60 hover:bg-card/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 active:translate-y-[1px]" : ""}`}
+    >
       <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className={`mt-1 font-display text-2xl font-bold ${color}`}>{value}</div>
       <div className="mt-1 flex items-center gap-2 text-xs">

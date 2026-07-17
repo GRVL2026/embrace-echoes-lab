@@ -98,12 +98,23 @@ async function callFn(params: URLSearchParams) {
   return j;
 }
 
-function KpiTile({ label, value, sub, Icon, accent = "primary" }: {
-  label: string; value: string | number; sub?: string; Icon: any; accent?: "primary" | "secondary" | "destructive";
+function KpiTile({ label, value, sub, Icon, accent = "primary", onClick, ariaLabel }: {
+  label: string; value: string | number; sub?: string; Icon: any;
+  accent?: "primary" | "secondary" | "destructive";
+  onClick?: () => void;
+  ariaLabel?: string;
 }) {
   const color = accent === "destructive" ? "text-destructive" : accent === "secondary" ? "text-secondary" : "text-primary";
+  const interactive = typeof onClick === "function";
   return (
-    <Card className="p-4 bg-card/60 border-border">
+    <Card
+      onClick={onClick}
+      role={interactive ? "button" : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      onKeyDown={interactive ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(); } } : undefined}
+      aria-label={ariaLabel}
+      className={`p-4 bg-card/60 border-border ${interactive ? "cursor-pointer transition-colors hover:border-primary/60 hover:bg-card/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 active:translate-y-[1px]" : ""}`}
+    >
       <div className="flex items-center justify-between">
         <div className="text-xs uppercase text-muted-foreground tracking-wider">{label}</div>
         <Icon className={`h-4 w-4 ${color}`} />
@@ -316,10 +327,39 @@ export default function Sav() {
           <>
             {/* KPI */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-              <KpiTile label="Nouveaux" value={stats.kpi.nouveaux} Icon={Inbox} accent="primary" />
-              <KpiTile label="Ouverts" value={stats.kpi.ouverts} Icon={AlertTriangle} accent="destructive" />
-              <KpiTile label="En attente" value={stats.kpi.enAttente} Icon={Clock} accent="primary" />
-              <KpiTile label="Résolus (7j)" value={stats.kpi.resolusSemaine} sub={`${stats.kpi.resolusMois} sur 30j`} Icon={CheckCircle2} accent="secondary" />
+              <KpiTile
+                label="Nouveaux"
+                value={stats.kpi.nouveaux}
+                Icon={Inbox}
+                accent="primary"
+                onClick={() => { setFilter("new"); document.getElementById("sav-tickets-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+                ariaLabel="Filtrer les tickets nouveaux"
+              />
+              <KpiTile
+                label="Ouverts"
+                value={stats.kpi.ouverts}
+                Icon={AlertTriangle}
+                accent="destructive"
+                onClick={() => { setFilter("open"); document.getElementById("sav-tickets-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+                ariaLabel="Filtrer les tickets ouverts"
+              />
+              <KpiTile
+                label="En attente"
+                value={stats.kpi.enAttente}
+                Icon={Clock}
+                accent="primary"
+                onClick={() => { setFilter("pending"); document.getElementById("sav-tickets-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+                ariaLabel="Filtrer les tickets en attente"
+              />
+              <KpiTile
+                label="Résolus (7j)"
+                value={stats.kpi.resolusSemaine}
+                sub={`${stats.kpi.resolusMois} sur 30j`}
+                Icon={CheckCircle2}
+                accent="secondary"
+                onClick={() => { setFilter("solved"); document.getElementById("sav-tickets-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+                ariaLabel="Filtrer les tickets résolus"
+              />
               <KpiTile
                 label="1ère réponse"
                 value={stats.avgFirstReplyMinutes != null ? `${stats.avgFirstReplyMinutes} min` : "—"}
@@ -415,7 +455,7 @@ export default function Sav() {
             </Card>
 
             {/* Tickets + search + filters */}
-            <Card className="p-4 sm:p-6 bg-card/60 border-border">
+            <Card id="sav-tickets-list" className="p-4 sm:p-6 bg-card/60 border-border scroll-mt-20">
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <h2 className="font-display text-lg font-semibold">
                   {searchResults ? `Résultats (${filteredList.length})` : "20 derniers tickets"}

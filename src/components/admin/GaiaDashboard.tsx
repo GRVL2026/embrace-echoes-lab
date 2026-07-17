@@ -6,6 +6,8 @@ import { Loader2, TrendingUp, TrendingDown, FileText, FileSignature, Package, Le
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { KpiTile } from "@/components/ui/kpi-tile";
 import {
   ResponsiveContainer,
   BarChart,
@@ -22,6 +24,7 @@ import {
   Cell,
 } from "recharts";
 import { ChartTooltipContent, barTooltipCursor } from "./chartTooltip";
+
 
 const FAMILY_COLORS = ["#9B5CFF", "#ADFF00", "#00D4FF", "#FF8A00", "#FF4FA3"];
 const OTHERS_COLOR = "#6B7280";
@@ -62,6 +65,15 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
   const [yearClient, setYearClient] = useState<number>(currentYear);
   const [yearFamille, setYearFamille] = useState<number>(currentYear);
   const [yearMarge, setYearMarge] = useState<number>(currentYear);
+  const [stockOpen, setStockOpen] = useState(false);
+  const [margeInfoOpen, setMargeInfoOpen] = useState(false);
+  const [familleOpen, setFamilleOpen] = useState<string | null>(null);
+
+  const scrollToId = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
 
 
   const { data, isPending: loading } = useQuery({
@@ -398,9 +410,12 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
 
       {/* KPI cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <KpiCard
+        <KpiTile
           title="CA exercice en cours"
           value={eur(caCurrent)}
+          icon={<TrendingUp className="h-4 w-4 text-primary" />}
+          onClick={() => scrollToId("ca-mensuel")}
+          ariaLabel="Voir le CA mensuel de l'exercice"
           hint={
             <div className="space-y-1">
               {evolution === null ? (
@@ -419,18 +434,20 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
               )}
             </div>
           }
-          icon={<TrendingUp className="h-4 w-4 text-primary" />}
         />
-        <KpiCard
+        <KpiTile
           title="Stock"
           value={eur(stockTotal.achat)}
-          hint={<span className="text-muted-foreground">Valeur vente : {eur(stockTotal.vente)}</span>}
           icon={<Package className="h-4 w-4 text-secondary" />}
+          onClick={() => setStockOpen(true)}
+          ariaLabel="Voir le détail du stock par dépôt"
+          hint={<span className="text-muted-foreground">Valeur vente : {eur(stockTotal.vente)} · voir le détail par dépôt</span>}
         />
       </div>
 
       {/* CA mensuel — calendrier fiscal */}
-      <Panel title="CA mensuel — comparaison par exercice (sept. → août)">
+      <Panel title="CA mensuel — comparaison par exercice (sept. → août)" id="ca-mensuel">
+
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartMensuel}>
@@ -554,6 +571,8 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
                         stroke="hsl(var(--background))"
                         strokeWidth={2}
                         labelLine={false}
+                        onClick={(d: any) => d?.name && setFamilleOpen(String(d.name))}
+                        className="cursor-pointer outline-none"
                         label={({ percent, cx, cy, midAngle, innerRadius, outerRadius }: any) => {
                           if (!percent || percent < 0.08) return null;
                           const RAD = Math.PI / 180;
@@ -581,21 +600,29 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
                   {famillesData.map((r) => {
                     const pct = famillesTotal > 0 ? (r.value / famillesTotal) * 100 : 0;
                     return (
-                      <li key={r.name} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/30">
-                        <span className="h-3 w-3 flex-shrink-0 rounded-sm" style={{ backgroundColor: r.color }} />
-                        <span className="flex-1 truncate">{r.name}</span>
-                        <span className="font-medium tabular-nums">{eur(r.value)}</span>
-                        <span className="w-12 text-right text-xs tabular-nums text-muted-foreground">{pct.toFixed(1)}%</span>
+                      <li key={r.name}>
+                        <button
+                          type="button"
+                          onClick={() => setFamilleOpen(r.name)}
+                          aria-label={`Voir le détail des ventes de la famille ${r.name}`}
+                          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 cursor-pointer"
+                        >
+                          <span className="h-3 w-3 flex-shrink-0 rounded-sm" style={{ backgroundColor: r.color }} />
+                          <span className="flex-1 truncate">{r.name}</span>
+                          <span className="font-medium tabular-nums">{eur(r.value)}</span>
+                          <span className="w-12 text-right text-xs tabular-nums text-muted-foreground">{pct.toFixed(1)}%</span>
+                        </button>
                       </li>
                     );
                   })}
                 </ul>
+
               </div>
             )}
           </Panel>
         </div>
         <div>
-          <Panel title="Éco-taxe">
+          <Panel title="Éco-taxe" id="ecotaxe-detail">
             {ecotaxe.length === 0 ? (
               <div className="flex h-64 flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
                 <Leaf className="h-8 w-8 text-secondary/60" />
@@ -649,16 +676,15 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
         ) : (
           <div className="space-y-4">
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-              <div className="rounded-lg border border-primary/40 bg-primary/5 p-4 lg:col-span-1">
+              <button
+                type="button"
+                onClick={() => setMargeInfoOpen(true)}
+                aria-label="Comment est calculée la marge"
+                className="text-left rounded-lg border border-primary/40 bg-primary/5 p-4 lg:col-span-1 transition-colors cursor-pointer hover:border-primary/60 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              >
                 <div className="mb-1 flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground">
                   <span>Taux de marque global</span>
-                  <span
-                    title="Taux de marque = marge ÷ prix de vente. Le taux de marge (marge ÷ coût d'achat) est indiqué entre parenthèses."
-                    className="inline-flex cursor-help"
-                    aria-label="Définition taux de marque"
-                  >
-                    <Info className="h-3.5 w-3.5 text-muted-foreground/70" />
-                  </span>
+                  <Info className="h-3.5 w-3.5 text-muted-foreground/70" />
                 </div>
                 <div className="font-display text-3xl font-bold text-primary text-glow-purple">
                   {margeGlobal.taux.toFixed(1)}%
@@ -675,7 +701,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
                   sur {margeGlobal.couverture.toFixed(0)}% du CA analysé ({eur(margeGlobal.caCout)} /{" "}
                   {eur(margeGlobal.caHt)})
                 </div>
-              </div>
+              </button>
 
               <div className="rounded-lg border border-border bg-card/40 p-4 lg:col-span-2">
                 <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
@@ -824,36 +850,284 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
           </div>
         )}
       </Panel>
+
+      {/* Sheet : détail du stock par dépôt */}
+      <Sheet open={stockOpen} onOpenChange={setStockOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="font-display inline-flex items-center gap-2">
+              <Package className="h-4 w-4 text-secondary" /> Stock par dépôt
+            </SheetTitle>
+            <SheetDescription>
+              Valeur totale d'achat : <span className="text-foreground">{eur(stockTotal.achat)}</span> ·
+              valeur de vente : <span className="text-foreground">{eur(stockTotal.vente)}</span>
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-4 overflow-auto rounded border border-border/60">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="px-2 py-2 text-left">Dépôt</th>
+                  <th className="px-2 py-2 text-right">Qté</th>
+                  <th className="px-2 py-2 text-right">Val. achat</th>
+                  <th className="px-2 py-2 text-right">Val. vente</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...stock]
+                  .sort((a, b) => Number(b.valeur_achat || 0) - Number(a.valeur_achat || 0))
+                  .map((r) => (
+                    <tr key={r.depot} className="border-t border-border/60">
+                      <td className="px-2 py-2 font-medium">{r.depot}</td>
+                      <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                        {num(Number(r.quantite || 0))}
+                      </td>
+                      <td className="px-2 py-2 text-right tabular-nums font-medium">
+                        {eur(Number(r.valeur_achat || 0))}
+                      </td>
+                      <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                        {eur(Number(r.valeur_vente || 0))}
+                      </td>
+                    </tr>
+                  ))}
+                {stock.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-2 py-6 text-center text-muted-foreground">
+                      Aucun stock à afficher.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Sheet : comment est calculée la marge */}
+      <Sheet open={margeInfoOpen} onOpenChange={setMargeInfoOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="font-display inline-flex items-center gap-2">
+              <Info className="h-4 w-4 text-primary" /> Comment est calculée la marge
+            </SheetTitle>
+            <SheetDescription>
+              Marge estimée sur la base du dernier coût d'achat connu par article.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-4 space-y-4 text-sm">
+            <div className="rounded-lg border border-border/60 bg-background/40 p-3">
+              <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">
+                Formule
+              </div>
+              <ul className="space-y-1 text-muted-foreground">
+                <li>
+                  <span className="text-foreground">Marge estimée</span> = Σ (prix de vente HT − dernier coût d'achat connu) × quantité vendue
+                </li>
+                <li>
+                  <span className="text-foreground">Taux de marque</span> = Marge ÷ prix de vente HT
+                </li>
+                <li>
+                  <span className="text-foreground">Taux de marge</span> = Marge ÷ coût d'achat
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-lg border border-border/60 bg-background/40 p-3 space-y-1.5">
+              <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">
+                Chiffres — {exShort(yearMarge)}
+              </div>
+              <div className="flex justify-between"><span className="text-muted-foreground">CA analysé</span><span className="tabular-nums font-medium">{eur(margeGlobal.caCout)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Coût d'achat estimé</span><span className="tabular-nums font-medium">{eur(margeGlobal.cout)}</span></div>
+              <div className="flex justify-between border-t border-border/60 pt-1.5"><span className="text-foreground font-medium">Marge estimée</span><span className="tabular-nums font-semibold text-primary">{eur(margeGlobal.marge)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Taux de marque</span><span className="tabular-nums">{margeGlobal.taux.toFixed(1)}%</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Taux de marge</span><span className="tabular-nums">{margeGlobal.tauxMarge.toFixed(1)}%</span></div>
+            </div>
+            <div className="rounded border border-border/60 bg-background/40 p-3 text-xs text-muted-foreground">
+              Couverture du calcul : {margeGlobal.couverture.toFixed(0)}% du CA HT
+              ({eur(margeGlobal.caCout)} sur {eur(margeGlobal.caHt)}). Les articles sans coût d'achat connu
+              sont exclus du calcul.
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Sheet : détail d'une famille (top articles + top clients) */}
+      <FamilleDetailSheet
+        famille={familleOpen}
+        year={yearFamille}
+        onClose={() => setFamilleOpen(null)}
+      />
     </div>
   );
 }
 
-function KpiCard({
-  title,
-  value,
-  hint,
-  icon,
+function FamilleDetailSheet({
+  famille,
+  year,
+  onClose,
 }: {
-  title: string;
-  value: string;
-  hint?: React.ReactNode;
-  icon?: React.ReactNode;
+  famille: string | null;
+  year: number;
+  onClose: () => void;
 }) {
+  const navigate = useNavigate();
+  const { data, isPending } = useQuery({
+    queryKey: ["gaia-famille-detail", famille, year],
+    enabled: !!famille,
+    queryFn: async () => {
+      const c: any = supabase;
+      // 1) Codes articles de la famille (via le cout_article qui expose la famille)
+      const { data: codes } = await c
+        .from("v_gaia_cout_article")
+        .select("code")
+        .eq("famille", famille);
+      const codeList = ((codes ?? []) as { code: string }[]).map((x) => x.code).filter(Boolean);
+      if (codeList.length === 0) return { articles: [], clients: [] };
+
+      // 2) Lignes de vente de l'exercice, agrégées par article et par client
+      const start = `${year - 1}-09-01`;
+      const end = `${year}-09-01`;
+      const { data: lignes } = await c
+        .from("v_gaia_lignes")
+        .select("code_article,inventory_id,code_client,montant_ht,qty,invoice_date")
+        .in("code_article", codeList)
+        .gte("invoice_date", start)
+        .lt("invoice_date", end)
+        .gt("montant_ht", 0)
+        .limit(5000);
+      const rows = (lignes ?? []) as { code_article: string; inventory_id: string | null; code_client: string; montant_ht: number | string; qty: number | string }[];
+
+      // Agrégations articles
+      const artMap = new Map<string, { code: string; qty: number; ca: number }>();
+      for (const r of rows) {
+        const key = r.code_article || r.inventory_id || "—";
+        const cur = artMap.get(key) ?? { code: key, qty: 0, ca: 0 };
+        cur.qty += Number(r.qty || 0);
+        cur.ca += Number(r.montant_ht || 0);
+        artMap.set(key, cur);
+      }
+      const articles = Array.from(artMap.values()).sort((a, b) => b.ca - a.ca).slice(0, 15);
+
+      // Agrégations clients
+      const cliMap = new Map<string, { code: string; ca: number; lignes: number }>();
+      for (const r of rows) {
+        const key = r.code_client || "—";
+        const cur = cliMap.get(key) ?? { code: key, ca: 0, lignes: 0 };
+        cur.ca += Number(r.montant_ht || 0);
+        cur.lignes += 1;
+        cliMap.set(key, cur);
+      }
+      const clientCodes = Array.from(cliMap.keys());
+      // Nom des clients (groupé)
+      const { data: cliNames } = clientCodes.length
+        ? await c.from("gaia_clients").select("customer_id,name").in("customer_id", clientCodes)
+        : { data: [] };
+      const nameOf = new Map<string, string>();
+      ((cliNames ?? []) as { customer_id: string; name: string }[]).forEach((x) => nameOf.set(x.customer_id, x.name));
+      const clients = Array.from(cliMap.values())
+        .map((c) => ({ ...c, nom: nameOf.get(c.code) || c.code }))
+        .sort((a, b) => b.ca - a.ca)
+        .slice(0, 10);
+
+      return { articles, clients };
+    },
+  });
+
+  const articles = data?.articles ?? [];
+  const clients = data?.clients ?? [];
+
   return (
-    <div className="rounded-lg border border-border bg-card/40 p-4">
-      <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
-        <span>{title}</span>
-        {icon}
-      </div>
-      <div className="font-display text-2xl font-bold">{value}</div>
-      {hint && <div className="mt-1 text-xs">{hint}</div>}
-    </div>
+    <Sheet open={!!famille} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle className="font-display inline-flex items-center gap-2">
+            <PackageCheck className="h-4 w-4 text-primary" /> Famille · {famille}
+          </SheetTitle>
+          <SheetDescription>Top articles et top clients — {exShort(year)}</SheetDescription>
+        </SheetHeader>
+        {isPending ? (
+          <div className="flex h-40 items-center justify-center text-muted-foreground">
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Chargement…
+          </div>
+        ) : (
+          <div className="mt-4 space-y-5">
+            <div>
+              <div className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">Top 15 articles</div>
+              <div className="overflow-auto rounded border border-border/60">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
+                    <tr>
+                      <th className="px-2 py-2 text-left">Code</th>
+                      <th className="px-2 py-2 text-right">Qté</th>
+                      <th className="px-2 py-2 text-right">CA HT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {articles.map((a) => (
+                      <tr key={a.code} className="border-t border-border/60">
+                        <td className="px-2 py-2 font-mono text-xs">{a.code}</td>
+                        <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{num(a.qty)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums font-medium">{eur(a.ca)}</td>
+                      </tr>
+                    ))}
+                    {articles.length === 0 && (
+                      <tr>
+                        <td colSpan={3} className="px-2 py-6 text-center text-muted-foreground">
+                          Aucun article vendu sur l'exercice.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div>
+              <div className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">Top 10 clients</div>
+              <div className="overflow-auto rounded border border-border/60">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
+                    <tr>
+                      <th className="px-2 py-2 text-left">Client</th>
+                      <th className="px-2 py-2 text-right">Lignes</th>
+                      <th className="px-2 py-2 text-right">CA HT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clients.map((c) => (
+                      <tr
+                        key={c.code}
+                        className="border-t border-border/60 cursor-pointer hover:bg-muted/30 transition-colors"
+                        onClick={() => {
+                          onClose();
+                          navigate(`/admin/gaia/client/${encodeURIComponent(c.nom)}`);
+                        }}
+                      >
+                        <td className="px-2 py-2 truncate max-w-[220px] text-primary hover:underline">{c.nom}</td>
+                        <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{num(c.lignes)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums font-medium">{eur(c.ca)}</td>
+                      </tr>
+                    ))}
+                    {clients.length === 0 && (
+                      <tr>
+                        <td colSpan={3} className="px-2 py-6 text-center text-muted-foreground">
+                          Aucun client sur l'exercice.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
   );
 }
 
-function Panel({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
+
+function Panel({ title, action, children, id }: { title: string; action?: React.ReactNode; children: React.ReactNode; id?: string }) {
   return (
-    <div className="rounded-lg border border-border bg-card/40 p-4">
+    <div id={id} className="rounded-lg border border-border bg-card/40 p-4 scroll-mt-20">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="font-display text-lg font-semibold">{title}</h3>
         {action}

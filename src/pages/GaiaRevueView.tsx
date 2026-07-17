@@ -117,12 +117,13 @@ export default function GaiaRevueView() {
         </div>
 
 
-        {/* Print-only header */}
+        {/* Print-only header — alimente string(revueTitle)/string(revueDate) du @page */}
         {row && (
-          <div className="hidden print:block mb-6">
-            <h1 className="text-2xl font-bold">{row.titre ?? "Revue commerciale"}</h1>
-            <p className="text-sm">Générée le {new Date(row.created_at).toLocaleString("fr-FR")}</p>
-            <hr className="mt-2 border-black/30" />
+          <div className="hidden print:block revue-print-header">
+            <div className="revue-print-title">{row.titre ?? "Revue commerciale"}</div>
+            <div className="revue-print-date">
+              Générée le {new Date(row.created_at).toLocaleString("fr-FR")}
+            </div>
           </div>
         )}
 
@@ -147,7 +148,7 @@ export default function GaiaRevueView() {
           </div>
         )}
         {row && !isRevueEmpty(row.data) && (
-          <div className="rounded border border-border/60 bg-background/40 p-4 print:border-0 print:bg-white print:p-0">
+          <div className="revue-print-frame rounded border border-border/60 bg-background/40 p-4 print:border-0 print:bg-transparent print:p-0">
             <RevueDashboard data={row.data} />
           </div>
         )}

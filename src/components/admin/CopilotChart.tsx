@@ -42,42 +42,52 @@ export function CopilotChart({ payload }: { payload: ChartPayload }) {
         {payload.titre}
       </div>
       <div style={{ width: "100%", height: 260 }}>
-        <ResponsiveContainer>
-          {payload.type === "ligne" ? (
-            <LineChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="x" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
-              <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => formatValue(Number(v))} />
-              <Tooltip
-                content={<ChartTooltipContent formatter={(v: any) => formatValue(Number(v), unite)} />}
-              />
-              <Line type="monotone" dataKey="y" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
-            </LineChart>
-          ) : payload.type === "barres" ? (
-            <BarChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="x" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
-              <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => formatValue(Number(v))} />
-              <Tooltip
-                cursor={barTooltipCursor}
-                content={<ChartTooltipContent formatter={(v: any) => formatValue(Number(v), unite)} />}
-              />
-              <Bar dataKey="y" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          ) : (
-            <PieChart>
-              <Pie data={data} dataKey="y" nameKey="x" outerRadius={90} innerRadius={50} paddingAngle={2}>
-                {data.map((_, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip
-                content={<ChartTooltipContent formatter={(v: any, n: any) => [formatValue(Number(v), unite), n]} />}
-              />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-            </PieChart>
-          )}
-        </ResponsiveContainer>
+        {payload.type === "donut" ? (() => {
+          const total = data.reduce((n, d) => n + Number(d.y || 0), 0);
+          const donutData = data.map((d, i) => ({
+            name: String(d.x),
+            value: Number(d.y || 0),
+            color: COLORS[i % COLORS.length],
+          }));
+          return (
+            <DonutHoverCenter
+              data={donutData}
+              total={formatValue(total, unite)}
+              innerRadius={50}
+              outerRadius={90}
+              paddingAngle={2}
+              formatValue={(v) => {
+                const p = total > 0 ? ((v / total) * 100).toFixed(1) : "0";
+                return `${formatValue(v, unite)} (${p} %)`;
+              }}
+            />
+          );
+        })() : (
+          <ResponsiveContainer>
+            {payload.type === "ligne" ? (
+              <LineChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="x" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => formatValue(Number(v))} />
+                <Tooltip
+                  content={<ChartTooltipContent formatter={(v: any) => formatValue(Number(v), unite)} />}
+                />
+                <Line type="monotone" dataKey="y" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
+              </LineChart>
+            ) : (
+              <BarChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="x" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => formatValue(Number(v))} />
+                <Tooltip
+                  cursor={barTooltipCursor}
+                  content={<ChartTooltipContent formatter={(v: any) => formatValue(Number(v), unite)} />}
+                />
+                <Bar dataKey="y" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            )}
+          </ResponsiveContainer>
+        )}
       </div>
     </div>
   );

@@ -123,8 +123,23 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
     [retroSfa, currentYear]
   );
 
-  const signees = cmdEtat.find((r) => r.etat === "signee") ?? { nb_commandes: 0, total_ht: 0, etat: "signee" as const };
-  const devis = cmdEtat.find((r) => r.etat === "devis") ?? { nb_commandes: 0, total_ht: 0, etat: "devis" as const };
+  // Pipeline commercial (agrégats)
+  const pipeStats = useMemo(() => {
+    const pick = (cat: "devis" | "commande", statuts: string[]) => {
+      const rows = pipeline.filter((r) => r.categorie === cat && statuts.includes(r.statut));
+      return {
+        total: rows.reduce((n, r) => n + Number(r.total_ht || 0), 0),
+        nb: rows.reduce((n, r) => n + Number(r.nb || 0), 0),
+      };
+    };
+    return {
+      devis: pick("devis", ["Brouillon", "Ouvert"]),
+      signee: pick("commande", ["Ouvert"]),
+      expedition: pick("commande", ["Expédition en cours"]),
+      reliquat: pick("commande", ["Reliquat"]),
+    };
+  }, [pipeline]);
+
   const stockTotal = stock.reduce(
     (acc, r) => ({ achat: acc.achat + Number(r.valeur_achat || 0), vente: acc.vente + Number(r.valeur_vente || 0) }),
     { achat: 0, vente: 0 }

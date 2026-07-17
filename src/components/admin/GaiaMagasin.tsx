@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Loader2, TrendingUp, TrendingDown, Users, ShoppingCart, Wrench,
   FileText, FileSignature, Truck, ArrowRight, ArrowDown, Info,

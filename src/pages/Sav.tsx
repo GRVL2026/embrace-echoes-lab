@@ -282,7 +282,7 @@ export default function Sav() {
     <div className="min-h-screen w-full bg-background text-foreground flex flex-col">
       <AppHeader
         right={
-          <Button variant="outline" size="sm" onClick={() => { load(true); loadTop(true); }} disabled={refreshing || loading}>
+          <Button variant="outline" size="sm" onClick={refreshAll} disabled={refreshing || loading}>
             {refreshing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
             Actualiser
           </Button>
@@ -355,7 +355,14 @@ export default function Sav() {
                     </div>
                   </div>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => loadTop(true)} disabled={loadingTop}>
+                <Button variant="ghost" size="sm" onClick={async () => {
+                  try {
+                    const tc = await callFn(new URLSearchParams({ action: "top_clients", refresh: "1" }));
+                    queryClient.setQueryData(["sav-top-clients"], tc);
+                  } catch (e: any) {
+                    toast.error("Top clients", { description: e?.message || String(e) });
+                  }
+                }} disabled={loadingTop}>
                   {loadingTop ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                 </Button>
               </div>

@@ -42,7 +42,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RTooltip } from "recharts";
+import { DonutHoverCenter } from "@/components/admin/DonutHoverCenter";
 import logoImg from "@/assets/logo.png";
 import { toast } from "@/hooks/use-toast";
 
@@ -650,42 +650,20 @@ export default function GaiaClientFiche() {
                 }));
                 return (
                   <div className="grid grid-cols-[minmax(0,140px)_1fr] gap-4 items-center">
-                    <div className="relative h-[140px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={data}
-                            dataKey="value"
-                            nameKey="name"
-                            innerRadius={44}
-                            outerRadius={64}
-                            paddingAngle={2}
-                            stroke="none"
-                            onClick={(d: any) => d?.name && setOpenParcFamille(d.name)}
-                            className="cursor-pointer outline-none"
-                          >
-                            {data.map((d, i) => (
-                              <Cell key={i} fill={d.color} />
-                            ))}
-                          </Pie>
-                          <RTooltip
-                            contentStyle={{
-                              background: "hsl(var(--popover) / 0.95)",
-                              border: "1px solid hsl(var(--border))",
-                              borderRadius: 6,
-                              fontSize: 12,
-                            }}
-                            formatter={(v: any, n: any) => {
-                              const pct = parcTotal > 0 ? ((Number(v) / parcTotal) * 100).toFixed(0) : "0";
-                              return [`${v} · ${pct}%`, n];
-                            }}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                        <div className="font-display text-lg font-bold tabular-nums leading-none">{parcTotal}</div>
-                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">machines</div>
-                      </div>
+                    <div className="h-[140px]">
+                      <DonutHoverCenter
+                        data={data.map((d) => ({ name: d.name, value: d.value, color: d.color }))}
+                        total={parcTotal}
+                        totalLabel="machines"
+                        innerRadius={44}
+                        outerRadius={64}
+                        paddingAngle={2}
+                        formatValue={(v) => {
+                          const p = parcTotal > 0 ? ((v / parcTotal) * 100).toFixed(0) : "0";
+                          return `${v} (${p} %)`;
+                        }}
+                        onSegmentClick={(d) => d?.name && setOpenParcFamille(d.name)}
+                      />
                     </div>
                     <ul className="min-w-0 space-y-1">
                       {rows.map((r, i) => {

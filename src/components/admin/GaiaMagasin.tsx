@@ -15,6 +15,7 @@ import {
   PieChart, Pie, Cell,
 } from "recharts";
 import { ChartTooltipContent, barTooltipCursor } from "./chartTooltip";
+import { DonutHoverCenter } from "./DonutHoverCenter";
 
 type Mensuel = { mois: string | null; annee: number | null; ca_ht: number | string | null; lignes: number | string | null; clients: number | string | null };
 type TopClient = { annee: number | null; client: string | null; code_client: string | null; ca_ht: number | string | null; lignes: number | string | null };
@@ -472,8 +473,8 @@ export function GaiaMagasin() {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
             <div className="lg:col-span-3">
               <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  {chartMode === "bar" ? (
+                {chartMode === "bar" ? (
+                  <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={sousFamStats} layout="vertical" margin={{ left: 20, right: 40 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={11}
@@ -494,31 +495,30 @@ export function GaiaMagasin() {
                         ))}
                       </Bar>
                     </BarChart>
-                  ) : (
-                    <PieChart>
-                      <Pie
-                        data={sousFamStats}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={100}
-                        innerRadius={55}
-                        paddingAngle={2}
-                        onClick={(d: any) => d?.name && setOpenSousFam(String(d.name))}
-                        className="cursor-pointer outline-none"
-                      >
-                        {sousFamStats.map((_, i) => (
-                          <Cell key={i} fill={SOUS_FAM_COLORS[i % SOUS_FAM_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        content={<ChartTooltipContent formatter={(v: any, n: any) => [eur(Number(v)), n]} />}
-                      />
-                      <Legend />
-                    </PieChart>
-                  )}
-                </ResponsiveContainer>
+                  </ResponsiveContainer>
+                ) : (() => {
+                  const total = sousFamStats.reduce((n, r) => n + Number(r.value || 0), 0);
+                  const data = sousFamStats.map((r, i) => ({
+                    name: r.name,
+                    value: Number(r.value || 0),
+                    color: SOUS_FAM_COLORS[i % SOUS_FAM_COLORS.length],
+                  }));
+                  return (
+                    <DonutHoverCenter
+                      data={data}
+                      total={eur(total)}
+                      totalLabel={exShort(yearSousFam)}
+                      innerRadius={55}
+                      outerRadius={100}
+                      paddingAngle={2}
+                      formatValue={(v) => {
+                        const p = total > 0 ? ((v / total) * 100).toFixed(1) : "0";
+                        return `${eur(v)} (${p} %)`;
+                      }}
+                      onSegmentClick={(d) => d?.name && setOpenSousFam(String(d.name))}
+                    />
+                  );
+                })()}
               </div>
             </div>
             <div className="lg:col-span-2">

@@ -24,6 +24,7 @@ import {
   Cell,
 } from "recharts";
 import { ChartTooltipContent, barTooltipCursor } from "./chartTooltip";
+import { DonutHoverCenter } from "./DonutHoverCenter";
 
 
 const FAMILY_COLORS = ["#9B5CFF", "#ADFF00", "#00D4FF", "#FF8A00", "#FF4FA3"];
@@ -557,44 +558,33 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
             ) : (
               <div className="flex flex-col gap-4 md:flex-row md:items-center">
                 <div className="h-72 w-full md:w-1/2">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={famillesData}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={110}
-                        paddingAngle={2}
-                        stroke="hsl(var(--background))"
-                        strokeWidth={2}
-                        labelLine={false}
-                        onClick={(d: any) => d?.name && setFamilleOpen(String(d.name))}
-                        className="cursor-pointer outline-none"
-                        label={({ percent, cx, cy, midAngle, innerRadius, outerRadius }: any) => {
-                          if (!percent || percent < 0.08) return null;
-                          const RAD = Math.PI / 180;
-                          const r = innerRadius + (outerRadius - innerRadius) * 0.55;
-                          const x = cx + r * Math.cos(-midAngle * RAD);
-                          const y = cy + r * Math.sin(-midAngle * RAD);
-                          return (
-                            <text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight={600}>
-                              {`${Math.round(percent * 100)}%`}
-                            </text>
-                          );
-                        }}
-                      >
-                        {famillesData.map((r, i) => (
-                          <Cell key={i} fill={r.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        content={<ChartTooltipContent formatter={(v: any, n: any) => [eur(Number(v)), n]} />}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <DonutHoverCenter
+                    data={famillesData.map((r) => ({ name: r.name, value: r.value, color: r.color }))}
+                    total={eur(famillesTotal)}
+                    totalLabel={exShort(yearFamille)}
+                    innerRadius={60}
+                    outerRadius={110}
+                    paddingAngle={2}
+                    stroke="hsl(var(--background))"
+                    strokeWidth={2}
+                    formatValue={(v) => {
+                      const p = famillesTotal > 0 ? ((v / famillesTotal) * 100).toFixed(1) : "0";
+                      return `${eur(v)} (${p} %)`;
+                    }}
+                    onSegmentClick={(d) => d?.name && setFamilleOpen(String(d.name))}
+                    sliceLabel={({ percent, cx, cy, midAngle, innerRadius, outerRadius }: any) => {
+                      if (!percent || percent < 0.08) return null;
+                      const RAD = Math.PI / 180;
+                      const r = innerRadius + (outerRadius - innerRadius) * 0.55;
+                      const x = cx + r * Math.cos(-midAngle * RAD);
+                      const y = cy + r * Math.sin(-midAngle * RAD);
+                      return (
+                        <text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight={600}>
+                          {`${Math.round(percent * 100)}%`}
+                        </text>
+                      );
+                    }}
+                  />
                 </div>
                 <ul className="w-full space-y-1.5 md:w-1/2">
                   {famillesData.map((r) => {

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppHeader } from "@/components/AppHeader";
@@ -144,38 +145,44 @@ function normalizeStats(j: any): Stats {
 
 export default function Ecommerce() {
   const { canAccessGaia, isLoading: authLoading } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [stats, setStats] = useState<Stats | null>(null);
   const [period, setPeriod] = useState<typeof PERIODS[number]["key"]>("30d");
   const [openOrder, setOpenOrder] = useState<OrderDetail | null>(null);
   const [lowStockOpen, setLowStockOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
 
-  const load = async (force = false, p = period) => {
-    if (force) setRefreshing(true); else setLoading(true);
+  const fetchStats = async (force: boolean, p: typeof period) => {
+    const { data: sess } = await supabase.auth.getSession();
+    const token = sess.session?.access_token;
+    const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+    const params = new URLSearchParams();
+    params.set("period", p);
+    if (force) params.set("refresh", "1");
+    const url = `https://${projectId}.supabase.co/functions/v1/shopify-stats?${params}`;
+    const r = await fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    const j = await r.json();
+    if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`);
+    return normalizeStats(j);
+  };
+
+  const { data: stats, isPending: loading } = useQuery({
+    queryKey: ["ecommerce-stats", period],
+    queryFn: () => fetchStats(false, period),
+  });
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
     try {
-      const { data: sess } = await supabase.auth.getSession();
-      const token = sess.session?.access_token;
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const params = new URLSearchParams();
-      params.set("period", p);
-      if (force) params.set("refresh", "1");
-      const url = `https://${projectId}.supabase.co/functions/v1/shopify-stats?${params}`;
-      const r = await fetch(url, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      const j = await r.json();
-      if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`);
-      setStats(normalizeStats(j));
+      const fresh = await fetchStats(true, period);
+      queryClient.setQueryData(["ecommerce-stats", period], fresh);
     } catch (e: any) {
       toast.error("Erreur Shopify", { description: e?.message || String(e) });
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
   };
-
-  useEffect(() => { load(false, period); /* eslint-disable-next-line */ }, [period]);
 
   if (authLoading) {
     return (
@@ -192,12 +199,13 @@ export default function Ecommerce() {
     <div className="min-h-screen w-full bg-background text-foreground flex flex-col">
       <AppHeader
         right={
-          <Button variant="outline" size="sm" onClick={() => load(true, period)} disabled={refreshing}>
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
             {refreshing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
             Actualiser
           </Button>
         }
       />
+
       <main className="flex-1 mx-auto w-full max-w-7xl px-4 sm:px-6 py-6 space-y-6">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>

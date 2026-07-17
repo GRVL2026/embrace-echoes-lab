@@ -114,6 +114,22 @@ const inAge = (m: number | null, f: AgeFilter) => {
   return v >= 12;
 };
 
+const STATUTS = ["Brouillon", "Ouvert", "Expédition en cours", "Reliquat"] as const;
+type StatutFilter = "all" | (typeof STATUTS)[number];
+
+const normalize = (s: string) =>
+  s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+function useDebounced<T>(value: T, delay = 200): T {
+  const [v, setV] = useState(value);
+  useMemo(() => {
+    const t = setTimeout(() => setV(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  // fallback via effect
+  return v;
+}
+
 export default function GaiaCarnet() {
   const { isAdmin, canAccessGaia, loading: authLoading } = useAuth();
   const { categorie } = useParams<{ categorie: string }>();

@@ -634,6 +634,7 @@ export default function AdminGaia() {
         )}
 
           </TabsContent>
+          )}
         </Tabs>
       </main>
     </div>

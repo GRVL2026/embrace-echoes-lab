@@ -218,7 +218,13 @@ export default function GaiaCarnet() {
               <div className="font-display text-2xl sm:text-3xl font-bold tabular-nums">{eur(totals.total)}</div>
               <div className="text-xs text-muted-foreground">{num(totals.nb)} document{totals.nb > 1 ? "s" : ""}</div>
               {totals.totalAvec !== totals.total && (
-                <div className="mt-0.5 text-[10px] text-muted-foreground/70 tabular-nums">avec SFA : {eur(totals.totalAvec)}</div>
+                <div
+                  className="mt-1 inline-flex items-center gap-1 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[12px] font-medium text-amber-500 tabular-nums"
+                  title="Total incluant les clients SFA (rétrocession) — exclus du CA officiel"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                  avec SFA : {eur(totals.totalAvec)}
+                </div>
               )}
             </div>
           </div>

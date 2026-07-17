@@ -37,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authLoading, setAuthLoading] = useState(true);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [copilotEnabled, setCopilotEnabled] = useState<boolean>(true);
+  const [dashboardEnabled, setDashboardEnabled] = useState<boolean>(false);
   const [rolesResolvedFor, setRolesResolvedFor] = useState<string | null>(null);
   const [roleError, setRoleError] = useState<string | null>(null);
   const [roleRefresh, setRoleRefresh] = useState(0);

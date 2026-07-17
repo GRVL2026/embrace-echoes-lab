@@ -29,7 +29,7 @@ type CaMensuel = { mois: string; annee: number; mois_fiscal?: number; mois_calen
 type CaClient = { annee: number; code_client: string; client: string; ca_ht: number };
 type CaFamille = { annee: number; famille: string; ca_ht: number };
 type CommandesEtat = { etat: "signee" | "devis"; nb_commandes: number; total_ht: number };
-type PipelineRow = { categorie: "devis" | "commande"; statut: string; nb: number; total_ht: number | string };
+type PipelineRow = { categorie: "devis" | "commande"; statut: string; nb: number; total_ht: number | string; sfa?: boolean };
 type StockValeur = { depot: string; quantite: number; valeur_achat: number; valeur_vente: number };
 type EcotaxeMensuel = { mois: number; ecotaxe_ht: number };
 type CaPeriodeEgale = { annee: number; ca_ht: number | string };
@@ -126,13 +126,16 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
     [retroSfa, currentYear]
   );
 
-  // Pipeline commercial (agrégats)
+  // Pipeline commercial (agrégats) — montants hors SFA par défaut, totaux "avec SFA" pour l'infobulle
   const pipeStats = useMemo(() => {
     const pick = (cat: "devis" | "commande", statuts: string[]) => {
       const rows = pipeline.filter((r) => r.categorie === cat && statuts.includes(r.statut));
+      const hors = rows.filter((r) => !r.sfa);
       return {
-        total: rows.reduce((n, r) => n + Number(r.total_ht || 0), 0),
-        nb: rows.reduce((n, r) => n + Number(r.nb || 0), 0),
+        total: hors.reduce((n, r) => n + Number(r.total_ht || 0), 0),
+        nb: hors.reduce((n, r) => n + Number(r.nb || 0), 0),
+        totalAvec: rows.reduce((n, r) => n + Number(r.total_ht || 0), 0),
+        nbAvec: rows.reduce((n, r) => n + Number(r.nb || 0), 0),
       };
     };
     return {
@@ -878,7 +881,7 @@ function YearSelect({ value, years, onChange }: { value: number; years: number[]
   );
 }
 
-type PipeAgg = { total: number; nb: number };
+type PipeAgg = { total: number; nb: number; totalAvec: number; nbAvec: number };
 type PipeStats = { devis: PipeAgg; signee: PipeAgg; expedition: PipeAgg; reliquat: PipeAgg };
 
 function PipelineBanner({ stats }: { stats: PipeStats }) {

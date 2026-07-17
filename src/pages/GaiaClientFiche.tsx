@@ -93,6 +93,7 @@ export default function GaiaClientFiche() {
   const [copilotQuestion, setCopilotQuestion] = useState("");
   const [copilotAnswer, setCopilotAnswer] = useState<string>("");
   const [copilotLoading, setCopilotLoading] = useState(false);
+  const [openParcFamille, setOpenParcFamille] = useState<string | null>(null);
 
   const { data: fiche, isPending: loading } = useQuery({
     queryKey: ["gaia-client", clientName],

@@ -135,6 +135,9 @@ export default function GaiaCarnet() {
   const cat = (categorie as Categorie) in CONFIG ? (categorie as Categorie) : null;
 
   const [ageFilter, setAgeFilter] = useState<AgeFilter>("all");
+  const [statutFilter, setStatutFilter] = useState<StatutFilter>("all");
+  const [searchInput, setSearchInput] = useState("");
+  const search = useDebounced(searchInput, 200);
   const [openDoc, setOpenDoc] = useState<CarnetDoc | null>(null);
 
   const { data: docs = [], isPending } = useQuery({
@@ -148,6 +151,7 @@ export default function GaiaCarnet() {
   });
   const loading = isPending;
 
+  // Docs de la catégorie (sans filtres UI) — sert au calcul des compteurs et des cartes d'ancienneté
   const filtered = useMemo(() => {
     if (!cat) return [];
     return docs.filter(CONFIG[cat].filter);
@@ -180,12 +184,52 @@ export default function GaiaCarnet() {
     };
   }, [filtered]);
 
+  // Compteurs par statut (indépendants du filtre statut actif, mais sensibles à age + texte)
+  const statutCounts = useMemo(() => {
+    const q = normalize(search.trim());
+    const matchText = (d: CarnetDoc) => {
+      if (!q) return true;
+      const client = normalize(d.client ?? "");
+      const num = (d.n_cde ?? "").toLowerCase();
+      return client.includes(q) || num.includes(q.toLowerCase());
+    };
+    const base = filtered.filter((d) => inAge(d.age_mois, ageFilter) && matchText(d));
+    const counts: Record<string, number> = { all: base.length };
+    for (const s of STATUTS) counts[s] = 0;
+    for (const d of base) {
+      const s = d.statut ?? "";
+      if (s in counts) counts[s] += 1;
+    }
+    return counts;
+  }, [filtered, ageFilter, search]);
+
   const visibleDocs = useMemo(() => {
-    const rows = filtered.filter((d) => inAge(d.age_mois, ageFilter));
-    // du plus ancien au plus récent : age_mois DESC
+    const q = normalize(search.trim());
+    const rows = filtered.filter((d) => {
+      if (!inAge(d.age_mois, ageFilter)) return false;
+      if (statutFilter !== "all" && d.statut !== statutFilter) return false;
+      if (q) {
+        const client = normalize(d.client ?? "");
+        const num = (d.n_cde ?? "").toLowerCase();
+        if (!client.includes(q) && !num.includes(q.toLowerCase())) return false;
+      }
+      return true;
+    });
     rows.sort((a, b) => (b.age_mois ?? 0) - (a.age_mois ?? 0));
     return rows;
-  }, [filtered, ageFilter]);
+  }, [filtered, ageFilter, statutFilter, search]);
+
+  const visibleTotal = useMemo(
+    () => visibleDocs.filter((d) => !d.sfa).reduce((n, d) => n + Number(d.total_ht ?? 0), 0),
+    [visibleDocs],
+  );
+
+  const anyFilterActive = ageFilter !== "all" || statutFilter !== "all" || search.trim().length > 0;
+  const resetFilters = () => {
+    setAgeFilter("all");
+    setStatutFilter("all");
+    setSearchInput("");
+  };
 
   if (authLoading) {
     return (

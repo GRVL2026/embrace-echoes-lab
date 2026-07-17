@@ -181,7 +181,11 @@ export default function GaiaCarnet() {
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground">
-      <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-border bg-background/85 backdrop-blur px-3 sm:px-6 gap-2">
+      <header
+        className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-background/85 backdrop-blur px-3 sm:px-6 gap-2"
+        style={{ paddingTop: "var(--safe-top)", minHeight: "calc(3.5rem + var(--safe-top))" }}
+      >
+
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <MobileNav />
           <Button

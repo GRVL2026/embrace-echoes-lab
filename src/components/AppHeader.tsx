@@ -65,7 +65,11 @@ export function AppHeader({ right }: { right?: ReactNode }) {
     item.match ? item.match(pathname) : pathname === item.to;
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between border-b border-border bg-background/85 backdrop-blur px-3 sm:px-6 gap-2 flex-shrink-0">
+    <header
+      className="sticky top-0 z-40 flex w-full items-center justify-between border-b border-border bg-background/85 backdrop-blur px-3 sm:px-6 gap-2 flex-shrink-0"
+      style={{ paddingTop: "var(--safe-top)", minHeight: "calc(3.5rem + var(--safe-top))" }}
+    >
+
       <div className="flex items-center gap-2 min-w-0 flex-1">
         <div className="md:hidden flex-shrink-0">
           <MobileNav />

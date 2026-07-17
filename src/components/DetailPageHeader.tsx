@@ -49,11 +49,13 @@ export function DetailPageHeader({
   return (
     <header
       className={cn(
-        "sticky top-0 z-40 flex h-14 items-center gap-2 border-b border-border bg-background/85 backdrop-blur px-2 sm:px-4",
+        "sticky top-0 z-40 flex items-center gap-2 border-b border-border bg-background/85 backdrop-blur px-2 sm:px-4",
         "print:hidden",
         className,
       )}
+      style={{ paddingTop: "var(--safe-top)", minHeight: "calc(3.5rem + var(--safe-top))" }}
     >
+
       {backTo ? (
         <Link to={backTo} aria-label={backLabel} className="flex-shrink-0">
           {backButton}

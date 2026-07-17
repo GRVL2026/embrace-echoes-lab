@@ -379,15 +379,15 @@ export function GaiaMagasin() {
 
         {/* Marge estimée — admin/direction uniquement */}
         {isDirection && (
-        <div className="rounded-lg border border-primary/40 bg-primary/5 p-4">
+        <button
+          type="button"
+          onClick={() => setMargeInfoOpen(true)}
+          aria-label="Comprendre les différentes lectures de la marge"
+          className="text-left rounded-lg border border-primary/40 bg-primary/5 p-4 transition-colors cursor-pointer hover:border-primary/60 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+        >
           <div className="mb-1 flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground">
             <span>Taux de marque pièces — {exShort(currentYear)}</span>
-            <span
-              title="Taux de marque = marge ÷ prix de vente, calculé sur la part du CA pour laquelle un coût est connu."
-              className="inline-flex cursor-help"
-            >
-              <Info className="h-3.5 w-3.5 text-muted-foreground/70" />
-            </span>
+            <Info className="h-3.5 w-3.5 text-muted-foreground/70" />
           </div>
           {margeCur ? (
             <>
@@ -414,8 +414,9 @@ export function GaiaMagasin() {
               Aucune donnée de marge pour {exShort(currentYear)}.
             </div>
           )}
-        </div>
+        </button>
         )}
+
       </div>
 
 

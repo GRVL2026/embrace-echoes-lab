@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { DetailPageHeader } from "@/components/DetailPageHeader";
 
 type Attachment = {
   id: number; file_name: string; content_url: string;
@@ -267,17 +268,26 @@ export default function SavTicket() {
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground flex flex-col">
-      <AppHeader
-        right={
-          subdomain && t && (
-            <a href={`https://${subdomain}.zendesk.com/agent/tickets/${t.id}`} target="_blank" rel="noreferrer">
-              <Button variant="outline" size="sm">
-                <ExternalLink className="h-4 w-4 mr-2" /> Ouvrir dans Zendesk
-              </Button>
-            </a>
-          )
-        }
+      <DetailPageHeader
+        className="md:hidden"
+        backTo="/sav"
+        backLabel="Retour aux tickets"
+        title={t ? t.subject : `Ticket #${id ?? ""}`}
+        subtitle={t ? `Ticket #${t.id}` : "SAV"}
       />
+      <div className="hidden md:block">
+        <AppHeader
+          right={
+            subdomain && t && (
+              <a href={`https://${subdomain}.zendesk.com/agent/tickets/${t.id}`} target="_blank" rel="noreferrer">
+                <Button variant="outline" size="sm">
+                  <ExternalLink className="h-4 w-4 mr-2" /> Ouvrir dans Zendesk
+                </Button>
+              </a>
+            )
+          }
+        />
+      </div>
       <main className="flex-1 mx-auto w-full max-w-5xl px-4 sm:px-6 py-4 sm:py-6 space-y-6">
         <Button
           asChild

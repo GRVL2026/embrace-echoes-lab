@@ -23,7 +23,7 @@ import logoImg from "@/assets/logo.png";
 
 
 type Brand = { id: string; name: string };
-type Profile = { id: string; email: string | null; full_name: string | null };
+type Profile = { id: string; email: string | null; full_name: string | null; copilote_enabled?: boolean };
 type Project = {
   id: string;
   brand_id: string | null;
@@ -33,6 +33,7 @@ type Project = {
   updated_at: string;
   owner_id: string | null;
 };
+
 
 const OFFER_LABEL: Record<string, string> = {
   vente: "Vente",

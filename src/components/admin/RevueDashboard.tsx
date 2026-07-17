@@ -175,7 +175,6 @@ function MonthlySparkline({ data }: { data: { mois: string; evolution_pct: numbe
           />
           <YAxis hide domain={[-50, 50]} />
           <Tooltip
-          <Tooltip
             cursor={barTooltipCursor}
             content={
               <ChartTooltipContent

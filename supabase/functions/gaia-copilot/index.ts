@@ -1088,7 +1088,8 @@ Deno.serve(async (req) => {
             }
           } catch (e: any) {
             console.log(`[gaia-copilot] chat stream fatal: ${e?.message ?? e}`);
-            send('gaia_error', { error: e?.message ?? String(e) });
+            const overload = isAnthropicOverload(e);
+            send('gaia_error', { error: e?.message ?? String(e), code: overload ? 'overload' : undefined });
           } finally {
             if (heartbeat !== undefined) clearInterval(heartbeat);
             try { controller.close(); } catch { /* already closed */ }

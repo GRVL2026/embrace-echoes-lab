@@ -327,10 +327,39 @@ export default function Sav() {
           <>
             {/* KPI */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-              <KpiTile label="Nouveaux" value={stats.kpi.nouveaux} Icon={Inbox} accent="primary" />
-              <KpiTile label="Ouverts" value={stats.kpi.ouverts} Icon={AlertTriangle} accent="destructive" />
-              <KpiTile label="En attente" value={stats.kpi.enAttente} Icon={Clock} accent="primary" />
-              <KpiTile label="Résolus (7j)" value={stats.kpi.resolusSemaine} sub={`${stats.kpi.resolusMois} sur 30j`} Icon={CheckCircle2} accent="secondary" />
+              <KpiTile
+                label="Nouveaux"
+                value={stats.kpi.nouveaux}
+                Icon={Inbox}
+                accent="primary"
+                onClick={() => { setFilter("new"); document.getElementById("sav-tickets-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+                ariaLabel="Filtrer les tickets nouveaux"
+              />
+              <KpiTile
+                label="Ouverts"
+                value={stats.kpi.ouverts}
+                Icon={AlertTriangle}
+                accent="destructive"
+                onClick={() => { setFilter("open"); document.getElementById("sav-tickets-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+                ariaLabel="Filtrer les tickets ouverts"
+              />
+              <KpiTile
+                label="En attente"
+                value={stats.kpi.enAttente}
+                Icon={Clock}
+                accent="primary"
+                onClick={() => { setFilter("pending"); document.getElementById("sav-tickets-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+                ariaLabel="Filtrer les tickets en attente"
+              />
+              <KpiTile
+                label="Résolus (7j)"
+                value={stats.kpi.resolusSemaine}
+                sub={`${stats.kpi.resolusMois} sur 30j`}
+                Icon={CheckCircle2}
+                accent="secondary"
+                onClick={() => { setFilter("solved"); document.getElementById("sav-tickets-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+                ariaLabel="Filtrer les tickets résolus"
+              />
               <KpiTile
                 label="1ère réponse"
                 value={stats.avgFirstReplyMinutes != null ? `${stats.avgFirstReplyMinutes} min` : "—"}

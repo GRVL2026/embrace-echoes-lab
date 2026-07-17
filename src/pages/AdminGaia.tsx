@@ -333,9 +333,11 @@ export default function AdminGaia() {
             {isAdmin && <TabsTrigger value="sync">Synchronisation</TabsTrigger>}
           </TabsList>
 
-          <TabsContent value="copilot">
-            <GaiaCopilot />
-          </TabsContent>
+          {(canAccessGaia && copilotEnabled) && (
+            <TabsContent value="copilot">
+              <GaiaCopilot />
+            </TabsContent>
+          )}
 
           <TabsContent value="dashboard">
             <GaiaDashboard onGoToSync={() => {

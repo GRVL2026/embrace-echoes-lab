@@ -416,6 +416,45 @@ export default function GaiaClientFiche() {
           </div>
         ) : (
           <div className="space-y-6">
+            {reparations.length > 0 && (
+              <section className="rounded-lg border border-orange-500/40 bg-orange-500/5 p-4 sm:p-5">
+                <div className="flex items-start gap-3">
+                  <span className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md bg-orange-500/15 text-orange-400">
+                    <Wrench className="h-5 w-5" />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <h3 className="font-display text-base font-semibold">Atelier / Réparations en cours</h3>
+                      <div className="font-display text-lg font-bold tabular-nums text-orange-400">
+                        {eur(reparations.reduce((n, r) => n + Number(r.total_ht ?? 0), 0))}
+                      </div>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {reparations.length} dossier{reparations.length > 1 ? "s" : ""} RP · signal commercial : un client qui répare beaucoup mais ne commande plus mérite une visite.
+                    </p>
+                    <ul className="mt-3 space-y-1.5">
+                      {[...reparations]
+                        .sort((a, b) => (b.age_mois ?? 0) - (a.age_mois ?? 0))
+                        .slice(0, 5)
+                        .map((r) => {
+                          const m = r.age_mois ?? 0;
+                          const ageTxt = m <= 0 ? "ce mois-ci" : m === 1 ? "il y a 1 mois" : `il y a ${m} mois`;
+                          return (
+                            <li key={r.n_cde} className="flex items-center justify-between gap-2 rounded border border-orange-500/20 bg-background/40 px-2 py-1.5 text-xs">
+                              <div className="min-w-0">
+                                <span className="font-mono">{r.n_cde ?? "—"}</span>
+                                <span className="ml-2 text-muted-foreground">{r.statut ?? "—"} · {ageTxt}</span>
+                              </div>
+                              <span className="tabular-nums font-medium">{eur(Number(r.total_ht ?? 0))}</span>
+                            </li>
+                          );
+                        })}
+                    </ul>
+                  </div>
+                </div>
+              </section>
+            )}
+
             {/* 2) À FAIRE */}
             <section className="rounded-lg border border-border bg-card/40 p-4 sm:p-6">
               <div className="mb-3 flex items-center gap-2">

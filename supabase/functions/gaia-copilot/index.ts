@@ -136,8 +136,9 @@ CHARTE DE L'ANALYSTE — règles SQL OBLIGATOIRES (aucune exception sans justifi
 3. COMMANDES (gaia_commandes) : à filtrer TOUJOURS par statut.
    • Devis = statut = 'Brouillon'.
    • Commandes signées en cours = statut IN ('Ouvert', 'Expédition en cours', 'Reliquat') ET completed = false.
-   • EXCLURE systématiquement 'Historique' et 'Annulé' des analyses opérationnelles.
+   • EXCLURE systématiquement 'Historique', 'Annulé' ET 'Traité' des analyses opérationnelles : le statut 'Traité' correspond à des commandes déjà facturées (donc déjà comptées dans le CA via v_gaia_lignes) — la vue v_gaia_commandes_etat les exclut à juste titre du portefeuille de commandes signées en cours.
    • Pour compter des commandes : COUNT(DISTINCT n_cde) (une commande = plusieurs lignes).
+
 
 4. AGRÉGER DANS LE SQL : gaia_query renvoie 200 lignes MAX. Ne calcule JAMAIS un total en récupérant des lignes brutes puis en sommant côté modèle. Utilise SUM/COUNT/AVG/GROUP BY dans la requête, et ORDER BY + LIMIT pour tout classement (Top N).
 

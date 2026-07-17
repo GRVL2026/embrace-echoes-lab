@@ -374,7 +374,8 @@ export function GaiaMagasin() {
           </details>
         </div>
 
-        {/* Marge estimée */}
+        {/* Marge estimée — admin/direction uniquement */}
+        {canAccessGaia && (
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-4">
           <div className="mb-1 flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground">
             <span>Taux de marque pièces — {exShort(currentYear)}</span>

@@ -906,7 +906,8 @@ function PipelineBanner({ stats }: { stats: PipeStats }) {
           label="Devis en cours"
           value={eur(stats.devis.total)}
           count={`${num(stats.devis.nb)} devis`}
-          tooltip="Statuts Cegid Brouillon + Ouvert d'un devis (QT) : documents non encore validés en commande. C'est du potentiel commercial."
+          withSfa={stats.devis.totalAvec !== stats.devis.total ? eur(stats.devis.totalAvec) : undefined}
+          tooltip="Statuts Cegid Brouillon + Ouvert d'un devis (QT) : documents non encore validés en commande. C'est du potentiel commercial. Montant hors clients SFA (retrocession, exclu du CA officiel)."
           href="/admin/gaia/carnet/devis"
         />
         <Arrow />
@@ -917,7 +918,8 @@ function PipelineBanner({ stats }: { stats: PipeStats }) {
           value={eur(stats.signee.total)}
           count={`${num(stats.signee.nb)} commandes`}
           subtitle="Stock réservé, en attente d'expédition"
-          tooltip="Statuts Cegid Brouillon + Ouvert d'une commande : commandes en cours de préparation ou validées, stock réservé, en attente d'expédition."
+          withSfa={stats.signee.totalAvec !== stats.signee.total ? eur(stats.signee.totalAvec) : undefined}
+          tooltip="Statuts Cegid Brouillon + Ouvert d'une commande : commandes en cours de préparation ou validées, stock réservé, en attente d'expédition. Montant hors clients SFA."
           href="/admin/gaia/carnet/commande"
         />
         <Arrow />
@@ -927,7 +929,12 @@ function PipelineBanner({ stats }: { stats: PipeStats }) {
           label="En livraison"
           value={eur(stats.expedition.total + stats.reliquat.total)}
           count={`${num(stats.expedition.nb + stats.reliquat.nb)} commandes`}
-          tooltip="Commandes physiquement en train d'être livrées ou livrées partiellement (reliquat)."
+          withSfa={
+            stats.expedition.totalAvec + stats.reliquat.totalAvec !== stats.expedition.total + stats.reliquat.total
+              ? eur(stats.expedition.totalAvec + stats.reliquat.totalAvec)
+              : undefined
+          }
+          tooltip="Commandes physiquement en train d'être livrées ou livrées partiellement (reliquat). Montant hors clients SFA."
           href="/admin/gaia/carnet/livraison"
           extra={
             <div className="mt-2 space-y-1 text-[11px]">
@@ -972,7 +979,7 @@ const PIPE_COLORS: Record<string, { border: string; bg: string; text: string; ic
 };
 
 function PipelineStep({
-  color, icon, label, value, count, subtitle, tooltip, extra, isFinal, href,
+  color, icon, label, value, count, subtitle, tooltip, extra, isFinal, href, withSfa,
 }: {
   color: "primary" | "blue" | "orange" | "green";
   icon: React.ReactNode;
@@ -984,6 +991,7 @@ function PipelineStep({
   extra?: React.ReactNode;
   isFinal?: boolean;
   href?: string;
+  withSfa?: string;
 }) {
   const c = PIPE_COLORS[color];
   const inner = (
@@ -999,6 +1007,9 @@ function PipelineStep({
       </div>
       <div className={`font-display text-2xl font-bold tabular-nums ${isFinal ? c.text : "text-foreground"}`}>{value}</div>
       <div className="mt-0.5 text-xs text-muted-foreground">{count}</div>
+      {withSfa && (
+        <div className="mt-0.5 text-[10px] text-muted-foreground/70 tabular-nums">avec SFA : {withSfa}</div>
+      )}
       {subtitle && <div className="mt-1 text-[11px] italic text-muted-foreground/80">{subtitle}</div>}
       {extra}
     </>

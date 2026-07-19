@@ -263,14 +263,22 @@ Deno.serve(async (req) => {
     // Job de suivi (progression visible côté UI)
     const { data: job } = await sb
       .from("veille_jobs")
-      .insert({ type, etape: "chargement watchlist", owner_id: ownerId })
+      .insert({ type, etape: "démarrage", owner_id: ownerId, progress: 5 })
       .select("id")
       .single();
     const jobId = job?.id as string | undefined;
-    const setEtape = async (etape: string) => {
+    let lastProgress = 5;
+    const setEtape = async (etape: string, progress?: number) => {
       if (!jobId) return;
-      await sb.from("veille_jobs").update({ etape, updated_at: new Date().toISOString() }).eq("id", jobId);
+      const patch: Record<string, unknown> = { etape, updated_at: new Date().toISOString() };
+      if (typeof progress === "number") {
+        const next = Math.max(lastProgress, Math.min(100, Math.round(progress)));
+        lastProgress = next;
+        patch.progress = next;
+      }
+      await sb.from("veille_jobs").update(patch).eq("id", jobId);
     };
+
 
     // Watchlist
     const { data: watchlist } = await sb

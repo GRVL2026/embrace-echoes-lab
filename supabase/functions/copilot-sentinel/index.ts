@@ -306,19 +306,16 @@ async function callAnthropic(signals: Signal[], fraicheur: string) {
     })),
   };
 
-  const res = await anthropicJson({
-    apiKey: ANTHROPIC_KEY,
-    body: {
-      model: MODEL,
-      max_tokens: 4000,
-      system: SYSTEM,
-      tools: [BUILD_TOOL as any],
-      tool_choice: { type: "tool", name: "build_sentinelle" },
-      messages: [{
-        role: "user",
-        content: [{ type: "text", text: "Signaux du jour :\n\n" + JSON.stringify(userPayload) }],
-      }],
-    },
+  const res = await anthropicJson(ANTHROPIC_KEY, {
+    model: MODEL,
+    max_tokens: 4000,
+    system: SYSTEM,
+    tools: [BUILD_TOOL as any],
+    tool_choice: { type: "tool", name: "build_sentinelle" },
+    messages: [{
+      role: "user",
+      content: [{ type: "text", text: "Signaux du jour :\n\n" + JSON.stringify(userPayload) }],
+    }],
   });
 
   const block = (res?.content ?? []).find((b: any) => b?.type === "tool_use" && b?.name === "build_sentinelle");

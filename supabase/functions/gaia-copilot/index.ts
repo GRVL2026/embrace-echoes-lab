@@ -782,7 +782,9 @@ async function toolLoop(params: {
           if (call?.name === 'executer_sql') {
             result = await runGaiaQuery(admin, String(call?.input?.sql_query ?? ''));
           } else if (call?.name === 'memoriser') {
-            result = await memoriser(admin, String(call?.input?.categorie ?? ''), String(call?.input?.contenu ?? ''));
+            const scopeInput = String(call?.input?.scope ?? 'global').toLowerCase();
+            const scope: 'global' | 'utilisateur' = scopeInput === 'utilisateur' ? 'utilisateur' : 'global';
+            result = await memoriser(admin, String(call?.input?.categorie ?? ''), String(call?.input?.contenu ?? ''), scope, userId);
           } else if (call?.name === 'oublier') {
             result = await oublier(admin, String(call?.input?.id ?? ''));
           } else if (call?.name === 'afficher_graphique') {

@@ -577,40 +577,43 @@ async function syncFeedChunk(
 
 const SELF_INVOKE_BUDGET_MS = 90_000;
 
+async function resolveCronSecret(): Promise<string | null> {
+  const envSecret = Deno.env.get('CRON_SECRET') ?? '';
+  if (envSecret) return envSecret;
+  try {
+    const admin = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    );
+    const { data } = await admin.from('gaia_config').select('value').eq('key', 'cron_secret').maybeSingle();
+    const v = (data?.value ?? '') as string;
+    return v ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 async function authorize(req: Request): Promise<
   | { ok: true; viaCron: true }
   | { ok: true; viaCron: false; userId: string }
   | { ok: false; status: number; error: string }
 > {
   const cronHeader = req.headers.get('x-cron-secret');
-  const cronSecret = Deno.env.get('CRON_SECRET');
   const authHeader = req.headers.get('Authorization');
   const hasBearer = !!authHeader?.startsWith('Bearer ');
 
-  if (cronHeader !== null) {
-    if (!cronSecret) {
-      return { ok: false, status: 403, error: 'CRON_SECRET non configuré côté serveur' };
-    }
-    if (cronHeader === cronSecret) {
+  if (cronHeader) {
+    const secret = await resolveCronSecret();
+    if (secret && cronHeader === secret) {
       return { ok: true, viaCron: true };
     }
     if (!hasBearer) {
-      return {
-        ok: false,
-        status: 403,
-        error: `x-cron-secret invalide (reçu ${cronHeader.length} caractères, attendu ${cronSecret.length})`,
-      };
+      return { ok: false, status: 403, error: 'x-cron-secret invalide' };
     }
     // sinon on tente l'auth JWT ci-dessous
   }
 
   if (!hasBearer) {
-    if (cronHeader === null && !cronSecret) {
-      return { ok: false, status: 403, error: 'en-tête x-cron-secret absent et CRON_SECRET non configuré côté serveur' };
-    }
-    if (cronHeader === null) {
-      return { ok: false, status: 403, error: 'en-tête x-cron-secret absent (et header Authorization Bearer manquant)' };
-    }
     return { ok: false, status: 403, error: 'header Authorization Bearer manquant' };
   }
 
@@ -636,9 +639,10 @@ async function authorize(req: Request): Promise<
   return { ok: true, viaCron: false, userId: userData.user.id };
 }
 
-function selfInvoke(payload: Record<string, unknown>) {
+
+async function selfInvoke(payload: Record<string, unknown>) {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-  const cronSecret = Deno.env.get('CRON_SECRET')!;
+  const cronSecret = (await resolveCronSecret()) ?? '';
   const url = `${supabaseUrl}/functions/v1/cegid-sync`;
   // fire-and-forget
   fetch(url, {
@@ -650,6 +654,7 @@ function selfInvoke(payload: Record<string, unknown>) {
     body: JSON.stringify(payload),
   }).catch((e) => console.error('[cegid-sync] selfInvoke error:', e?.message ?? String(e)));
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {

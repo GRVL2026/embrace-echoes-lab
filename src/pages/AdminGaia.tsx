@@ -423,8 +423,12 @@ export default function AdminGaia() {
           )}
         </div>
 
+        {/* Planification nocturne */}
+        <NightlyScheduleCard lastLogs={lastLogs} />
+
         {/* Résumé des dernières synchros par flux */}
         {lastLogs.length > 0 && (
+
           <div className="mb-6 rounded-lg border border-border bg-card/40 p-4">
             <div className="mb-3 flex items-center gap-2">
               <Database className="h-4 w-4 text-primary" />
@@ -673,3 +677,55 @@ export default function AdminGaia() {
     </div>
   );
 }
+
+function NightlyScheduleCard({ lastLogs }: { lastLogs: SyncLogRow[] }) {
+  // Prochaine exécution : 03:00 UTC quotidien
+  const nextRun = (() => {
+    const now = new Date();
+    const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 3, 0, 0));
+    if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 1);
+    return next;
+  })();
+  const lastOk = lastLogs
+    .filter((l) => l.ok && l.finished_at)
+    .map((l) => new Date(l.finished_at as string))
+    .sort((a, b) => b.getTime() - a.getTime())[0];
+  const ageH = lastOk ? (Date.now() - lastOk.getTime()) / 3_600_000 : null;
+  const stale = ageH === null || ageH > 36;
+
+  return (
+    <div className={`mb-6 rounded-lg border p-4 ${stale ? "border-amber-500/50 bg-amber-500/5" : "border-border bg-card/40"}`}>
+      <div className="mb-2 flex items-center gap-2">
+        <RefreshCw className={`h-4 w-4 ${stale ? "text-amber-500" : "text-primary"}`} />
+        <h3 className="font-display text-lg font-semibold">Synchronisation nocturne automatique</h3>
+      </div>
+      <div className="grid gap-2 text-sm sm:grid-cols-2">
+        <div>
+          <span className="text-muted-foreground">Planification :</span>{" "}
+          <code className="text-xs">cegid-sync-nocturne-v2</code> — tous les jours à 03:00 UTC (≈ 5h Paris été).
+        </div>
+        <div>
+          <span className="text-muted-foreground">Prochaine exécution :</span>{" "}
+          {nextRun.toLocaleString("fr-FR", { timeZone: "Europe/Paris" })}
+        </div>
+        <div className="sm:col-span-2">
+          <span className="text-muted-foreground">Dernière synchro réussie :</span>{" "}
+          {lastOk ? (
+            <span className={stale ? "text-amber-600 font-medium" : ""}>
+              {lastOk.toLocaleString("fr-FR", { timeZone: "Europe/Paris" })}
+              {ageH !== null && ` (il y a ${Math.round(ageH)}h)`}
+            </span>
+          ) : (
+            <span className="text-amber-600 font-medium">aucune trace</span>
+          )}
+        </div>
+      </div>
+      {stale && (
+        <p className="mt-3 text-xs text-amber-600">
+          ⚠ Aucune synchro réussie depuis plus de 36h — la sentinelle a créé une alerte. Vérifier avec « Synchroniser les données ».
+        </p>
+      )}
+    </div>
+  );
+}
+

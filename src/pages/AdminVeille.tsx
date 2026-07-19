@@ -440,6 +440,18 @@ export default function AdminVeille() {
                 />
               </div>
             )}
+            {!generating && stalled && (
+              <div className="w-full sm:w-auto flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                <span>Génération {stalled.type} interrompue</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => generate(stalled.type)}
+                >
+                  Relancer
+                </Button>
+              </div>
+            )}
 
             <Button onClick={() => generate("quotidien")} disabled={generating !== null} variant="outline">
               {generating === "quotidien" ? (

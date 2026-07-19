@@ -43,11 +43,11 @@ const BUILD_VEILLE_TOOL = {
       },
       sections: {
         type: "array",
-        description: "Les 4 sections thématiques dans l'ordre : nouveautes, concurrents, evenements, tendances.",
+        description: "Les 5 sections thématiques dans l'ordre : nouveautes, concurrents, evenements, tendances, barometre_stern.",
         items: {
           type: "object",
           properties: {
-            id: { type: "string", enum: ["nouveautes", "concurrents", "evenements", "tendances"] },
+            id: { type: "string", enum: ["nouveautes", "concurrents", "evenements", "tendances", "barometre_stern"] },
             titre: { type: "string" },
             items: {
               type: "array",
@@ -61,6 +61,20 @@ const BUILD_VEILLE_TOOL = {
                     items: { type: "string", description: "Bullet courte." },
                   },
                   importance: { type: "string", enum: ["haute", "moyenne", "info"] },
+                  tonalite: {
+                    type: "string",
+                    enum: ["enthousiaste", "mitige", "negatif", "neutre"],
+                    description: "Réservé à la section barometre_stern : ressenti communautaire dominant. Optionnel ailleurs.",
+                  },
+                  statut_stern: {
+                    type: "string",
+                    enum: ["rumeur", "annonce", "sorti"],
+                    description: "Réservé à la section barometre_stern pour les titres Stern : stade du titre.",
+                  },
+                  implication_aa: {
+                    type: "string",
+                    description: "Réservé à la section barometre_stern : lecture commerciale pour Avranches Automatic (importateur Stern) en 1 phrase.",
+                  },
                   liens: {
                     type: "array",
                     items: {

@@ -321,3 +321,44 @@ export default function AdminDossiers() {
   );
 }
 
+function SentinelleSection() {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+
+  async function run() {
+    setLoading(true);
+    setResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("copilot-sentinel", { body: {} });
+      if (error) throw error;
+      const r = data as any;
+      setResult(`OK — ${r?.signals_count ?? 0} signaux · ${r?.alertes_generees ?? 0} alertes générées (${r?.alertes_nouvelles ?? 0} nouvelles) · briefing du ${r?.date ?? "jour"} mis à jour.`);
+      toast({ title: "Sentinelle exécutée", description: "Alertes et briefing mis à jour." });
+    } catch (e: any) {
+      setResult(`Erreur : ${e?.message ?? String(e)}`);
+      toast({ title: "Erreur sentinelle", description: e?.message ?? String(e), variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <section className="mt-10">
+      <div className="mb-3 flex items-center gap-2">
+        <Sparkles className="h-4 w-4 text-primary" />
+        <h3 className="font-display text-lg font-semibold">Sentinelle du copilote</h3>
+      </div>
+      <p className="mb-4 text-sm text-muted-foreground">
+        La sentinelle scanne les données chaque matin à 6h et compose le briefing + les alertes. Vous pouvez la relancer manuellement à tout moment.
+      </p>
+      <div className="flex items-center gap-3 flex-wrap">
+        <Button onClick={run} disabled={loading} variant="secondary">
+          {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
+          Analyser maintenant
+        </Button>
+        {result && <span className="text-xs text-muted-foreground">{result}</span>}
+      </div>
+    </section>
+  );
+}
+

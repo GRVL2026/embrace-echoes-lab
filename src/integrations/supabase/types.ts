@@ -1691,6 +1691,7 @@ export type Database = {
           done: boolean
           etape: string
           id: string
+          owner_id: string | null
           started_at: string
           type: string
           updated_at: string
@@ -1699,6 +1700,7 @@ export type Database = {
           done?: boolean
           etape?: string
           id?: string
+          owner_id?: string | null
           started_at?: string
           type: string
           updated_at?: string
@@ -1707,6 +1709,7 @@ export type Database = {
           done?: boolean
           etape?: string
           id?: string
+          owner_id?: string | null
           started_at?: string
           type?: string
           updated_at?: string
@@ -1719,6 +1722,7 @@ export type Database = {
           contenu_markdown: string
           created_at: string
           id: string
+          owner_id: string | null
           periode: string
           sources: Json
           type: string
@@ -1728,6 +1732,7 @@ export type Database = {
           contenu_markdown: string
           created_at?: string
           id?: string
+          owner_id?: string | null
           periode: string
           sources?: Json
           type: string
@@ -1737,6 +1742,7 @@ export type Database = {
           contenu_markdown?: string
           created_at?: string
           id?: string
+          owner_id?: string | null
           periode?: string
           sources?: Json
           type?: string
@@ -2161,6 +2167,19 @@ export type Database = {
       gaia_query: { Args: { sql_query: string }; Returns: Json }
       is_admin: { Args: never; Returns: boolean }
       is_direction: { Args: never; Returns: boolean }
+      notify_user: {
+        Args: {
+          _corps?: string
+          _dedupe_key?: string
+          _gravite?: string
+          _lien?: string
+          _meta?: Json
+          _titre: string
+          _type_cle: string
+          _user_id: string
+        }
+        Returns: string
+      }
       refresh_erp_prices: { Args: never; Returns: number }
       unaccent: { Args: { "": string }; Returns: string }
     }

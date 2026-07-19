@@ -218,7 +218,7 @@ export default function AdminVeille() {
         .select("id, type, etape, done, progress")
         .eq("owner_id", user.id)
         .eq("done", false)
-        .order("created_at", { ascending: false })
+        .order("started_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       if (cancelled) return;
@@ -226,20 +226,28 @@ export default function AdminVeille() {
         setGenerating(data.type as "quotidien" | "hebdomadaire");
         setEtape(data.etape ?? "en cours…");
         setProgress(typeof data.progress === "number" ? data.progress : 0);
-      } else if (generating) {
-        // Le job est fini : on libère l'UI et on rafraîchit l'historique.
+        setCurrentJobId(data.id as string);
+      } else if (currentJobId) {
+        // Le job connu est terminé (ou disparu) : on libère l'UI.
         setGenerating(null);
         setEtape("");
         setProgress(0);
+        setCurrentJobId(null);
         load();
       }
+      // IMPORTANT : si currentJobId est null, on NE remet PAS generating à null.
+      // Sinon, dès que l'utilisateur clique « Générer », l'effet se déclenche
+      // avant que le backend ait inséré la ligne veille_jobs, et la barre de
+      // progression disparaîtrait immédiatement.
 
     };
     poll();
     const id = setInterval(poll, 8000);
     return () => { cancelled = true; clearInterval(id); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canAccessGaia, user?.id, generating]);
+  }, [canAccessGaia, user?.id, currentJobId]);
+
+
 
 
   const structured: VeilleJson | null = useMemo(() => {

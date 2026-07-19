@@ -1215,7 +1215,25 @@ Deno.serve(async (req) => {
         { role: 'user', content: question },
       ];
 
-      const chatSystem = `${SYSTEM_PROMPT}\n\n${SUIVI_INSTRUCTION}`;
+      // Contexte de page : où est l'utilisateur, sur quelle entité ?
+      const rawCtx = body?.context && typeof body.context === 'object' ? body.context : null;
+      let contextBlock = '';
+      if (rawCtx) {
+        const route = typeof rawCtx.route === 'string' ? rawCtx.route : '';
+        const pageTitle = typeof rawCtx.page_title === 'string' ? rawCtx.page_title : '';
+        const entity = rawCtx.entity && typeof rawCtx.entity === 'object' ? rawCtx.entity : null;
+        const entityLine = entity
+          ? `- Entité affichée : ${entity.kind ?? '?'} « ${entity.label ?? '?'} »${entity.id ? ` (id ${entity.id})` : ''}${entity.extra ? ` — détails : ${JSON.stringify(entity.extra).slice(0, 400)}` : ''}`
+          : '- Aucune entité précise en cours de consultation.';
+        contextBlock = `CONTEXTE DE PAGE (à utiliser pour interpréter les questions elliptiques du type "pourquoi il baisse ?", "et sur ce client ?", "et sur cette catégorie ?") :\n- Page : ${pageTitle || 'inconnue'} (${route || 'route inconnue'})\n${entityLine}\nQuand l'utilisateur emploie un pronom ("il", "ça", "cette") sans nommer d'entité, applique-le à l'entité ci-dessus par défaut.`;
+      }
+
+      const chatSystem = [
+        SYSTEM_PROMPT,
+        SUIVI_INSTRUCTION,
+        userProfileSuffix,
+        contextBlock,
+      ].filter(Boolean).join('\n\n');
 
       const encoder = new TextEncoder();
       let heartbeat: number | undefined;

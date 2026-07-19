@@ -71,6 +71,20 @@ export function AlertsBell({ compact = false }: { compact?: boolean }) {
     });
   }, [user?.id, qc]);
 
+  // Realtime : la cloche se met à jour en quelques secondes dès qu'une notification arrive.
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`notifications:${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
+        () => { qc.invalidateQueries({ queryKey: ["notifications"] }); },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id, qc]);
+
   const { data: notifs = [] } = useQuery({
     queryKey: ["notifications", user?.id],
     enabled: !!user?.id,

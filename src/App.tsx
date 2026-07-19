@@ -17,6 +17,8 @@ import AdminCatalogErp from "./pages/AdminCatalogErp";
 import AdminGaia from "./pages/AdminGaia";
 import AdminVeille from "./pages/AdminVeille";
 import GaiaClientFiche from "./pages/GaiaClientFiche";
+import Clients from "./pages/Clients";
+
 import GaiaCarnet from "./pages/GaiaCarnet";
 import GaiaRevueView from "./pages/GaiaRevueView";
 import NotFound from "./pages/NotFound";

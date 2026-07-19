@@ -1148,3 +1148,44 @@ function FeedbackControls({
   );
 }
 
+/** Bloc étapes : déplié pendant le stream, replié en résumé après. */
+function StepsBlock({ steps, streaming }: { steps: ChatStep[]; streaming: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const isOpen = streaming || expanded;
+  if (streaming) {
+    return (
+      <ul className="mb-2 space-y-0.5 text-[11px] text-muted-foreground">
+        {steps.map((s, j) => (
+          <li key={j} title={s.query} className="flex items-center gap-1.5">
+            <Search className="h-3 w-3 shrink-0 opacity-70" />
+            <span className="truncate">Requête : {s.summary}</span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  return (
+    <div className="mb-2">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ChevronRight className={cn("h-3 w-3 transition-transform", isOpen && "rotate-90")} />
+        <Search className="h-3 w-3 opacity-70" />
+        <span>{steps.length} requête{steps.length > 1 ? "s" : ""} exécutée{steps.length > 1 ? "s" : ""}</span>
+      </button>
+      {isOpen && (
+        <ul className="mt-1 ml-4 space-y-0.5 text-[11px] text-muted-foreground">
+          {steps.map((s, j) => (
+            <li key={j} title={s.query} className="flex items-center gap-1.5">
+              <span className="truncate">· {s.summary}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+

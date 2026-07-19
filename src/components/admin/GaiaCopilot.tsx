@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, Component, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCopilot } from "@/contexts/CopilotContext";
 
 import { CopiloteMarkdown } from "./CopiloteMarkdown";
 import { FunctionsHttpError } from "@supabase/supabase-js";
@@ -229,8 +230,14 @@ class RevueRenderBoundary extends Component<
 
 // ─────────── Main component ───────────
 
-export function GaiaCopilot() {
+type GaiaCopilotProps = {
+  /** Mode compact : masque revue, cartes d'actions rapides et historique. */
+  embedded?: boolean;
+};
+
+export function GaiaCopilot({ embedded = false }: GaiaCopilotProps = {}) {
   const { copilotEnabled } = useAuth();
+  const { pageContext, consumePrefill } = useCopilot();
   const [revueLoading, setRevueLoading] = useState(false);
   const [revueData, setRevueData] = useState<RevueData | null>(null);
 

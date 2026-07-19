@@ -312,6 +312,7 @@ export function GaiaCopilot({ embedded = false }: GaiaCopilotProps = {}) {
   }, [chat, storageKey]);
 
   useEffect(() => {
+    if (embedded) { setCardsLoading(false); return; }
     (async () => {
       setCardsLoading(true);
       const client: any = supabase;
@@ -326,7 +327,7 @@ export function GaiaCopilot({ embedded = false }: GaiaCopilotProps = {}) {
       setCardsLoading(false);
       loadHistory();
     })();
-  }, []);
+  }, [embedded]);
 
   // Détecte si l'utilisateur est en bas du chat pour décider du "stick to bottom"
   const handleChatScroll = () => {

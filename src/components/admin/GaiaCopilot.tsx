@@ -299,6 +299,18 @@ export function GaiaCopilot({ embedded = false }: GaiaCopilotProps = {}) {
     })();
   }, []);
 
+  // Consomme un prefill éventuel (bouton "Demander au copilote" d'une autre page)
+  const { prefill: pendingPrefill } = useCopilot();
+  useEffect(() => {
+    if (!pendingPrefill) return;
+    const q = consumePrefill();
+    if (!q) return;
+    setChatInput(q);
+    // auto-envoi
+    setTimeout(() => { void sendChat(q); }, 50);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingPrefill]);
+
   // Persiste le chat à chaque changement (après hydratation)
   useEffect(() => {
     if (!chatHydratedRef.current || !storageKey) return;

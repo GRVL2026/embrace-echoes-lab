@@ -353,15 +353,19 @@ Rends des notes brutes datées avec URLs.`;
           { label: "D · TCG & e-commerce", ...failedCollector("non démarré", false) },
         ];
         const prompts = [collectorA, collectorB, collectorC, collectorD];
+        // Jalons : 20 / 35 / 50 / 60 après chaque collecteur.
+        const collectorProgress = [20, 35, 50, 60];
         for (let idx = 0; idx < prompts.length; idx++) {
           await setEtape(`collecte ${idx + 1}/4 (séquentielle · sonnet)`);
           const result = await runCollectorWithRetry(paquets[idx].label, prompts[idx], searchTurns);
           paquets[idx] = { label: paquets[idx].label, ...result };
+          await setEtape(`collecte ${idx + 1}/4 terminée`, collectorProgress[idx]);
           if (idx < prompts.length - 1) {
             await setEtape(`collecte ${idx + 1}/4 (pause 20 s)`);
             await new Promise((r) => setTimeout(r, 20000));
           }
         }
+
 
         // === ANTI-RAPPORT-VIDE ===
         // On compte uniquement les vrais web_search_result, jamais les puces du

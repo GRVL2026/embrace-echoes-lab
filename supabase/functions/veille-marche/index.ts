@@ -110,7 +110,32 @@ function extractText(content: any[]): string {
     .join("\n");
 }
 
-async function runCollector(prompt: string, maxTurns: number): Promise<{ notes: string; content: any[] }> {
+function detectQuotaError(content: any[]): boolean {
+  const walk = (node: any): boolean => {
+    if (!node) return false;
+    if (Array.isArray(node)) return node.some(walk);
+    if (typeof node === "object") {
+      if (node.type === "web_search_tool_result") {
+        const c = node.content;
+        if (c && typeof c === "object" && !Array.isArray(c) && c.type === "web_search_tool_result_error") return true;
+        if (Array.isArray(c) && c.some((x: any) => x?.type === "web_search_tool_result_error")) return true;
+      }
+      if (typeof node.error === "string" && /limit exceeded|max_uses/i.test(node.error)) return true;
+      for (const k of Object.keys(node)) if (walk(node[k])) return true;
+    }
+    return false;
+  };
+  return walk(content);
+}
+
+function countFactualItems(notes: string): number {
+  if (!notes || notes.startsWith("(")) return 0;
+  const bullets = (notes.match(/^\s*[-*]\s+.+/gm) ?? []).length;
+  const urls = (notes.match(/https?:\/\/[^\s)]+/g) ?? []).length;
+  return Math.max(bullets, urls);
+}
+
+async function runCollector(prompt: string, maxTurns: number): Promise<{ notes: string; content: any[]; quotaError: boolean }> {
   const messages: any[] = [{ role: "user", content: prompt }];
   let allContent: any[] = [];
   let lastText = "";
@@ -132,7 +157,30 @@ async function runCollector(prompt: string, maxTurns: number): Promise<{ notes: 
     }
     break;
   }
-  return { notes: lastText || "(aucune note produite)", content: allContent };
+  return { notes: lastText || "(aucune note produite)", content: allContent, quotaError: detectQuotaError(allContent) };
+}
+
+async function runCollectorWithRetry(label: string, prompt: string, maxTurns: number): Promise<{ notes: string; content: any[]; quotaError: boolean }> {
+  try {
+    const first = await runCollector(prompt, maxTurns);
+    if (first.quotaError) {
+      console.warn(`[veille] ${label} quota exceeded, retry in 30s`);
+      await new Promise((r) => setTimeout(r, 30000));
+      try { return await runCollector(prompt, maxTurns); }
+      catch (e: any) { return { notes: `(collecteur ${label} en échec après retry : ${e?.message ?? e})`, content: first.content, quotaError: true }; }
+    }
+    return first;
+  } catch (e: any) {
+    const msg = (e?.message ?? String(e)).toLowerCase();
+    const isQuota = msg.includes("limit exceeded") || msg.includes("429") || msg.includes("rate");
+    if (isQuota) {
+      console.warn(`[veille] ${label} threw quota-like error, retry in 30s`);
+      await new Promise((r) => setTimeout(r, 30000));
+      try { return await runCollector(prompt, maxTurns); }
+      catch (e2: any) { return { notes: `(collecteur ${label} en échec après retry : ${e2?.message ?? e2})`, content: [], quotaError: true }; }
+    }
+    return { notes: `(collecteur ${label} en échec : ${e?.message ?? e})`, content: [], quotaError: false };
+  }
 }
 
 Deno.serve(async (req) => {
@@ -243,35 +291,45 @@ Rends des notes brutes datées avec URLs.`;
 
     const runJob = async () => {
       try {
-        const paquets: { label: string; notes: string; content: any[] }[] = [
-          { label: "A · Baromètre Stern & flipper", notes: "", content: [] },
-          { label: "B · Watchlist France", notes: "", content: [] },
-          { label: "C · Marché arcade & FEC", notes: "", content: [] },
-          { label: "D · TCG & e-commerce", notes: "", content: [] },
+        const paquets: { label: string; notes: string; content: any[]; quotaError: boolean; items: number }[] = [
+          { label: "A · Baromètre Stern & flipper", notes: "", content: [], quotaError: false, items: 0 },
+          { label: "B · Watchlist France", notes: "", content: [], quotaError: false, items: 0 },
+          { label: "C · Marché arcade & FEC", notes: "", content: [], quotaError: false, items: 0 },
+          { label: "D · TCG & e-commerce", notes: "", content: [], quotaError: false, items: 0 },
         ];
         let doneCount = 0;
-        await setEtape(`collecte 0/4 (parallèle · sonnet)`);
+        await setEtape(`collecte 0/4 (vague 1 · sonnet)`);
 
-        const wrap = (idx: number, prompt: string) =>
-          runCollector(prompt, searchTurns).then(async (r) => {
+        const runOne = (idx: number, prompt: string, wave: number) =>
+          runCollectorWithRetry(paquets[idx].label, prompt, searchTurns).then(async (r) => {
             paquets[idx].notes = r.notes;
             paquets[idx].content = r.content;
+            paquets[idx].quotaError = r.quotaError;
+            paquets[idx].items = countFactualItems(r.notes);
             doneCount += 1;
-            await setEtape(`collecte ${doneCount}/4 (parallèle · sonnet)`);
-          }).catch(async (e) => {
-            console.error(`[veille] collector ${idx} failed`, e?.message ?? e);
-            paquets[idx].notes = `(collecteur ${paquets[idx].label} en échec : ${e?.message ?? e})`;
-            doneCount += 1;
-            await setEtape(`collecte ${doneCount}/4 (parallèle · sonnet)`);
+            await setEtape(`collecte ${doneCount}/4 (vague ${wave} · sonnet)`);
           });
 
-        await Promise.all([
-          wrap(0, collectorA), wrap(1, collectorB), wrap(2, collectorC), wrap(3, collectorD),
-        ]);
+        // Vague 1 : A + B
+        await Promise.all([runOne(0, collectorA, 1), runOne(1, collectorB, 1)]);
+        // Pause 10 s entre les deux vagues (respire pour le quota web_search)
+        await setEtape(`collecte ${doneCount}/4 (pause inter-vagues)`);
+        await new Promise((r) => setTimeout(r, 10000));
+        // Vague 2 : C + D
+        await setEtape(`collecte ${doneCount}/4 (vague 2 · sonnet)`);
+        await Promise.all([runOne(2, collectorC, 2), runOne(3, collectorD, 2)]);
 
-        await setEtape("synthèse (opus · thinking)");
+        // === ANTI-RAPPORT-VIDE ===
+        const totalItems = paquets.reduce((s, p) => s + p.items, 0);
+        const emptyCount = paquets.filter((p) => p.items === 0).length;
+        if (totalItems === 0 || emptyCount === 4) {
+          throw new Error("Quota de recherches web saturé, réessayez dans quelques minutes.");
+        }
 
-        const notesBlock = paquets.map((p) => `### PAQUET ${p.label}\n\n${p.notes}`).join("\n\n---\n\n");
+        await setEtape(`synthèse (opus · thinking${emptyCount ? ` · ${emptyCount} section(s) sans données` : ""})`);
+
+        const notesBlock = paquets.map((p) => `### PAQUET ${p.label}${p.items === 0 ? " (aucune donnée collectée)" : ""}\n\n${p.notes}`).join("\n\n---\n\n");
+
         const synthPrompt = `Période : ${periode}.
 
 Voici les 4 paquets de notes brutes collectés en parallèle par des agents web spécialisés. Synthétise-les en un rapport complet via l'outil build_veille (5 sections dans l'ordre : nouveautes, concurrents, evenements, tendances, barometre_stern).

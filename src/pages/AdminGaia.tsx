@@ -67,6 +67,24 @@ type SyncLogRow = {
 
 export default function AdminGaia() {
   const { isAdmin, canAccessGaia, canAccessDashboard, copilotEnabled, loading: authLoading } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Onglet actif piloté par le hash de l'URL (sidebar → tab). Mapping :
+  //   #aa | #clients | (aucun) → dashboard   #magasin → magasin
+  //   #copilote | #revue → copilot           #sync → sync
+  const hashToTab = (hash: string): string => {
+    const h = hash.replace(/^#/, "");
+    if (h === "magasin") return "magasin";
+    if (h === "copilote" || h === "revue") return "copilot";
+    if (h === "sync") return "sync";
+    return "dashboard";
+  };
+  const [tab, setTab] = useState<string>(() => hashToTab(location.hash));
+  useEffect(() => {
+    setTab(hashToTab(location.hash));
+  }, [location.hash]);
+
   const [running, setRunning] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [diag, setDiag] = useState<Diagnostic | null>(null);
@@ -74,6 +92,7 @@ export default function AdminGaia() {
   const [lastLogs, setLastLogs] = useState<SyncLogRow[]>([]);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [progress, setProgress] = useState<Record<string, SyncSummary & { status: "pending" | "running" | "done" }>>({});
+
 
   const FEEDS = [
     "BD-Clients",

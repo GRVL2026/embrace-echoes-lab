@@ -229,11 +229,12 @@ const SQL_TOOL = {
 
 const MEMORISE_TOOL = {
   name: 'memoriser',
-  description: "Enregistre une note durable dans la mémoire du copilote (décisions, plans d'action, contextes, suivis). NE MÉMORISE JAMAIS de chiffres bruts (ils sont dans la base) — uniquement du contexte qualitatif qui devra être rappelé dans les prochaines conversations. Catégories usuelles : 'decision', 'plan', 'contexte', 'suivi', 'note'.",
+  description: "Enregistre une note durable. Deux portées possibles via 'scope' : 'global' (mémoire du copilote pour toute l'équipe : décisions, plans d'action, contextes, suivis — c'est le comportement historique par défaut), ou 'utilisateur' (mémoire personnelle sur l'utilisateur courant : son rôle métier, ses sujets récurrents, ses préférences de réponse — jamais d'informations sensibles hors contexte pro). NE MÉMORISE JAMAIS de chiffres bruts (ils sont dans la base). Catégories usuelles côté global : 'decision', 'plan', 'contexte', 'suivi', 'note'. Côté utilisateur : 'role', 'preference', 'sujet_recurrent', 'note'.",
   input_schema: {
     type: 'object',
     properties: {
-      categorie: { type: 'string', description: "Catégorie courte : 'decision' | 'plan' | 'contexte' | 'suivi' | 'note'." },
+      scope: { type: 'string', enum: ['global', 'utilisateur'], description: "Portée : 'global' (défaut) ou 'utilisateur'." },
+      categorie: { type: 'string', description: "Catégorie courte." },
       contenu: { type: 'string', description: 'Note à mémoriser, phrase complète, autonome (compréhensible sans le contexte de la conversation).' },
     },
     required: ['categorie', 'contenu'],

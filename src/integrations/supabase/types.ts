@@ -1178,6 +1178,121 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_prefs: {
+        Row: {
+          canal: string
+          mode: string
+          type_cle: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          canal?: string
+          mode?: string
+          type_cle: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          canal?: string
+          mode?: string
+          type_cle?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_prefs_type_cle_fkey"
+            columns: ["type_cle"]
+            isOneToOne: false
+            referencedRelation: "notification_types"
+            referencedColumns: ["cle"]
+          },
+        ]
+      }
+      notification_types: {
+        Row: {
+          categorie: string
+          cle: string
+          created_at: string
+          description: string | null
+          gravite_defaut: string
+          libelle: string
+          visibilite_role: string
+        }
+        Insert: {
+          categorie?: string
+          cle: string
+          created_at?: string
+          description?: string | null
+          gravite_defaut?: string
+          libelle: string
+          visibilite_role?: string
+        }
+        Update: {
+          categorie?: string
+          cle?: string
+          created_at?: string
+          description?: string | null
+          gravite_defaut?: string
+          libelle?: string
+          visibilite_role?: string
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          corps: string | null
+          created_at: string
+          dedupe_key: string | null
+          gravite: string
+          id: string
+          lien: string | null
+          lu: boolean
+          lu_at: string | null
+          meta: Json
+          titre: string
+          type_cle: string
+          user_id: string
+        }
+        Insert: {
+          corps?: string | null
+          created_at?: string
+          dedupe_key?: string | null
+          gravite?: string
+          id?: string
+          lien?: string | null
+          lu?: boolean
+          lu_at?: string | null
+          meta?: Json
+          titre: string
+          type_cle: string
+          user_id: string
+        }
+        Update: {
+          corps?: string | null
+          created_at?: string
+          dedupe_key?: string | null
+          gravite?: string
+          id?: string
+          lien?: string | null
+          lu?: boolean
+          lu_at?: string | null
+          meta?: Json
+          titre?: string
+          type_cle?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_type_cle_fkey"
+            columns: ["type_cle"]
+            isOneToOne: false
+            referencedRelation: "notification_types"
+            referencedColumns: ["cle"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           copilote_enabled: boolean
@@ -1971,6 +2086,19 @@ export type Database = {
     }
     Functions: {
       can_access_dashboard: { Args: { _uid?: string }; Returns: boolean }
+      dispatch_notification: {
+        Args: {
+          _corps?: string
+          _dedupe_key?: string
+          _gravite?: string
+          _lien?: string
+          _meta?: Json
+          _titre: string
+          _type_cle: string
+        }
+        Returns: number
+      }
+      ensure_notification_prefs: { Args: { _uid: string }; Returns: undefined }
       gaia_query: { Args: { sql_query: string }; Returns: Json }
       is_admin: { Args: never; Returns: boolean }
       is_direction: { Args: never; Returns: boolean }

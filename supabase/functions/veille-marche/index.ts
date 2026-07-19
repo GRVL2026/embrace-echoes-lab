@@ -110,32 +110,60 @@ function extractText(content: any[]): string {
     .join("\n");
 }
 
-function detectQuotaError(content: any[]): boolean {
-  const walk = (node: any): boolean => {
-    if (!node) return false;
-    if (Array.isArray(node)) return node.some(walk);
-    if (typeof node === "object") {
-      if (node.type === "web_search_tool_result") {
-        const c = node.content;
-        if (c && typeof c === "object" && !Array.isArray(c) && c.type === "web_search_tool_result_error") return true;
-        if (Array.isArray(c) && c.some((x: any) => x?.type === "web_search_tool_result_error")) return true;
-      }
-      if (typeof node.error === "string" && /limit exceeded|max_uses/i.test(node.error)) return true;
-      for (const k of Object.keys(node)) if (walk(node[k])) return true;
+type CollectorResult = {
+  notes: string;
+  content: any[];
+  quotaError: boolean;
+  accountUnavailable: boolean;
+  errorMessage: string | null;
+  factualItems: number;
+};
+
+function inspectWebSearch(content: any[]) {
+  const factualUrls = new Set<string>();
+  const errorMessages: string[] = [];
+
+  const walk = (node: any) => {
+    if (!node) return;
+    if (Array.isArray(node)) { node.forEach(walk); return; }
+    if (typeof node !== "object") return;
+
+    if (node.type === "web_search_result" && typeof node.url === "string") {
+      factualUrls.add(node.url);
     }
-    return false;
+    if (node.type === "web_search_tool_result_error" || node.type === "error") {
+      errorMessages.push(JSON.stringify(node));
+    }
+    for (const value of Object.values(node)) walk(value);
   };
-  return walk(content);
+  walk(content);
+
+  // Certains modèles reformulent l'erreur outil dans leur texte final. On la
+  // conserve pour le diagnostic, mais elle ne compte jamais comme un fait.
+  const text = extractText(content);
+  if (/server tool use limit exceeded|max_uses_exceeded|web search.{0,40}(?:limit|unavailable|disabled|not enabled)|(?:rate limit|429)/i.test(text)) {
+    errorMessages.push(text);
+  }
+
+  const errorMessage = errorMessages.join(" | ").slice(0, 1200) || null;
+  const quotaError = !!errorMessage && /server tool use limit exceeded|max_uses_exceeded|rate.?limit|\b429\b|quota/i.test(errorMessage);
+  const accountUnavailable = !!errorMessage && /web.?search.{0,80}(?:unavailable|disabled|not enabled|not available|not permitted)|(?:account|organization|workspace).{0,80}(?:quota|limit|disabled)|billing|credit/i.test(errorMessage);
+
+  return { factualItems: factualUrls.size, quotaError, accountUnavailable, errorMessage };
 }
 
-function countFactualItems(notes: string): number {
-  if (!notes || notes.startsWith("(")) return 0;
-  const bullets = (notes.match(/^\s*[-*]\s+.+/gm) ?? []).length;
-  const urls = (notes.match(/https?:\/\/[^\s)]+/g) ?? []).length;
-  return Math.max(bullets, urls);
+function failedCollector(message: string, quotaError: boolean, accountUnavailable = false): CollectorResult {
+  return {
+    notes: `(collecteur en échec : ${message})`,
+    content: [],
+    quotaError,
+    accountUnavailable,
+    errorMessage: message,
+    factualItems: 0,
+  };
 }
 
-async function runCollector(prompt: string, maxTurns: number): Promise<{ notes: string; content: any[]; quotaError: boolean }> {
+async function runCollector(prompt: string, maxUses: number): Promise<CollectorResult> {
   const messages: any[] = [{ role: "user", content: prompt }];
   let allContent: any[] = [];
   let lastText = "";
@@ -145,41 +173,60 @@ async function runCollector(prompt: string, maxTurns: number): Promise<{ notes: 
       model: COLLECT_MODEL,
       max_tokens: 6000,
       system: COLLECTOR_SYSTEM,
-      tools: [WEB_SEARCH_TOOL(maxTurns)],
+      tools: [WEB_SEARCH_TOOL(maxUses)],
       messages,
     });
     allContent.push(...(resp.content ?? []));
     messages.push({ role: "assistant", content: resp.content });
     lastText = extractText(resp.content);
+    const inspection = inspectWebSearch(allContent);
+    if (inspection.errorMessage) break;
     if (resp.stop_reason === "pause_turn") {
       messages.push({ role: "user", content: "Continue." });
       continue;
     }
     break;
   }
-  return { notes: lastText || "(aucune note produite)", content: allContent, quotaError: detectQuotaError(allContent) };
+  const inspection = inspectWebSearch(allContent);
+  return { notes: lastText || "(aucune note produite)", content: allContent, ...inspection };
 }
 
-async function runCollectorWithRetry(label: string, prompt: string, maxTurns: number): Promise<{ notes: string; content: any[]; quotaError: boolean }> {
+async function runCollectorWithRetry(label: string, prompt: string, maxUses: number): Promise<CollectorResult> {
   try {
-    const first = await runCollector(prompt, maxTurns);
+    const first = await runCollector(prompt, maxUses);
+    if (first.errorMessage) {
+      console.error(`[veille] ${label} web_search error (HTTP 200 tool result): ${first.errorMessage}`);
+    }
+    if (first.accountUnavailable) return first;
     if (first.quotaError) {
-      console.warn(`[veille] ${label} quota exceeded, retry in 30s`);
-      await new Promise((r) => setTimeout(r, 30000));
-      try { return await runCollector(prompt, maxTurns); }
-      catch (e: any) { return { notes: `(collecteur ${label} en échec après retry : ${e?.message ?? e})`, content: first.content, quotaError: true }; }
+      console.warn(`[veille] ${label} quota exceeded, retry in 60s`);
+      await new Promise((r) => setTimeout(r, 60000));
+      try {
+        const retry = await runCollector(prompt, maxUses);
+        if (retry.errorMessage) {
+          console.error(`[veille] ${label} retry web_search error (HTTP 200 tool result): ${retry.errorMessage}`);
+        }
+        return retry;
+      } catch (e: any) {
+        return failedCollector(e?.message ?? String(e), true);
+      }
     }
     return first;
   } catch (e: any) {
-    const msg = (e?.message ?? String(e)).toLowerCase();
-    const isQuota = msg.includes("limit exceeded") || msg.includes("429") || msg.includes("rate");
+    const raw = `${e?.message ?? String(e)} ${e?.body ?? ""}`;
+    const msg = raw.toLowerCase();
+    const status = Number(e?.status ?? 0);
+    const isQuota = status === 429 || /limit exceeded|max_uses|rate.?limit|quota/.test(msg);
+    const isAccountUnavailable = /web.?search.{0,80}(?:unavailable|disabled|not enabled|not available|not permitted)|(?:account|organization|workspace).{0,80}(?:quota|limit|disabled)|billing|credit/.test(msg);
+    console.error(`[veille] ${label} API error HTTP ${status || "inconnu"}: ${raw.slice(0, 1200)}`);
+    if (isAccountUnavailable) return failedCollector(raw, isQuota, true);
     if (isQuota) {
-      console.warn(`[veille] ${label} threw quota-like error, retry in 30s`);
-      await new Promise((r) => setTimeout(r, 30000));
-      try { return await runCollector(prompt, maxTurns); }
-      catch (e2: any) { return { notes: `(collecteur ${label} en échec après retry : ${e2?.message ?? e2})`, content: [], quotaError: true }; }
+      console.warn(`[veille] ${label} API quota error, retry in 60s`);
+      await new Promise((r) => setTimeout(r, 60000));
+      try { return await runCollector(prompt, maxUses); }
+      catch (e2: any) { return failedCollector(e2?.message ?? String(e2), true); }
     }
-    return { notes: `(collecteur ${label} en échec : ${e?.message ?? e})`, content: [], quotaError: false };
+    return failedCollector(raw, false);
   }
 }
 
@@ -199,7 +246,7 @@ Deno.serve(async (req) => {
       ? `Journée du ${now.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })} (dernières 24h)`
       : `Semaine du ${new Date(now.getTime() - 7 * 86400000).toLocaleDateString("fr-FR")} au ${now.toLocaleDateString("fr-FR")} (7 derniers jours)`;
     const window = type === "quotidien" ? "dans les dernières 24 heures" : "au cours des 7 derniers jours";
-    const searchTurns = type === "quotidien" ? 2 : 4;
+    const searchTurns = type === "quotidien" ? 2 : 3;
 
     const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
 
@@ -246,7 +293,7 @@ Deno.serve(async (req) => {
     const wlP2 = groupByCat(2) || "(aucune)";
     const wlP3 = groupByCat(3) || "(aucune)";
 
-    // === COLLECTEURS PARALLÈLES ===
+    // === COLLECTEURS STRICTEMENT SÉQUENTIELS ===
     const collectorA = `PÉRIMÈTRE : Baromètre Stern & flipper (${window}).
 Cherche sur le web (Pinball News, This Week in Pinball, Kaneda's Blog, Pinside, Stern officiel, comptes réseaux sociaux Stern, presse spécialisée) :
 (a) NOUVEAUX TITRES Stern : rumeurs, teasers, licences, annonces officielles.
@@ -291,39 +338,38 @@ Rends des notes brutes datées avec URLs.`;
 
     const runJob = async () => {
       try {
-        const paquets: { label: string; notes: string; content: any[]; quotaError: boolean; items: number }[] = [
-          { label: "A · Baromètre Stern & flipper", notes: "", content: [], quotaError: false, items: 0 },
-          { label: "B · Watchlist France", notes: "", content: [], quotaError: false, items: 0 },
-          { label: "C · Marché arcade & FEC", notes: "", content: [], quotaError: false, items: 0 },
-          { label: "D · TCG & e-commerce", notes: "", content: [], quotaError: false, items: 0 },
+        const paquets: Array<CollectorResult & { label: string }> = [
+          { label: "A · Baromètre Stern & flipper", ...failedCollector("non démarré", false) },
+          { label: "B · Watchlist France", ...failedCollector("non démarré", false) },
+          { label: "C · Marché arcade & FEC", ...failedCollector("non démarré", false) },
+          { label: "D · TCG & e-commerce", ...failedCollector("non démarré", false) },
         ];
-        let doneCount = 0;
-        await setEtape(`collecte 0/4 (vague 1 · sonnet)`);
-
-        const runOne = (idx: number, prompt: string, wave: number) =>
-          runCollectorWithRetry(paquets[idx].label, prompt, searchTurns).then(async (r) => {
-            paquets[idx].notes = r.notes;
-            paquets[idx].content = r.content;
-            paquets[idx].quotaError = r.quotaError;
-            paquets[idx].items = countFactualItems(r.notes);
-            doneCount += 1;
-            await setEtape(`collecte ${doneCount}/4 (vague ${wave} · sonnet)`);
-          });
-
-        // Vague 1 : A + B
-        await Promise.all([runOne(0, collectorA, 1), runOne(1, collectorB, 1)]);
-        // Pause 10 s entre les deux vagues (respire pour le quota web_search)
-        await setEtape(`collecte ${doneCount}/4 (pause inter-vagues)`);
-        await new Promise((r) => setTimeout(r, 10000));
-        // Vague 2 : C + D
-        await setEtape(`collecte ${doneCount}/4 (vague 2 · sonnet)`);
-        await Promise.all([runOne(2, collectorC, 2), runOne(3, collectorD, 2)]);
+        const prompts = [collectorA, collectorB, collectorC, collectorD];
+        for (let idx = 0; idx < prompts.length; idx++) {
+          await setEtape(`collecte ${idx + 1}/4 (séquentielle · sonnet)`);
+          const result = await runCollectorWithRetry(paquets[idx].label, prompts[idx], searchTurns);
+          paquets[idx] = { label: paquets[idx].label, ...result };
+          if (idx < prompts.length - 1) {
+            await setEtape(`collecte ${idx + 1}/4 (pause 20 s)`);
+            await new Promise((r) => setTimeout(r, 20000));
+          }
+        }
 
         // === ANTI-RAPPORT-VIDE ===
-        const totalItems = paquets.reduce((s, p) => s + p.items, 0);
-        const emptyCount = paquets.filter((p) => p.items === 0).length;
-        if (totalItems === 0 || emptyCount === 4) {
-          throw new Error("Quota de recherches web saturé, réessayez dans quelques minutes.");
+        // On compte uniquement les vrais web_search_result, jamais les puces du
+        // modèle (qui peuvent simplement décrire une erreur technique).
+        const totalItems = paquets.reduce((sum, paquet) => sum + paquet.factualItems, 0);
+        const emptyCount = paquets.filter((paquet) => paquet.factualItems === 0).length;
+        if (totalItems === 0) {
+          const accountUnavailable = paquets.some((paquet) => paquet.accountUnavailable);
+          const allQuota = paquets.every((paquet) => paquet.quotaError);
+          if (accountUnavailable) {
+            throw new Error("La recherche web Anthropic est indisponible ou désactivée au niveau du compte. Vérifiez l'accès web_search de la clé API.");
+          }
+          if (allQuota) {
+            throw new Error("Quota de recherches web saturé au niveau du serveur Anthropic, réessayez dans quelques minutes.");
+          }
+          throw new Error("Aucune donnée factuelle sourcée n'a été collectée : aucun rapport n'a été publié.");
         }
 
         await setEtape(`synthèse (opus · thinking${emptyCount ? ` · ${emptyCount} section(s) sans données` : ""})`);
@@ -374,6 +420,18 @@ ${notesBlock}`;
         const structured = toolCall.input as any;
         const allContent = [...paquets.flatMap((p) => p.content), ...synthContent];
         const sources = extractSources(allContent);
+        const realStructuredItems = (structured.sections ?? [])
+          .flatMap((section: any) => section?.items ?? [])
+          .filter((item: any) =>
+            Array.isArray(item?.liens)
+            && item.liens.some((link: any) => typeof link?.url === "string" && /^https?:\/\//.test(link.url))
+            && !/aucune (?:donnée|actualité|information)|collecte non aboutie|échec technique/i.test(`${item?.titre ?? ""} ${item?.resume ?? ""}`)
+          );
+        // Second verrou immédiatement avant l'unique INSERT : même si la
+        // synthèse réussit techniquement, un rapport sans item réel sourcé est refusé.
+        if (sources.length === 0 || realStructuredItems.length === 0) {
+          throw new Error("La synthèse ne contient aucun item factuel sourcé : aucun rapport n'a été publié.");
+        }
         const md = [
           `# ${structured.titre ?? "Veille marché"}`,
           structured.periode ?? periode,
@@ -389,7 +447,7 @@ ${notesBlock}`;
           sources,
           owner_id: ownerId,
         }).select("id").single();
-        if (error) console.error("[veille-marche] insert error", error);
+        if (error) throw new Error(`Sauvegarde du rapport impossible : ${error.message}`);
         const rapportId = inserted?.id as string | undefined;
 
         if (jobId) await sb.from("veille_jobs").update({ etape: "terminé", done: true, updated_at: new Date().toISOString() }).eq("id", jobId);

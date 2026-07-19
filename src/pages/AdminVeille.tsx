@@ -212,7 +212,7 @@ export default function AdminVeille() {
     const poll = async () => {
       const { data } = await (supabase as any)
         .from("veille_jobs")
-        .select("id, type, etape, done")
+        .select("id, type, etape, done, progress")
         .eq("owner_id", user.id)
         .eq("done", false)
         .order("created_at", { ascending: false })
@@ -222,12 +222,15 @@ export default function AdminVeille() {
       if (data && !data.done) {
         setGenerating(data.type as "quotidien" | "hebdomadaire");
         setEtape(data.etape ?? "en cours…");
+        setProgress(typeof data.progress === "number" ? data.progress : 0);
       } else if (generating) {
         // Le job est fini : on libère l'UI et on rafraîchit l'historique.
         setGenerating(null);
         setEtape("");
+        setProgress(0);
         load();
       }
+
     };
     poll();
     const id = setInterval(poll, 8000);

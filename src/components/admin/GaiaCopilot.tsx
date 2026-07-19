@@ -11,7 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import {
   Loader2, Sparkles, Copy, Send, FileText, UserX, Package, History, ExternalLink,
-  Search, ThumbsUp, ThumbsDown, RotateCcw, AlertTriangle,
+  Search, ThumbsUp, ThumbsDown, RotateCcw, AlertTriangle, ChevronRight,
+
 } from "lucide-react";
 
 import { RevueDashboard, revueToText, eur, isRevueEmpty, type RevueData } from "./RevueDashboard";

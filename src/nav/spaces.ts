@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   RefreshCw,
   Cog,
+  Bell,
   type LucideIcon,
 } from "lucide-react";
 
@@ -191,24 +192,33 @@ export const SPACES: Space[] = [
     label: "Réglages",
     icon: Settings,
     colorToken: "--space-reglages",
-    show: (c) => c.isAdmin,
+    show: (c) => c.isAdmin || true,
     entries: [
+      {
+        label: "Notifications",
+        to: "/admin/notifications",
+        icon: Bell,
+        match: startsWith("/admin/notifications"),
+      },
       {
         label: "Utilisateurs & accès",
         to: "/admin",
         icon: ShieldCheck,
+        show: (c) => c.isAdmin,
         match: (p) => p === "/admin",
       },
       {
         label: "Synchronisation ERP",
         to: "/admin/gaia#sync",
         icon: RefreshCw,
+        show: (c) => c.isAdmin,
         match: (p, h) => p === "/admin/gaia" && h === "#sync",
       },
       {
         label: "Catalogue ↔ ERP",
         to: "/admin/catalog-erp",
         icon: Cog,
+        show: (c) => c.isAdmin,
         match: startsWith("/admin/catalog-erp"),
       },
     ],

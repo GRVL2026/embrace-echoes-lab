@@ -20,6 +20,7 @@ import GaiaClientFiche from "./pages/GaiaClientFiche";
 import GaiaCarnet from "./pages/GaiaCarnet";
 import GaiaRevueView from "./pages/GaiaRevueView";
 import NotFound from "./pages/NotFound";
+import NotificationsSettings from "./pages/NotificationsSettings";
 import PublicDossier from "./pages/PublicDossier";
 import Login from "./pages/Login";
 import SignUp from "./pages/SignUp";
@@ -75,6 +76,8 @@ const App = () => (
             <Route path="/admin/veille" element={<P><AdminVeille /></P>} />
             <Route path="/admin/gaia/client/:nom" element={<P><GaiaClientFiche /></P>} />
             <Route path="/admin/gaia/revue/:id" element={<P><GaiaRevueView /></P>} />
+            <Route path="/admin/notifications" element={<P><NotificationsSettings /></P>} />
+
 
             <Route path="*" element={<NotFound />} />
           </Routes>

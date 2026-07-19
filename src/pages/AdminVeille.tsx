@@ -292,11 +292,13 @@ export default function AdminVeille() {
         if (jobId) {
           const { data: jobRow } = await (supabase as any)
             .from("veille_jobs")
-            .select("etape, done")
+            .select("etape, done, progress")
             .eq("id", jobId)
             .maybeSingle();
           if (jobRow?.etape) setEtape(jobRow.etape);
+          if (typeof jobRow?.progress === "number") setProgress(jobRow.progress);
         }
+
         const { data } = await (supabase as any)
           .from("veille_rapports")
           .select("*")

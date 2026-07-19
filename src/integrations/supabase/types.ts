@@ -934,7 +934,9 @@ export type Database = {
           created_by: string | null
           data: Json | null
           erreur: string | null
+          etape: string
           id: string
+          progress: number
           statut: string
           titre: string | null
           updated_at: string
@@ -944,7 +946,9 @@ export type Database = {
           created_by?: string | null
           data?: Json | null
           erreur?: string | null
+          etape?: string
           id?: string
+          progress?: number
           statut?: string
           titre?: string | null
           updated_at?: string
@@ -954,7 +958,9 @@ export type Database = {
           created_by?: string | null
           data?: Json | null
           erreur?: string | null
+          etape?: string
           id?: string
+          progress?: number
           statut?: string
           titre?: string | null
           updated_at?: string
@@ -1692,6 +1698,7 @@ export type Database = {
           etape: string
           id: string
           owner_id: string | null
+          progress: number
           started_at: string
           type: string
           updated_at: string
@@ -1701,6 +1708,7 @@ export type Database = {
           etape?: string
           id?: string
           owner_id?: string | null
+          progress?: number
           started_at?: string
           type: string
           updated_at?: string
@@ -1710,6 +1718,7 @@ export type Database = {
           etape?: string
           id?: string
           owner_id?: string | null
+          progress?: number
           started_at?: string
           type?: string
           updated_at?: string

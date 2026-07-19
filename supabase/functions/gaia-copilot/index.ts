@@ -1078,6 +1078,20 @@ Deno.serve(async (req) => {
 
           const work = async () => {
             let revueId: string | null = null;
+            let lastRevueProgress = 0;
+            const setRevueProgress = async (progress: number, etape: string) => {
+              if (!revueId) return;
+              const next = Math.max(lastRevueProgress, Math.min(100, Math.round(progress)));
+              lastRevueProgress = next;
+              try {
+                await admin
+                  .from('gaia_revues')
+                  .update({ progress: next, etape, updated_at: new Date().toISOString() })
+                  .eq('id', revueId);
+              } catch (e: any) {
+                console.log(`[gaia-copilot] setRevueProgress failed: ${e?.message ?? e}`);
+              }
+            };
             try {
               // 1. Draft row (statut = 'en_cours') — persistée avant tout traitement
               const { data: draftRow, error: draftErr } = await admin
@@ -1087,11 +1101,14 @@ Deno.serve(async (req) => {
                   statut: 'en_cours',
                   data: null,
                   created_by: userIdForRow,
+                  progress: 10,
+                  etape: 'agrégats prêts',
                 })
                 .select('id')
                 .single();
               if (draftErr) throw new Error(`Création de la revue impossible : ${draftErr.message}`);
               revueId = (draftRow as any)?.id ?? null;
+              lastRevueProgress = 10;
 
               safeSend('gaia_start', { kind: 'revue', id: revueId });
               heartbeat = setInterval(safeHeartbeat, 10_000);
@@ -1109,11 +1126,18 @@ Deno.serve(async (req) => {
                 initialMessages,
                 extraTools: [],
                 extraPayload: revueExtra,
-                onEvent: (evt, data) => safeSend(evt, data),
+                onEvent: (evt, data) => {
+                  safeSend(evt, data);
+                  // +5% par tour d'outil SQL, plafonné à 65%.
+                  if (evt === 'gaia_sql') {
+                    void setRevueProgress(lastRevueProgress + 5, 'analyse SQL en cours');
+                  }
+                },
                 userId: currentUserId,
               });
 
               // 3. Appel final build_revue (non-streamé, heartbeats maintiennent la connexion)
+              await setRevueProgress(75, 'construction de la revue');
               safeSend('gaia_sql', { summary: 'Construction de la revue finale…', query: '' });
               let { input: revueInput, stopReason } = await callBuildRevue(agenticMessages, null);
 
@@ -1132,6 +1156,7 @@ Deno.serve(async (req) => {
                   throw new Error(`Revue vide même après retry (${validation.reason}). stop_reason=${stopReason}. Relancez la génération.`);
                 }
               }
+              await setRevueProgress(90, 'validation');
 
               // 4. Sauvegarde finale
               if (revueId) {
@@ -1141,6 +1166,8 @@ Deno.serve(async (req) => {
                     statut: 'terminee',
                     data: revueInput,
                     erreur: null,
+                    progress: 100,
+                    etape: 'terminée',
                     updated_at: new Date().toISOString(),
                   })
                   .eq('id', revueId);

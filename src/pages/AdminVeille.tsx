@@ -20,6 +20,8 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { WatchlistPanel } from "@/components/admin/WatchlistPanel";
 import logoImg from "@/assets/logo.png";
+import { GenerationProgress } from "@/components/GenerationProgress";
+
 
 type VeilleLink = { label: string; url: string };
 type VeilleItem = {
@@ -176,6 +178,8 @@ export default function AdminVeille() {
   const [selected, setSelected] = useState<Rapport | null>(null);
   const [generating, setGenerating] = useState<"quotidien" | "hebdomadaire" | null>(null);
   const [etape, setEtape] = useState<string>("");
+  const [progress, setProgress] = useState<number>(0);
+
 
   const load = async () => {
     const { data } = await (supabase as any)
@@ -208,7 +212,7 @@ export default function AdminVeille() {
     const poll = async () => {
       const { data } = await (supabase as any)
         .from("veille_jobs")
-        .select("id, type, etape, done")
+        .select("id, type, etape, done, progress")
         .eq("owner_id", user.id)
         .eq("done", false)
         .order("created_at", { ascending: false })
@@ -218,12 +222,15 @@ export default function AdminVeille() {
       if (data && !data.done) {
         setGenerating(data.type as "quotidien" | "hebdomadaire");
         setEtape(data.etape ?? "en cours…");
+        setProgress(typeof data.progress === "number" ? data.progress : 0);
       } else if (generating) {
         // Le job est fini : on libère l'UI et on rafraîchit l'historique.
         setGenerating(null);
         setEtape("");
+        setProgress(0);
         load();
       }
+
     };
     poll();
     const id = setInterval(poll, 8000);
@@ -250,6 +257,8 @@ export default function AdminVeille() {
   const generate = async (type: "quotidien" | "hebdomadaire") => {
     setGenerating(type);
     setEtape("démarrage…");
+    setProgress(5);
+
     toast({
       title: "Génération lancée",
       description: "Collecte parallèle puis synthèse (≈ 2 à 3 min).",
@@ -285,11 +294,13 @@ export default function AdminVeille() {
         if (jobId) {
           const { data: jobRow } = await (supabase as any)
             .from("veille_jobs")
-            .select("etape, done")
+            .select("etape, done, progress")
             .eq("id", jobId)
             .maybeSingle();
           if (jobRow?.etape) setEtape(jobRow.etape);
+          if (typeof jobRow?.progress === "number") setProgress(jobRow.progress);
         }
+
         const { data } = await (supabase as any)
           .from("veille_rapports")
           .select("*")
@@ -312,6 +323,8 @@ export default function AdminVeille() {
     } finally {
       setGenerating(null);
       setEtape("");
+      setProgress(0);
+
     }
   };
 
@@ -365,11 +378,16 @@ export default function AdminVeille() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {generating && (
-              <span className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs text-primary">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Génération en cours — vous pouvez naviguer, vous serez notifié{etape ? ` · ${etape}` : ""}
-              </span>
+              <div className="w-full sm:w-80">
+                <GenerationProgress
+                  progress={progress}
+                  etape={etape}
+                  label="Génération en cours — vous pouvez naviguer"
+                  compact
+                />
+              </div>
             )}
+
             <Button onClick={() => generate("quotidien")} disabled={generating !== null} variant="outline">
               {generating === "quotidien" ? (
                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Génération…</>

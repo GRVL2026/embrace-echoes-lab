@@ -263,14 +263,22 @@ Deno.serve(async (req) => {
     // Job de suivi (progression visible côté UI)
     const { data: job } = await sb
       .from("veille_jobs")
-      .insert({ type, etape: "chargement watchlist", owner_id: ownerId })
+      .insert({ type, etape: "démarrage", owner_id: ownerId, progress: 5 })
       .select("id")
       .single();
     const jobId = job?.id as string | undefined;
-    const setEtape = async (etape: string) => {
+    let lastProgress = 5;
+    const setEtape = async (etape: string, progress?: number) => {
       if (!jobId) return;
-      await sb.from("veille_jobs").update({ etape, updated_at: new Date().toISOString() }).eq("id", jobId);
+      const patch: Record<string, unknown> = { etape, updated_at: new Date().toISOString() };
+      if (typeof progress === "number") {
+        const next = Math.max(lastProgress, Math.min(100, Math.round(progress)));
+        lastProgress = next;
+        patch.progress = next;
+      }
+      await sb.from("veille_jobs").update(patch).eq("id", jobId);
     };
+
 
     // Watchlist
     const { data: watchlist } = await sb
@@ -345,15 +353,19 @@ Rends des notes brutes datées avec URLs.`;
           { label: "D · TCG & e-commerce", ...failedCollector("non démarré", false) },
         ];
         const prompts = [collectorA, collectorB, collectorC, collectorD];
+        // Jalons : 20 / 35 / 50 / 60 après chaque collecteur.
+        const collectorProgress = [20, 35, 50, 60];
         for (let idx = 0; idx < prompts.length; idx++) {
           await setEtape(`collecte ${idx + 1}/4 (séquentielle · sonnet)`);
           const result = await runCollectorWithRetry(paquets[idx].label, prompts[idx], searchTurns);
           paquets[idx] = { label: paquets[idx].label, ...result };
+          await setEtape(`collecte ${idx + 1}/4 terminée`, collectorProgress[idx]);
           if (idx < prompts.length - 1) {
             await setEtape(`collecte ${idx + 1}/4 (pause 20 s)`);
             await new Promise((r) => setTimeout(r, 20000));
           }
         }
+
 
         // === ANTI-RAPPORT-VIDE ===
         // On compte uniquement les vrais web_search_result, jamais les puces du
@@ -372,7 +384,7 @@ Rends des notes brutes datées avec URLs.`;
           throw new Error("Aucune donnée factuelle sourcée n'a été collectée : aucun rapport n'a été publié.");
         }
 
-        await setEtape(`synthèse (opus · thinking${emptyCount ? ` · ${emptyCount} section(s) sans données` : ""})`);
+        await setEtape(`synthèse (opus · thinking${emptyCount ? ` · ${emptyCount} section(s) sans données` : ""})`, 70);
 
         const notesBlock = paquets.map((p) => `### PAQUET ${p.label}${p.items === 0 ? " (aucune donnée collectée)" : ""}\n\n${p.notes}`).join("\n\n---\n\n");
 
@@ -432,6 +444,7 @@ ${notesBlock}`;
         if (sources.length === 0 || realStructuredItems.length === 0) {
           throw new Error("La synthèse ne contient aucun item factuel sourcé : aucun rapport n'a été publié.");
         }
+        await setEtape("synthèse terminée", 90);
         const md = [
           `# ${structured.titre ?? "Veille marché"}`,
           structured.periode ?? periode,
@@ -450,7 +463,7 @@ ${notesBlock}`;
         if (error) throw new Error(`Sauvegarde du rapport impossible : ${error.message}`);
         const rapportId = inserted?.id as string | undefined;
 
-        if (jobId) await sb.from("veille_jobs").update({ etape: "terminé", done: true, updated_at: new Date().toISOString() }).eq("id", jobId);
+        if (jobId) await sb.from("veille_jobs").update({ etape: "terminé", done: true, progress: 100, updated_at: new Date().toISOString() }).eq("id", jobId);
 
         if (ownerId) {
           try {

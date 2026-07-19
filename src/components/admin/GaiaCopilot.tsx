@@ -19,11 +19,13 @@ import {
 
 import { RevueDashboard, revueToText, eur, isRevueEmpty, type RevueData } from "./RevueDashboard";
 import { CopilotChart, type ChartPayload } from "./CopilotChart";
+import { GenerationProgress } from "@/components/GenerationProgress";
+
 
 type DevisRelance = { n_cde: string; code_client: string; client: string; date_devis: string; age_jours: number; montant_ht: number };
 type ClientDormant = { code_client: string; client: string; ca_annee_courante: number; ca_n1: number; ca_n2: number; derniere_facture: string | null };
 type StockDormant = { code_article: string; description: string; famille: string; quantite: number; valeur_achat: number };
-type SavedRevue = { id: string; titre: string | null; created_at: string; statut?: string | null; erreur?: string | null };
+type SavedRevue = { id: string; titre: string | null; created_at: string; statut?: string | null; erreur?: string | null; progress?: number | null; etape?: string | null };
 
 type ChatPart =
   | { type: "text"; text: string }
@@ -270,7 +272,7 @@ export function GaiaCopilot({ embedded = false }: GaiaCopilotProps = {}) {
   const loadHistory = async () => {
     const { data } = await (supabase as any)
       .from("gaia_revues")
-      .select("id,titre,created_at,statut,erreur")
+      .select("id,titre,created_at,statut,erreur,progress,etape")
       .order("created_at", { ascending: false })
       .limit(30);
     setHistory((data as SavedRevue[]) ?? []);
@@ -1011,15 +1013,10 @@ export function GaiaCopilot({ embedded = false }: GaiaCopilotProps = {}) {
               const isRunning = statut === "en_cours";
               const isError = statut === "erreur";
               return (
-                <li key={h.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                <li key={h.id} className="flex flex-col gap-2 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate font-medium">{h.titre ?? "Revue"}</span>
-                      {isRunning && (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
-                          <Loader2 className="h-2.5 w-2.5 animate-spin" /> En cours
-                        </span>
-                      )}
                       {isError && (
                         <span className="rounded-full border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[10px] text-destructive">
                           Échec
@@ -1030,6 +1027,16 @@ export function GaiaCopilot({ embedded = false }: GaiaCopilotProps = {}) {
                       {new Date(h.created_at).toLocaleString("fr-FR")}
                       {isError && h.erreur ? ` · ${h.erreur.slice(0, 120)}` : ""}
                     </div>
+                    {isRunning && (
+                      <div className="mt-2 max-w-sm">
+                        <GenerationProgress
+                          progress={h.progress ?? 0}
+                          etape={h.etape ?? "en cours…"}
+                          label="Revue en cours de génération"
+                          compact
+                        />
+                      </div>
+                    )}
                   </div>
                   {isRunning ? (
                     <span className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-xs text-muted-foreground">
@@ -1044,6 +1051,7 @@ export function GaiaCopilot({ embedded = false }: GaiaCopilotProps = {}) {
                     </Link>
                   )}
                 </li>
+
               );
             })}
           </ul>

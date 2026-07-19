@@ -1,6 +1,6 @@
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { anthropicJson } from "../_shared/anthropic-fetch.ts";
+import { AnthropicApiError } from "../_shared/anthropic-fetch.ts";
 
 const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -8,6 +8,27 @@ const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const SYNTH_MODEL = "claude-opus-4-8";
 const COLLECT_MODEL = "claude-sonnet-5";
+
+// Étapes séquentielles auto-relancées
+type Step = "collecte_a" | "collecte_b" | "collecte_c" | "collecte_d" | "synthese";
+const STEP_ORDER: Step[] = ["collecte_a", "collecte_b", "collecte_c", "collecte_d", "synthese"];
+const STEP_PROGRESS: Record<Step, number> = {
+  collecte_a: 20, collecte_b: 35, collecte_c: 50, collecte_d: 60, synthese: 70,
+};
+const STEP_LABEL: Record<Step, string> = {
+  collecte_a: "A · Baromètre Stern & flipper",
+  collecte_b: "B · Watchlist France",
+  collecte_c: "C · Marché arcade & FEC",
+  collecte_d: "D · TCG & e-commerce",
+  synthese: "Synthèse",
+};
+
+// Timeout dur par appel Anthropic (le runtime edge tue ~400s : aucun appel ne doit pendre).
+const ANTHROPIC_TIMEOUT_MS = 150_000;
+// Retry quota unique et rapide (30s max).
+const QUOTA_RETRY_MS = 30_000;
+// Un job non-done sans mise à jour depuis > 12 min est considéré zombie.
+const ZOMBIE_MS = 12 * 60 * 1000;
 
 const WEB_SEARCH_TOOL = (maxUses: number) => ({
   type: "web_search_20260209", name: "web_search", max_uses: maxUses,
@@ -122,54 +143,65 @@ type CollectorResult = {
 function inspectWebSearch(content: any[]) {
   const factualUrls = new Set<string>();
   const errorMessages: string[] = [];
-
   const walk = (node: any) => {
     if (!node) return;
     if (Array.isArray(node)) { node.forEach(walk); return; }
     if (typeof node !== "object") return;
-
-    if (node.type === "web_search_result" && typeof node.url === "string") {
-      factualUrls.add(node.url);
-    }
-    if (node.type === "web_search_tool_result_error" || node.type === "error") {
-      errorMessages.push(JSON.stringify(node));
-    }
+    if (node.type === "web_search_result" && typeof node.url === "string") factualUrls.add(node.url);
+    if (node.type === "web_search_tool_result_error" || node.type === "error") errorMessages.push(JSON.stringify(node));
     for (const value of Object.values(node)) walk(value);
   };
   walk(content);
-
-  // Certains modèles reformulent l'erreur outil dans leur texte final. On la
-  // conserve pour le diagnostic, mais elle ne compte jamais comme un fait.
   const text = extractText(content);
   if (/server tool use limit exceeded|max_uses_exceeded|web search.{0,40}(?:limit|unavailable|disabled|not enabled)|(?:rate limit|429)/i.test(text)) {
     errorMessages.push(text);
   }
-
   const errorMessage = errorMessages.join(" | ").slice(0, 1200) || null;
   const quotaError = !!errorMessage && /server tool use limit exceeded|max_uses_exceeded|rate.?limit|\b429\b|quota/i.test(errorMessage);
   const accountUnavailable = !!errorMessage && /web.?search.{0,80}(?:unavailable|disabled|not enabled|not available|not permitted)|(?:account|organization|workspace).{0,80}(?:quota|limit|disabled)|billing|credit/i.test(errorMessage);
-
   return { factualItems: factualUrls.size, quotaError, accountUnavailable, errorMessage };
 }
 
 function failedCollector(message: string, quotaError: boolean, accountUnavailable = false): CollectorResult {
-  return {
-    notes: `(collecteur en échec : ${message})`,
-    content: [],
-    quotaError,
-    accountUnavailable,
-    errorMessage: message,
-    factualItems: 0,
-  };
+  return { notes: `(collecteur en échec : ${message})`, content: [], quotaError, accountUnavailable, errorMessage: message, factualItems: 0 };
+}
+
+// Appel Anthropic direct avec AbortController pour garantir qu'aucun appel ne
+// dépasse ANTHROPIC_TIMEOUT_MS. Ne pas passer par anthropicJson dont les
+// retries transparents pourraient dépasser la limite globale de l'edge.
+async function anthropicWithTimeout(payload: Record<string, unknown>): Promise<any> {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), ANTHROPIC_TIMEOUT_MS);
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": ANTHROPIC_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    const text = await res.text();
+    if (!res.ok) throw new AnthropicApiError(res.status, text);
+    try { return JSON.parse(text); } catch {
+      throw new AnthropicApiError(res.status, `Invalid JSON. Body: ${text.slice(0, 800)}`);
+    }
+  } catch (e: any) {
+    if (e?.name === "AbortError") throw new Error(`Anthropic timeout (${Math.round(ANTHROPIC_TIMEOUT_MS / 1000)}s)`);
+    throw e;
+  } finally {
+    clearTimeout(t);
+  }
 }
 
 async function runCollector(prompt: string, maxUses: number): Promise<CollectorResult> {
   const messages: any[] = [{ role: "user", content: prompt }];
   let allContent: any[] = [];
   let lastText = "";
-
   for (let i = 0; i < 6; i++) {
-    const resp = await anthropicJson(ANTHROPIC_KEY, {
+    const resp = await anthropicWithTimeout({
       model: COLLECT_MODEL,
       max_tokens: 6000,
       system: COLLECTOR_SYSTEM,
@@ -181,10 +213,7 @@ async function runCollector(prompt: string, maxUses: number): Promise<CollectorR
     lastText = extractText(resp.content);
     const inspection = inspectWebSearch(allContent);
     if (inspection.errorMessage) break;
-    if (resp.stop_reason === "pause_turn") {
-      messages.push({ role: "user", content: "Continue." });
-      continue;
-    }
+    if (resp.stop_reason === "pause_turn") { messages.push({ role: "user", content: "Continue." }); continue; }
     break;
   }
   const inspection = inspectWebSearch(allContent);
@@ -194,22 +223,13 @@ async function runCollector(prompt: string, maxUses: number): Promise<CollectorR
 async function runCollectorWithRetry(label: string, prompt: string, maxUses: number): Promise<CollectorResult> {
   try {
     const first = await runCollector(prompt, maxUses);
-    if (first.errorMessage) {
-      console.error(`[veille] ${label} web_search error (HTTP 200 tool result): ${first.errorMessage}`);
-    }
+    if (first.errorMessage) console.error(`[veille] ${label} web_search error: ${first.errorMessage}`);
     if (first.accountUnavailable) return first;
     if (first.quotaError) {
-      console.warn(`[veille] ${label} quota exceeded, retry in 60s`);
-      await new Promise((r) => setTimeout(r, 60000));
-      try {
-        const retry = await runCollector(prompt, maxUses);
-        if (retry.errorMessage) {
-          console.error(`[veille] ${label} retry web_search error (HTTP 200 tool result): ${retry.errorMessage}`);
-        }
-        return retry;
-      } catch (e: any) {
-        return failedCollector(e?.message ?? String(e), true);
-      }
+      console.warn(`[veille] ${label} quota, retry in ${QUOTA_RETRY_MS}ms (once)`);
+      await new Promise((r) => setTimeout(r, QUOTA_RETRY_MS));
+      try { return await runCollector(prompt, maxUses); }
+      catch (e: any) { return failedCollector(e?.message ?? String(e), true); }
     }
     return first;
   } catch (e: any) {
@@ -218,11 +238,11 @@ async function runCollectorWithRetry(label: string, prompt: string, maxUses: num
     const status = Number(e?.status ?? 0);
     const isQuota = status === 429 || /limit exceeded|max_uses|rate.?limit|quota/.test(msg);
     const isAccountUnavailable = /web.?search.{0,80}(?:unavailable|disabled|not enabled|not available|not permitted)|(?:account|organization|workspace).{0,80}(?:quota|limit|disabled)|billing|credit/.test(msg);
-    console.error(`[veille] ${label} API error HTTP ${status || "inconnu"}: ${raw.slice(0, 1200)}`);
+    console.error(`[veille] ${label} API error HTTP ${status || "?"}: ${raw.slice(0, 1200)}`);
     if (isAccountUnavailable) return failedCollector(raw, isQuota, true);
     if (isQuota) {
-      console.warn(`[veille] ${label} API quota error, retry in 60s`);
-      await new Promise((r) => setTimeout(r, 60000));
+      console.warn(`[veille] ${label} quota (API), retry in ${QUOTA_RETRY_MS}ms (once)`);
+      await new Promise((r) => setTimeout(r, QUOTA_RETRY_MS));
       try { return await runCollector(prompt, maxUses); }
       catch (e2: any) { return failedCollector(e2?.message ?? String(e2), true); }
     }
@@ -230,27 +250,317 @@ async function runCollectorWithRetry(label: string, prompt: string, maxUses: num
   }
 }
 
+// --- helpers job/context ------------------------------------------------------
+
+function buildContext(type: "quotidien" | "hebdomadaire", wl: any[]) {
+  const now = new Date();
+  const periode = type === "quotidien"
+    ? `Journée du ${now.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })} (dernières 24h)`
+    : `Semaine du ${new Date(now.getTime() - 7 * 86400000).toLocaleDateString("fr-FR")} au ${now.toLocaleDateString("fr-FR")} (7 derniers jours)`;
+  const wnd = type === "quotidien" ? "dans les dernières 24 heures" : "au cours des 7 derniers jours";
+  const searchTurns = type === "quotidien" ? 2 : 3;
+
+  const groupByCat = (prio: number) => {
+    const items = wl.filter((w: any) => w.priorite === prio);
+    const byCat: Record<string, string[]> = {};
+    for (const w of items) {
+      const label = w.note ? `${w.nom} (${w.note})` : w.nom;
+      (byCat[w.categorie] ||= []).push(label);
+    }
+    return Object.entries(byCat).map(([c, n]) => `- ${c} : ${n.join(", ")}`).join("\n");
+  };
+
+  return {
+    type, periode, window: wnd, searchTurns,
+    wlP1: groupByCat(1) || "(aucune)",
+    wlP2: groupByCat(2) || "(aucune)",
+    wlP3: groupByCat(3) || "(aucune)",
+  };
+}
+
+function collectorPrompt(step: Step, ctx: any): string {
+  const { window: wnd, wlP1, wlP2 } = ctx;
+  switch (step) {
+    case "collecte_a":
+      return `PÉRIMÈTRE : Baromètre Stern & flipper (${wnd}).
+Cherche sur le web (Pinball News, This Week in Pinball, Kaneda's Blog, Pinside, Stern officiel, réseaux sociaux Stern, presse spécialisée) :
+(a) NOUVEAUX TITRES Stern : rumeurs, teasers, licences, annonces officielles.
+(b) ACCUEIL DES SORTIES RÉCENTES : ressenti communautaire (qualité, prix, hype, critiques) sur Pinside + pages fans FR.
+(c) TENDANCES MARCHÉ FLIPPER : Jersey Jack, American Pinball, Chicago Gaming, Spooky, Multimorphic, prix occasion, nouveaux acteurs.
+(d) POLITIQUE COMMERCIALE STERN : vente directe, marges revendeurs, exclusivités, prix imposés, conditions aux importateurs européens.
+Rends des notes brutes datées avec URLs. Distingue rumeur/annonce/sorti et enthousiaste/mitigé/négatif/neutre.`;
+    case "collecte_b":
+      return `PÉRIMÈTRE : Watchlist France (${wnd}).
+Cherche des actualités RÉCENTES pour les comptes suivants.
+
+PRIORITÉ 1 (obligatoire) :
+${wlP1}
+
+PRIORITÉ 2 (si actualité) :
+${wlP2}
+
+LECTURE PARTICULIÈRE :
+- reseau_revendeurs : partenaires actuels d'AA, concurrents potentiels via vente directe B2C poussée par Stern.
+- contentieux : STRICTEMENT FACTUEL.
+- MBA Entertainment : double statut (négoce + revendeur AA + propriétaire La Tête dans les Nuages).
+
+Notes brutes datées, chaque item préfixé de la catégorie entre crochets, avec URLs.`;
+    case "collecte_c":
+      return `PÉRIMÈTRE : Marché arcade, FEC et distributeurs européens (${wnd}).
+Cherche : UNIS, SEGA Amusement, Namco, Bandai Namco, Raw Thrills, Andamiro, Bay Tek, LAI Games, Ace ; IAAPA, EAG ; FEC FR/EU (ouvertures, fermetures, cashless, redemption) ; Freddy's, Pinball Universe, RS Pinball, High Voltage.
+Notes brutes datées avec URLs, distingue confirmé vs rumeur.`;
+    case "collecte_d":
+      return `PÉRIMÈTRE : TCG, blind box et e-commerce loisirs (${wnd}).
+Cherche : Pokemon/Yu-Gi-Oh/Magic (sorties, ruptures, événements FR) ; Pop Mart, Labubu, Sonny Angel ; mouvements Shopify/Amazon/marketplaces sur loisirs/collection.
+Notes brutes datées avec URLs.`;
+    default:
+      return "";
+  }
+}
+
+function nextStep(current: Step): Step | null {
+  const i = STEP_ORDER.indexOf(current);
+  return i < 0 || i >= STEP_ORDER.length - 1 ? null : STEP_ORDER[i + 1];
+}
+
+// Fire-and-forget auto-invocation. Le fetch n'est pas awaité au-delà du démarrage.
+function selfInvoke(jobId: string) {
+  const url = `${SUPABASE_URL}/functions/v1/veille-marche`;
+  // On ne bloque pas : promesse détachée, avec petit timeout d'initiation.
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), 5000);
+  fetch(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-internal-relay": SERVICE_ROLE,
+      apikey: SERVICE_ROLE,
+      authorization: `Bearer ${SERVICE_ROLE}`,
+    },
+    body: JSON.stringify({ job_id: jobId }),
+    signal: controller.signal,
+  }).catch(() => { /* fire and forget */ });
+}
+
+// --- exécution d'une étape ----------------------------------------------------
+
+async function runStep(sb: any, job: any): Promise<void> {
+  const jobId = job.id as string;
+  const step = job.step as Step;
+  const ctx = job.context ?? {};
+  const notesAcc: Record<string, any> = job.notes ?? {};
+
+  const touch = async (patch: Record<string, unknown>) => {
+    await sb.from("veille_jobs").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", jobId);
+  };
+
+  if (step !== "synthese") {
+    const label = STEP_LABEL[step];
+    await touch({ etape: `collecte ${STEP_ORDER.indexOf(step) + 1}/4 (${label})` });
+    const result = await runCollectorWithRetry(label, collectorPrompt(step, ctx), ctx.searchTurns ?? 2);
+    notesAcc[step] = {
+      label,
+      notes: result.notes,
+      content: result.content,
+      factualItems: result.factualItems,
+      quotaError: result.quotaError,
+      accountUnavailable: result.accountUnavailable,
+      errorMessage: result.errorMessage,
+    };
+    const nxt = nextStep(step)!;
+    await touch({
+      notes: notesAcc,
+      step: nxt,
+      progress: STEP_PROGRESS[step],
+      etape: `collecte ${STEP_ORDER.indexOf(step) + 1}/4 terminée`,
+    });
+    selfInvoke(jobId);
+    return;
+  }
+
+  // === SYNTHÈSE ===
+  await touch({ etape: "synthèse (opus)", progress: STEP_PROGRESS.synthese });
+  const paquets = STEP_ORDER.slice(0, 4).map((s) => {
+    const n = notesAcc[s] ?? {};
+    return {
+      label: n.label ?? STEP_LABEL[s],
+      notes: n.notes ?? "(aucune note)",
+      content: Array.isArray(n.content) ? n.content : [],
+      factualItems: Number(n.factualItems ?? 0),
+      quotaError: !!n.quotaError,
+      accountUnavailable: !!n.accountUnavailable,
+      errorMessage: n.errorMessage ?? null,
+    };
+  });
+
+  // Anti-rapport-vide (verrou 1)
+  const totalItems = paquets.reduce((s, p) => s + p.factualItems, 0);
+  const emptyCount = paquets.filter((p) => p.factualItems === 0).length;
+  if (totalItems === 0) {
+    const accountUnavailable = paquets.some((p) => p.accountUnavailable);
+    const allQuota = paquets.every((p) => p.quotaError);
+    if (accountUnavailable) throw new Error("La recherche web Anthropic est indisponible au niveau du compte.");
+    if (allQuota) throw new Error("Quota de recherches web saturé au niveau du serveur Anthropic.");
+    throw new Error("Aucune donnée factuelle sourcée n'a été collectée : aucun rapport n'a été publié.");
+  }
+
+  const notesBlock = paquets.map((p) =>
+    `### PAQUET ${p.label}${p.factualItems === 0 ? " (aucune donnée collectée)" : ""}\n\n${p.notes}`
+  ).join("\n\n---\n\n");
+
+  const synthPrompt = `Période : ${ctx.periode}.
+
+Voici les 4 paquets de notes brutes. Synthétise via l'outil build_veille (5 sections : nouveautes, concurrents, evenements, tendances, barometre_stern).
+
+RÈGLES TAGGING WATCHLIST — préfixe chaque titre concerné par la catégorie entre crochets. Catégories : fabricants, concurrents, reseau_revendeurs, flipper, communaute_flipper, exploitants, tcg, presse, contentieux.
+
+WATCHLIST P1 :
+${ctx.wlP1}
+
+WATCHLIST P2 :
+${ctx.wlP2}
+
+WATCHLIST P3 :
+${ctx.wlP3}
+
+SECTION barometre_stern OBLIGATOIRE — pour chaque titre Stern : statut_stern, tonalite (+ pourquoi en 1 phrase), implication_aa (lecture commerciale pour AA). Tout signal politique commerciale Stern ou mouvement B2C d'un revendeur AA en importance "haute".
+
+Si une section manque d'infos, mets un unique item "info" honnête — n'invente rien.
+
+=== NOTES BRUTES ===
+
+${notesBlock}`;
+
+  const resp = await anthropicWithTimeout({
+    model: SYNTH_MODEL,
+    max_tokens: 16000,
+    thinking: { type: "adaptive" },
+    output_config: { effort: "high" },
+    system: SYNTH_SYSTEM,
+    tools: [BUILD_VEILLE_TOOL],
+    tool_choice: { type: "tool", name: "build_veille" },
+    messages: [{ role: "user", content: synthPrompt }],
+  });
+  const synthContent = resp.content ?? [];
+  const toolCall = findToolUse(synthContent, "build_veille");
+  if (!toolCall) throw new Error("Synthèse : build_veille non produit.");
+
+  const structured = toolCall.input as any;
+  const allContent = [...paquets.flatMap((p) => p.content), ...synthContent];
+  const sources = extractSources(allContent);
+  const realStructuredItems = (structured.sections ?? [])
+    .flatMap((s: any) => s?.items ?? [])
+    .filter((it: any) =>
+      Array.isArray(it?.liens)
+      && it.liens.some((l: any) => typeof l?.url === "string" && /^https?:\/\//.test(l.url))
+      && !/aucune (?:donnée|actualité|information)|collecte non aboutie|échec technique/i.test(`${it?.titre ?? ""} ${it?.resume ?? ""}`)
+    );
+  if (sources.length === 0 || realStructuredItems.length === 0) {
+    throw new Error("La synthèse ne contient aucun item factuel sourcé : aucun rapport n'a été publié.");
+  }
+
+  await touch({ etape: "synthèse terminée", progress: 90 });
+
+  const md = [
+    `# ${structured.titre ?? "Veille marché"}`,
+    structured.periode ?? ctx.periode,
+    "",
+    structured.resume_executif ?? "",
+  ].join("\n");
+
+  const { data: inserted, error } = await sb.from("veille_rapports").insert({
+    type: ctx.type,
+    periode: structured.periode ?? ctx.periode,
+    contenu_markdown: md,
+    contenu_json: structured,
+    sources,
+    owner_id: job.owner_id ?? null,
+  }).select("id").single();
+  if (error) throw new Error(`Sauvegarde du rapport impossible : ${error.message}`);
+
+  await touch({ etape: "terminé", done: true, progress: 100 });
+
+  if (job.owner_id) {
+    try {
+      await sb.rpc("notify_user", {
+        _user_id: job.owner_id,
+        _type_cle: "veille_publiee",
+        _titre: ctx.type === "quotidien" ? "Ton rapport de veille quotidien est prêt" : "Le rapport de veille hebdomadaire est disponible",
+        _corps: structured.titre ?? ctx.periode,
+        _lien: inserted?.id ? `/admin/veille?rapport=${inserted.id}` : "/admin/veille",
+        _gravite: "info",
+      });
+    } catch (nErr: any) { console.error("[veille] notify success failed", nErr?.message ?? nErr); }
+  }
+}
+
+// --- HTTP entrypoint ----------------------------------------------------------
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
+
+  let body: any = {};
+  try { body = await req.json(); } catch { /* ignore */ }
+
+  // ============ MODE 2 : exécuter UNE étape d'un job existant ============
+  if (body?.job_id) {
+    const relay = req.headers.get("x-internal-relay");
+    if (relay !== SERVICE_ROLE) {
+      return new Response(JSON.stringify({ error: "forbidden" }), { status: 403, headers: { ...corsHeaders, "content-type": "application/json" } });
+    }
+    const jobId = body.job_id as string;
+
+    // @ts-ignore EdgeRuntime
+    EdgeRuntime.waitUntil((async () => {
+      const { data: job } = await sb.from("veille_jobs").select("*").eq("id", jobId).maybeSingle();
+      if (!job || job.done) return;
+      try {
+        await runStep(sb, job);
+      } catch (e: any) {
+        const msg = (e?.message ?? String(e)).slice(0, 200);
+        console.error(`[veille] step ${job.step} error`, msg);
+        await sb.from("veille_jobs").update({
+          etape: `erreur : ${msg}`, done: true, updated_at: new Date().toISOString(),
+        }).eq("id", jobId);
+        if (job.owner_id) {
+          try {
+            await sb.rpc("notify_user", {
+              _user_id: job.owner_id,
+              _type_cle: "veille_erreur",
+              _titre: "La veille marché a échoué",
+              _corps: msg,
+              _lien: "/admin/veille",
+              _gravite: "attention",
+            });
+          } catch { /* ignore */ }
+        }
+      }
+    })());
+
+    return new Response(JSON.stringify({ status: "step_started", job_id: jobId }), {
+      status: 202, headers: { ...corsHeaders, "content-type": "application/json" },
+    });
+  }
+
+  // ============ MODE 1 : créer un nouveau job ============
   try {
-    const { type } = await req.json() as { type: "quotidien" | "hebdomadaire" };
+    const { type } = body as { type: "quotidien" | "hebdomadaire" };
     if (type !== "quotidien" && type !== "hebdomadaire") {
       return new Response(JSON.stringify({ error: "type invalide" }), {
         status: 400, headers: { ...corsHeaders, "content-type": "application/json" },
       });
     }
 
-    const now = new Date();
-    const periode = type === "quotidien"
-      ? `Journée du ${now.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })} (dernières 24h)`
-      : `Semaine du ${new Date(now.getTime() - 7 * 86400000).toLocaleDateString("fr-FR")} au ${now.toLocaleDateString("fr-FR")} (7 derniers jours)`;
-    const window = type === "quotidien" ? "dans les dernières 24 heures" : "au cours des 7 derniers jours";
-    const searchTurns = type === "quotidien" ? 2 : 3;
+    // Marquer les jobs zombies AVANT tout nouveau lancement.
+    const zombieCutoff = new Date(Date.now() - ZOMBIE_MS).toISOString();
+    await sb.from("veille_jobs")
+      .update({ done: true, etape: "erreur : interrompue", updated_at: new Date().toISOString() })
+      .eq("done", false)
+      .lt("updated_at", zombieCutoff);
 
-    const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
-
-    // Récupérer l'utilisateur qui lance la génération (pour le notifier à la fin)
+    // Owner
     let ownerId: string | null = null;
     const authHeader = req.headers.get("Authorization");
     if (authHeader) {
@@ -260,252 +570,30 @@ Deno.serve(async (req) => {
       } catch { /* ignore */ }
     }
 
-    // Job de suivi (progression visible côté UI)
-    const { data: job } = await sb
-      .from("veille_jobs")
-      .insert({ type, etape: "démarrage", owner_id: ownerId, progress: 5 })
-      .select("id")
-      .single();
-    const jobId = job?.id as string | undefined;
-    let lastProgress = 5;
-    const setEtape = async (etape: string, progress?: number) => {
-      if (!jobId) return;
-      const patch: Record<string, unknown> = { etape, updated_at: new Date().toISOString() };
-      if (typeof progress === "number") {
-        const next = Math.max(lastProgress, Math.min(100, Math.round(progress)));
-        lastProgress = next;
-        patch.progress = next;
-      }
-      await sb.from("veille_jobs").update(patch).eq("id", jobId);
-    };
-
-
-    // Watchlist
-    const { data: watchlist } = await sb
-      .from("veille_watchlist")
+    // Watchlist figée
+    const { data: watchlist } = await sb.from("veille_watchlist")
       .select("nom, categorie, priorite, note")
       .eq("actif", true)
       .order("priorite", { ascending: true })
       .order("categorie", { ascending: true });
-    const wl = (watchlist ?? []) as { nom: string; categorie: string; priorite: number; note: string | null }[];
-    const groupByCat = (prio: number) => {
-      const items = wl.filter((w) => w.priorite === prio);
-      const byCat: Record<string, string[]> = {};
-      for (const w of items) {
-        const label = w.note ? `${w.nom} (${w.note})` : w.nom;
-        (byCat[w.categorie] ||= []).push(label);
-      }
-      return Object.entries(byCat).map(([c, n]) => `- ${c} : ${n.join(", ")}`).join("\n");
-    };
-    const wlP1 = groupByCat(1) || "(aucune)";
-    const wlP2 = groupByCat(2) || "(aucune)";
-    const wlP3 = groupByCat(3) || "(aucune)";
+    const ctx = buildContext(type, watchlist ?? []);
 
-    // === COLLECTEURS STRICTEMENT SÉQUENTIELS ===
-    const collectorA = `PÉRIMÈTRE : Baromètre Stern & flipper (${window}).
-Cherche sur le web (Pinball News, This Week in Pinball, Kaneda's Blog, Pinside, Stern officiel, comptes réseaux sociaux Stern, presse spécialisée) :
-(a) NOUVEAUX TITRES Stern : rumeurs, teasers, licences, annonces officielles.
-(b) ACCUEIL DES SORTIES RÉCENTES : ressenti communautaire (qualité, prix, hype, critiques) sur Pinside en priorité + pages fans FR (Mordus de Flipper, Flippers Attitude, Flippers achat/vente).
-(c) TENDANCES MARCHÉ FLIPPER : Jersey Jack, American Pinball, Chicago Gaming, Spooky, Multimorphic, prix occasion, nouveaux acteurs.
-(d) POLITIQUE COMMERCIALE STERN : vente directe, marges revendeurs, exclusivités territoriales, prix publics imposés, conditions aux importateurs européens (Freddy's Pinball Paradise, Pinball Universe, RS Pinball, High Voltage Pinball).
-Rends des notes brutes datées avec URLs. Distingue rumeur/annonce/sorti et enthousiaste/mitigé/négatif/neutre pour chaque titre.`;
+    const { data: job, error: jobErr } = await sb.from("veille_jobs").insert({
+      type,
+      etape: "démarrage",
+      owner_id: ownerId,
+      progress: 5,
+      step: "collecte_a",
+      notes: {},
+      context: ctx,
+    }).select("id").single();
+    if (jobErr || !job) throw new Error(`Création du job impossible : ${jobErr?.message ?? "?"}`);
 
-    const collectorB = `PÉRIMÈTRE : Watchlist France (${window}).
-Cherche des actualités RÉCENTES pour les comptes suivants (partenaires, concurrents, communauté, contentieux, exploitants). Utilise LinkedIn public, presse locale, sites, réseaux sociaux.
+    // Auto-invocation immédiate de la 1re étape.
+    selfInvoke(job.id);
 
-PRIORITÉ 1 (obligatoire, couvre chaque nom) :
-${wlP1}
-
-PRIORITÉ 2 (à couvrir si actualité récente) :
-${wlP2}
-
-LECTURE PARTICULIÈRE :
-- reseau_revendeurs : partenaires distributeurs flippers d'AA AUJOURD'HUI, mais la nouvelle politique commerciale Stern les pousse vers la vente directe B2C → CONCURRENTS POTENTIELS. Surveille en priorité tout mouvement stratégique : offres B2C agressives, prix cassés, exclusivités revendiquées, communication qui contourne AA, rapprochements avec importateurs européens (Freddy's, Pinball Universe, RS Pinball, High Voltage).
-- contentieux : ton STRICTEMENT FACTUEL, mouvements publics vérifiables uniquement, aucun jugement.
-- MBA Entertainment : concurrent négoce + revendeur flipper AA + propriétaire La Tête dans les Nuages → double statut à monitorer.
-
-Rends des notes brutes datées, chaque item préfixé de la catégorie entre crochets, avec URLs. Si aucun compte P1 n'a d'actu, dis-le honnêtement.`;
-
-    const collectorC = `PÉRIMÈTRE : Marché arcade, FEC et distributeurs européens (${window}).
-Cherche :
-- Fabricants arcade : UNIS, SEGA Amusement, Namco, Bandai Namco Amusement, Raw Thrills, Andamiro, Bay Tek, LAI Games, Ace.
-- Salons et événements : IAAPA, EAG, salons français, tournois flipper majeurs.
-- FEC (Family Entertainment Centers) France et Europe : ouvertures, fermetures, tendances, cashless / systèmes de paiement, redemption.
-- Distributeurs européens : Freddy's Pinball Paradise (DE), Pinball Universe (DE), RS Pinball (AT), High Voltage Pinball (BE) — mouvements, offres, événements.
-- Tendances marché arcade en général.
-
-Rends des notes brutes datées avec URLs, distingue confirmé vs rumeur.`;
-
-    const collectorD = `PÉRIMÈTRE : TCG, blind box et e-commerce loisirs (${window}).
-Cherche :
-- Scène TCG : Pokemon, Yu-Gi-Oh, Magic — sorties, ruptures, spéculation, événements FR.
-- Blind box / collectibles : Pop Mart, Labubu, Sonny Angel, tendances retail loisirs.
-- E-commerce loisirs : mouvements Shopify, Amazon, marketplaces sur la niche jeu / collection.
-
-Rends des notes brutes datées avec URLs.`;
-
-    const runJob = async () => {
-      try {
-        const paquets: Array<CollectorResult & { label: string }> = [
-          { label: "A · Baromètre Stern & flipper", ...failedCollector("non démarré", false) },
-          { label: "B · Watchlist France", ...failedCollector("non démarré", false) },
-          { label: "C · Marché arcade & FEC", ...failedCollector("non démarré", false) },
-          { label: "D · TCG & e-commerce", ...failedCollector("non démarré", false) },
-        ];
-        const prompts = [collectorA, collectorB, collectorC, collectorD];
-        // Jalons : 20 / 35 / 50 / 60 après chaque collecteur.
-        const collectorProgress = [20, 35, 50, 60];
-        for (let idx = 0; idx < prompts.length; idx++) {
-          await setEtape(`collecte ${idx + 1}/4 (séquentielle · sonnet)`);
-          const result = await runCollectorWithRetry(paquets[idx].label, prompts[idx], searchTurns);
-          paquets[idx] = { label: paquets[idx].label, ...result };
-          await setEtape(`collecte ${idx + 1}/4 terminée`, collectorProgress[idx]);
-          if (idx < prompts.length - 1) {
-            await setEtape(`collecte ${idx + 1}/4 (pause 20 s)`);
-            await new Promise((r) => setTimeout(r, 20000));
-          }
-        }
-
-
-        // === ANTI-RAPPORT-VIDE ===
-        // On compte uniquement les vrais web_search_result, jamais les puces du
-        // modèle (qui peuvent simplement décrire une erreur technique).
-        const totalItems = paquets.reduce((sum, paquet) => sum + paquet.factualItems, 0);
-        const emptyCount = paquets.filter((paquet) => paquet.factualItems === 0).length;
-        if (totalItems === 0) {
-          const accountUnavailable = paquets.some((paquet) => paquet.accountUnavailable);
-          const allQuota = paquets.every((paquet) => paquet.quotaError);
-          if (accountUnavailable) {
-            throw new Error("La recherche web Anthropic est indisponible ou désactivée au niveau du compte. Vérifiez l'accès web_search de la clé API.");
-          }
-          if (allQuota) {
-            throw new Error("Quota de recherches web saturé au niveau du serveur Anthropic, réessayez dans quelques minutes.");
-          }
-          throw new Error("Aucune donnée factuelle sourcée n'a été collectée : aucun rapport n'a été publié.");
-        }
-
-        await setEtape(`synthèse (opus · thinking${emptyCount ? ` · ${emptyCount} section(s) sans données` : ""})`, 70);
-
-        const notesBlock = paquets.map((p) => `### PAQUET ${p.label}${p.items === 0 ? " (aucune donnée collectée)" : ""}\n\n${p.notes}`).join("\n\n---\n\n");
-
-        const synthPrompt = `Période : ${periode}.
-
-Voici les 4 paquets de notes brutes collectés en parallèle par des agents web spécialisés. Synthétise-les en un rapport complet via l'outil build_veille (5 sections dans l'ordre : nouveautes, concurrents, evenements, tendances, barometre_stern).
-
-RÈGLES DE TAGGING WATCHLIST — pour chaque item qui mentionne une entité de la watchlist ci-dessous, préfixe le titre par la catégorie entre crochets (ex. « [reseau_revendeurs] Bananas Distribution ouvre… »). Catégories possibles : fabricants, concurrents, reseau_revendeurs, flipper, communaute_flipper, exploitants, tcg, presse, contentieux.
-
-WATCHLIST P1 :
-${wlP1}
-
-WATCHLIST P2 :
-${wlP2}
-
-WATCHLIST P3 (mentions seulement si événement notable) :
-${wlP3}
-
-SECTION barometre_stern OBLIGATOIRE — pour chaque titre Stern renseigne statut_stern (rumeur/annonce/sorti), tonalite (enthousiaste/mitige/negatif/neutre + le pourquoi en 1 phrase dans le résumé), et implication_aa (lecture commerciale pour AA importateur Stern, 1 phrase). Traite tout signal de politique commerciale Stern ou de mouvement B2C d'un revendeur AA en importance "haute".
-
-Si une section manque d'infos, mets un unique item d'importance "info" expliquant honnêtement l'absence d'actualité — n'invente rien.
-
-=== NOTES BRUTES ===
-
-${notesBlock}`;
-
-        let synthContent: any[] = [];
-        let toolCall: any = null;
-        {
-          const resp = await anthropicJson(ANTHROPIC_KEY, {
-            model: SYNTH_MODEL,
-            max_tokens: 16000,
-            thinking: { type: "adaptive" },
-            output_config: { effort: "high" },
-            system: SYNTH_SYSTEM,
-            tools: [BUILD_VEILLE_TOOL],
-            tool_choice: { type: "tool", name: "build_veille" },
-            messages: [{ role: "user", content: synthPrompt }],
-          });
-          synthContent = resp.content ?? [];
-          toolCall = findToolUse(synthContent, "build_veille");
-        }
-        if (!toolCall) throw new Error("Synthèse : build_veille non produit.");
-
-        const structured = toolCall.input as any;
-        const allContent = [...paquets.flatMap((p) => p.content), ...synthContent];
-        const sources = extractSources(allContent);
-        const realStructuredItems = (structured.sections ?? [])
-          .flatMap((section: any) => section?.items ?? [])
-          .filter((item: any) =>
-            Array.isArray(item?.liens)
-            && item.liens.some((link: any) => typeof link?.url === "string" && /^https?:\/\//.test(link.url))
-            && !/aucune (?:donnée|actualité|information)|collecte non aboutie|échec technique/i.test(`${item?.titre ?? ""} ${item?.resume ?? ""}`)
-          );
-        // Second verrou immédiatement avant l'unique INSERT : même si la
-        // synthèse réussit techniquement, un rapport sans item réel sourcé est refusé.
-        if (sources.length === 0 || realStructuredItems.length === 0) {
-          throw new Error("La synthèse ne contient aucun item factuel sourcé : aucun rapport n'a été publié.");
-        }
-        await setEtape("synthèse terminée", 90);
-        const md = [
-          `# ${structured.titre ?? "Veille marché"}`,
-          structured.periode ?? periode,
-          "",
-          structured.resume_executif ?? "",
-        ].join("\n");
-
-        const { data: inserted, error } = await sb.from("veille_rapports").insert({
-          type,
-          periode: structured.periode ?? periode,
-          contenu_markdown: md,
-          contenu_json: structured,
-          sources,
-          owner_id: ownerId,
-        }).select("id").single();
-        if (error) throw new Error(`Sauvegarde du rapport impossible : ${error.message}`);
-        const rapportId = inserted?.id as string | undefined;
-
-        if (jobId) await sb.from("veille_jobs").update({ etape: "terminé", done: true, progress: 100, updated_at: new Date().toISOString() }).eq("id", jobId);
-
-        if (ownerId) {
-          try {
-            await sb.rpc("notify_user", {
-              _user_id: ownerId,
-              _type_cle: "veille_publiee",
-              _titre: type === "quotidien" ? "Ton rapport de veille quotidien est prêt" : "Le rapport de veille hebdomadaire est disponible",
-              _corps: structured.titre ?? periode,
-              _lien: rapportId ? `/admin/veille?rapport=${rapportId}` : "/admin/veille",
-              _gravite: "info",
-            });
-          } catch (nErr: any) {
-            console.error("[veille-marche] notify_user veille_publiee failed", nErr?.message ?? nErr);
-          }
-        }
-      } catch (e: any) {
-        console.error("[veille-marche] background error", e?.message ?? e);
-        const msg = (e?.message ?? String(e)).slice(0, 200);
-        if (jobId) await sb.from("veille_jobs").update({ etape: `erreur : ${msg}`, done: true, updated_at: new Date().toISOString() }).eq("id", jobId);
-        if (ownerId) {
-          try {
-            await sb.rpc("notify_user", {
-              _user_id: ownerId,
-              _type_cle: "veille_erreur",
-              _titre: "La veille marché a échoué",
-              _corps: msg,
-              _lien: "/admin/veille",
-              _gravite: "attention",
-            });
-          } catch (nErr: any) {
-            console.error("[veille-marche] notify_user veille_erreur failed", nErr?.message ?? nErr);
-          }
-        }
-      }
-    };
-
-    // @ts-ignore EdgeRuntime
-    EdgeRuntime.waitUntil(runJob());
-
-    return new Response(JSON.stringify({ status: "started", type, periode, job_id: jobId }), {
-      status: 202,
-      headers: { ...corsHeaders, "content-type": "application/json" },
+    return new Response(JSON.stringify({ status: "started", type, periode: ctx.periode, job_id: job.id }), {
+      status: 202, headers: { ...corsHeaders, "content-type": "application/json" },
     });
   } catch (e: any) {
     console.error("[veille-marche]", e?.message ?? e);

@@ -6,6 +6,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Loader2, ArrowRight } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { SPACES, type NavCtx } from "@/nav/spaces";
+import { BriefingCard } from "@/components/copilot/BriefingCard";
 
 /**
  * Portail Arcade OS. Chaque carte = un espace. La description est suivie

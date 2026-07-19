@@ -323,6 +323,8 @@ export default function AdminVeille() {
     } finally {
       setGenerating(null);
       setEtape("");
+      setProgress(0);
+
     }
   };
 

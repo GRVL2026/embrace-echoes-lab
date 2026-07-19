@@ -22,10 +22,13 @@ type Entry = {
 const CATEGORIES = [
   { value: "fabricants", label: "Fabricants" },
   { value: "concurrents", label: "Concurrents / Distributeurs" },
+  { value: "reseau_revendeurs", label: "Réseau revendeurs (partenaires AA)" },
   { value: "flipper", label: "Scène flipper" },
+  { value: "communaute_flipper", label: "Communauté flipper" },
   { value: "exploitants", label: "Exploitants / FEC" },
   { value: "tcg", label: "TCG / blindbox" },
   { value: "presse", label: "Presse" },
+  { value: "contentieux", label: "Contentieux (surveillance sensible)" },
 ];
 
 const PRIO_META: Record<number, { label: string; cls: string }> = {

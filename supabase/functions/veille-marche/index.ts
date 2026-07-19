@@ -43,11 +43,11 @@ const BUILD_VEILLE_TOOL = {
       },
       sections: {
         type: "array",
-        description: "Les 4 sections thématiques dans l'ordre : nouveautes, concurrents, evenements, tendances.",
+        description: "Les 5 sections thématiques dans l'ordre : nouveautes, concurrents, evenements, tendances, barometre_stern.",
         items: {
           type: "object",
           properties: {
-            id: { type: "string", enum: ["nouveautes", "concurrents", "evenements", "tendances"] },
+            id: { type: "string", enum: ["nouveautes", "concurrents", "evenements", "tendances", "barometre_stern"] },
             titre: { type: "string" },
             items: {
               type: "array",
@@ -61,6 +61,20 @@ const BUILD_VEILLE_TOOL = {
                     items: { type: "string", description: "Bullet courte." },
                   },
                   importance: { type: "string", enum: ["haute", "moyenne", "info"] },
+                  tonalite: {
+                    type: "string",
+                    enum: ["enthousiaste", "mitige", "negatif", "neutre"],
+                    description: "Réservé à la section barometre_stern : ressenti communautaire dominant. Optionnel ailleurs.",
+                  },
+                  statut_stern: {
+                    type: "string",
+                    enum: ["rumeur", "annonce", "sorti"],
+                    description: "Réservé à la section barometre_stern pour les titres Stern : stade du titre.",
+                  },
+                  implication_aa: {
+                    type: "string",
+                    description: "Réservé à la section barometre_stern : lecture commerciale pour Avranches Automatic (importateur Stern) en 1 phrase.",
+                  },
                   liens: {
                     type: "array",
                     items: {
@@ -152,12 +166,12 @@ Deno.serve(async (req) => {
     };
 
     const watchlistBlock = wl.length
-      ? `\n\nWATCHLIST OFFICIELLE (à couvrir obligatoirement pour la priorité 1, opportunément pour la priorité 2) :\n\nPRIORITÉ 1 — obligatoire à chaque veille :\n${groupByCat(1) || "(aucune)"}\n\nPRIORITÉ 2 — à couvrir si actualité :\n${groupByCat(2) || "(aucune)"}\n\nPRIORITÉ 3 — signaux faibles, mentionner seulement si événement notable :\n${groupByCat(3) || "(aucune)"}\n\nRÈGLE : pour chaque item de la veille qui mentionne une entité de cette watchlist, préfixe le titre par la catégorie correspondante entre crochets (ex. « [concurrents] Bananas Distribution ouvre… », catégories possibles : fabricants, concurrents, flipper, exploitants, tcg, presse). Si tu ne trouves aucune actualité pour un compte prioritaire 1, ne rien inventer.`
+      ? `\n\nWATCHLIST OFFICIELLE (à couvrir obligatoirement pour la priorité 1, opportunément pour la priorité 2) :\n\nPRIORITÉ 1 — obligatoire à chaque veille :\n${groupByCat(1) || "(aucune)"}\n\nPRIORITÉ 2 — à couvrir si actualité :\n${groupByCat(2) || "(aucune)"}\n\nPRIORITÉ 3 — signaux faibles, mentionner seulement si événement notable :\n${groupByCat(3) || "(aucune)"}\n\nRÈGLE DE TAGGING : pour chaque item de la veille qui mentionne une entité de cette watchlist, préfixe le titre par la catégorie correspondante entre crochets (ex. « [reseau_revendeurs] Bananas Distribution ouvre… »). Catégories possibles : fabricants, concurrents, reseau_revendeurs, flipper, communaute_flipper, exploitants, tcg, presse, contentieux.\n\nLECTURE PARTICULIÈRE PAR CATÉGORIE :\n- reseau_revendeurs : ce sont les partenaires distributeurs flippers d'Avranches Automatic. Leurs succès/ouvertures = signaux positifs à valoriser pour le réseau ; leurs difficultés = alertes internes.\n- contentieux : entités en litige avec AA (ex. procès en cours). Ton STRICTEMENT FACTUEL, aucun jugement, aucune spéculation, uniquement mouvements publics vérifiables.\n- communaute_flipper : forums et groupes fans (source clé pour le baromètre Stern ci-dessous).\n\nSi tu ne trouves aucune actualité pour un compte prioritaire 1, ne rien inventer.\n\nVOLET OBLIGATOIRE — BAROMÈTRE STERN & FLIPPER (section id="barometre_stern") :\nÀ chaque veille, produis cette section dédiée. Elle DOIT couvrir :\n(a) NOUVEAUX TITRES Stern : rumeurs, teasers, licences évoquées, annonces officielles — sources Pinball News, This Week in Pinball, Kaneda's Blog, Pinside, comptes officiels Stern.\n(b) ACCUEIL DES SORTIES RÉCENTES : ressenti communautaire sur les derniers titres Stern (qualité, prix, hype, critiques) — sources Pinside en priorité, puis pages fans FR (Mordus de Flipper, Flippers Attitude, Flippers achat/vente).\n(c) TENDANCES MARCHÉ FLIPPER : mouvements globaux (prix occasion, concurrents Jersey Jack / American Pinball / Chicago Gaming / Spooky, nouveaux acteurs).\nPour chaque item de titre Stern, renseigne "statut_stern" (rumeur/annonce/sorti), "tonalite" (enthousiaste/mitige/negatif/neutre + le "pourquoi" dans le résumé en 1 phrase), et "implication_aa" (lecture commerciale pour AA en tant qu'importateur Stern France : ex. « titre hype → pousser les précommandes », « accueil tiède → prudence sur les volumes »).`
       : "";
 
     const userPrompt = `Génère le rapport de veille marché pour la période : ${periode}.
 
-Concentre-toi exclusivement sur les informations publiées ou survenues ${window}. Effectue plusieurs recherches web ciblées (Stern Pinball news, distributeurs flippers France, IAAPA, Pinball News, arcade industry, etc.) puis synthétise. Ta réponse finale DOIT être un appel à l'outil build_veille avec toutes les sections remplies. Aucune section ne doit être vide : si tu n'as rien trouvé de récent, mets un unique item d'importance "info" expliquant honnêtement l'absence d'actualité.${watchlistBlock}`;
+Concentre-toi exclusivement sur les informations publiées ou survenues ${window}. Effectue plusieurs recherches web ciblées (Stern Pinball news, distributeurs flippers France, IAAPA, Pinball News, Pinside, arcade industry, etc.) puis synthétise. Ta réponse finale DOIT être un appel à l'outil build_veille avec les 5 sections remplies (nouveautes, concurrents, evenements, tendances, barometre_stern). Aucune section ne doit être vide : si tu n'as rien trouvé de récent, mets un unique item d'importance "info" expliquant honnêtement l'absence d'actualité.${watchlistBlock}`;
 
     let messages: any[] = [{ role: "user", content: userPrompt }];
     let finalContent: any[] = [];

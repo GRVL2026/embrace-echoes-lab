@@ -129,9 +129,35 @@ Deno.serve(async (req) => {
 
     const window = type === "quotidien" ? "dans les dernières 24 heures" : "au cours des 7 derniers jours";
 
+    // Charge la watchlist active pour orienter les recherches
+    const sbEarly = createClient(SUPABASE_URL, SERVICE_ROLE);
+    const { data: watchlist } = await sbEarly
+      .from("veille_watchlist")
+      .select("nom, categorie, priorite, note")
+      .eq("actif", true)
+      .order("priorite", { ascending: true })
+      .order("categorie", { ascending: true });
+
+    const wl = (watchlist ?? []) as { nom: string; categorie: string; priorite: number; note: string | null }[];
+    const groupByCat = (prio: number) => {
+      const items = wl.filter((w) => w.priorite === prio);
+      const byCat: Record<string, string[]> = {};
+      for (const w of items) {
+        const label = w.note ? `${w.nom} (${w.note})` : w.nom;
+        (byCat[w.categorie] ||= []).push(label);
+      }
+      return Object.entries(byCat)
+        .map(([cat, names]) => `- ${cat} : ${names.join(", ")}`)
+        .join("\n");
+    };
+
+    const watchlistBlock = wl.length
+      ? `\n\nWATCHLIST OFFICIELLE (à couvrir obligatoirement pour la priorité 1, opportunément pour la priorité 2) :\n\nPRIORITÉ 1 — obligatoire à chaque veille :\n${groupByCat(1) || "(aucune)"}\n\nPRIORITÉ 2 — à couvrir si actualité :\n${groupByCat(2) || "(aucune)"}\n\nPRIORITÉ 3 — signaux faibles, mentionner seulement si événement notable :\n${groupByCat(3) || "(aucune)"}\n\nRÈGLE : pour chaque item de la veille qui mentionne une entité de cette watchlist, préfixe le titre par la catégorie correspondante entre crochets (ex. « [concurrents] Bananas Distribution ouvre… », catégories possibles : fabricants, concurrents, flipper, exploitants, tcg, presse). Si tu ne trouves aucune actualité pour un compte prioritaire 1, ne rien inventer.`
+      : "";
+
     const userPrompt = `Génère le rapport de veille marché pour la période : ${periode}.
 
-Concentre-toi exclusivement sur les informations publiées ou survenues ${window}. Effectue plusieurs recherches web ciblées (Stern Pinball news, distributeurs flippers France, IAAPA, Pinball News, arcade industry, etc.) puis synthétise. Ta réponse finale DOIT être un appel à l'outil build_veille avec toutes les sections remplies. Aucune section ne doit être vide : si tu n'as rien trouvé de récent, mets un unique item d'importance "info" expliquant honnêtement l'absence d'actualité.`;
+Concentre-toi exclusivement sur les informations publiées ou survenues ${window}. Effectue plusieurs recherches web ciblées (Stern Pinball news, distributeurs flippers France, IAAPA, Pinball News, arcade industry, etc.) puis synthétise. Ta réponse finale DOIT être un appel à l'outil build_veille avec toutes les sections remplies. Aucune section ne doit être vide : si tu n'as rien trouvé de récent, mets un unique item d'importance "info" expliquant honnêtement l'absence d'actualité.${watchlistBlock}`;
 
     let messages: any[] = [{ role: "user", content: userPrompt }];
     let finalContent: any[] = [];

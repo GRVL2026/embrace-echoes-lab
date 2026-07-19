@@ -210,10 +210,10 @@ export const SPACES: Space[] = [
       },
       {
         label: "Synchronisation ERP",
-        to: "/admin/gaia#sync",
+        to: "/admin/synchronisation",
         icon: RefreshCw,
         show: (c) => c.isAdmin,
-        match: (p, h) => p === "/admin/gaia" && h === "#sync",
+        match: startsWith("/admin/synchronisation"),
       },
       {
         label: "Catalogue ↔ ERP",

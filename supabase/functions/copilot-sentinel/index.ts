@@ -355,7 +355,7 @@ async function runSentinel() {
         await admin.from("copilot_alertes").update({
           titre: "Synchro Cegid nocturne en échec", constat,
           action_suggeree: "Ouvrir Réglages → Synchronisation, relancer manuellement et vérifier les logs.",
-          lien: "/admin/gaia#sync", gravite: "attention",
+          lien: "/admin/synchronisation", gravite: "attention",
           updated_at: new Date().toISOString(),
         }).eq("id", exist.id);
       } else {
@@ -363,7 +363,7 @@ async function runSentinel() {
           type: "sync_fresh", gravite: "attention",
           titre: "Synchro Cegid nocturne en échec",
           constat, action_suggeree: "Ouvrir Réglages → Synchronisation, relancer manuellement et vérifier les logs.",
-          lien: "/admin/gaia#sync", visibilite: "direction",
+          lien: "/admin/synchronisation", visibilite: "direction",
           dedupe_key: dedupe, statut: "nouveau",
         });
       }

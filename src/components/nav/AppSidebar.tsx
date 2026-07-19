@@ -15,7 +15,9 @@ import {
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/contexts/AuthContext";
 import { SPACES, resolveActive, type NavCtx, type Space } from "@/nav/spaces";
+import { AlertsBell } from "@/components/copilot/AlertsBell";
 import logoImg from "@/assets/logo.png";
+import { cn } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 
 /**

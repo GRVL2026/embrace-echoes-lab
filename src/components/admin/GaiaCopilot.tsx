@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, Component, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCopilot } from "@/contexts/CopilotContext";
 
 import { CopiloteMarkdown } from "./CopiloteMarkdown";
 import { FunctionsHttpError } from "@supabase/supabase-js";
@@ -229,8 +230,14 @@ class RevueRenderBoundary extends Component<
 
 // ─────────── Main component ───────────
 
-export function GaiaCopilot() {
+type GaiaCopilotProps = {
+  /** Mode compact : masque revue, cartes d'actions rapides et historique. */
+  embedded?: boolean;
+};
+
+export function GaiaCopilot({ embedded = false }: GaiaCopilotProps = {}) {
   const { copilotEnabled } = useAuth();
+  const { pageContext, consumePrefill } = useCopilot();
   const [revueLoading, setRevueLoading] = useState(false);
   const [revueData, setRevueData] = useState<RevueData | null>(null);
 
@@ -292,6 +299,18 @@ export function GaiaCopilot() {
     })();
   }, []);
 
+  // Consomme un prefill éventuel (bouton "Demander au copilote" d'une autre page)
+  const { prefill: pendingPrefill } = useCopilot();
+  useEffect(() => {
+    if (!pendingPrefill) return;
+    const q = consumePrefill();
+    if (!q) return;
+    setChatInput(q);
+    // auto-envoi
+    setTimeout(() => { void sendChat(q); }, 50);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingPrefill]);
+
   // Persiste le chat à chaque changement (après hydratation)
   useEffect(() => {
     if (!chatHydratedRef.current || !storageKey) return;
@@ -305,6 +324,7 @@ export function GaiaCopilot() {
   }, [chat, storageKey]);
 
   useEffect(() => {
+    if (embedded) { setCardsLoading(false); return; }
     (async () => {
       setCardsLoading(true);
       const client: any = supabase;
@@ -319,7 +339,7 @@ export function GaiaCopilot() {
       setCardsLoading(false);
       loadHistory();
     })();
-  }, []);
+  }, [embedded]);
 
   // Détecte si l'utilisateur est en bas du chat pour décider du "stick to bottom"
   const handleChatScroll = () => {
@@ -531,7 +551,16 @@ export function GaiaCopilot() {
           apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ action: "chat", question: q, history: historyMsgs }),
+        body: JSON.stringify({
+          action: "chat",
+          question: q,
+          history: historyMsgs,
+          context: {
+            route: pageContext.route,
+            page_title: pageContext.title,
+            entity: pageContext.entity,
+          },
+        }),
       });
       if (!resp.ok) {
         const body = await resp.text();
@@ -821,6 +850,7 @@ export function GaiaCopilot() {
       </div>
 
 
+      {!embedded && (<>
       {/* Revue du mois */}
       <div className="rounded-lg border border-border bg-card/40 p-4">
         <div className="mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -1022,6 +1052,7 @@ export function GaiaCopilot() {
           </ul>
         </div>
       )}
+      </>)}
     </div>
   );
 }

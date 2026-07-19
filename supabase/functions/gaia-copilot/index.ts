@@ -196,6 +196,16 @@ CHARTE DE L'ANALYSTE — règles SQL OBLIGATOIRES (aucune exception sans justifi
     Ne jamais faire = 'MAGASIN' sans trim, tu louperais des lignes.
 
     • DASHBOARD MAGASIN : le pilotage du magasin de pièces s'appuie sur les vues v_gaia_magasin_mensuel (mois, annee, ca_ht, lignes, clients), v_gaia_magasin_top_clients (annee, client, code_client, ca_ht, lignes) et v_gaia_magasin_top_articles (annee, code_article, description, quantite, ca_ht). Utilise-les de préférence pour toute question sur les pièces détachées — elles appliquent déjà les bons filtres de classe et d'exercice fiscal.
+
+    • CARNET COMMERCIAL : v_gaia_carnet_documents (type_document IN ('devis','commande','livraison'), n_cde, client, code_client, date_doc, montant_ht, statut, sfa boolean, age_jours) — utilise-la pour lister les devis à relancer (6-12 mois), commandes non livrées, etc.
+
+    • E-COMMERCE (site Shopify Arcade OS / avranchesautomatic-boutique) : table shopify_stats_cache (cached_at, kpis jsonb {ca_30j, ca_90j, ca_1an, commandes_30j, panier_moyen, top_produits[], evolutions}). Utilise-la pour toute question sur le canal en ligne. Le CA Shopify est DISTINCT du CA ERP (SI commerce comptabilisé côté site) — ne les additionne pas sans le préciser.
+
+    • SAV : table zendesk_stats_cache (cached_at, kpis jsonb {tickets_ouverts, tickets_30j, delai_resolution_moyen, top_raisons[]}) pour les KPIs globaux ; table zendesk_ticket_summaries (ticket_id, resume, categorie, client, created_at, updated_at) pour lister/croiser les tickets d'un client. CROISEMENT UTILE : avant de proposer une relance commerciale sur un client, vérifie via zendesk_ticket_summaries s'il n'a pas de ticket SAV ouvert ou récent — sujet à ne pas rater dans un appel de relance.
+
+    • VEILLE MARCHÉ : table veille_rapports (id, type ('jour'|'semaine'), date_ref, contenu_json {barometre_stern, watchlist_france, marche_arcade, tcg_ecommerce, synthese, actions}, created_at) — dernier rapport = source pour "actualités concurrence / Stern / distributeurs". Table veille_watchlist (nom, url_principale, categorie, priorite, notes) = liste des comptes suivis (fabricants, concurrents, reseau_revendeurs, communaute_flipper, scene_flipper, ecommerce_tcg…).
+
+    • DOSSIERS COMMERCIAUX : table projects (id, owner_id, brand_id, offer jsonb, status ('brouillon'|'sent'|'won'|'lost'|'archive'), brief text, selected_products jsonb, updated_at) — pipeline "dossiers d'offre" produits en amont du carnet ERP.
 `;
 
 
@@ -229,11 +239,12 @@ const SQL_TOOL = {
 
 const MEMORISE_TOOL = {
   name: 'memoriser',
-  description: "Enregistre une note durable dans la mémoire du copilote (décisions, plans d'action, contextes, suivis). NE MÉMORISE JAMAIS de chiffres bruts (ils sont dans la base) — uniquement du contexte qualitatif qui devra être rappelé dans les prochaines conversations. Catégories usuelles : 'decision', 'plan', 'contexte', 'suivi', 'note'.",
+  description: "Enregistre une note durable. Deux portées possibles via 'scope' : 'global' (mémoire du copilote pour toute l'équipe : décisions, plans d'action, contextes, suivis — c'est le comportement historique par défaut), ou 'utilisateur' (mémoire personnelle sur l'utilisateur courant : son rôle métier, ses sujets récurrents, ses préférences de réponse — jamais d'informations sensibles hors contexte pro). NE MÉMORISE JAMAIS de chiffres bruts (ils sont dans la base). Catégories usuelles côté global : 'decision', 'plan', 'contexte', 'suivi', 'note'. Côté utilisateur : 'role', 'preference', 'sujet_recurrent', 'note'.",
   input_schema: {
     type: 'object',
     properties: {
-      categorie: { type: 'string', description: "Catégorie courte : 'decision' | 'plan' | 'contexte' | 'suivi' | 'note'." },
+      scope: { type: 'string', enum: ['global', 'utilisateur'], description: "Portée : 'global' (défaut) ou 'utilisateur'." },
+      categorie: { type: 'string', description: "Catégorie courte." },
       contenu: { type: 'string', description: 'Note à mémoriser, phrase complète, autonome (compréhensible sans le contexte de la conversation).' },
     },
     required: ['categorie', 'contenu'],
@@ -533,21 +544,77 @@ function formatMemories(memos: Array<{ id: string; categorie: string; contenu: s
   return `MÉMOIRE DU COPILOTE (entrées actives, à prendre en compte dans chaque réponse — outils : "memoriser" pour ajouter, "oublier" pour désactiver via id)\n${sections}`;
 }
 
-async function memoriser(admin: any, categorie: string, contenu: string): Promise<unknown> {
+async function memoriser(
+  admin: any,
+  categorie: string,
+  contenu: string,
+  scope: 'global' | 'utilisateur' = 'global',
+  userId: string | null = null,
+): Promise<unknown> {
   try {
     const cat = (categorie || 'note').toString().trim().slice(0, 40) || 'note';
     const txt = (contenu || '').toString().trim().slice(0, 2000);
     if (!txt) return { error: 'contenu vide' };
+
+    // Mémoire personnelle (par utilisateur)
+    if (scope === 'utilisateur') {
+      if (!userId) return { error: 'utilisateur inconnu, impossible de mémoriser dans le profil personnel' };
+      const { data: existing } = await admin
+        .from('copilot_user_profiles')
+        .select('memoire')
+        .eq('user_id', userId)
+        .maybeSingle();
+      const memoire = existing?.memoire && typeof existing.memoire === 'object' ? existing.memoire : { notes: [] };
+      const notes = Array.isArray(memoire.notes) ? memoire.notes : [];
+      notes.unshift({
+        id: crypto.randomUUID(),
+        categorie: cat,
+        contenu: txt,
+        created_at: new Date().toISOString(),
+      });
+      memoire.notes = notes.slice(0, 60); // borne dure pour éviter la dérive
+      const { error } = await admin
+        .from('copilot_user_profiles')
+        .upsert({ user_id: userId, memoire }, { onConflict: 'user_id' });
+      if (error) return { error: error.message };
+      return { ok: true, scope: 'utilisateur', memoire: notes[0] };
+    }
+
+    // Mémoire globale (comportement historique)
     const { data, error } = await admin
       .from('copilote_memoire')
       .insert({ categorie: cat, contenu: txt, auteur: 'copilote', actif: true })
       .select('id, categorie, contenu, created_at')
       .single();
     if (error) return { error: error.message };
-    return { ok: true, memoire: data };
+    return { ok: true, scope: 'global', memoire: data };
   } catch (e: any) {
     return { error: e?.message ?? String(e) };
   }
+}
+
+async function loadUserProfile(admin: any, userId: string): Promise<Array<{ categorie: string; contenu: string; created_at: string }>> {
+  try {
+    const { data, error } = await admin
+      .from('copilot_user_profiles')
+      .select('memoire')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (error || !data?.memoire) return [];
+    const notes = Array.isArray(data.memoire.notes) ? data.memoire.notes : [];
+    return notes.slice(0, 30);
+  } catch {
+    return [];
+  }
+}
+
+function formatUserProfile(userLabel: string, notes: Array<{ categorie: string; contenu: string }>): string {
+  const header = `PROFIL UTILISATEUR (personne actuellement connectée : ${userLabel})`;
+  if (!notes.length) {
+    return `${header}\n(aucune note personnelle enregistrée) — utilise l'outil "memoriser" avec scope='utilisateur' pour consigner discrètement le rôle métier, les préférences de réponse ou les sujets récurrents.`;
+  }
+  const lines = notes.map((n) => `  • [${n.categorie}] ${n.contenu}`).join('\n');
+  return `${header}\nNotes personnelles apprises (à considérer dans le ton et le niveau de détail des réponses) :\n${lines}`;
 }
 
 async function oublier(admin: any, id: string): Promise<unknown> {
@@ -633,14 +700,14 @@ async function toolLoop(params: {
   toolChoice?: any;
   extraPayload?: Record<string, unknown>;
   onEvent?: (event: string, data: unknown) => void;
-
+  userId?: string | null;
 }): Promise<{
   messages: Array<{ role: 'user' | 'assistant'; content: any }>;
   last: any;
   rounds: number;
   journal: TurnLog[];
 }> {
-  const { admin, model, system, dynamicSuffix, initialMessages, extraTools = [], toolChoice, extraPayload, onEvent } = params;
+  const { admin, model, system, dynamicSuffix, initialMessages, extraTools = [], toolChoice, extraPayload, onEvent, userId = null } = params;
   const tools = [SQL_TOOL, MEMORISE_TOOL, OUBLIER_TOOL, CHART_TOOL, ...extraTools];
   const messages = [...initialMessages];
   const journal: TurnLog[] = [];
@@ -725,7 +792,9 @@ async function toolLoop(params: {
           if (call?.name === 'executer_sql') {
             result = await runGaiaQuery(admin, String(call?.input?.sql_query ?? ''));
           } else if (call?.name === 'memoriser') {
-            result = await memoriser(admin, String(call?.input?.categorie ?? ''), String(call?.input?.contenu ?? ''));
+            const scopeInput = String(call?.input?.scope ?? 'global').toLowerCase();
+            const scope: 'global' | 'utilisateur' = scopeInput === 'utilisateur' ? 'utilisateur' : 'global';
+            result = await memoriser(admin, String(call?.input?.categorie ?? ''), String(call?.input?.contenu ?? ''), scope, userId);
           } else if (call?.name === 'oublier') {
             result = await oublier(admin, String(call?.input?.id ?? ''));
           } else if (call?.name === 'afficher_graphique') {
@@ -865,7 +934,13 @@ Deno.serve(async (req) => {
     const memorySuffix = formatMemories(memos);
     console.log(`[gaia-copilot] memoires actives=${memos.length}`);
 
-    const SUIVI_INSTRUCTION = `CONSIGNE DE SUIVI : quand une conversation aboutit à une action décidée (relance, plan client, décision), appelle immédiatement l'outil "memoriser" (catégorie 'suivi' ou 'plan') pour la consigner. Une action non mémorisée sera perdue.`;
+    // Profil personnel de l'utilisateur (mémoire par-utilisateur)
+    const currentUserId = userData.user.id;
+    const currentUserLabel = userData.user.email ?? currentUserId;
+    const userNotes = await loadUserProfile(admin, currentUserId);
+    const userProfileSuffix = formatUserProfile(currentUserLabel, userNotes);
+
+    const SUIVI_INSTRUCTION = `CONSIGNE DE SUIVI : quand une conversation aboutit à une action décidée (relance, plan client, décision), appelle immédiatement l'outil "memoriser" (scope='global', catégorie 'suivi' ou 'plan') pour la consigner. Une action non mémorisée sera perdue. Quand tu apprends une info comportementale utile sur l'utilisateur courant (rôle métier, préférence de format, sujet récurrent), consigne-la via "memoriser" scope='utilisateur' — jamais d'infos personnelles hors contexte pro.`;
 
     if (action === 'revue') {
       const suivis = memos.filter((m) => m.categorie === 'suivi');
@@ -1035,6 +1110,7 @@ Deno.serve(async (req) => {
                 extraTools: [],
                 extraPayload: revueExtra,
                 onEvent: (evt, data) => safeSend(evt, data),
+                userId: currentUserId,
               });
 
               // 3. Appel final build_revue (non-streamé, heartbeats maintiennent la connexion)
@@ -1140,7 +1216,25 @@ Deno.serve(async (req) => {
         { role: 'user', content: question },
       ];
 
-      const chatSystem = `${SYSTEM_PROMPT}\n\n${SUIVI_INSTRUCTION}`;
+      // Contexte de page : où est l'utilisateur, sur quelle entité ?
+      const rawCtx = body?.context && typeof body.context === 'object' ? body.context : null;
+      let contextBlock = '';
+      if (rawCtx) {
+        const route = typeof rawCtx.route === 'string' ? rawCtx.route : '';
+        const pageTitle = typeof rawCtx.page_title === 'string' ? rawCtx.page_title : '';
+        const entity = rawCtx.entity && typeof rawCtx.entity === 'object' ? rawCtx.entity : null;
+        const entityLine = entity
+          ? `- Entité affichée : ${entity.kind ?? '?'} « ${entity.label ?? '?'} »${entity.id ? ` (id ${entity.id})` : ''}${entity.extra ? ` — détails : ${JSON.stringify(entity.extra).slice(0, 400)}` : ''}`
+          : '- Aucune entité précise en cours de consultation.';
+        contextBlock = `CONTEXTE DE PAGE (à utiliser pour interpréter les questions elliptiques du type "pourquoi il baisse ?", "et sur ce client ?", "et sur cette catégorie ?") :\n- Page : ${pageTitle || 'inconnue'} (${route || 'route inconnue'})\n${entityLine}\nQuand l'utilisateur emploie un pronom ("il", "ça", "cette") sans nommer d'entité, applique-le à l'entité ci-dessus par défaut.`;
+      }
+
+      const chatSystem = [
+        SYSTEM_PROMPT,
+        SUIVI_INSTRUCTION,
+        userProfileSuffix,
+        contextBlock,
+      ].filter(Boolean).join('\n\n');
 
       const encoder = new TextEncoder();
       let heartbeat: number | undefined;
@@ -1166,6 +1260,7 @@ Deno.serve(async (req) => {
               dynamicSuffix: memorySuffix,
               initialMessages,
               onEvent: (evt, data) => send(evt, data),
+              userId: currentUserId,
             });
 
             const lastContent = Array.isArray(last?.content) ? last.content : [];

@@ -155,10 +155,20 @@ Deno.serve(async (req) => {
 
     const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
 
+    // Récupérer l'utilisateur qui lance la génération (pour le notifier à la fin)
+    let ownerId: string | null = null;
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader) {
+      try {
+        const { data: userData } = await sb.auth.getUser(authHeader.replace("Bearer ", ""));
+        ownerId = userData?.user?.id ?? null;
+      } catch { /* ignore */ }
+    }
+
     // Job de suivi (progression visible côté UI)
     const { data: job } = await sb
       .from("veille_jobs")
-      .insert({ type, etape: "chargement watchlist" })
+      .insert({ type, etape: "chargement watchlist", owner_id: ownerId })
       .select("id")
       .single();
     const jobId = job?.id as string | undefined;

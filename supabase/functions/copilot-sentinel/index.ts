@@ -328,17 +328,50 @@ async function callAnthropic(signals: Signal[], fraicheur: string) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function runSentinel() {
-  // Fraîcheur des données
+  // Fraîcheur des données — on cible le dernier log de synchro RÉUSSI.
   const sync = await safeTable(() =>
     admin.from("gaia_sync_log")
-      .select("created_at, status, source")
-      .order("created_at", { ascending: false })
+      .select("finished_at, ok, feed")
+      .eq("ok", true)
+      .order("finished_at", { ascending: false })
       .limit(1) as any
   );
-  const last = sync[0]?.created_at ? new Date(sync[0].created_at) : null;
+  const last = sync[0]?.finished_at ? new Date(sync[0].finished_at) : null;
+  const ageH = last ? (Date.now() - last.getTime()) / 3_600_000 : null;
   const fraicheur = last
-    ? `Dernière synchro Cegid : ${last.toLocaleString("fr-FR", { timeZone: "Europe/Paris" })}`
+    ? `Dernière synchro Cegid réussie : ${last.toLocaleString("fr-FR", { timeZone: "Europe/Paris" })}`
     : "Fraîcheur des données inconnue (aucun log de synchro trouvé).";
+
+  // Garde-fou : si la synchro nocturne échoue silencieusement (>36h sans succès),
+  // on crée systématiquement une alerte 'attention' — indépendamment de l'IA.
+  if (ageH === null || ageH > 36) {
+    try {
+      const constat = last
+        ? `Dernière synchro Cegid réussie il y a ${Math.round(ageH!)}h (${last.toLocaleString("fr-FR", { timeZone: "Europe/Paris" })}). La synchro nocturne semble en échec.`
+        : "Aucun log de synchro Cegid réussie trouvé — la synchro nocturne n'a jamais tourné ou a été purgée.";
+      const dedupe = "sync_fresh:stale";
+      const { data: exist } = await admin.from("copilot_alertes").select("id, statut").eq("dedupe_key", dedupe).maybeSingle();
+      if (exist) {
+        await admin.from("copilot_alertes").update({
+          titre: "Synchro Cegid nocturne en échec", constat,
+          action_suggeree: "Ouvrir Réglages → Synchronisation, relancer manuellement et vérifier les logs.",
+          lien: "/admin/gaia#sync", gravite: "attention",
+          updated_at: new Date().toISOString(),
+        }).eq("id", exist.id);
+      } else {
+        await admin.from("copilot_alertes").insert({
+          type: "sync_fresh", gravite: "attention",
+          titre: "Synchro Cegid nocturne en échec",
+          constat, action_suggeree: "Ouvrir Réglages → Synchronisation, relancer manuellement et vérifier les logs.",
+          lien: "/admin/gaia#sync", visibilite: "direction",
+          dedupe_key: dedupe, statut: "nouveau",
+        });
+      }
+    } catch (e) {
+      console.warn("sync_fresh alert failed:", (e as Error).message);
+    }
+  }
+
 
   const signals = await collectSignals();
 

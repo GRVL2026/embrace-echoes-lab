@@ -270,7 +270,7 @@ export function GaiaCopilot({ embedded = false }: GaiaCopilotProps = {}) {
   const loadHistory = async () => {
     const { data } = await (supabase as any)
       .from("gaia_revues")
-      .select("id,titre,created_at,statut,erreur")
+      .select("id,titre,created_at,statut,erreur,progress,etape")
       .order("created_at", { ascending: false })
       .limit(30);
     setHistory((data as SavedRevue[]) ?? []);

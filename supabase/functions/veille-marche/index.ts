@@ -384,7 +384,7 @@ Rends des notes brutes datées avec URLs.`;
           throw new Error("Aucune donnée factuelle sourcée n'a été collectée : aucun rapport n'a été publié.");
         }
 
-        await setEtape(`synthèse (opus · thinking${emptyCount ? ` · ${emptyCount} section(s) sans données` : ""})`);
+        await setEtape(`synthèse (opus · thinking${emptyCount ? ` · ${emptyCount} section(s) sans données` : ""})`, 70);
 
         const notesBlock = paquets.map((p) => `### PAQUET ${p.label}${p.items === 0 ? " (aucune donnée collectée)" : ""}\n\n${p.notes}`).join("\n\n---\n\n");
 

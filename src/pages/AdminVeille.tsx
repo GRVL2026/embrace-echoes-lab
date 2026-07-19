@@ -179,6 +179,9 @@ export default function AdminVeille() {
   const [generating, setGenerating] = useState<"quotidien" | "hebdomadaire" | null>(null);
   const [etape, setEtape] = useState<string>("");
   const [progress, setProgress] = useState<number>(0);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+
+
 
 
   const load = async () => {
@@ -215,7 +218,7 @@ export default function AdminVeille() {
         .select("id, type, etape, done, progress")
         .eq("owner_id", user.id)
         .eq("done", false)
-        .order("created_at", { ascending: false })
+        .order("started_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       if (cancelled) return;
@@ -223,20 +226,28 @@ export default function AdminVeille() {
         setGenerating(data.type as "quotidien" | "hebdomadaire");
         setEtape(data.etape ?? "en cours…");
         setProgress(typeof data.progress === "number" ? data.progress : 0);
-      } else if (generating) {
-        // Le job est fini : on libère l'UI et on rafraîchit l'historique.
+        setCurrentJobId(data.id as string);
+      } else if (currentJobId) {
+        // Le job connu est terminé (ou disparu) : on libère l'UI.
         setGenerating(null);
         setEtape("");
         setProgress(0);
+        setCurrentJobId(null);
         load();
       }
+      // IMPORTANT : si currentJobId est null, on NE remet PAS generating à null.
+      // Sinon, dès que l'utilisateur clique « Générer », l'effet se déclenche
+      // avant que le backend ait inséré la ligne veille_jobs, et la barre de
+      // progression disparaîtrait immédiatement.
 
     };
     poll();
     const id = setInterval(poll, 8000);
     return () => { cancelled = true; clearInterval(id); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canAccessGaia, user?.id, generating]);
+  }, [canAccessGaia, user?.id, currentJobId]);
+
+
 
 
   const structured: VeilleJson | null = useMemo(() => {
@@ -258,34 +269,61 @@ export default function AdminVeille() {
     setGenerating(type);
     setEtape("démarrage…");
     setProgress(5);
+    setCurrentJobId(null);
 
     toast({
       title: "Génération lancée",
-      description: "Collecte parallèle puis synthèse (≈ 2 à 3 min).",
+      description: "Collecte séquentielle puis synthèse (≈ 2 à 3 min).",
     });
     const startedAt = new Date().toISOString();
     let jobId: string | null = null;
+    let launched = false;
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/veille-marche`;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
-          ...(token ? { authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ type }),
-      });
-      if (!res.ok && res.status !== 202) {
-        const raw = await res.text();
-        throw new Error(`HTTP ${res.status} — ${raw.slice(0, 400)}`);
+
+      let res: Response;
+      try {
+        res = await fetch(url, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
+            ...(token ? { authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ type }),
+        });
+      } catch (netErr: any) {
+        throw new Error(`Réseau injoignable — ${netErr?.message ?? String(netErr)}`);
       }
+
+      if (res.status !== 200 && res.status !== 202) {
+        let raw = "";
+        try { raw = await res.text(); } catch { /* ignore */ }
+        let serverMsg = raw;
+        try {
+          const j = JSON.parse(raw);
+          serverMsg = j?.error ?? j?.message ?? raw;
+        } catch { /* not JSON */ }
+        throw new Error(`HTTP ${res.status} — ${String(serverMsg).slice(0, 500)}`);
+      }
+
+      // À partir d'ici, le lancement a bien été accepté par le serveur.
+      launched = true;
       try {
         const payload = await res.json();
         jobId = payload?.job_id ?? null;
-      } catch { /* ignore */ }
+        if (payload?.error) {
+          // Le serveur a répondu 200/202 mais signale une erreur logique.
+          throw new Error(`Serveur : ${payload.error}`);
+        }
+      } catch (parseErr: any) {
+        // Si l'erreur vient de "throw new Error(Serveur…)" ci-dessus, on la relance.
+        if (parseErr?.message?.startsWith("Serveur")) throw parseErr;
+        // Sinon on ignore : réponse non-JSON tolérée (lancement OK).
+      }
+      if (jobId) setCurrentJobId(jobId);
 
       const maxMs = 10 * 60 * 1000;
       const t0 = Date.now();
@@ -299,6 +337,9 @@ export default function AdminVeille() {
             .maybeSingle();
           if (jobRow?.etape) setEtape(jobRow.etape);
           if (typeof jobRow?.progress === "number") setProgress(jobRow.progress);
+          if (jobRow?.done && typeof jobRow?.etape === "string" && jobRow.etape.startsWith("erreur")) {
+            throw new Error(jobRow.etape);
+          }
         }
 
         const { data } = await (supabase as any)
@@ -319,14 +360,22 @@ export default function AdminVeille() {
       throw new Error("Le rapport n'est pas arrivé dans le délai (10 min). Vérifiez plus tard l'historique.");
     } catch (e: any) {
       console.error("[veille] erreur", e);
-      toast({ title: "Erreur de génération", description: e?.message ?? String(e), variant: "destructive" });
+      const description = e?.message ?? String(e);
+      toast({
+        title: launched ? "Génération interrompue" : "Échec du lancement de la veille",
+        description,
+        variant: "destructive",
+        duration: 20000,
+      });
     } finally {
       setGenerating(null);
       setEtape("");
       setProgress(0);
+      setCurrentJobId(null);
 
     }
   };
+
 
   const copyLink = async () => {
     try {

@@ -1110,6 +1110,7 @@ Deno.serve(async (req) => {
                 extraTools: [],
                 extraPayload: revueExtra,
                 onEvent: (evt, data) => safeSend(evt, data),
+                userId: currentUserId,
               });
 
               // 3. Appel final build_revue (non-streamé, heartbeats maintiennent la connexion)

@@ -196,6 +196,16 @@ CHARTE DE L'ANALYSTE — règles SQL OBLIGATOIRES (aucune exception sans justifi
     Ne jamais faire = 'MAGASIN' sans trim, tu louperais des lignes.
 
     • DASHBOARD MAGASIN : le pilotage du magasin de pièces s'appuie sur les vues v_gaia_magasin_mensuel (mois, annee, ca_ht, lignes, clients), v_gaia_magasin_top_clients (annee, client, code_client, ca_ht, lignes) et v_gaia_magasin_top_articles (annee, code_article, description, quantite, ca_ht). Utilise-les de préférence pour toute question sur les pièces détachées — elles appliquent déjà les bons filtres de classe et d'exercice fiscal.
+
+    • CARNET COMMERCIAL : v_gaia_carnet_documents (type_document IN ('devis','commande','livraison'), n_cde, client, code_client, date_doc, montant_ht, statut, sfa boolean, age_jours) — utilise-la pour lister les devis à relancer (6-12 mois), commandes non livrées, etc.
+
+    • E-COMMERCE (site Shopify Arcade OS / avranchesautomatic-boutique) : table shopify_stats_cache (cached_at, kpis jsonb {ca_30j, ca_90j, ca_1an, commandes_30j, panier_moyen, top_produits[], evolutions}). Utilise-la pour toute question sur le canal en ligne. Le CA Shopify est DISTINCT du CA ERP (SI commerce comptabilisé côté site) — ne les additionne pas sans le préciser.
+
+    • SAV : table zendesk_stats_cache (cached_at, kpis jsonb {tickets_ouverts, tickets_30j, delai_resolution_moyen, top_raisons[]}) pour les KPIs globaux ; table zendesk_ticket_summaries (ticket_id, resume, categorie, client, created_at, updated_at) pour lister/croiser les tickets d'un client. CROISEMENT UTILE : avant de proposer une relance commerciale sur un client, vérifie via zendesk_ticket_summaries s'il n'a pas de ticket SAV ouvert ou récent — sujet à ne pas rater dans un appel de relance.
+
+    • VEILLE MARCHÉ : table veille_rapports (id, type ('jour'|'semaine'), date_ref, contenu_json {barometre_stern, watchlist_france, marche_arcade, tcg_ecommerce, synthese, actions}, created_at) — dernier rapport = source pour "actualités concurrence / Stern / distributeurs". Table veille_watchlist (nom, url_principale, categorie, priorite, notes) = liste des comptes suivis (fabricants, concurrents, reseau_revendeurs, communaute_flipper, scene_flipper, ecommerce_tcg…).
+
+    • DOSSIERS COMMERCIAUX : table projects (id, owner_id, brand_id, offer jsonb, status ('brouillon'|'sent'|'won'|'lost'|'archive'), brief text, selected_products jsonb, updated_at) — pipeline "dossiers d'offre" produits en amont du carnet ERP.
 `;
 
 

@@ -1452,6 +1452,42 @@ export type Database = {
         }
         Relationships: []
       }
+      veille_watchlist: {
+        Row: {
+          actif: boolean
+          categorie: string
+          created_at: string
+          id: string
+          nom: string
+          note: string | null
+          plateforme: string | null
+          priorite: number
+          updated_at: string
+        }
+        Insert: {
+          actif?: boolean
+          categorie: string
+          created_at?: string
+          id?: string
+          nom: string
+          note?: string | null
+          plateforme?: string | null
+          priorite?: number
+          updated_at?: string
+        }
+        Update: {
+          actif?: boolean
+          categorie?: string
+          created_at?: string
+          id?: string
+          nom?: string
+          note?: string | null
+          plateforme?: string | null
+          priorite?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       zendesk_stats_cache: {
         Row: {
           cache_version: number

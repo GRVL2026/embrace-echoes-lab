@@ -323,19 +323,51 @@ ${notesBlock}`;
           structured.resume_executif ?? "",
         ].join("\n");
 
-        const { error } = await sb.from("veille_rapports").insert({
+        const { data: inserted, error } = await sb.from("veille_rapports").insert({
           type,
           periode: structured.periode ?? periode,
           contenu_markdown: md,
           contenu_json: structured,
           sources,
-        });
+          owner_id: ownerId,
+        }).select("id").single();
         if (error) console.error("[veille-marche] insert error", error);
+        const rapportId = inserted?.id as string | undefined;
 
         if (jobId) await sb.from("veille_jobs").update({ etape: "terminé", done: true, updated_at: new Date().toISOString() }).eq("id", jobId);
+
+        if (ownerId) {
+          try {
+            await sb.rpc("notify_user", {
+              _user_id: ownerId,
+              _type_cle: "veille_publiee",
+              _titre: type === "quotidien" ? "Ton rapport de veille quotidien est prêt" : "Le rapport de veille hebdomadaire est disponible",
+              _corps: structured.titre ?? periode,
+              _lien: rapportId ? `/admin/veille?rapport=${rapportId}` : "/admin/veille",
+              _gravite: "info",
+            });
+          } catch (nErr: any) {
+            console.error("[veille-marche] notify_user veille_publiee failed", nErr?.message ?? nErr);
+          }
+        }
       } catch (e: any) {
         console.error("[veille-marche] background error", e?.message ?? e);
-        if (jobId) await sb.from("veille_jobs").update({ etape: `erreur : ${(e?.message ?? String(e)).slice(0, 200)}`, done: true, updated_at: new Date().toISOString() }).eq("id", jobId);
+        const msg = (e?.message ?? String(e)).slice(0, 200);
+        if (jobId) await sb.from("veille_jobs").update({ etape: `erreur : ${msg}`, done: true, updated_at: new Date().toISOString() }).eq("id", jobId);
+        if (ownerId) {
+          try {
+            await sb.rpc("notify_user", {
+              _user_id: ownerId,
+              _type_cle: "veille_erreur",
+              _titre: "La veille marché a échoué",
+              _corps: msg,
+              _lien: "/admin/veille",
+              _gravite: "attention",
+            });
+          } catch (nErr: any) {
+            console.error("[veille-marche] notify_user veille_erreur failed", nErr?.message ?? nErr);
+          }
+        }
       }
     };
 

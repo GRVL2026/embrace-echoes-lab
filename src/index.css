@@ -101,6 +101,18 @@
   .safe-top    { padding-top: max(var(--safe-top), 0px); }
   .safe-x { padding-left: var(--safe-left); padding-right: var(--safe-right); }
 
+  /* iOS Safari auto-zooms fields with font-size < 16px on focus and never zooms back.
+     Force at least 16px on mobile for every editable control. */
+  @media (max-width: 767px) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+    textarea,
+    select,
+    [contenteditable="true"],
+    [contenteditable=""] {
+      font-size: 16px !important;
+    }
+  }
+
   * {
     @apply border-border;
   }

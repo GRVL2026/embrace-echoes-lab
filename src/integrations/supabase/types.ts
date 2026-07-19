@@ -1422,6 +1422,33 @@ export type Database = {
         }
         Relationships: []
       }
+      veille_jobs: {
+        Row: {
+          done: boolean
+          etape: string
+          id: string
+          started_at: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          done?: boolean
+          etape?: string
+          id?: string
+          started_at?: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          done?: boolean
+          etape?: string
+          id?: string
+          started_at?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       veille_rapports: {
         Row: {
           contenu_json: Json | null

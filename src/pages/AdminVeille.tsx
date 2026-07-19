@@ -211,11 +211,13 @@ export default function AdminVeille() {
 
   const generate = async (type: "quotidien" | "hebdomadaire") => {
     setGenerating(type);
+    setEtape("démarrage…");
     toast({
       title: "Génération lancée",
-      description: "Recherche web et synthèse en cours (2 à 5 min). Le rapport apparaîtra ici automatiquement.",
+      description: "Collecte parallèle puis synthèse (≈ 2 à 3 min).",
     });
     const startedAt = new Date().toISOString();
+    let jobId: string | null = null;
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
@@ -233,13 +235,23 @@ export default function AdminVeille() {
         const raw = await res.text();
         throw new Error(`HTTP ${res.status} — ${raw.slice(0, 400)}`);
       }
-      await res.text();
+      try {
+        const payload = await res.json();
+        jobId = payload?.job_id ?? null;
+      } catch { /* ignore */ }
 
-      // Polling : le job tourne en tâche de fond côté edge (peut prendre plusieurs minutes)
       const maxMs = 10 * 60 * 1000;
       const t0 = Date.now();
       while (Date.now() - t0 < maxMs) {
         await new Promise((r) => setTimeout(r, 8000));
+        if (jobId) {
+          const { data: jobRow } = await (supabase as any)
+            .from("veille_jobs")
+            .select("etape, done")
+            .eq("id", jobId)
+            .maybeSingle();
+          if (jobRow?.etape) setEtape(jobRow.etape);
+        }
         const { data } = await (supabase as any)
           .from("veille_rapports")
           .select("*")
@@ -261,6 +273,7 @@ export default function AdminVeille() {
       toast({ title: "Erreur de génération", description: e?.message ?? String(e), variant: "destructive" });
     } finally {
       setGenerating(null);
+      setEtape("");
     }
   };
 

@@ -1145,6 +1145,20 @@ Deno.serve(async (req) => {
                   })
                   .eq('id', revueId);
                 if (updErr) console.log(`[gaia-copilot] revue update terminee error: ${updErr.message}`);
+                if (userIdForRow) {
+                  try {
+                    await admin.rpc('notify_user', {
+                      _user_id: userIdForRow,
+                      _type_cle: 'revue_generee',
+                      _titre: 'Ta revue commerciale est prête',
+                      _corps: (revueInput as any)?.titre ?? titreRevue,
+                      _lien: `/admin/gaia/revue/${revueId}`,
+                      _gravite: 'info',
+                    });
+                  } catch (nErr: any) {
+                    console.log(`[gaia-copilot] notify_user revue_generee failed: ${nErr?.message ?? nErr}`);
+                  }
+                }
               }
               safeSend('gaia_revue', { id: revueId, data: revueInput });
             } catch (e: any) {
@@ -1162,6 +1176,20 @@ Deno.serve(async (req) => {
                     .eq('id', revueId);
                 } catch (persistErr: any) {
                   console.log(`[gaia-copilot] revue update erreur failed: ${persistErr?.message ?? persistErr}`);
+                }
+              }
+              if (userIdForRow) {
+                try {
+                  await admin.rpc('notify_user', {
+                    _user_id: userIdForRow,
+                    _type_cle: 'revue_erreur',
+                    _titre: 'Ta revue commerciale a échoué',
+                    _corps: msg.slice(0, 300),
+                    _lien: '/admin/gaia',
+                    _gravite: 'attention',
+                  });
+                } catch (nErr: any) {
+                  console.log(`[gaia-copilot] notify_user revue_erreur failed: ${nErr?.message ?? nErr}`);
                 }
               }
               safeSend('gaia_error', { error: msg, id: revueId, code: isAnthropicOverload(e) ? 'overload' : undefined });

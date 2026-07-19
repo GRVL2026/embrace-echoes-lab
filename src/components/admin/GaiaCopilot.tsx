@@ -539,7 +539,16 @@ export function GaiaCopilot({ embedded = false }: GaiaCopilotProps = {}) {
           apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ action: "chat", question: q, history: historyMsgs }),
+        body: JSON.stringify({
+          action: "chat",
+          question: q,
+          history: historyMsgs,
+          context: {
+            route: pageContext.route,
+            page_title: pageContext.title,
+            entity: pageContext.entity,
+          },
+        }),
       });
       if (!resp.ok) {
         const body = await resp.text();

@@ -211,9 +211,10 @@ export default function AdminVeille() {
   const generate = async (type: "quotidien" | "hebdomadaire") => {
     setGenerating(type);
     toast({
-      title: "Génération en cours",
-      description: "Recherche web et synthèse : le rapport peut prendre 1 à 3 minutes.",
+      title: "Génération lancée",
+      description: "Recherche web et synthèse en cours (2 à 5 min). Le rapport apparaîtra ici automatiquement.",
     });
+    const startedAt = new Date().toISOString();
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
@@ -227,14 +228,33 @@ export default function AdminVeille() {
         },
         body: JSON.stringify({ type }),
       });
-      const raw = await res.text();
-      if (!res.ok) throw new Error(`HTTP ${res.status} — ${raw.slice(0, 400)}`);
-      const parsed = JSON.parse(raw);
-      if (parsed?.error) throw new Error(String(parsed.error));
-      const rapport = parsed as Rapport;
-      setRapports((prev) => [rapport, ...prev.filter((r) => r.id !== rapport.id)]);
-      setSelected(rapport);
-      toast({ title: "Rapport généré", description: rapport.periode });
+      if (!res.ok && res.status !== 202) {
+        const raw = await res.text();
+        throw new Error(`HTTP ${res.status} — ${raw.slice(0, 400)}`);
+      }
+      await res.text();
+
+      // Polling : le job tourne en tâche de fond côté edge (peut prendre plusieurs minutes)
+      const maxMs = 10 * 60 * 1000;
+      const t0 = Date.now();
+      while (Date.now() - t0 < maxMs) {
+        await new Promise((r) => setTimeout(r, 8000));
+        const { data } = await (supabase as any)
+          .from("veille_rapports")
+          .select("*")
+          .eq("type", type)
+          .gt("created_at", startedAt)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        const fresh = data?.[0] as Rapport | undefined;
+        if (fresh) {
+          setRapports((prev) => [fresh, ...prev.filter((r) => r.id !== fresh.id)]);
+          setSelected(fresh);
+          toast({ title: "Rapport généré", description: fresh.periode });
+          return;
+        }
+      }
+      throw new Error("Le rapport n'est pas arrivé dans le délai (10 min). Vérifiez plus tard l'historique.");
     } catch (e: any) {
       console.error("[veille] erreur", e);
       toast({ title: "Erreur de génération", description: e?.message ?? String(e), variant: "destructive" });

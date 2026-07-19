@@ -173,97 +173,90 @@ Deno.serve(async (req) => {
 
 Concentre-toi exclusivement sur les informations publiées ou survenues ${window}. Effectue plusieurs recherches web ciblées (Stern Pinball news, distributeurs flippers France, IAAPA, Pinball News, Pinside, arcade industry, etc.) puis synthétise. Ta réponse finale DOIT être un appel à l'outil build_veille avec les 5 sections remplies (nouveautes, concurrents, evenements, tendances, barometre_stern). Aucune section ne doit être vide : si tu n'as rien trouvé de récent, mets un unique item d'importance "info" expliquant honnêtement l'absence d'actualité.${watchlistBlock}`;
 
-    let messages: any[] = [{ role: "user", content: userPrompt }];
-    let finalContent: any[] = [];
-    const allContent: any[] = [];
+    // Tâche de fond : la génération peut prendre plusieurs minutes → dépasse la limite 150s du gateway.
+    // On répond immédiatement 202 et on insère le rapport en base quand il est prêt (client poll).
+    const runJob = async () => {
+      try {
+        let messages: any[] = [{ role: "user", content: userPrompt }];
+        let finalContent: any[] = [];
+        const allContent: any[] = [];
 
-    // Boucle exploration web (jusqu'à 8 tours), tools = web_search + build_veille dispo
-    for (let i = 0; i < 8; i++) {
-      const resp = await callAnthropic({
-        model: MODEL,
-        max_tokens: 16000,
-        thinking: { type: "adaptive" },
-        output_config: { effort: "high" },
-        system: SYSTEM_PROMPT,
-        tools: [WEB_SEARCH_TOOL, BUILD_VEILLE_TOOL],
-        messages,
-      });
-      finalContent = resp.content;
-      allContent.push(...(resp.content ?? []));
-      messages.push({ role: "assistant", content: resp.content });
+        for (let i = 0; i < 8; i++) {
+          const resp = await callAnthropic({
+            model: MODEL,
+            max_tokens: 16000,
+            thinking: { type: "adaptive" },
+            output_config: { effort: "high" },
+            system: SYSTEM_PROMPT,
+            tools: [WEB_SEARCH_TOOL, BUILD_VEILLE_TOOL],
+            messages,
+          });
+          finalContent = resp.content;
+          allContent.push(...(resp.content ?? []));
+          messages.push({ role: "assistant", content: resp.content });
+          if (findToolUse(resp.content, "build_veille")) break;
+          if (resp.stop_reason === "pause_turn") {
+            messages.push({ role: "user", content: "Continue." });
+            continue;
+          }
+          break;
+        }
 
-      // Si build_veille a été appelé, on stoppe
-      if (findToolUse(resp.content, "build_veille")) break;
+        let toolCall = findToolUse(finalContent, "build_veille");
+        if (!toolCall) {
+          messages.push({
+            role: "user",
+            content: "Appelle maintenant l'outil build_veille avec toutes les sections structurées, sans texte libre.",
+          });
+          const forced = await callAnthropic({
+            model: MODEL,
+            max_tokens: 16000,
+            thinking: { type: "adaptive" },
+            output_config: { effort: "high" },
+            system: SYSTEM_PROMPT,
+            tools: [WEB_SEARCH_TOOL, BUILD_VEILLE_TOOL],
+            tool_choice: { type: "tool", name: "build_veille" },
+            messages,
+          });
+          finalContent = forced.content;
+          allContent.push(...(forced.content ?? []));
+          toolCall = findToolUse(forced.content, "build_veille");
+        }
 
-      if (resp.stop_reason === "pause_turn") {
-        messages.push({ role: "user", content: "Continue." });
-        continue;
+        if (!toolCall) throw new Error("Le modèle n'a pas produit de sortie structurée build_veille.");
+
+        const structured = toolCall.input as any;
+        const sources = extractSources(allContent);
+        const md = [
+          `# ${structured.titre ?? "Veille marché"}`,
+          structured.periode ?? periode,
+          "",
+          structured.resume_executif ?? "",
+        ].join("\n");
+
+        const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
+        const { error } = await sb.from("veille_rapports").insert({
+          type,
+          periode: structured.periode ?? periode,
+          contenu_markdown: md,
+          contenu_json: structured,
+          sources,
+        });
+        if (error) console.error("[veille-marche] insert error", error);
+      } catch (e: any) {
+        console.error("[veille-marche] background error", e?.message ?? e);
       }
-      // stop_reason = end_turn ou tool_use non résolu autre : on relance en forçant build_veille
-      break;
-    }
+    };
 
-    // Si pas encore d'appel build_veille, force-le
-    let toolCall = findToolUse(finalContent, "build_veille");
-    if (!toolCall) {
-      messages.push({
-        role: "user",
-        content: "Appelle maintenant l'outil build_veille avec toutes les sections structurées, sans texte libre.",
-      });
-      const forced = await callAnthropic({
-        model: MODEL,
-        max_tokens: 16000,
-        thinking: { type: "adaptive" },
-        output_config: { effort: "high" },
-        system: SYSTEM_PROMPT,
-        tools: [WEB_SEARCH_TOOL, BUILD_VEILLE_TOOL],
-        tool_choice: { type: "tool", name: "build_veille" },
-        messages,
-      });
-      finalContent = forced.content;
-      allContent.push(...(forced.content ?? []));
-      toolCall = findToolUse(forced.content, "build_veille");
-    }
+    // @ts-ignore EdgeRuntime is provided by Supabase edge runtime
+    EdgeRuntime.waitUntil(runJob());
 
-    if (!toolCall) {
-      throw new Error("Le modèle n'a pas produit de sortie structurée build_veille.");
-    }
-
-    const structured = toolCall.input as any;
-    const sources = extractSources(allContent);
-
-    // Markdown fallback minimal pour compatibilité colonne NOT NULL
-    const md = [
-      `# ${structured.titre ?? "Veille marché"}`,
-      structured.periode ?? periode,
-      "",
-      structured.resume_executif ?? "",
-    ].join("\n");
-
-    const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
-    const { data, error } = await sb
-      .from("veille_rapports")
-      .insert({
-        type,
-        periode: structured.periode ?? periode,
-        contenu_markdown: md,
-        contenu_json: structured,
-        sources,
-      })
-      .select()
-      .single();
-    if (error) throw error;
-
-    return new Response(JSON.stringify(data), {
+    return new Response(JSON.stringify({ status: "started", type, periode }), {
+      status: 202,
       headers: { ...corsHeaders, "content-type": "application/json" },
     });
   } catch (e: any) {
     console.error("[veille-marche]", e?.message ?? e);
-    if (isAnthropicOverload(e)) {
-      return new Response(JSON.stringify({ error: e.userMessage, code: 'overload' }), {
-        status: 503, headers: { ...corsHeaders, "content-type": "application/json" },
-      });
-    }
     return new Response(JSON.stringify({ error: e?.message ?? String(e) }), {
       status: 500, headers: { ...corsHeaders, "content-type": "application/json" },
     });

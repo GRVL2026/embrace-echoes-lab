@@ -180,9 +180,7 @@ export default function AdminVeille() {
   const [etape, setEtape] = useState<string>("");
   const [progress, setProgress] = useState<number>(0);
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
-
-
-
+  const [stalled, setStalled] = useState<{ type: "quotidien" | "hebdomadaire" } | null>(null);
 
   const load = async () => {
     const { data } = await (supabase as any)
@@ -192,7 +190,6 @@ export default function AdminVeille() {
       .limit(100);
     if (data) {
       setRapports(data);
-      // Deep-link : ?rapport=id
       const url = new URL(window.location.href);
       const rid = url.searchParams.get("rapport");
       const target = rid ? data.find((r: Rapport) => r.id === rid) : null;
@@ -206,16 +203,17 @@ export default function AdminVeille() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canAccessGaia]);
 
-  // Reprise persistante : si un job de veille de cet utilisateur est en cours,
-  // on remonte l'état pour bloquer la génération et afficher la progression,
-  // même après un rafraîchissement ou une navigation.
+  // Reprise persistante : lit progress/etape depuis la BD. Un job dont
+  // updated_at date de plus de 5 min est considéré "interrompu" → bouton
+  // Relancer au lieu de la barre éternelle.
   useEffect(() => {
     if (!canAccessGaia || !user?.id) return;
     let cancelled = false;
+    const STALE_MS = 5 * 60 * 1000;
     const poll = async () => {
       const { data } = await (supabase as any)
         .from("veille_jobs")
-        .select("id, type, etape, done, progress")
+        .select("id, type, etape, done, progress, updated_at, started_at")
         .eq("owner_id", user.id)
         .eq("done", false)
         .order("started_at", { ascending: false })
@@ -223,23 +221,29 @@ export default function AdminVeille() {
         .maybeSingle();
       if (cancelled) return;
       if (data && !data.done) {
+        const ts = data.updated_at ?? data.started_at;
+        const age = ts ? Date.now() - new Date(ts).getTime() : 0;
+        if (age > STALE_MS) {
+          setStalled({ type: data.type });
+          setGenerating(null);
+          setEtape("");
+          setProgress(0);
+          setCurrentJobId(null);
+          return;
+        }
+        setStalled(null);
         setGenerating(data.type as "quotidien" | "hebdomadaire");
         setEtape(data.etape ?? "en cours…");
         setProgress(typeof data.progress === "number" ? data.progress : 0);
         setCurrentJobId(data.id as string);
       } else if (currentJobId) {
-        // Le job connu est terminé (ou disparu) : on libère l'UI.
         setGenerating(null);
         setEtape("");
         setProgress(0);
         setCurrentJobId(null);
+        setStalled(null);
         load();
       }
-      // IMPORTANT : si currentJobId est null, on NE remet PAS generating à null.
-      // Sinon, dès que l'utilisateur clique « Générer », l'effet se déclenche
-      // avant que le backend ait inséré la ligne veille_jobs, et la barre de
-      // progression disparaîtrait immédiatement.
-
     };
     poll();
     const id = setInterval(poll, 8000);

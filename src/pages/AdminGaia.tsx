@@ -345,7 +345,20 @@ export default function AdminGaia() {
           </p>
         </div>
 
-        <Tabs defaultValue="dashboard" className="w-full">
+        <Tabs
+          value={tab}
+          onValueChange={(v) => {
+            setTab(v);
+            const map: Record<string, string> = {
+              dashboard: "#aa",
+              magasin: "#magasin",
+              copilot: "#copilote",
+              sync: "#sync",
+            };
+            navigate({ pathname: location.pathname, hash: map[v] ?? "" }, { replace: true });
+          }}
+          className="w-full"
+        >
           <TabsList className="mb-6 flex-wrap">
             <TabsTrigger value="dashboard">AA</TabsTrigger>
             <TabsTrigger value="magasin">Magasin</TabsTrigger>

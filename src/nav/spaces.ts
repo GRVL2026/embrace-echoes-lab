@@ -70,11 +70,12 @@ export const SPACES: Space[] = [
     entries: [
       {
         label: "Clients",
-        to: "/admin/gaia#clients",
+        to: "/clients",
         icon: Users,
         show: (c) => c.canAccessDashboard,
-        match: (p, h) => p === "/admin/gaia" && (h === "#clients" || h === ""),
+        match: startsWith("/clients"),
       },
+
       {
         label: "Pipeline",
         to: "/admin/gaia/carnet/devis",

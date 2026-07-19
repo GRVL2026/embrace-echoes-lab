@@ -423,8 +423,12 @@ export default function AdminGaia() {
           )}
         </div>
 
+        {/* Planification nocturne */}
+        <NightlyScheduleCard lastLogs={lastLogs} />
+
         {/* Résumé des dernières synchros par flux */}
         {lastLogs.length > 0 && (
+
           <div className="mb-6 rounded-lg border border-border bg-card/40 p-4">
             <div className="mb-3 flex items-center gap-2">
               <Database className="h-4 w-4 text-primary" />

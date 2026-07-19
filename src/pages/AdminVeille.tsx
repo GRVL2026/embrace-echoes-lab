@@ -257,6 +257,8 @@ export default function AdminVeille() {
   const generate = async (type: "quotidien" | "hebdomadaire") => {
     setGenerating(type);
     setEtape("démarrage…");
+    setProgress(5);
+
     toast({
       title: "Génération lancée",
       description: "Collecte parallèle puis synthèse (≈ 2 à 3 min).",

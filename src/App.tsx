@@ -17,6 +17,8 @@ import AdminCatalogErp from "./pages/AdminCatalogErp";
 import AdminGaia from "./pages/AdminGaia";
 import AdminVeille from "./pages/AdminVeille";
 import GaiaClientFiche from "./pages/GaiaClientFiche";
+import Clients from "./pages/Clients";
+
 import GaiaCarnet from "./pages/GaiaCarnet";
 import GaiaRevueView from "./pages/GaiaRevueView";
 import NotFound from "./pages/NotFound";
@@ -64,6 +66,8 @@ const App = () => (
             <Route path="/planner/dossier/:dossierId" element={<P><SpacePlanner /></P>} />
             <Route path="/dossiers" element={<P><DossiersList /></P>} />
             <Route path="/catalogue" element={<P><Catalogue /></P>} />
+            <Route path="/clients" element={<P><Clients /></P>} />
+
             <Route path="/dossiers/:id" element={<P><DossierEdit /></P>} />
             <Route path="/logistique" element={<P><Logistique /></P>} />
             <Route path="/ecommerce" element={<P><Ecommerce /></P>} />

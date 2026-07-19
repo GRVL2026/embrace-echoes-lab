@@ -6,12 +6,15 @@ import { useCopilot } from "@/contexts/CopilotContext";
 import { CopiloteMarkdown } from "./CopiloteMarkdown";
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
+
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import {
   Loader2, Sparkles, Copy, Send, FileText, UserX, Package, History, ExternalLink,
-  Search, ThumbsUp, ThumbsDown, RotateCcw, AlertTriangle,
+  Search, ThumbsUp, ThumbsDown, RotateCcw, AlertTriangle, ChevronRight,
+
 } from "lucide-react";
 
 import { RevueDashboard, revueToText, eur, isRevueEmpty, type RevueData } from "./RevueDashboard";
@@ -782,17 +785,11 @@ export function GaiaCopilot({ embedded = false }: GaiaCopilotProps = {}) {
                     </div>
                   ) : (
                     <>
-                      {/* Étapes de progression (grisé, petit) */}
+                      {/* Étapes de progression : dépliées pendant le stream, repliées après */}
                       {m.steps.length > 0 && (
-                        <ul className="mb-2 space-y-0.5 text-[11px] text-muted-foreground">
-                          {m.steps.map((s, j) => (
-                            <li key={j} title={s.query} className="flex items-center gap-1.5">
-                              <Search className="h-3 w-3 shrink-0 opacity-70" />
-                              <span className="truncate">Requête : {s.summary}</span>
-                            </li>
-                          ))}
-                        </ul>
+                        <StepsBlock steps={m.steps} streaming={!!m.streaming} />
                       )}
+
 
                       {/* Blocs de réponse : texte / graphique dans l'ordre */}
                       {m.parts.map((part, j) =>
@@ -1152,4 +1149,45 @@ function FeedbackControls({
     </div>
   );
 }
+
+/** Bloc étapes : déplié pendant le stream, replié en résumé après. */
+function StepsBlock({ steps, streaming }: { steps: ChatStep[]; streaming: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const isOpen = streaming || expanded;
+  if (streaming) {
+    return (
+      <ul className="mb-2 space-y-0.5 text-[11px] text-muted-foreground">
+        {steps.map((s, j) => (
+          <li key={j} title={s.query} className="flex items-center gap-1.5">
+            <Search className="h-3 w-3 shrink-0 opacity-70" />
+            <span className="truncate">Requête : {s.summary}</span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  return (
+    <div className="mb-2">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ChevronRight className={cn("h-3 w-3 transition-transform", isOpen && "rotate-90")} />
+        <Search className="h-3 w-3 opacity-70" />
+        <span>{steps.length} requête{steps.length > 1 ? "s" : ""} exécutée{steps.length > 1 ? "s" : ""}</span>
+      </button>
+      {isOpen && (
+        <ul className="mt-1 ml-4 space-y-0.5 text-[11px] text-muted-foreground">
+          {steps.map((s, j) => (
+            <li key={j} title={s.query} className="flex items-center gap-1.5">
+              <span className="truncate">· {s.summary}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 

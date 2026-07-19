@@ -436,6 +436,65 @@ export type Database = {
         }
         Relationships: []
       }
+      copilot_conversations: {
+        Row: {
+          created_at: string
+          id: string
+          titre: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          titre?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          titre?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      copilot_messages: {
+        Row: {
+          contenu: string
+          conversation_id: string
+          created_at: string
+          id: string
+          role: string
+          steps: Json | null
+        }
+        Insert: {
+          contenu: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          role: string
+          steps?: Json | null
+        }
+        Update: {
+          contenu?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          role?: string
+          steps?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copilot_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "copilot_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       copilot_textures: {
         Row: {
           albedo_url: string | null

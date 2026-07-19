@@ -62,15 +62,6 @@ export function GlobalCopilotPanel() {
             <SheetTitle className="flex items-center gap-2 text-base">
               <Sparkles className="h-4 w-4 text-primary" />
               Copilote
-              {pageContext.title && (
-                <span className="ml-2 rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-[10px] font-normal text-muted-foreground">
-                  contexte : {pageContext.title}
-                  {pageContext.entity ? ` · ${pageContext.entity.label}` : ""}
-                </span>
-              )}
-              <span className="ml-auto text-[10px] font-normal text-muted-foreground">
-                Cmd/Ctrl+K pour ouvrir/fermer
-              </span>
             </SheetTitle>
           </SheetHeader>
           <div className="flex-1 min-h-0">

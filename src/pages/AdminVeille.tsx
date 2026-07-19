@@ -15,8 +15,10 @@ import { toast } from "@/hooks/use-toast";
 import {
   Loader2, Shield, Database, Radar, CalendarDays, CalendarRange,
   Sparkles, Building2, CalendarClock, LineChart, ExternalLink,
-  Link as LinkIcon, Mail, Printer, ChevronRight,
+  Link as LinkIcon, Mail, Printer, ChevronRight, Eye,
 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { WatchlistPanel } from "@/components/admin/WatchlistPanel";
 import logoImg from "@/assets/logo.png";
 
 type VeilleLink = { label: string; url: string };

@@ -4,8 +4,9 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Button } from "@/components/ui/button";
 import { useCopilot } from "@/contexts/CopilotContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { GaiaCopilot } from "@/components/admin/GaiaCopilot";
+import { CopilotDbChat } from "@/components/copilot/CopilotDbChat";
 import { cn } from "@/lib/utils";
+
 
 /**
  * Panneau global du copilote :

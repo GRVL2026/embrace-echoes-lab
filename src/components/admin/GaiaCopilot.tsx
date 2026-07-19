@@ -782,17 +782,11 @@ export function GaiaCopilot({ embedded = false }: GaiaCopilotProps = {}) {
                     </div>
                   ) : (
                     <>
-                      {/* Étapes de progression (grisé, petit) */}
+                      {/* Étapes de progression : dépliées pendant le stream, repliées après */}
                       {m.steps.length > 0 && (
-                        <ul className="mb-2 space-y-0.5 text-[11px] text-muted-foreground">
-                          {m.steps.map((s, j) => (
-                            <li key={j} title={s.query} className="flex items-center gap-1.5">
-                              <Search className="h-3 w-3 shrink-0 opacity-70" />
-                              <span className="truncate">Requête : {s.summary}</span>
-                            </li>
-                          ))}
-                        </ul>
+                        <StepsBlock steps={m.steps} streaming={!!m.streaming} />
                       )}
+
 
                       {/* Blocs de réponse : texte / graphique dans l'ordre */}
                       {m.parts.map((part, j) =>

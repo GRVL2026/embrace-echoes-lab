@@ -431,6 +431,64 @@ async function runSentinel() {
     updated_at: new Date().toISOString(),
   });
 
+  // ─── Dispatch notifications in-app (Phase 1 gestionnaire) ──────────────
+  // Respect visibilité par rôle + préférences par utilisateur (RPC SECURITY DEFINER).
+  try {
+    // 1. Briefing du matin
+    await admin.rpc("dispatch_notification", {
+      _type_cle: "briefing_quotidien",
+      _titre: `Briefing du jour`,
+      _corps: ai.briefing?.resume ?? null,
+      _lien: "/",
+      _gravite: "info",
+      _dedupe_key: `briefing:${today}`,
+      _meta: {},
+    });
+
+    // 2. Alertes regroupées par type_cle (une notif par type/jour)
+    const byType: Record<string, any[]> = {};
+    for (const a of ai.alertes ?? []) {
+      const key = String(a.type || "").trim();
+      if (!key) continue;
+      (byType[key] ??= []).push(a);
+    }
+    for (const [typeCle, list] of Object.entries(byType)) {
+      const first = list[0];
+      const nb = list.length;
+      const anyUrgent = list.some((a) => a.gravite === "urgent");
+      const titre = nb === 1 ? first.titre : `${nb} alertes : ${first.titre}`;
+      const corps = nb === 1
+        ? first.constat
+        : list.slice(0, 3).map((a) => `• ${a.titre} — ${a.constat}`).join("\n") +
+          (nb > 3 ? `\n… et ${nb - 3} autres.` : "");
+      await admin.rpc("dispatch_notification", {
+        _type_cle: typeCle,
+        _titre: titre,
+        _corps: corps,
+        _lien: first.lien ?? null,
+        _gravite: anyUrgent ? "urgent" : (first.gravite ?? null),
+        _dedupe_key: `${typeCle}:${today}`,
+        _meta: { nb },
+      });
+    }
+
+    // 3. Veille publiée (si un rapport frais existe)
+    const lastVeilleAt = (veille[0] as any)?.created_at;
+    if (lastVeilleAt && (Date.now() - new Date(lastVeilleAt).getTime()) < 26 * 3600 * 1000) {
+      await admin.rpc("dispatch_notification", {
+        _type_cle: "veille_publiee",
+        _titre: "Nouvelle veille marché publiée",
+        _corps: "Un nouveau rapport de veille est disponible.",
+        _lien: "/admin/veille",
+        _gravite: "info",
+        _dedupe_key: `veille:${lastVeilleAt.slice(0, 10)}`,
+        _meta: {},
+      });
+    }
+  } catch (e) {
+    console.warn("dispatch notifications failed:", (e as Error).message);
+  }
+
   return { ok: true, signals_count: signals.length, alertes_generees: (ai.alertes ?? []).length, alertes_nouvelles: created, date: today };
 }
 

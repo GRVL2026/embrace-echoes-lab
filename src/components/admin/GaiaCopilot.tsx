@@ -19,6 +19,8 @@ import {
 
 import { RevueDashboard, revueToText, eur, isRevueEmpty, type RevueData } from "./RevueDashboard";
 import { CopilotChart, type ChartPayload } from "./CopilotChart";
+import { GenerationProgress } from "@/components/GenerationProgress";
+
 
 type DevisRelance = { n_cde: string; code_client: string; client: string; date_devis: string; age_jours: number; montant_ht: number };
 type ClientDormant = { code_client: string; client: string; ca_annee_courante: number; ca_n1: number; ca_n2: number; derniere_facture: string | null };

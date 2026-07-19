@@ -175,6 +175,7 @@ export default function AdminVeille() {
   const [rapports, setRapports] = useState<Rapport[]>([]);
   const [selected, setSelected] = useState<Rapport | null>(null);
   const [generating, setGenerating] = useState<"quotidien" | "hebdomadaire" | null>(null);
+  const [etape, setEtape] = useState<string>("");
 
   const load = async () => {
     const { data } = await (supabase as any)

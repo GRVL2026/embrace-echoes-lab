@@ -18,7 +18,6 @@ import { SPACES, resolveActive, type NavCtx, type Space } from "@/nav/spaces";
 import { AlertsBell } from "@/components/copilot/AlertsBell";
 import logoImg from "@/assets/logo.png";
 import { cn } from "@/lib/utils";
-import { cn } from "@/lib/utils";
 
 /**
  * Barre latérale persistante — organisée en 5 espaces + Réglages.

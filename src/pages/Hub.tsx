@@ -6,6 +6,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Loader2, ArrowRight } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { SPACES, type NavCtx } from "@/nav/spaces";
+import { BriefingCard } from "@/components/copilot/BriefingCard";
 
 /**
  * Portail Arcade OS. Chaque carte = un espace. La description est suivie
@@ -90,6 +91,10 @@ export default function Hub() {
           <p className="mt-3 text-sm sm:text-base text-muted-foreground max-w-xl mx-auto">
             Choisissez votre espace de travail.
           </p>
+        </div>
+
+        <div className="mb-8">
+          <BriefingCard />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">

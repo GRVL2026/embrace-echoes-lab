@@ -1,26 +1,27 @@
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { anthropicJson, isAnthropicOverload } from "../_shared/anthropic-fetch.ts";
+import { anthropicJson } from "../_shared/anthropic-fetch.ts";
 
 const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-const MODEL = "claude-opus-4-8";
+const SYNTH_MODEL = "claude-opus-4-8";
+const COLLECT_MODEL = "claude-sonnet-5";
 
-const SYSTEM_PROMPT = `Tu es l'analyste de veille marché d'Avranches Automatic.
+const WEB_SEARCH_TOOL = (maxUses: number) => ({
+  type: "web_search_20260209", name: "web_search", max_uses: maxUses,
+} as any);
 
-Avranches Automatic est un distributeur français de flippers Stern Pinball (revendeur officiel), de jeux d'arcade, de grues et de jeux de tir. L'entreprise commercialise aussi la marque Hypernova Arcade.
+const COLLECTOR_SYSTEM = `Tu es un collecteur de veille marché pour Avranches Automatic (distributeur français de flippers Stern, jeux d'arcade, grues, jeux de tir ; marque Hypernova Arcade).
+Ta mission : effectuer plusieurs recherches web ciblées sur le périmètre qui t'est confié, puis rendre des NOTES BRUTES structurées (bullet points) : uniquement des faits datés, chiffrés si possible, avec les URLs sources entre parenthèses.
+Ne rédige aucune synthèse, aucune conclusion : d'autres se chargeront de la synthèse. Sois exhaustif, factuel, distingue confirmé vs rumeur. Réponse finale en texte brut markdown (pas d'appel outil final).`;
 
-Ta mission : rechercher sur le web les informations RÉCENTES (période précisée par l'utilisateur) sur :
-(a) Nouveautés produits Stern Pinball et fabricants arcade (UNIS, SEGA Amusement, Namco, Ace, Bandai Namco Amusement, Raw Thrills, Andamiro, Bay Tek, LAI Games, etc.).
-(b) Actions des distributeurs de flippers / arcade France et Europe : promotions, événements, portes ouvertes, showrooms, partenariats.
-(c) Salons et événements (IAAPA, EAG, salons français, tournois de flipper importants).
-(d) Tendances et signaux faibles (LinkedIn public, presse spécialisée : Pinball News, Knapp Arcade, This Week in Pinball, Kaneda's Blog, Arcade Heroes, etc.).
+const SYNTH_SYSTEM = `Tu es l'analyste de veille marché senior d'Avranches Automatic (distributeur français, revendeur officiel Stern Pinball, marque Hypernova Arcade).
 
-Utilise l'outil web_search de façon intensive (jusqu'à 10 recherches) pour croiser plusieurs sources avant de conclure. Privilégie les sources primaires et récentes.
+Tu reçois 4 paquets de NOTES BRUTES rédigés par des collecteurs web spécialisés. Tu ne dois PAS refaire de recherches. Ta mission : synthétiser ces notes en un rapport structuré via l'outil build_veille.
 
-Ta réponse FINALE doit être un unique appel à l'outil build_veille avec des données structurées, sans texte libre. Aucun contenu ne doit être écrit en dehors de cet appel. Sois factuel, distingue clairement confirmé vs rumeur, et si une section manque d'infos récentes indique-le honnêtement plutôt que d'inventer.`;
+Ta réponse finale DOIT être un unique appel à l'outil build_veille, sans texte libre. Sois factuel, distingue confirmé vs rumeur, si une section manque d'infos indique-le honnêtement plutôt que d'inventer.`;
 
 const BUILD_VEILLE_TOOL = {
   name: "build_veille",
@@ -28,9 +29,9 @@ const BUILD_VEILLE_TOOL = {
   input_schema: {
     type: "object",
     properties: {
-      titre: { type: "string", description: "Titre du rapport, court et parlant." },
-      periode: { type: "string", description: "Période couverte, ex : « Semaine du 10 au 16 juillet 2026 »." },
-      resume_executif: { type: "string", description: "Résumé exécutif en 3 à 4 phrases max, ton direct." },
+      titre: { type: "string" },
+      periode: { type: "string" },
+      resume_executif: { type: "string", description: "3 à 4 phrases max, ton direct." },
       stats: {
         type: "object",
         properties: {
@@ -43,7 +44,7 @@ const BUILD_VEILLE_TOOL = {
       },
       sections: {
         type: "array",
-        description: "Les 5 sections thématiques dans l'ordre : nouveautes, concurrents, evenements, tendances, barometre_stern.",
+        description: "5 sections dans l'ordre : nouveautes, concurrents, evenements, tendances, barometre_stern.",
         items: {
           type: "object",
           properties: {
@@ -55,34 +56,17 @@ const BUILD_VEILLE_TOOL = {
                 type: "object",
                 properties: {
                   titre: { type: "string" },
-                  resume: { type: "string", description: "2-3 phrases max." },
-                  points_cles: {
-                    type: "array",
-                    items: { type: "string", description: "Bullet courte." },
-                  },
+                  resume: { type: "string" },
+                  points_cles: { type: "array", items: { type: "string" } },
                   importance: { type: "string", enum: ["haute", "moyenne", "info"] },
-                  tonalite: {
-                    type: "string",
-                    enum: ["enthousiaste", "mitige", "negatif", "neutre"],
-                    description: "Réservé à la section barometre_stern : ressenti communautaire dominant. Optionnel ailleurs.",
-                  },
-                  statut_stern: {
-                    type: "string",
-                    enum: ["rumeur", "annonce", "sorti"],
-                    description: "Réservé à la section barometre_stern pour les titres Stern : stade du titre.",
-                  },
-                  implication_aa: {
-                    type: "string",
-                    description: "Réservé à la section barometre_stern : lecture commerciale pour Avranches Automatic (importateur Stern) en 1 phrase.",
-                  },
+                  tonalite: { type: "string", enum: ["enthousiaste", "mitige", "negatif", "neutre"] },
+                  statut_stern: { type: "string", enum: ["rumeur", "annonce", "sorti"] },
+                  implication_aa: { type: "string" },
                   liens: {
                     type: "array",
                     items: {
                       type: "object",
-                      properties: {
-                        label: { type: "string" },
-                        url: { type: "string" },
-                      },
+                      properties: { label: { type: "string" }, url: { type: "string" } },
                       required: ["label", "url"],
                     },
                   },
@@ -99,10 +83,8 @@ const BUILD_VEILLE_TOOL = {
   },
 } as const;
 
-const WEB_SEARCH_TOOL = { type: "web_search_20260209", name: "web_search", max_uses: 10 } as any;
-
-async function callAnthropic(payload: any) {
-  return await anthropicJson(ANTHROPIC_KEY, payload);
+function findToolUse(content: any[], name: string) {
+  return (content ?? []).find((b) => b?.type === "tool_use" && b?.name === name);
 }
 
 function extractSources(content: any[]): { title?: string; url: string }[] {
@@ -121,8 +103,36 @@ function extractSources(content: any[]): { title?: string; url: string }[] {
   return Array.from(urls.values());
 }
 
-function findToolUse(content: any[], name: string) {
-  return (content ?? []).find((b) => b?.type === "tool_use" && b?.name === name);
+function extractText(content: any[]): string {
+  return (content ?? [])
+    .filter((b) => b?.type === "text" && typeof b.text === "string")
+    .map((b) => b.text)
+    .join("\n");
+}
+
+async function runCollector(prompt: string, maxTurns: number): Promise<{ notes: string; content: any[] }> {
+  const messages: any[] = [{ role: "user", content: prompt }];
+  let allContent: any[] = [];
+  let lastText = "";
+
+  for (let i = 0; i < 6; i++) {
+    const resp = await anthropicJson(ANTHROPIC_KEY, {
+      model: COLLECT_MODEL,
+      max_tokens: 6000,
+      system: COLLECTOR_SYSTEM,
+      tools: [WEB_SEARCH_TOOL(maxTurns)],
+      messages,
+    });
+    allContent.push(...(resp.content ?? []));
+    messages.push({ role: "assistant", content: resp.content });
+    lastText = extractText(resp.content);
+    if (resp.stop_reason === "pause_turn") {
+      messages.push({ role: "user", content: "Continue." });
+      continue;
+    }
+    break;
+  }
+  return { notes: lastText || "(aucune note produite)", content: allContent };
 }
 
 Deno.serve(async (req) => {
@@ -140,18 +150,30 @@ Deno.serve(async (req) => {
     const periode = type === "quotidien"
       ? `Journée du ${now.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })} (dernières 24h)`
       : `Semaine du ${new Date(now.getTime() - 7 * 86400000).toLocaleDateString("fr-FR")} au ${now.toLocaleDateString("fr-FR")} (7 derniers jours)`;
-
     const window = type === "quotidien" ? "dans les dernières 24 heures" : "au cours des 7 derniers jours";
+    const searchTurns = type === "quotidien" ? 2 : 4;
 
-    // Charge la watchlist active pour orienter les recherches
-    const sbEarly = createClient(SUPABASE_URL, SERVICE_ROLE);
-    const { data: watchlist } = await sbEarly
+    const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
+
+    // Job de suivi (progression visible côté UI)
+    const { data: job } = await sb
+      .from("veille_jobs")
+      .insert({ type, etape: "chargement watchlist" })
+      .select("id")
+      .single();
+    const jobId = job?.id as string | undefined;
+    const setEtape = async (etape: string) => {
+      if (!jobId) return;
+      await sb.from("veille_jobs").update({ etape, updated_at: new Date().toISOString() }).eq("id", jobId);
+    };
+
+    // Watchlist
+    const { data: watchlist } = await sb
       .from("veille_watchlist")
       .select("nom, categorie, priorite, note")
       .eq("actif", true)
       .order("priorite", { ascending: true })
       .order("categorie", { ascending: true });
-
     const wl = (watchlist ?? []) as { nom: string; categorie: string; priorite: number; note: string | null }[];
     const groupByCat = (prio: number) => {
       const items = wl.filter((w) => w.priorite === prio);
@@ -160,72 +182,129 @@ Deno.serve(async (req) => {
         const label = w.note ? `${w.nom} (${w.note})` : w.nom;
         (byCat[w.categorie] ||= []).push(label);
       }
-      return Object.entries(byCat)
-        .map(([cat, names]) => `- ${cat} : ${names.join(", ")}`)
-        .join("\n");
+      return Object.entries(byCat).map(([c, n]) => `- ${c} : ${n.join(", ")}`).join("\n");
     };
+    const wlP1 = groupByCat(1) || "(aucune)";
+    const wlP2 = groupByCat(2) || "(aucune)";
+    const wlP3 = groupByCat(3) || "(aucune)";
 
-    const watchlistBlock = wl.length
-      ? `\n\nWATCHLIST OFFICIELLE (à couvrir obligatoirement pour la priorité 1, opportunément pour la priorité 2) :\n\nPRIORITÉ 1 — obligatoire à chaque veille :\n${groupByCat(1) || "(aucune)"}\n\nPRIORITÉ 2 — à couvrir si actualité :\n${groupByCat(2) || "(aucune)"}\n\nPRIORITÉ 3 — signaux faibles, mentionner seulement si événement notable :\n${groupByCat(3) || "(aucune)"}\n\nRÈGLE DE TAGGING : pour chaque item de la veille qui mentionne une entité de cette watchlist, préfixe le titre par la catégorie correspondante entre crochets (ex. « [reseau_revendeurs] Bananas Distribution ouvre… »). Catégories possibles : fabricants, concurrents, reseau_revendeurs, flipper, communaute_flipper, exploitants, tcg, presse, contentieux.\n\nLECTURE PARTICULIÈRE PAR CATÉGORIE :\n- reseau_revendeurs : partenaires distributeurs flippers d'AA AUJOURD'HUI — mais la nouvelle politique commerciale de Stern pousse AA vers la vente directe B2C, ce qui en fait des CONCURRENTS POTENTIELS demain. Double lecture obligatoire : leurs succès restent des signaux réseau positifs à court terme, MAIS surveiller particulièrement leurs mouvements stratégiques — offres B2C agressives, prix cassés, exclusivités revendiquées, communication qui contourne AA, rapprochements avec d'autres importateurs européens (Freddy's Pinball Paradise, Pinball Universe, RS Pinball, High Voltage Pinball). Tout signal de ce type = ALERTE STRATÉGIQUE à faire remonter en tête de veille (importance "haute", tag [reseau_revendeurs]).\n- contentieux : entités en litige avec AA (ex. procès en cours). Ton STRICTEMENT FACTUEL, aucun jugement, aucune spéculation, uniquement mouvements publics vérifiables.\n- communaute_flipper : forums et groupes fans (source clé pour le baromètre Stern ci-dessous).\n\nSi tu ne trouves aucune actualité pour un compte prioritaire 1, ne rien inventer.\n\nVOLET OBLIGATOIRE — BAROMÈTRE STERN & FLIPPER (section id="barometre_stern") :\nÀ chaque veille, produis cette section dédiée. Elle DOIT couvrir :\n(a) NOUVEAUX TITRES Stern : rumeurs, teasers, licences évoquées, annonces officielles — sources Pinball News, This Week in Pinball, Kaneda's Blog, Pinside, comptes officiels Stern.\n(b) ACCUEIL DES SORTIES RÉCENTES : ressenti communautaire sur les derniers titres Stern (qualité, prix, hype, critiques) — sources Pinside en priorité, puis pages fans FR (Mordus de Flipper, Flippers Attitude, Flippers achat/vente).\n(c) TENDANCES MARCHÉ FLIPPER : mouvements globaux (prix occasion, concurrents Jersey Jack / American Pinball / Chicago Gaming / Spooky, nouveaux acteurs).\n(d) POLITIQUE COMMERCIALE STERN : surveiller toute évolution de la politique de distribution Stern (vente directe, marges revendeurs, exclusivités territoriales, prix publics imposés, conditions faites aux importateurs européens) — impact direct sur le modèle d'AA. Tout signal ici est à traiter en importance "haute".\nPour chaque item de titre Stern, renseigne "statut_stern" (rumeur/annonce/sorti), "tonalite" (enthousiaste/mitige/negatif/neutre + le "pourquoi" dans le résumé en 1 phrase), et "implication_aa" (lecture commerciale pour AA en tant qu'importateur Stern France : ex. « titre hype → pousser les précommandes », « accueil tiède → prudence sur les volumes »).`
-      : "";
+    // === COLLECTEURS PARALLÈLES ===
+    const collectorA = `PÉRIMÈTRE : Baromètre Stern & flipper (${window}).
+Cherche sur le web (Pinball News, This Week in Pinball, Kaneda's Blog, Pinside, Stern officiel, comptes réseaux sociaux Stern, presse spécialisée) :
+(a) NOUVEAUX TITRES Stern : rumeurs, teasers, licences, annonces officielles.
+(b) ACCUEIL DES SORTIES RÉCENTES : ressenti communautaire (qualité, prix, hype, critiques) sur Pinside en priorité + pages fans FR (Mordus de Flipper, Flippers Attitude, Flippers achat/vente).
+(c) TENDANCES MARCHÉ FLIPPER : Jersey Jack, American Pinball, Chicago Gaming, Spooky, Multimorphic, prix occasion, nouveaux acteurs.
+(d) POLITIQUE COMMERCIALE STERN : vente directe, marges revendeurs, exclusivités territoriales, prix publics imposés, conditions aux importateurs européens (Freddy's Pinball Paradise, Pinball Universe, RS Pinball, High Voltage Pinball).
+Rends des notes brutes datées avec URLs. Distingue rumeur/annonce/sorti et enthousiaste/mitigé/négatif/neutre pour chaque titre.`;
 
-    const userPrompt = `Génère le rapport de veille marché pour la période : ${periode}.
+    const collectorB = `PÉRIMÈTRE : Watchlist France (${window}).
+Cherche des actualités RÉCENTES pour les comptes suivants (partenaires, concurrents, communauté, contentieux, exploitants). Utilise LinkedIn public, presse locale, sites, réseaux sociaux.
 
-Concentre-toi exclusivement sur les informations publiées ou survenues ${window}. Effectue plusieurs recherches web ciblées (Stern Pinball news, distributeurs flippers France, IAAPA, Pinball News, Pinside, arcade industry, etc.) puis synthétise. Ta réponse finale DOIT être un appel à l'outil build_veille avec les 5 sections remplies (nouveautes, concurrents, evenements, tendances, barometre_stern). Aucune section ne doit être vide : si tu n'as rien trouvé de récent, mets un unique item d'importance "info" expliquant honnêtement l'absence d'actualité.${watchlistBlock}`;
+PRIORITÉ 1 (obligatoire, couvre chaque nom) :
+${wlP1}
 
-    // Tâche de fond : la génération peut prendre plusieurs minutes → dépasse la limite 150s du gateway.
-    // On répond immédiatement 202 et on insère le rapport en base quand il est prêt (client poll).
+PRIORITÉ 2 (à couvrir si actualité récente) :
+${wlP2}
+
+LECTURE PARTICULIÈRE :
+- reseau_revendeurs : partenaires distributeurs flippers d'AA AUJOURD'HUI, mais la nouvelle politique commerciale Stern les pousse vers la vente directe B2C → CONCURRENTS POTENTIELS. Surveille en priorité tout mouvement stratégique : offres B2C agressives, prix cassés, exclusivités revendiquées, communication qui contourne AA, rapprochements avec importateurs européens (Freddy's, Pinball Universe, RS Pinball, High Voltage).
+- contentieux : ton STRICTEMENT FACTUEL, mouvements publics vérifiables uniquement, aucun jugement.
+- MBA Entertainment : concurrent négoce + revendeur flipper AA + propriétaire La Tête dans les Nuages → double statut à monitorer.
+
+Rends des notes brutes datées, chaque item préfixé de la catégorie entre crochets, avec URLs. Si aucun compte P1 n'a d'actu, dis-le honnêtement.`;
+
+    const collectorC = `PÉRIMÈTRE : Marché arcade, FEC et distributeurs européens (${window}).
+Cherche :
+- Fabricants arcade : UNIS, SEGA Amusement, Namco, Bandai Namco Amusement, Raw Thrills, Andamiro, Bay Tek, LAI Games, Ace.
+- Salons et événements : IAAPA, EAG, salons français, tournois flipper majeurs.
+- FEC (Family Entertainment Centers) France et Europe : ouvertures, fermetures, tendances, cashless / systèmes de paiement, redemption.
+- Distributeurs européens : Freddy's Pinball Paradise (DE), Pinball Universe (DE), RS Pinball (AT), High Voltage Pinball (BE) — mouvements, offres, événements.
+- Tendances marché arcade en général.
+
+Rends des notes brutes datées avec URLs, distingue confirmé vs rumeur.`;
+
+    const collectorD = `PÉRIMÈTRE : TCG, blind box et e-commerce loisirs (${window}).
+Cherche :
+- Scène TCG : Pokemon, Yu-Gi-Oh, Magic — sorties, ruptures, spéculation, événements FR.
+- Blind box / collectibles : Pop Mart, Labubu, Sonny Angel, tendances retail loisirs.
+- E-commerce loisirs : mouvements Shopify, Amazon, marketplaces sur la niche jeu / collection.
+
+Rends des notes brutes datées avec URLs.`;
+
     const runJob = async () => {
       try {
-        let messages: any[] = [{ role: "user", content: userPrompt }];
-        let finalContent: any[] = [];
-        const allContent: any[] = [];
+        const paquets: { label: string; notes: string; content: any[] }[] = [
+          { label: "A · Baromètre Stern & flipper", notes: "", content: [] },
+          { label: "B · Watchlist France", notes: "", content: [] },
+          { label: "C · Marché arcade & FEC", notes: "", content: [] },
+          { label: "D · TCG & e-commerce", notes: "", content: [] },
+        ];
+        let doneCount = 0;
+        await setEtape(`collecte 0/4 (parallèle · sonnet)`);
 
-        for (let i = 0; i < 8; i++) {
-          const resp = await callAnthropic({
-            model: MODEL,
+        const wrap = (idx: number, prompt: string) =>
+          runCollector(prompt, searchTurns).then(async (r) => {
+            paquets[idx].notes = r.notes;
+            paquets[idx].content = r.content;
+            doneCount += 1;
+            await setEtape(`collecte ${doneCount}/4 (parallèle · sonnet)`);
+          }).catch(async (e) => {
+            console.error(`[veille] collector ${idx} failed`, e?.message ?? e);
+            paquets[idx].notes = `(collecteur ${paquets[idx].label} en échec : ${e?.message ?? e})`;
+            doneCount += 1;
+            await setEtape(`collecte ${doneCount}/4 (parallèle · sonnet)`);
+          });
+
+        await Promise.all([
+          wrap(0, collectorA), wrap(1, collectorB), wrap(2, collectorC), wrap(3, collectorD),
+        ]);
+
+        await setEtape("synthèse (opus · thinking)");
+
+        const notesBlock = paquets.map((p) => `### PAQUET ${p.label}\n\n${p.notes}`).join("\n\n---\n\n");
+        const synthPrompt = `Période : ${periode}.
+
+Voici les 4 paquets de notes brutes collectés en parallèle par des agents web spécialisés. Synthétise-les en un rapport complet via l'outil build_veille (5 sections dans l'ordre : nouveautes, concurrents, evenements, tendances, barometre_stern).
+
+RÈGLES DE TAGGING WATCHLIST — pour chaque item qui mentionne une entité de la watchlist ci-dessous, préfixe le titre par la catégorie entre crochets (ex. « [reseau_revendeurs] Bananas Distribution ouvre… »). Catégories possibles : fabricants, concurrents, reseau_revendeurs, flipper, communaute_flipper, exploitants, tcg, presse, contentieux.
+
+WATCHLIST P1 :
+${wlP1}
+
+WATCHLIST P2 :
+${wlP2}
+
+WATCHLIST P3 (mentions seulement si événement notable) :
+${wlP3}
+
+SECTION barometre_stern OBLIGATOIRE — pour chaque titre Stern renseigne statut_stern (rumeur/annonce/sorti), tonalite (enthousiaste/mitige/negatif/neutre + le pourquoi en 1 phrase dans le résumé), et implication_aa (lecture commerciale pour AA importateur Stern, 1 phrase). Traite tout signal de politique commerciale Stern ou de mouvement B2C d'un revendeur AA en importance "haute".
+
+Si une section manque d'infos, mets un unique item d'importance "info" expliquant honnêtement l'absence d'actualité — n'invente rien.
+
+=== NOTES BRUTES ===
+
+${notesBlock}`;
+
+        let synthContent: any[] = [];
+        let toolCall: any = null;
+        {
+          const resp = await anthropicJson(ANTHROPIC_KEY, {
+            model: SYNTH_MODEL,
             max_tokens: 16000,
             thinking: { type: "adaptive" },
             output_config: { effort: "high" },
-            system: SYSTEM_PROMPT,
-            tools: [WEB_SEARCH_TOOL, BUILD_VEILLE_TOOL],
-            messages,
-          });
-          finalContent = resp.content;
-          allContent.push(...(resp.content ?? []));
-          messages.push({ role: "assistant", content: resp.content });
-          if (findToolUse(resp.content, "build_veille")) break;
-          if (resp.stop_reason === "pause_turn") {
-            messages.push({ role: "user", content: "Continue." });
-            continue;
-          }
-          break;
-        }
-
-        let toolCall = findToolUse(finalContent, "build_veille");
-        if (!toolCall) {
-          messages.push({
-            role: "user",
-            content: "Appelle maintenant l'outil build_veille avec toutes les sections structurées, sans texte libre.",
-          });
-          const forced = await callAnthropic({
-            model: MODEL,
-            max_tokens: 16000,
-            thinking: { type: "adaptive" },
-            output_config: { effort: "high" },
-            system: SYSTEM_PROMPT,
-            tools: [WEB_SEARCH_TOOL, BUILD_VEILLE_TOOL],
+            system: SYNTH_SYSTEM,
+            tools: [BUILD_VEILLE_TOOL],
             tool_choice: { type: "tool", name: "build_veille" },
-            messages,
+            messages: [{ role: "user", content: synthPrompt }],
           });
-          finalContent = forced.content;
-          allContent.push(...(forced.content ?? []));
-          toolCall = findToolUse(forced.content, "build_veille");
+          synthContent = resp.content ?? [];
+          toolCall = findToolUse(synthContent, "build_veille");
         }
-
-        if (!toolCall) throw new Error("Le modèle n'a pas produit de sortie structurée build_veille.");
+        if (!toolCall) throw new Error("Synthèse : build_veille non produit.");
 
         const structured = toolCall.input as any;
+        const allContent = [...paquets.flatMap((p) => p.content), ...synthContent];
         const sources = extractSources(allContent);
         const md = [
           `# ${structured.titre ?? "Veille marché"}`,
@@ -234,7 +313,6 @@ Concentre-toi exclusivement sur les informations publiées ou survenues ${window
           structured.resume_executif ?? "",
         ].join("\n");
 
-        const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
         const { error } = await sb.from("veille_rapports").insert({
           type,
           periode: structured.periode ?? periode,
@@ -243,15 +321,18 @@ Concentre-toi exclusivement sur les informations publiées ou survenues ${window
           sources,
         });
         if (error) console.error("[veille-marche] insert error", error);
+
+        if (jobId) await sb.from("veille_jobs").update({ etape: "terminé", done: true, updated_at: new Date().toISOString() }).eq("id", jobId);
       } catch (e: any) {
         console.error("[veille-marche] background error", e?.message ?? e);
+        if (jobId) await sb.from("veille_jobs").update({ etape: `erreur : ${(e?.message ?? String(e)).slice(0, 200)}`, done: true, updated_at: new Date().toISOString() }).eq("id", jobId);
       }
     };
 
-    // @ts-ignore EdgeRuntime is provided by Supabase edge runtime
+    // @ts-ignore EdgeRuntime
     EdgeRuntime.waitUntil(runJob());
 
-    return new Response(JSON.stringify({ status: "started", type, periode }), {
+    return new Response(JSON.stringify({ status: "started", type, periode, job_id: jobId }), {
       status: 202,
       headers: { ...corsHeaders, "content-type": "application/json" },
     });

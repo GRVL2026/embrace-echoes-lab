@@ -45,19 +45,22 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border">
-        <Link to="/" className="flex items-center gap-2 px-2 py-1.5 min-w-0">
-          <img
-            src={logoImg}
-            alt="Arcade OS"
-            className="h-6 w-auto object-contain flex-shrink-0"
-          />
-          {!collapsed && (
-            <span className="font-display text-sm font-bold tracking-tight truncate">
-              <span className="text-primary text-glow-purple">Arcade</span>{" "}
-              <span className="text-secondary text-glow-green">OS</span>
-            </span>
-          )}
-        </Link>
+        <div className="flex items-center gap-2 px-2 py-1.5 min-w-0">
+          <Link to="/" className="flex items-center gap-2 min-w-0 flex-1">
+            <img
+              src={logoImg}
+              alt="Arcade OS"
+              className="h-6 w-auto object-contain flex-shrink-0"
+            />
+            {!collapsed && (
+              <span className="font-display text-sm font-bold tracking-tight truncate">
+                <span className="text-primary text-glow-purple">Arcade</span>{" "}
+                <span className="text-secondary text-glow-green">OS</span>
+              </span>
+            )}
+          </Link>
+          {!collapsed && <AlertsBell compact />}
+        </div>
       </SidebarHeader>
 
       <SidebarContent>

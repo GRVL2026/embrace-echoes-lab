@@ -15,8 +15,10 @@ import { toast } from "@/hooks/use-toast";
 import {
   Loader2, Shield, Database, Radar, CalendarDays, CalendarRange,
   Sparkles, Building2, CalendarClock, LineChart, ExternalLink,
-  Link as LinkIcon, Mail, Printer, ChevronRight,
+  Link as LinkIcon, Mail, Printer, ChevronRight, Eye,
 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { WatchlistPanel } from "@/components/admin/WatchlistPanel";
 import logoImg from "@/assets/logo.png";
 
 type VeilleLink = { label: string; url: string };
@@ -307,6 +309,13 @@ export default function AdminVeille() {
           </div>
         </div>
 
+        <Tabs defaultValue="rapports">
+          <TabsList className="mb-4">
+            <TabsTrigger value="rapports"><Radar className="h-4 w-4 mr-1" /> Rapports</TabsTrigger>
+            <TabsTrigger value="watchlist"><Eye className="h-4 w-4 mr-1" /> Watchlist</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="rapports">
         <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
           <aside className="rounded-lg border border-border bg-card/40 p-3 max-h-[75vh] overflow-y-auto print:hidden">
             <div className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -388,6 +397,12 @@ export default function AdminVeille() {
             )}
           </section>
         </div>
+          </TabsContent>
+
+          <TabsContent value="watchlist">
+            <WatchlistPanel />
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );

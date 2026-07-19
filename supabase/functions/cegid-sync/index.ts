@@ -640,9 +640,9 @@ async function authorize(req: Request): Promise<
 }
 
 
-function selfInvoke(payload: Record<string, unknown>) {
+async function selfInvoke(payload: Record<string, unknown>) {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-  const cronSecret = Deno.env.get('CRON_SECRET')!;
+  const cronSecret = (await resolveCronSecret()) ?? '';
   const url = `${supabaseUrl}/functions/v1/cegid-sync`;
   // fire-and-forget
   fetch(url, {
@@ -654,6 +654,7 @@ function selfInvoke(payload: Record<string, unknown>) {
     body: JSON.stringify(payload),
   }).catch((e) => console.error('[cegid-sync] selfInvoke error:', e?.message ?? String(e)));
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {

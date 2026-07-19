@@ -850,6 +850,7 @@ export function GaiaCopilot({ embedded = false }: GaiaCopilotProps = {}) {
       </div>
 
 
+      {!embedded && (<>
       {/* Revue du mois */}
       <div className="rounded-lg border border-border bg-card/40 p-4">
         <div className="mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">

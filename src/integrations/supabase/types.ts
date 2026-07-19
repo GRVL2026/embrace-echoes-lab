@@ -268,6 +268,54 @@ export type Database = {
         }
         Relationships: []
       }
+      copilot_alertes: {
+        Row: {
+          action_suggeree: string | null
+          constat: string
+          created_at: string
+          dedupe_key: string
+          gravite: string
+          id: string
+          lien: string | null
+          meta: Json
+          statut: string
+          titre: string
+          type: string
+          updated_at: string
+          visibilite: string
+        }
+        Insert: {
+          action_suggeree?: string | null
+          constat: string
+          created_at?: string
+          dedupe_key: string
+          gravite: string
+          id?: string
+          lien?: string | null
+          meta?: Json
+          statut?: string
+          titre: string
+          type: string
+          updated_at?: string
+          visibilite?: string
+        }
+        Update: {
+          action_suggeree?: string | null
+          constat?: string
+          created_at?: string
+          dedupe_key?: string
+          gravite?: string
+          id?: string
+          lien?: string | null
+          meta?: Json
+          statut?: string
+          titre?: string
+          type?: string
+          updated_at?: string
+          visibilite?: string
+        }
+        Relationships: []
+      }
       copilot_assets: {
         Row: {
           asset_type: string
@@ -363,6 +411,27 @@ export type Database = {
           style_tags?: string[] | null
           subcategory?: string | null
           thumbnail_url?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      copilot_briefings: {
+        Row: {
+          contenu: Json
+          created_at: string
+          date: string
+          updated_at: string
+        }
+        Insert: {
+          contenu: Json
+          created_at?: string
+          date: string
+          updated_at?: string
+        }
+        Update: {
+          contenu?: Json
+          created_at?: string
+          date?: string
           updated_at?: string
         }
         Relationships: []

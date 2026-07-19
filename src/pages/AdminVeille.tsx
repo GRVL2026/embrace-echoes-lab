@@ -179,6 +179,9 @@ export default function AdminVeille() {
   const [generating, setGenerating] = useState<"quotidien" | "hebdomadaire" | null>(null);
   const [etape, setEtape] = useState<string>("");
   const [progress, setProgress] = useState<number>(0);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+
+
 
 
   const load = async () => {

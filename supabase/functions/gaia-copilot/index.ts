@@ -534,21 +534,77 @@ function formatMemories(memos: Array<{ id: string; categorie: string; contenu: s
   return `MÉMOIRE DU COPILOTE (entrées actives, à prendre en compte dans chaque réponse — outils : "memoriser" pour ajouter, "oublier" pour désactiver via id)\n${sections}`;
 }
 
-async function memoriser(admin: any, categorie: string, contenu: string): Promise<unknown> {
+async function memoriser(
+  admin: any,
+  categorie: string,
+  contenu: string,
+  scope: 'global' | 'utilisateur' = 'global',
+  userId: string | null = null,
+): Promise<unknown> {
   try {
     const cat = (categorie || 'note').toString().trim().slice(0, 40) || 'note';
     const txt = (contenu || '').toString().trim().slice(0, 2000);
     if (!txt) return { error: 'contenu vide' };
+
+    // Mémoire personnelle (par utilisateur)
+    if (scope === 'utilisateur') {
+      if (!userId) return { error: 'utilisateur inconnu, impossible de mémoriser dans le profil personnel' };
+      const { data: existing } = await admin
+        .from('copilot_user_profiles')
+        .select('memoire')
+        .eq('user_id', userId)
+        .maybeSingle();
+      const memoire = existing?.memoire && typeof existing.memoire === 'object' ? existing.memoire : { notes: [] };
+      const notes = Array.isArray(memoire.notes) ? memoire.notes : [];
+      notes.unshift({
+        id: crypto.randomUUID(),
+        categorie: cat,
+        contenu: txt,
+        created_at: new Date().toISOString(),
+      });
+      memoire.notes = notes.slice(0, 60); // borne dure pour éviter la dérive
+      const { error } = await admin
+        .from('copilot_user_profiles')
+        .upsert({ user_id: userId, memoire }, { onConflict: 'user_id' });
+      if (error) return { error: error.message };
+      return { ok: true, scope: 'utilisateur', memoire: notes[0] };
+    }
+
+    // Mémoire globale (comportement historique)
     const { data, error } = await admin
       .from('copilote_memoire')
       .insert({ categorie: cat, contenu: txt, auteur: 'copilote', actif: true })
       .select('id, categorie, contenu, created_at')
       .single();
     if (error) return { error: error.message };
-    return { ok: true, memoire: data };
+    return { ok: true, scope: 'global', memoire: data };
   } catch (e: any) {
     return { error: e?.message ?? String(e) };
   }
+}
+
+async function loadUserProfile(admin: any, userId: string): Promise<Array<{ categorie: string; contenu: string; created_at: string }>> {
+  try {
+    const { data, error } = await admin
+      .from('copilot_user_profiles')
+      .select('memoire')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (error || !data?.memoire) return [];
+    const notes = Array.isArray(data.memoire.notes) ? data.memoire.notes : [];
+    return notes.slice(0, 30);
+  } catch {
+    return [];
+  }
+}
+
+function formatUserProfile(userLabel: string, notes: Array<{ categorie: string; contenu: string }>): string {
+  const header = `PROFIL UTILISATEUR (personne actuellement connectée : ${userLabel})`;
+  if (!notes.length) {
+    return `${header}\n(aucune note personnelle enregistrée) — utilise l'outil "memoriser" avec scope='utilisateur' pour consigner discrètement le rôle métier, les préférences de réponse ou les sujets récurrents.`;
+  }
+  const lines = notes.map((n) => `  • [${n.categorie}] ${n.contenu}`).join('\n');
+  return `${header}\nNotes personnelles apprises (à considérer dans le ton et le niveau de détail des réponses) :\n${lines}`;
 }
 
 async function oublier(admin: any, id: string): Promise<unknown> {

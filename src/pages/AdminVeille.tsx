@@ -364,9 +364,10 @@ export default function AdminVeille() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {generating && etape && (
+            {generating && (
               <span className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs text-primary">
-                <Loader2 className="h-3 w-3 animate-spin" /> {etape}
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Génération en cours — vous pouvez naviguer, vous serez notifié{etape ? ` · ${etape}` : ""}
               </span>
             )}
             <Button onClick={() => generate("quotidien")} disabled={generating !== null} variant="outline">

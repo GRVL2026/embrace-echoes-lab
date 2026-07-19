@@ -934,7 +934,13 @@ Deno.serve(async (req) => {
     const memorySuffix = formatMemories(memos);
     console.log(`[gaia-copilot] memoires actives=${memos.length}`);
 
-    const SUIVI_INSTRUCTION = `CONSIGNE DE SUIVI : quand une conversation aboutit à une action décidée (relance, plan client, décision), appelle immédiatement l'outil "memoriser" (catégorie 'suivi' ou 'plan') pour la consigner. Une action non mémorisée sera perdue.`;
+    // Profil personnel de l'utilisateur (mémoire par-utilisateur)
+    const currentUserId = userData.user.id;
+    const currentUserLabel = userData.user.email ?? currentUserId;
+    const userNotes = await loadUserProfile(admin, currentUserId);
+    const userProfileSuffix = formatUserProfile(currentUserLabel, userNotes);
+
+    const SUIVI_INSTRUCTION = `CONSIGNE DE SUIVI : quand une conversation aboutit à une action décidée (relance, plan client, décision), appelle immédiatement l'outil "memoriser" (scope='global', catégorie 'suivi' ou 'plan') pour la consigner. Une action non mémorisée sera perdue. Quand tu apprends une info comportementale utile sur l'utilisateur courant (rôle métier, préférence de format, sujet récurrent), consigne-la via "memoriser" scope='utilisateur' — jamais d'infos personnelles hors contexte pro.`;
 
     if (action === 'revue') {
       const suivis = memos.filter((m) => m.categorie === 'suivi');

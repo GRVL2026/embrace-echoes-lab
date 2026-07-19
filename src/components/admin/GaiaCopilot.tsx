@@ -1013,15 +1013,10 @@ export function GaiaCopilot({ embedded = false }: GaiaCopilotProps = {}) {
               const isRunning = statut === "en_cours";
               const isError = statut === "erreur";
               return (
-                <li key={h.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                <li key={h.id} className="flex flex-col gap-2 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate font-medium">{h.titre ?? "Revue"}</span>
-                      {isRunning && (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
-                          <Loader2 className="h-2.5 w-2.5 animate-spin" /> En cours
-                        </span>
-                      )}
                       {isError && (
                         <span className="rounded-full border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[10px] text-destructive">
                           Échec
@@ -1032,6 +1027,16 @@ export function GaiaCopilot({ embedded = false }: GaiaCopilotProps = {}) {
                       {new Date(h.created_at).toLocaleString("fr-FR")}
                       {isError && h.erreur ? ` · ${h.erreur.slice(0, 120)}` : ""}
                     </div>
+                    {isRunning && (
+                      <div className="mt-2 max-w-sm">
+                        <GenerationProgress
+                          progress={h.progress ?? 0}
+                          etape={h.etape ?? "en cours…"}
+                          label="Revue en cours de génération"
+                          compact
+                        />
+                      </div>
+                    )}
                   </div>
                   {isRunning ? (
                     <span className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-xs text-muted-foreground">
@@ -1046,6 +1051,7 @@ export function GaiaCopilot({ embedded = false }: GaiaCopilotProps = {}) {
                     </Link>
                   )}
                 </li>
+
               );
             })}
           </ul>

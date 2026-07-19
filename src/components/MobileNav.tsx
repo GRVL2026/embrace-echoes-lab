@@ -1,33 +1,41 @@
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { Menu, Shield, Database, FolderKanban, LayoutGrid, LogOut, Home, BookOpen, Truck, Radar, Globe, Wrench } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Menu, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { SPACES, type NavCtx } from "@/nav/spaces";
 
+/**
+ * Menu de navigation mobile — reprend la structure de la sidebar
+ * (5 espaces + Réglages, colorés) sous forme d'accordéon vertical.
+ */
 export function MobileNav() {
-  const { isAdmin, canAccessGaia, canAccessDashboard, user, signOut } = useAuth();
+  const {
+    isAdmin,
+    isDirection,
+    canAccessGaia,
+    canAccessDashboard,
+    copilotEnabled,
+    user,
+    signOut,
+  } = useAuth();
   const [open, setOpen] = useState(false);
-  const { pathname } = useLocation();
+  const { pathname, hash } = useLocation();
   const navigate = useNavigate();
 
-  const item = (to: string, label: string, Icon: any) => {
-    const active = pathname === to || (to !== "/" && pathname.startsWith(to + "/"));
-    return (
-      <Link
-        to={to}
-        onClick={() => setOpen(false)}
-        className={`flex min-h-11 items-center gap-3 rounded-md px-3 py-3 text-sm font-medium ${
-          active
-            ? "bg-primary/15 border border-primary/40 text-primary"
-            : "text-foreground hover:bg-muted"
-        }`}
-      >
-        <Icon className="h-4 w-4" />
-        {label}
-      </Link>
-    );
+  const ctx: NavCtx = {
+    isAdmin,
+    isDirection,
+    canAccessGaia,
+    canAccessDashboard,
+    copilotEnabled,
   };
 
   const handleSignOut = async () => {
@@ -43,22 +51,60 @@ export function MobileNav() {
           <Menu className="h-5 w-5" />
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-72 p-0 flex flex-col">
+      <SheetContent side="left" className="w-80 p-0 flex flex-col">
         <SheetHeader className="border-b border-border p-4 text-left">
-          <SheetTitle className="font-display">Menu</SheetTitle>
-          {user?.email && <div className="text-xs text-muted-foreground truncate">{user.email}</div>}
+          <SheetTitle className="font-display">Navigation</SheetTitle>
+          {user?.email && (
+            <div className="text-xs text-muted-foreground truncate">{user.email}</div>
+          )}
         </SheetHeader>
-        <div className="flex-1 space-y-1 p-3">
-          {isAdmin && item("/", "Hub", Home)}
-          {item("/dossiers", "Dossiers", FolderKanban)}
-          {item("/planner", "Arcade Planner", LayoutGrid)}
-          {item("/catalogue", "Catalogue", BookOpen)}
-          {isAdmin && item("/logistique", "Logistique", Truck)}
-          {canAccessGaia && item("/ecommerce", "E-commerce", Globe)}
-          {canAccessGaia && item("/sav", "SAV", Wrench)}
-          {canAccessDashboard && item("/admin/gaia", "Dashboard", Database)}
-          {canAccessGaia && item("/admin/veille", "Veille marché", Radar)}
-          {isAdmin && item("/admin", "Admin", Shield)}
+        <div className="flex-1 overflow-y-auto p-3 space-y-4">
+          {SPACES.filter((s) => !s.show || s.show(ctx)).map((space) => {
+            const entries = space.entries.filter((e) => !e.show || e.show(ctx));
+            if (entries.length === 0) return null;
+            const color = `hsl(var(${space.colorToken}))`;
+            return (
+              <div key={space.key}>
+                <div
+                  className="flex items-center gap-2 px-2 mb-1 uppercase tracking-wider text-[10px] font-semibold"
+                  style={{ color }}
+                >
+                  <span
+                    className="inline-block h-3 w-0.5 rounded-full"
+                    style={{ backgroundColor: color }}
+                  />
+                  <space.icon className="h-3 w-3" />
+                  {space.label}
+                </div>
+                <div className="space-y-1">
+                  {entries.map((entry) => {
+                    const active = entry.match?.(pathname, hash) ?? false;
+                    const Icon = entry.icon;
+                    return (
+                      <Link
+                        key={entry.to}
+                        to={entry.to}
+                        onClick={() => setOpen(false)}
+                        className="flex min-h-11 items-center gap-3 rounded-md px-3 py-3 text-sm font-medium text-foreground hover:bg-muted"
+                        style={
+                          active
+                            ? {
+                                backgroundColor: `hsl(var(${space.colorToken}) / 0.12)`,
+                                color,
+                                borderLeft: `2px solid ${color}`,
+                              }
+                            : undefined
+                        }
+                      >
+                        <Icon className="h-4 w-4" />
+                        {entry.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </div>
         <div className="border-t border-border p-3">
           <Button variant="ghost" className="w-full justify-start gap-2" onClick={handleSignOut}>

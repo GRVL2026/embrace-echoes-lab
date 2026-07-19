@@ -2,57 +2,25 @@ import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserMenu } from "@/components/UserMenu";
 import { MobileNav } from "@/components/MobileNav";
-import { Badge } from "@/components/ui/badge";
-import { Loader2, ShoppingCart, Truck, Wrench, ArrowRight, Globe } from "lucide-react";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Loader2, ArrowRight } from "lucide-react";
 import logoImg from "@/assets/logo.png";
+import { SPACES, type NavCtx } from "@/nav/spaces";
 
-type EnvCard = {
-  key: string;
-  title: string;
-  description: string;
-  Icon: typeof ShoppingCart;
-  to?: string;
-  available: boolean;
-};
-
-const CARDS: EnvCard[] = [
-  {
-    key: "commerce",
-    title: "Commerce",
-    description: "Dossiers commerciaux, planner arcade, catalogue et Dashboard.",
-    Icon: ShoppingCart,
-    to: "/dossiers",
-    available: true,
-  },
-  {
-    key: "logistique",
-    title: "Logistique",
-    description: "Suivi des expéditions fournisseurs : flippers Stern (US), jeux Asie, dates, coûts, documents.",
-    Icon: Truck,
-    to: "/logistique",
-    available: true,
-  },
-  {
-    key: "ecommerce",
-    title: "E-commerce",
-    description: "Activité de la boutique en ligne : ventes, produits, clients.",
-    Icon: Globe,
-    to: "/ecommerce",
-    available: true,
-  },
-  {
-    key: "sav",
-    title: "SAV",
-    description: "Tickets, interventions et pièces détachées — piloté par Zendesk.",
-    Icon: Wrench,
-    to: "/sav",
-    available: true,
-  },
-];
-
+/**
+ * Portail Arcade OS. Chaque carte = un espace. La description est suivie
+ * de 3-4 destinations en liens directs (raccourcis clavier de l'équipe).
+ * L'ordre et les couleurs correspondent à la sidebar.
+ */
 export default function Hub() {
-  const { isAdmin, canAccessGaia, isLoading } = useAuth();
-  const visibleCards = CARDS.filter((c) => c.key !== "sav" || canAccessGaia);
+  const {
+    isAdmin,
+    isDirection,
+    canAccessGaia,
+    canAccessDashboard,
+    copilotEnabled,
+    isLoading,
+  } = useAuth();
 
   if (isLoading) {
     return (
@@ -62,16 +30,46 @@ export default function Hub() {
     );
   }
 
-  // Non-admins are sent directly to their workspace.
-  if (!isAdmin) return <Navigate to="/dossiers" replace />;
+  // Les non-admins sont envoyés directement dans leur espace de travail.
+  if (!isAdmin && !isDirection) return <Navigate to="/dossiers" replace />;
+
+  const ctx: NavCtx = {
+    isAdmin,
+    isDirection,
+    canAccessGaia,
+    canAccessDashboard,
+    copilotEnabled,
+  };
+
+  const DESCRIPTIONS: Record<string, string> = {
+    commerce:
+      "Fiches clients, pipeline commercial, dossiers, planner arcade et catalogue.",
+    pilotage:
+      "Tableaux de bord AA & Magasin, revue stratégique, veille marché et copilote IA.",
+    ecommerce: "Activité de la boutique en ligne : ventes, produits, clients.",
+    sav: "Tickets, interventions et pièces détachées — piloté par Zendesk.",
+    logistique:
+      "Suivi des expéditions fournisseurs : flippers Stern (US), jeux Asie, dates, coûts.",
+    reglages:
+      "Utilisateurs & accès, synchronisation ERP Cegid, configuration.",
+  };
+
+  const visibleSpaces = SPACES.filter((s) => !s.show || s.show(ctx));
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground">
       <header className="flex h-14 items-center justify-between border-b border-border bg-card/30 backdrop-blur-sm px-3 sm:px-6 gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <MobileNav />
+          <div className="md:hidden">
+            <MobileNav />
+          </div>
+          <SidebarTrigger className="hidden md:inline-flex" />
           <Link to="/" className="flex items-center gap-2 min-w-0">
-            <img src={logoImg} alt="Arcade OS logo" className="h-7 w-auto object-contain flex-shrink-0" />
+            <img
+              src={logoImg}
+              alt="Arcade OS logo"
+              className="h-7 w-auto object-contain flex-shrink-0"
+            />
             <h1 className="font-display text-base sm:text-xl font-bold tracking-tight truncate">
               <span className="text-primary text-glow-purple">Arcade</span>{" "}
               <span className="text-secondary text-glow-green">OS</span>
@@ -90,55 +88,70 @@ export default function Hub() {
             <span className="text-primary text-glow-purple">Gaia</span>
           </h2>
           <p className="mt-3 text-sm sm:text-base text-muted-foreground max-w-xl mx-auto">
-            Choisissez votre environnement de travail.
+            Choisissez votre espace de travail.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          {visibleCards.map(({ key, title, description, Icon, to, available }) => {
-            const inner = (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+          {visibleSpaces.map((space) => {
+            const entries = space.entries.filter((e) => !e.show || e.show(ctx));
+            const first = entries[0];
+            if (!first) return null;
+            const color = `hsl(var(${space.colorToken}))`;
+            const border = `hsl(var(${space.colorToken}) / 0.35)`;
+            const borderHover = `hsl(var(${space.colorToken}) / 0.7)`;
+            const bgTint = `hsl(var(${space.colorToken}) / 0.08)`;
+            const Icon = space.icon;
+            return (
               <div
-                className={`group relative flex h-full flex-col justify-between rounded-2xl border p-6 sm:p-8 transition-all ${
-                  available
-                    ? "border-primary/30 bg-card/60 hover:border-primary/60 hover:bg-card/80 hover:-translate-y-0.5 cursor-pointer"
-                    : "border-border/50 bg-card/20 opacity-60 cursor-not-allowed"
-                }`}
+                key={space.key}
+                className="group relative flex h-full flex-col rounded-2xl border bg-card/60 p-6 transition-all hover:-translate-y-0.5"
+                style={{
+                  borderColor: border,
+                  boxShadow: `0 0 0 1px transparent, 0 20px 40px -30px ${color}`,
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.borderColor = borderHover)}
+                onMouseLeave={(e) => (e.currentTarget.style.borderColor = border)}
               >
-                <div>
+                <Link to={first.to} className="flex items-start gap-3">
                   <div
-                    className={`flex h-12 w-12 items-center justify-center rounded-xl ${
-                      available ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
-                    }`}
+                    className="flex h-12 w-12 items-center justify-center rounded-xl flex-shrink-0"
+                    style={{ backgroundColor: bgTint, color }}
                   >
                     <Icon className="h-6 w-6" />
                   </div>
-                  <div className="mt-4 flex items-center gap-2">
-                    <h3 className="font-display text-xl sm:text-2xl font-semibold">{title}</h3>
-                    {!available && (
-                      <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
-                        Bientôt
-                      </Badge>
-                    )}
+                  <div className="min-w-0">
+                    <h3 className="font-display text-xl sm:text-2xl font-semibold">
+                      {space.label}
+                    </h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {DESCRIPTIONS[space.key]}
+                    </p>
                   </div>
-                  <p className="mt-2 text-sm text-muted-foreground">{description}</p>
-                </div>
-                {available && (
-                  <div className="mt-6 inline-flex items-center gap-1 text-xs font-medium text-primary opacity-80 group-hover:opacity-100">
-                    Entrer <ArrowRight className="h-3.5 w-3.5" />
-                  </div>
-                )}
-              </div>
-            );
-            if (available && to) {
-              return (
-                <Link key={key} to={to} className="block h-full">
-                  {inner}
                 </Link>
-              );
-            }
-            return (
-              <div key={key} aria-disabled className="h-full">
-                {inner}
+
+                <ul className="mt-5 space-y-1.5 border-t pt-4" style={{ borderColor: border }}>
+                  {entries.map((entry) => {
+                    const EntryIcon = entry.icon;
+                    return (
+                      <li key={entry.to}>
+                        <Link
+                          to={entry.to}
+                          className="group/entry flex items-center justify-between rounded-md px-2 py-1.5 text-sm hover:bg-muted/50"
+                        >
+                          <span className="inline-flex items-center gap-2">
+                            <EntryIcon className="h-3.5 w-3.5" style={{ color }} />
+                            <span>{entry.label}</span>
+                          </span>
+                          <ArrowRight
+                            className="h-3.5 w-3.5 opacity-40 group-hover/entry:opacity-100 transition-opacity"
+                            style={{ color }}
+                          />
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
             );
           })}

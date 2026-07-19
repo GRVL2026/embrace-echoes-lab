@@ -25,6 +25,8 @@ import Login from "./pages/Login";
 import SignUp from "./pages/SignUp";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { AppShell } from "./components/nav/AppShell";
+import type { ReactNode } from "react";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -34,6 +36,13 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+/** Route protégée + shell avec sidebar persistante. */
+const P = ({ children }: { children: ReactNode }) => (
+  <ProtectedRoute>
+    <AppShell>{children}</AppShell>
+  </ProtectedRoute>
+);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -49,23 +58,23 @@ const App = () => (
             <Route path="/d/:slug" element={<PublicDossier />} />
 
             {/* Protected */}
-            <Route path="/" element={<ProtectedRoute><Hub /></ProtectedRoute>} />
-            <Route path="/planner" element={<ProtectedRoute><SpacePlanner /></ProtectedRoute>} />
-            <Route path="/planner/dossier/:dossierId" element={<ProtectedRoute><SpacePlanner /></ProtectedRoute>} />
-            <Route path="/dossiers" element={<ProtectedRoute><DossiersList /></ProtectedRoute>} />
-            <Route path="/catalogue" element={<ProtectedRoute><Catalogue /></ProtectedRoute>} />
-            <Route path="/dossiers/:id" element={<ProtectedRoute><DossierEdit /></ProtectedRoute>} />
-            <Route path="/logistique" element={<ProtectedRoute><Logistique /></ProtectedRoute>} />
-            <Route path="/ecommerce" element={<ProtectedRoute><Ecommerce /></ProtectedRoute>} />
-            <Route path="/sav" element={<ProtectedRoute><Sav /></ProtectedRoute>} />
-            <Route path="/sav/ticket/:id" element={<ProtectedRoute><SavTicket /></ProtectedRoute>} />
-            <Route path="/admin" element={<ProtectedRoute><AdminDossiers /></ProtectedRoute>} />
-            <Route path="/admin/catalog-erp" element={<ProtectedRoute><AdminCatalogErp /></ProtectedRoute>} />
-            <Route path="/admin/gaia" element={<ProtectedRoute><AdminGaia /></ProtectedRoute>} />
-            <Route path="/admin/gaia/carnet/:categorie" element={<ProtectedRoute><GaiaCarnet /></ProtectedRoute>} />
-            <Route path="/admin/veille" element={<ProtectedRoute><AdminVeille /></ProtectedRoute>} />
-            <Route path="/admin/gaia/client/:nom" element={<ProtectedRoute><GaiaClientFiche /></ProtectedRoute>} />
-            <Route path="/admin/gaia/revue/:id" element={<ProtectedRoute><GaiaRevueView /></ProtectedRoute>} />
+            <Route path="/" element={<P><Hub /></P>} />
+            <Route path="/planner" element={<P><SpacePlanner /></P>} />
+            <Route path="/planner/dossier/:dossierId" element={<P><SpacePlanner /></P>} />
+            <Route path="/dossiers" element={<P><DossiersList /></P>} />
+            <Route path="/catalogue" element={<P><Catalogue /></P>} />
+            <Route path="/dossiers/:id" element={<P><DossierEdit /></P>} />
+            <Route path="/logistique" element={<P><Logistique /></P>} />
+            <Route path="/ecommerce" element={<P><Ecommerce /></P>} />
+            <Route path="/sav" element={<P><Sav /></P>} />
+            <Route path="/sav/ticket/:id" element={<P><SavTicket /></P>} />
+            <Route path="/admin" element={<P><AdminDossiers /></P>} />
+            <Route path="/admin/catalog-erp" element={<P><AdminCatalogErp /></P>} />
+            <Route path="/admin/gaia" element={<P><AdminGaia /></P>} />
+            <Route path="/admin/gaia/carnet/:categorie" element={<P><GaiaCarnet /></P>} />
+            <Route path="/admin/veille" element={<P><AdminVeille /></P>} />
+            <Route path="/admin/gaia/client/:nom" element={<P><GaiaClientFiche /></P>} />
+            <Route path="/admin/gaia/revue/:id" element={<P><GaiaRevueView /></P>} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>
@@ -74,5 +83,6 @@ const App = () => (
     </TooltipProvider>
   </QueryClientProvider>
 );
+
 
 export default App;

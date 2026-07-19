@@ -110,7 +110,32 @@ function extractText(content: any[]): string {
     .join("\n");
 }
 
-async function runCollector(prompt: string, maxTurns: number): Promise<{ notes: string; content: any[] }> {
+function detectQuotaError(content: any[]): boolean {
+  const walk = (node: any): boolean => {
+    if (!node) return false;
+    if (Array.isArray(node)) return node.some(walk);
+    if (typeof node === "object") {
+      if (node.type === "web_search_tool_result") {
+        const c = node.content;
+        if (c && typeof c === "object" && !Array.isArray(c) && c.type === "web_search_tool_result_error") return true;
+        if (Array.isArray(c) && c.some((x: any) => x?.type === "web_search_tool_result_error")) return true;
+      }
+      if (typeof node.error === "string" && /limit exceeded|max_uses/i.test(node.error)) return true;
+      for (const k of Object.keys(node)) if (walk(node[k])) return true;
+    }
+    return false;
+  };
+  return walk(content);
+}
+
+function countFactualItems(notes: string): number {
+  if (!notes || notes.startsWith("(")) return 0;
+  const bullets = (notes.match(/^\s*[-*]\s+.+/gm) ?? []).length;
+  const urls = (notes.match(/https?:\/\/[^\s)]+/g) ?? []).length;
+  return Math.max(bullets, urls);
+}
+
+async function runCollector(prompt: string, maxTurns: number): Promise<{ notes: string; content: any[]; quotaError: boolean }> {
   const messages: any[] = [{ role: "user", content: prompt }];
   let allContent: any[] = [];
   let lastText = "";
@@ -132,7 +157,30 @@ async function runCollector(prompt: string, maxTurns: number): Promise<{ notes: 
     }
     break;
   }
-  return { notes: lastText || "(aucune note produite)", content: allContent };
+  return { notes: lastText || "(aucune note produite)", content: allContent, quotaError: detectQuotaError(allContent) };
+}
+
+async function runCollectorWithRetry(label: string, prompt: string, maxTurns: number): Promise<{ notes: string; content: any[]; quotaError: boolean }> {
+  try {
+    const first = await runCollector(prompt, maxTurns);
+    if (first.quotaError) {
+      console.warn(`[veille] ${label} quota exceeded, retry in 30s`);
+      await new Promise((r) => setTimeout(r, 30000));
+      try { return await runCollector(prompt, maxTurns); }
+      catch (e: any) { return { notes: `(collecteur ${label} en échec après retry : ${e?.message ?? e})`, content: first.content, quotaError: true }; }
+    }
+    return first;
+  } catch (e: any) {
+    const msg = (e?.message ?? String(e)).toLowerCase();
+    const isQuota = msg.includes("limit exceeded") || msg.includes("429") || msg.includes("rate");
+    if (isQuota) {
+      console.warn(`[veille] ${label} threw quota-like error, retry in 30s`);
+      await new Promise((r) => setTimeout(r, 30000));
+      try { return await runCollector(prompt, maxTurns); }
+      catch (e2: any) { return { notes: `(collecteur ${label} en échec après retry : ${e2?.message ?? e2})`, content: [], quotaError: true }; }
+    }
+    return { notes: `(collecteur ${label} en échec : ${e?.message ?? e})`, content: [], quotaError: false };
+  }
 }
 
 Deno.serve(async (req) => {

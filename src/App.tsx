@@ -77,6 +77,7 @@ const App = () => (
             <Route path="/admin" element={<P><AdminDossiers /></P>} />
             <Route path="/admin/catalog-erp" element={<P><AdminCatalogErp /></P>} />
             <Route path="/admin/gaia" element={<P><AdminGaia /></P>} />
+            <Route path="/admin/synchronisation" element={<P><AdminSync /></P>} />
             <Route path="/admin/gaia/carnet/:categorie" element={<P><GaiaCarnet /></P>} />
             <Route path="/admin/veille" element={<P><AdminVeille /></P>} />
             <Route path="/admin/gaia/client/:nom" element={<P><GaiaClientFiche /></P>} />

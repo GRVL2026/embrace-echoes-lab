@@ -1694,32 +1694,41 @@ export type Database = {
       }
       veille_jobs: {
         Row: {
+          context: Json
           done: boolean
           etape: string
           id: string
+          notes: Json
           owner_id: string | null
           progress: number
           started_at: string
+          step: string | null
           type: string
           updated_at: string
         }
         Insert: {
+          context?: Json
           done?: boolean
           etape?: string
           id?: string
+          notes?: Json
           owner_id?: string | null
           progress?: number
           started_at?: string
+          step?: string | null
           type: string
           updated_at?: string
         }
         Update: {
+          context?: Json
           done?: boolean
           etape?: string
           id?: string
+          notes?: Json
           owner_id?: string | null
           progress?: number
           started_at?: string
+          step?: string | null
           type?: string
           updated_at?: string
         }

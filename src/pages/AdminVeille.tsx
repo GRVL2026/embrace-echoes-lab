@@ -309,6 +309,13 @@ export default function AdminVeille() {
           </div>
         </div>
 
+        <Tabs defaultValue="rapports">
+          <TabsList className="mb-4">
+            <TabsTrigger value="rapports"><Radar className="h-4 w-4 mr-1" /> Rapports</TabsTrigger>
+            <TabsTrigger value="watchlist"><Eye className="h-4 w-4 mr-1" /> Watchlist</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="rapports">
         <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
           <aside className="rounded-lg border border-border bg-card/40 p-3 max-h-[75vh] overflow-y-auto print:hidden">
             <div className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -390,6 +397,12 @@ export default function AdminVeille() {
             )}
           </section>
         </div>
+          </TabsContent>
+
+          <TabsContent value="watchlist">
+            <WatchlistPanel />
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );

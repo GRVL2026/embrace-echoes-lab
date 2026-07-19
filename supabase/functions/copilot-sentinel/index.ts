@@ -473,7 +473,10 @@ async function runSentinel() {
     }
 
     // 3. Veille publiée (si un rapport frais existe)
-    const lastVeilleAt = (veille[0] as any)?.created_at;
+    const veilleLast = await safeTable(() =>
+      admin.from("veille_rapports").select("created_at").order("created_at", { ascending: false }).limit(1) as any
+    );
+    const lastVeilleAt = (veilleLast[0] as any)?.created_at;
     if (lastVeilleAt && (Date.now() - new Date(lastVeilleAt).getTime()) < 26 * 3600 * 1000) {
       await admin.rpc("dispatch_notification", {
         _type_cle: "veille_publiee",
@@ -481,7 +484,7 @@ async function runSentinel() {
         _corps: "Un nouveau rapport de veille est disponible.",
         _lien: "/admin/veille",
         _gravite: "info",
-        _dedupe_key: `veille:${lastVeilleAt.slice(0, 10)}`,
+        _dedupe_key: `veille:${String(lastVeilleAt).slice(0, 10)}`,
         _meta: {},
       });
     }

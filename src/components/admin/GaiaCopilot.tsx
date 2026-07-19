@@ -1052,6 +1052,7 @@ export function GaiaCopilot({ embedded = false }: GaiaCopilotProps = {}) {
           </ul>
         </div>
       )}
+      </>)}
     </div>
   );
 }

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Menu, LogOut } from "lucide-react";
+import { Menu, LogOut, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -10,11 +10,14 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useAuth } from "@/contexts/AuthContext";
-import { SPACES, type NavCtx } from "@/nav/spaces";
+import { SPACES, resolveActive, type NavCtx } from "@/nav/spaces";
+import { useSpaceCollapse } from "@/nav/useSpaceCollapse";
+import { cn } from "@/lib/utils";
 
 /**
  * Menu de navigation mobile — reprend la structure de la sidebar
  * (5 espaces + Réglages, colorés) sous forme d'accordéon vertical.
+ * Les sections sont repliables (état partagé avec la sidebar via localStorage).
  */
 export function MobileNav() {
   const {
@@ -38,6 +41,17 @@ export function MobileNav() {
     copilotEnabled,
   };
 
+  const visibleSpaces = useMemo(
+    () => SPACES.filter((s) => !s.show || s.show(ctx)),
+    // ctx depends only on primitive flags; safe to recompute
+    [isAdmin, isDirection, canAccessGaia, canAccessDashboard, copilotEnabled],
+  );
+  const active = resolveActive(pathname, hash, ctx);
+  const { isCollapsed, toggle } = useSpaceCollapse(
+    visibleSpaces.map((s) => s.key),
+    active.space?.key ?? null,
+  );
+
   const handleSignOut = async () => {
     setOpen(false);
     await signOut();
@@ -59,14 +73,20 @@ export function MobileNav() {
           )}
         </SheetHeader>
         <div className="flex-1 overflow-y-auto p-3 space-y-4">
-          {SPACES.filter((s) => !s.show || s.show(ctx)).map((space) => {
+          {visibleSpaces.map((space) => {
             const entries = space.entries.filter((e) => !e.show || e.show(ctx));
             if (entries.length === 0) return null;
             const color = `hsl(var(${space.colorToken}))`;
+            const sectionCollapsed = isCollapsed(space.key);
+            const sectionId = `mnav-space-${space.key}`;
             return (
               <div key={space.key}>
-                <div
-                  className="flex items-center gap-2 px-2 mb-1 uppercase tracking-wider text-[10px] font-semibold"
+                <button
+                  type="button"
+                  onClick={() => toggle(space.key)}
+                  aria-expanded={!sectionCollapsed}
+                  aria-controls={sectionId}
+                  className="flex w-full items-center gap-2 px-2 mb-1 uppercase tracking-wider text-[10px] font-semibold hover:opacity-80 transition-opacity"
                   style={{ color }}
                 >
                   <span
@@ -74,34 +94,42 @@ export function MobileNav() {
                     style={{ backgroundColor: color }}
                   />
                   <space.icon className="h-3 w-3" />
-                  {space.label}
-                </div>
-                <div className="space-y-1">
-                  {entries.map((entry) => {
-                    const active = entry.match?.(pathname, hash) ?? false;
-                    const Icon = entry.icon;
-                    return (
-                      <Link
-                        key={entry.to}
-                        to={entry.to}
-                        onClick={() => setOpen(false)}
-                        className="flex min-h-11 items-center gap-3 rounded-md px-3 py-3 text-sm font-medium text-foreground hover:bg-muted"
-                        style={
-                          active
-                            ? {
-                                backgroundColor: `hsl(var(${space.colorToken}) / 0.12)`,
-                                color,
-                                borderLeft: `2px solid ${color}`,
-                              }
-                            : undefined
-                        }
-                      >
-                        <Icon className="h-4 w-4" />
-                        {entry.label}
-                      </Link>
-                    );
-                  })}
-                </div>
+                  <span className="flex-1 text-left">{space.label}</span>
+                  <ChevronDown
+                    className={cn(
+                      "h-3 w-3 transition-transform",
+                      sectionCollapsed && "-rotate-90",
+                    )}
+                  />
+                </button>
+                {!sectionCollapsed && (
+                  <div id={sectionId} className="space-y-1">
+                    {entries.map((entry) => {
+                      const active = entry.match?.(pathname, hash) ?? false;
+                      const Icon = entry.icon;
+                      return (
+                        <Link
+                          key={entry.to}
+                          to={entry.to}
+                          onClick={() => setOpen(false)}
+                          className="flex min-h-11 items-center gap-3 rounded-md px-3 py-3 text-sm font-medium text-foreground hover:bg-muted"
+                          style={
+                            active
+                              ? {
+                                  backgroundColor: `hsl(var(${space.colorToken}) / 0.12)`,
+                                  color,
+                                  borderLeft: `2px solid ${color}`,
+                                }
+                              : undefined
+                          }
+                        >
+                          <Icon className="h-4 w-4" />
+                          {entry.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           })}

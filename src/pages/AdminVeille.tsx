@@ -175,6 +175,7 @@ export default function AdminVeille() {
   const [rapports, setRapports] = useState<Rapport[]>([]);
   const [selected, setSelected] = useState<Rapport | null>(null);
   const [generating, setGenerating] = useState<"quotidien" | "hebdomadaire" | null>(null);
+  const [etape, setEtape] = useState<string>("");
 
   const load = async () => {
     const { data } = await (supabase as any)
@@ -210,11 +211,13 @@ export default function AdminVeille() {
 
   const generate = async (type: "quotidien" | "hebdomadaire") => {
     setGenerating(type);
+    setEtape("démarrage…");
     toast({
       title: "Génération lancée",
-      description: "Recherche web et synthèse en cours (2 à 5 min). Le rapport apparaîtra ici automatiquement.",
+      description: "Collecte parallèle puis synthèse (≈ 2 à 3 min).",
     });
     const startedAt = new Date().toISOString();
+    let jobId: string | null = null;
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
@@ -232,13 +235,23 @@ export default function AdminVeille() {
         const raw = await res.text();
         throw new Error(`HTTP ${res.status} — ${raw.slice(0, 400)}`);
       }
-      await res.text();
+      try {
+        const payload = await res.json();
+        jobId = payload?.job_id ?? null;
+      } catch { /* ignore */ }
 
-      // Polling : le job tourne en tâche de fond côté edge (peut prendre plusieurs minutes)
       const maxMs = 10 * 60 * 1000;
       const t0 = Date.now();
       while (Date.now() - t0 < maxMs) {
         await new Promise((r) => setTimeout(r, 8000));
+        if (jobId) {
+          const { data: jobRow } = await (supabase as any)
+            .from("veille_jobs")
+            .select("etape, done")
+            .eq("id", jobId)
+            .maybeSingle();
+          if (jobRow?.etape) setEtape(jobRow.etape);
+        }
         const { data } = await (supabase as any)
           .from("veille_rapports")
           .select("*")
@@ -260,6 +273,7 @@ export default function AdminVeille() {
       toast({ title: "Erreur de génération", description: e?.message ?? String(e), variant: "destructive" });
     } finally {
       setGenerating(null);
+      setEtape("");
     }
   };
 
@@ -311,7 +325,12 @@ export default function AdminVeille() {
               Flippers Stern, arcade, distributeurs FR/EU — synthèses générées par IA à partir du web.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {generating && etape && (
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs text-primary">
+                <Loader2 className="h-3 w-3 animate-spin" /> {etape}
+              </span>
+            )}
             <Button onClick={() => generate("quotidien")} disabled={generating !== null} variant="outline">
               {generating === "quotidien" ? (
                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Génération…</>

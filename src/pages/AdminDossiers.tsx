@@ -229,6 +229,9 @@ export default function AdminDossiers() {
             ))
           )}
         </div>
+        {/* Sentinelle du copilote */}
+        <SentinelleSection />
+
         {/* Utilisateurs & accès copilote */}
         <section className="mt-10">
           <div className="mb-3 flex items-center gap-2">

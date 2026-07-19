@@ -20,6 +20,8 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { WatchlistPanel } from "@/components/admin/WatchlistPanel";
 import logoImg from "@/assets/logo.png";
+import { GenerationProgress } from "@/components/GenerationProgress";
+
 
 type VeilleLink = { label: string; url: string };
 type VeilleItem = {

@@ -171,7 +171,7 @@ function VeilleRichView({ data }: { data: VeilleJson }) {
 }
 
 export default function AdminVeille() {
-  const { isAdmin, canAccessGaia, loading } = useAuth();
+  const { isAdmin, canAccessGaia, loading, user } = useAuth();
   const [rapports, setRapports] = useState<Rapport[]>([]);
   const [selected, setSelected] = useState<Rapport | null>(null);
   const [generating, setGenerating] = useState<"quotidien" | "hebdomadaire" | null>(null);
@@ -185,7 +185,12 @@ export default function AdminVeille() {
       .limit(100);
     if (data) {
       setRapports(data);
-      if (!selected && data.length > 0) setSelected(data[0]);
+      // Deep-link : ?rapport=id
+      const url = new URL(window.location.href);
+      const rid = url.searchParams.get("rapport");
+      const target = rid ? data.find((r: Rapport) => r.id === rid) : null;
+      if (target) setSelected(target);
+      else if (!selected && data.length > 0) setSelected(data[0]);
     }
   };
 
@@ -193,6 +198,39 @@ export default function AdminVeille() {
     if (canAccessGaia) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canAccessGaia]);
+
+  // Reprise persistante : si un job de veille de cet utilisateur est en cours,
+  // on remonte l'état pour bloquer la génération et afficher la progression,
+  // même après un rafraîchissement ou une navigation.
+  useEffect(() => {
+    if (!canAccessGaia || !user?.id) return;
+    let cancelled = false;
+    const poll = async () => {
+      const { data } = await (supabase as any)
+        .from("veille_jobs")
+        .select("id, type, etape, done")
+        .eq("owner_id", user.id)
+        .eq("done", false)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled) return;
+      if (data && !data.done) {
+        setGenerating(data.type as "quotidien" | "hebdomadaire");
+        setEtape(data.etape ?? "en cours…");
+      } else if (generating) {
+        // Le job est fini : on libère l'UI et on rafraîchit l'historique.
+        setGenerating(null);
+        setEtape("");
+        load();
+      }
+    };
+    poll();
+    const id = setInterval(poll, 8000);
+    return () => { cancelled = true; clearInterval(id); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canAccessGaia, user?.id, generating]);
+
 
   const structured: VeilleJson | null = useMemo(() => {
     const j = selected?.contenu_json;
@@ -326,9 +364,10 @@ export default function AdminVeille() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {generating && etape && (
+            {generating && (
               <span className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs text-primary">
-                <Loader2 className="h-3 w-3 animate-spin" /> {etape}
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Génération en cours — vous pouvez naviguer, vous serez notifié{etape ? ` · ${etape}` : ""}
               </span>
             )}
             <Button onClick={() => generate("quotidien")} disabled={generating !== null} variant="outline">

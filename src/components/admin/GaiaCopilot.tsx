@@ -877,7 +877,7 @@ export function GaiaCopilot({ embedded = false }: GaiaCopilotProps = {}) {
               <span>
                 Revue en cours de génération…{" "}
                 <span className="text-muted-foreground">
-                  Vous pouvez naviguer ailleurs, elle apparaîtra dans l'historique une fois prête.
+                  Vous pouvez naviguer ailleurs, vous serez notifié dès qu'elle sera prête.
                 </span>
               </span>
             </div>

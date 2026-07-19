@@ -444,6 +444,7 @@ ${notesBlock}`;
         if (sources.length === 0 || realStructuredItems.length === 0) {
           throw new Error("La synthèse ne contient aucun item factuel sourcé : aucun rapport n'a été publié.");
         }
+        await setEtape("synthèse terminée", 90);
         const md = [
           `# ${structured.titre ?? "Veille marché"}`,
           structured.periode ?? periode,
@@ -462,7 +463,7 @@ ${notesBlock}`;
         if (error) throw new Error(`Sauvegarde du rapport impossible : ${error.message}`);
         const rapportId = inserted?.id as string | undefined;
 
-        if (jobId) await sb.from("veille_jobs").update({ etape: "terminé", done: true, updated_at: new Date().toISOString() }).eq("id", jobId);
+        if (jobId) await sb.from("veille_jobs").update({ etape: "terminé", done: true, progress: 100, updated_at: new Date().toISOString() }).eq("id", jobId);
 
         if (ownerId) {
           try {

@@ -1259,6 +1259,7 @@ Deno.serve(async (req) => {
               dynamicSuffix: memorySuffix,
               initialMessages,
               onEvent: (evt, data) => send(evt, data),
+              userId: currentUserId,
             });
 
             const lastContent = Array.isArray(last?.content) ? last.content : [];

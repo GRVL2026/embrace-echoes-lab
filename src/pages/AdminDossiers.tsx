@@ -324,6 +324,21 @@ export default function AdminDossiers() {
 function SentinelleSection() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [lastBriefing, setLastBriefing] = useState<string | null>(null);
+  const [scheduleLoaded, setScheduleLoaded] = useState(false);
+
+  async function loadStatus() {
+    const { data } = await supabase
+      .from("copilot_briefings")
+      .select("date, created_at")
+      .order("date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setLastBriefing((data as any)?.created_at ?? (data as any)?.date ?? null);
+    setScheduleLoaded(true);
+  }
+
+  useEffect(() => { loadStatus(); }, []);
 
   async function run() {
     setLoading(true);
@@ -334,6 +349,7 @@ function SentinelleSection() {
       const r = data as any;
       setResult(`OK — ${r?.signals_count ?? 0} signaux · ${r?.alertes_generees ?? 0} alertes générées (${r?.alertes_nouvelles ?? 0} nouvelles) · briefing du ${r?.date ?? "jour"} mis à jour.`);
       toast({ title: "Sentinelle exécutée", description: "Alertes et briefing mis à jour." });
+      loadStatus();
     } catch (e: any) {
       setResult(`Erreur : ${e?.message ?? String(e)}`);
       toast({ title: "Erreur sentinelle", description: e?.message ?? String(e), variant: "destructive" });
@@ -342,6 +358,10 @@ function SentinelleSection() {
     }
   }
 
+  const lastLabel = lastBriefing
+    ? new Date(lastBriefing).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" })
+    : (scheduleLoaded ? "aucune exécution enregistrée" : "…");
+
   return (
     <section className="mt-10">
       <div className="mb-3 flex items-center gap-2">
@@ -349,7 +369,7 @@ function SentinelleSection() {
         <h3 className="font-display text-lg font-semibold">Sentinelle du copilote</h3>
       </div>
       <p className="mb-4 text-sm text-muted-foreground">
-        La sentinelle scanne les données chaque matin à 6h et compose le briefing + les alertes. Vous pouvez la relancer manuellement à tout moment.
+        La sentinelle scanne les données chaque matin à 05:00 UTC (≈ 7h Paris) et compose le briefing + les alertes. Vous pouvez la relancer manuellement à tout moment.
       </p>
       <div className="flex items-center gap-3 flex-wrap">
         <Button onClick={run} disabled={loading} variant="secondary">
@@ -358,7 +378,12 @@ function SentinelleSection() {
         </Button>
         {result && <span className="text-xs text-muted-foreground">{result}</span>}
       </div>
+      <div className="mt-3 rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+        <div><span className="font-medium text-foreground">Planification :</span> job pg_cron <code>copilot-sentinelle-matin</code> — tous les jours à 05:00 UTC.</div>
+        <div><span className="font-medium text-foreground">Dernière exécution enregistrée :</span> {lastLabel}</div>
+      </div>
     </section>
   );
 }
+
 

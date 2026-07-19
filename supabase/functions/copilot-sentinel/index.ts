@@ -409,11 +409,15 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    // Auth : soit CRON_SECRET (pg_cron), soit user admin/direction.
+    // Auth : soit CRON_SECRET (env ou gaia_config.cron_secret pour pg_cron), soit user admin/direction.
     const url = new URL(req.url);
     const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
     const cronHeader = req.headers.get("x-cron-secret") ?? url.searchParams.get("secret") ?? "";
-    const isCron = !!CRON_SECRET && cronHeader === CRON_SECRET;
+    let isCron = !!CRON_SECRET && cronHeader === CRON_SECRET;
+    if (!isCron && cronHeader) {
+      const { data: cfg } = await admin.from("gaia_config").select("value").eq("key", "cron_secret").maybeSingle();
+      if (cfg?.value && cronHeader === cfg.value) isCron = true;
+    }
 
     if (!isCron) {
       // Vérifie l'utilisateur (doit être admin ou direction)

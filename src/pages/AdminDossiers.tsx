@@ -310,6 +310,28 @@ export default function AdminDossiers() {
                             }}
                           />
                         </TableCell>
+                        <TableCell className="text-right">
+                          <Switch
+                            checked={p.salle_enabled === true}
+                            onCheckedChange={async (checked) => {
+                              const prev = p.salle_enabled === true;
+                              setProfiles((s) => ({ ...s, [p.id]: { ...p, salle_enabled: checked } }));
+                              const { error } = await (supabase as any)
+                                .from("profiles")
+                                .update({ salle_enabled: checked })
+                                .eq("id", p.id);
+                              if (error) {
+                                setProfiles((s) => ({ ...s, [p.id]: { ...p, salle_enabled: prev } }));
+                                toast({ title: "Erreur", description: error.message, variant: "destructive" });
+                              } else {
+                                toast({
+                                  title: checked ? "Salle activée" : "Salle désactivée",
+                                  description: p.full_name?.trim() || p.email || "",
+                                });
+                              }
+                            }}
+                          />
+                        </TableCell>
                       </TableRow>
                     ))
                 )}

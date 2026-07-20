@@ -252,6 +252,12 @@
   border: 1px solid hsl(var(--hn-red) / 0.7);
   animation: hn-record-pop 1.8s ease-in-out infinite;
 }
+.hn-record-badge--sm {
+  padding: 0.1rem 0.4rem;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  gap: 0.25rem;
+}
 
 
 /* Impression du dossier — une slide 16:9 par page paysage */

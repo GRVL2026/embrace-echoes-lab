@@ -696,7 +696,7 @@ function DashboardTab() {
         compareCurrentVisitors: currentWeek.visiteurs,
         comparePrevVisitors: pVis,
       };
-    }, [hasCurrentData, currentWeekDates, prevWeek, displayWeek, comparePrev, rows, currentWeek]);
+    }, [hasCurrentData, currentWeekDates, prevWeek, displayWeek, comparePrev, rows, currentWeek, isCurrentSelected]);
 
   const bestSource = useMemo(() => {
     if (!displayWeek) return null;

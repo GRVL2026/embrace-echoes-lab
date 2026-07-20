@@ -26,6 +26,8 @@ export function MobileNav() {
     canAccessGaia,
     canAccessDashboard,
     copilotEnabled,
+    canAccessSalle,
+    salleOnly,
     user,
     signOut,
   } = useAuth();
@@ -39,12 +41,14 @@ export function MobileNav() {
     canAccessGaia,
     canAccessDashboard,
     copilotEnabled,
+    canAccessSalle,
+    salleOnly,
   };
 
   const visibleSpaces = useMemo(
     () => SPACES.filter((s) => !s.show || s.show(ctx)),
     // ctx depends only on primitive flags; safe to recompute
-    [isAdmin, isDirection, canAccessGaia, canAccessDashboard, copilotEnabled],
+    [isAdmin, isDirection, canAccessGaia, canAccessDashboard, copilotEnabled, canAccessSalle, salleOnly],
   );
   const active = resolveActive(pathname, hash, ctx);
   const { isCollapsed, toggle } = useSpaceCollapse(

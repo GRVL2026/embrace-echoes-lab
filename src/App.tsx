@@ -19,6 +19,7 @@ import AdminSync from "./pages/AdminSync";
 import AdminVeille from "./pages/AdminVeille";
 import GaiaClientFiche from "./pages/GaiaClientFiche";
 import Clients from "./pages/Clients";
+import Salle from "./pages/Salle";
 
 import GaiaCarnet from "./pages/GaiaCarnet";
 import GaiaRevueView from "./pages/GaiaRevueView";
@@ -68,6 +69,7 @@ const App = () => (
             <Route path="/dossiers" element={<P><DossiersList /></P>} />
             <Route path="/catalogue" element={<P><Catalogue /></P>} />
             <Route path="/clients" element={<P><Clients /></P>} />
+            <Route path="/salle" element={<P><Salle /></P>} />
 
             <Route path="/dossiers/:id" element={<P><DossierEdit /></P>} />
             <Route path="/logistique" element={<P><Logistique /></P>} />

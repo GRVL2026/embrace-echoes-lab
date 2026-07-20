@@ -18,6 +18,10 @@ type AuthContextValue = {
   canAccessDashboard: boolean;
   copilotEnabled: boolean;
   dashboardEnabled: boolean;
+  salleEnabled: boolean;
+  canAccessSalle: boolean;
+  /** True quand l'utilisateur n'a QUE l'accès Salle (ni admin/direction, ni dashboard). */
+  salleOnly: boolean;
   refreshRoles: () => void;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (
@@ -38,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [copilotEnabled, setCopilotEnabled] = useState<boolean>(true);
   const [dashboardEnabled, setDashboardEnabled] = useState<boolean>(false);
+  const [salleEnabled, setSalleEnabled] = useState<boolean>(false);
   const [rolesResolvedFor, setRolesResolvedFor] = useState<string | null>(null);
   const [roleError, setRoleError] = useState<string | null>(null);
   const [roleRefresh, setRoleRefresh] = useState(0);
@@ -82,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setRoles([]);
       setCopilotEnabled(true);
       setDashboardEnabled(false);
+      setSalleEnabled(false);
       setRolesResolvedFor(null);
       setRoleError(null);
       return;
@@ -96,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (async () => {
       const [{ data, error }, { data: profile }] = await Promise.all([
         (supabase as any).from("user_roles").select("role").eq("user_id", userId),
-        (supabase as any).from("profiles").select("copilote_enabled, dashboard_enabled").eq("id", userId).maybeSingle(),
+        (supabase as any).from("profiles").select("copilote_enabled, dashboard_enabled, salle_enabled").eq("id", userId).maybeSingle(),
       ]);
 
       if (!active) return;
@@ -109,6 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setRoles(((data ?? []) as { role: AppRole }[]).map((r) => r.role));
       setCopilotEnabled(profile?.copilote_enabled !== false);
       setDashboardEnabled(profile?.dashboard_enabled === true);
+      setSalleEnabled(profile?.salle_enabled === true);
       setRolesResolvedFor(userId);
     })();
 
@@ -129,6 +136,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isDirection = roles.includes("admin") || roles.includes("direction");
   const canAccessGaia = isAdmin || isDirection;
   const canAccessDashboard = canAccessGaia || dashboardEnabled;
+  const canAccessSalle = canAccessGaia || salleEnabled;
+  const salleOnly = !!user && !isAdmin && !isDirection && !dashboardEnabled && salleEnabled;
 
   const signIn: AuthContextValue["signIn"] = async (email, password) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -167,6 +176,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         canAccessDashboard,
         copilotEnabled,
         dashboardEnabled,
+        salleEnabled,
+        canAccessSalle,
+        salleOnly,
         refreshRoles,
 
         signIn,

@@ -1,6 +1,7 @@
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { AnthropicApiError } from "../_shared/anthropic-fetch.ts";
+import { scheduleSelfInvoke } from "../_shared/self-invoke.ts";
 
 const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -323,23 +324,14 @@ function nextStep(current: Step): Step | null {
   return i < 0 || i >= STEP_ORDER.length - 1 ? null : STEP_ORDER[i + 1];
 }
 
-// Fire-and-forget auto-invocation. Le fetch n'est pas awaité au-delà du démarrage.
+// Auto-invocation garantie via le helper partagé (EdgeRuntime.waitUntil ⇒ la
+// promesse ne peut pas être coupée quand la fonction courante retourne).
 function selfInvoke(jobId: string) {
-  const url = `${SUPABASE_URL}/functions/v1/veille-marche`;
-  // On ne bloque pas : promesse détachée, avec petit timeout d'initiation.
-  const controller = new AbortController();
-  setTimeout(() => controller.abort(), 5000);
-  fetch(url, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-internal-relay": SERVICE_ROLE,
-      apikey: SERVICE_ROLE,
-      authorization: `Bearer ${SERVICE_ROLE}`,
-    },
-    body: JSON.stringify({ job_id: jobId }),
-    signal: controller.signal,
-  }).catch(() => { /* fire and forget */ });
+  scheduleSelfInvoke("veille-marche", { job_id: jobId }, {
+    "x-internal-relay": SERVICE_ROLE,
+    apikey: SERVICE_ROLE,
+    authorization: `Bearer ${SERVICE_ROLE}`,
+  });
 }
 
 // --- exécution d'une étape ----------------------------------------------------

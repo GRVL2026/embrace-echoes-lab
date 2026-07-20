@@ -23,7 +23,7 @@ import logoImg from "@/assets/logo.png";
 
 
 type Brand = { id: string; name: string };
-type Profile = { id: string; email: string | null; full_name: string | null; copilote_enabled?: boolean; dashboard_enabled?: boolean };
+type Profile = { id: string; email: string | null; full_name: string | null; copilote_enabled?: boolean; dashboard_enabled?: boolean; salle_enabled?: boolean };
 type Project = {
   id: string;
   brand_id: string | null;
@@ -72,7 +72,7 @@ export default function AdminDossiers() {
           .select("id, brand_id, client_name, offer, status, updated_at, owner_id")
           .order("updated_at", { ascending: false }),
         (supabase as any).from("brands").select("id, name"),
-        (supabase as any).from("profiles").select("id, email, full_name, copilote_enabled, dashboard_enabled"),
+        (supabase as any).from("profiles").select("id, email, full_name, copilote_enabled, dashboard_enabled, salle_enabled"),
       ]);
       if (pe) toast({ title: "Erreur", description: pe.message, variant: "destructive" });
       setProjects((p as Project[]) ?? []);
@@ -249,12 +249,13 @@ export default function AdminDossiers() {
                   <TableHead>Email</TableHead>
                   <TableHead className="text-right">Accès copilote</TableHead>
                   <TableHead className="text-right">Accès Dashboard (AA + Magasin)</TableHead>
+                  <TableHead className="text-right">Accès Salle Hyper Nova</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {Object.values(profiles).length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="py-6 text-center text-muted-foreground">
+                    <TableCell colSpan={5} className="py-6 text-center text-muted-foreground">
                       Aucun utilisateur.
                     </TableCell>
                   </TableRow>
@@ -303,6 +304,28 @@ export default function AdminDossiers() {
                               } else {
                                 toast({
                                   title: checked ? "Dashboard activé" : "Dashboard désactivé",
+                                  description: p.full_name?.trim() || p.email || "",
+                                });
+                              }
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Switch
+                            checked={p.salle_enabled === true}
+                            onCheckedChange={async (checked) => {
+                              const prev = p.salle_enabled === true;
+                              setProfiles((s) => ({ ...s, [p.id]: { ...p, salle_enabled: checked } }));
+                              const { error } = await (supabase as any)
+                                .from("profiles")
+                                .update({ salle_enabled: checked })
+                                .eq("id", p.id);
+                              if (error) {
+                                setProfiles((s) => ({ ...s, [p.id]: { ...p, salle_enabled: prev } }));
+                                toast({ title: "Erreur", description: error.message, variant: "destructive" });
+                              } else {
+                                toast({
+                                  title: checked ? "Salle activée" : "Salle désactivée",
                                   description: p.full_name?.trim() || p.email || "",
                                 });
                               }

@@ -16,7 +16,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Loader2, Save, Gamepad2, CalendarDays, Info } from "lucide-react";
+import { Loader2, Save, Gamepad2, CalendarDays, Info, ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppTopNav } from "@/components/AppTopNav";

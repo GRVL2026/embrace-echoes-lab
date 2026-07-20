@@ -1107,6 +1107,8 @@ function KpiTile({
   accent,
   progress,
   positive,
+  pulse,
+  badge,
 }: {
   label: string;
   value: string;
@@ -1114,11 +1116,21 @@ function KpiTile({
   accent: string;
   progress?: number;
   positive?: boolean;
+  pulse?: boolean;
+  badge?: string;
 }) {
   return (
-    <Card className="p-4 border-l-4" style={{ borderLeftColor: accent }}>
+    <Card
+      className={`p-4 border-l-4 relative ${pulse ? "hn-pulse" : ""}`}
+      style={{ borderLeftColor: accent }}
+    >
+      {badge && (
+        <div className="absolute top-2 right-2">
+          <span className="hn-record-badge">⚡ {badge}</span>
+        </div>
+      )}
       <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">{label}</div>
-      <div className="mt-1 text-2xl font-bold" style={{ color: accent }}>
+      <div className="hn-kpi-value mt-1 text-2xl font-bold" style={{ color: accent }}>
         {value}
       </div>
       {sub && (

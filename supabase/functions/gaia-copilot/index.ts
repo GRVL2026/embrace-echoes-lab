@@ -806,7 +806,7 @@ async function toolLoop(params: {
         let result: unknown;
         try {
           if (call?.name === 'executer_sql') {
-            result = await runGaiaQuery(admin, String(call?.input?.sql_query ?? ''));
+            result = await runGaiaQuery(admin, String(call?.input?.sql_query ?? ''), salleOnly);
           } else if (call?.name === 'memoriser') {
             const scopeInput = String(call?.input?.scope ?? 'global').toLowerCase();
             const scope: 'global' | 'utilisateur' = scopeInput === 'utilisateur' ? 'utilisateur' : 'global';

@@ -496,6 +496,27 @@ async function loadData(admin: any) {
   };
 }
 
+/**
+ * Charge les données récentes du module Salle Hyper Nova pour les
+ * utilisateurs salle_enabled (ou en complément pour la direction).
+ */
+async function loadSalleData(admin: any) {
+  const [journees, objectifs] = await Promise.all([
+    admin.from('salle_journees')
+      .select('date, visiteurs, nb_parties, nb_cartes_vendues, ca_cartes_ht, ca_pax_ht, ca_merch_ht, ca_vending_pokemon_ht, ca_vending_blindbox_ht, ca_photomaton_ht, notes')
+      .order('date', { ascending: false })
+      .limit(400),
+    admin.from('salle_objectifs')
+      .select('date_debut, date_fin, objectif_jour_ht, objectif_semaine_ht')
+      .order('date_debut', { ascending: false }),
+  ]);
+  return {
+    module: 'salle_hyper_nova',
+    salle_journees: journees.data ?? [],
+    salle_objectifs: objectifs.data ?? [],
+  };
+}
+
 // Autorise uniquement des requêtes qui ne touchent QUE les tables du module Salle
 // (utilisé pour les utilisateurs salle_enabled sans rôle admin/direction).
 function sqlTouchesOnlySalle(sql: string): boolean {

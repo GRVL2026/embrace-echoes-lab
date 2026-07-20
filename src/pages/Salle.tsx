@@ -814,63 +814,74 @@ function DashboardTab() {
         />
       </div>
 
-      {/* Semaine courante : barres empilées */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="p-4 lg:col-span-2">
-          <SectionTitle>Répartition par source — semaine courante</SectionTitle>
-          <div className="h-72">
-            <ResponsiveContainer>
-              <BarChart data={currentWeekDays}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={eurAxis} />
-                <Tooltip
-                  cursor={barTooltipCursor}
-                  content={
-                    <ChartTooltipContent
-                      formatter={(value: any, name: any) => [eur(Number(value)), name]}
-                    />
-                  }
-                />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                {SOURCES.map((s) => (
-                  <Bar key={s.key as string} dataKey={s.key as string} stackId="a" fill={s.color} name={s.label} />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
+      {/* Répartition par source — donut + légende détaillée */}
+      <div>
         <Card className="p-4">
-          <SectionTitle>Part de chaque source</SectionTitle>
-          <div className="h-72">
-            <ResponsiveContainer>
-              <PieChart>
-                <Pie data={donutData} dataKey="value" innerRadius={60} outerRadius={90} paddingAngle={2} stroke="none">
-                  {donutData.map((d) => (
-                    <Cell key={d.name} fill={d.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  cursor={false}
-                  content={
-                    <ChartTooltipContent
-                      hideLabel
-                      formatter={(value: any, name: any) => {
-                        const share = donutTotal > 0 ? (Number(value) / donutTotal) * 100 : 0;
-                        return [`${eur(Number(value))} (${share.toFixed(1)}%)`, name];
-                      }}
-                    />
-                  }
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="mt-2 text-center text-xs text-muted-foreground">
-            Total : <span className="font-semibold text-foreground">{eur(donutTotal)}</span>
+          <SectionTitle>Part de chaque source — {weekLabel}</SectionTitle>
+          <div className="grid gap-4 md:grid-cols-[minmax(0,320px)_1fr] items-center">
+            <div className="h-72">
+              <DonutHoverCenter
+                data={donutData}
+                total={eur(donutTotal)}
+                totalLabel="TOTAL CA HT"
+                innerRadius={60}
+                outerRadius={95}
+                formatValue={(v) => {
+                  const share = donutTotal > 0 ? (v / donutTotal) * 100 : 0;
+                  return `${eur(v)} · ${share.toFixed(1)}%`;
+                }}
+                sliceLabel={(a: any) => {
+                  const pctSlice = (a.percent ?? 0) * 100;
+                  if (pctSlice < 5) return null;
+                  const RAD = Math.PI / 180;
+                  const r = a.innerRadius + (a.outerRadius - a.innerRadius) / 2;
+                  const x = a.cx + r * Math.cos(-a.midAngle * RAD);
+                  const y = a.cy + r * Math.sin(-a.midAngle * RAD);
+                  return (
+                    <text
+                      x={x}
+                      y={y}
+                      fill="#fff"
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      style={{ fontSize: 11, fontWeight: 600, pointerEvents: "none" }}
+                    >
+                      {`${pctSlice.toFixed(0)}%`}
+                    </text>
+                  );
+                }}
+              />
+            </div>
+            <ul className="space-y-1.5">
+              {[...donutData]
+                .sort((a, b) => b.value - a.value)
+                .map((d) => {
+                  const share = donutTotal > 0 ? (d.value / donutTotal) * 100 : 0;
+                  return (
+                    <li
+                      key={d.name}
+                      className="grid grid-cols-[10px_minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md px-2 py-1 hover:bg-muted/30"
+                    >
+                      <span
+                        className="inline-block h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: d.color }}
+                      />
+                      <span className="text-sm truncate">{d.name}</span>
+                      <span className="text-sm tabular-nums text-muted-foreground">{eur(d.value)}</span>
+                      <span
+                        className="text-sm font-semibold tabular-nums w-14 text-right"
+                        style={{ color: d.color }}
+                      >
+                        {share.toFixed(1)}%
+                      </span>
+                    </li>
+                  );
+                })}
+            </ul>
           </div>
         </Card>
       </div>
+
 
       {/* Progression CA hebdo */}
       <Card className="p-4">

@@ -309,7 +309,7 @@ function SaisieTab({ userId }: { userId: string | null }) {
     });
   }, [weekMondayStr, filled]);
 
-  const totalHT = SOURCES.reduce((s, src) => s + Number((form as any)[src.key] ?? 0), 0);
+  const totalHT = TOTAL_KEYS.reduce((s, k) => s + Number((form as any)[k] ?? 0), 0);
 
   // Records historiques (hors journée en cours d'édition) pour badge "NOUVEAU RECORD"
   const { data: records } = useQuery({

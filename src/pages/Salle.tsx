@@ -75,12 +75,13 @@ const SOURCES: Array<{
   label: string;
   color: string;
 }> = [
-  { key: "ca_cartes_ht", label: "Cartes cashless", color: "hsl(320 85% 62%)" },
-  { key: "ca_pax_ht", label: "TPA jeux (CB)", color: "hsl(263 85% 68%)" },
-  { key: "ca_merch_ht", label: "Merch Hypernova", color: "hsl(30 95% 55%)" },
-  { key: "ca_vending_pokemon_ht", label: "Vending Pokémon", color: "hsl(210 100% 62%)" },
-  { key: "ca_vending_blindbox_ht", label: "Vending Blind Box", color: "hsl(142 71% 45%)" },
-  { key: "ca_photomaton_ht", label: "Photomaton", color: "hsl(188 94% 55%)" },
+  // Palette officielle Hypernova (livret de marque)
+  { key: "ca_cartes_ht", label: "Cartes cashless", color: "hsl(273 87% 72%)" },   // Neon Purple #B97DF5
+  { key: "ca_pax_ht", label: "TPA jeux (CB)", color: "hsl(224 68% 59%)" },        // Glitch Blue #5078DE
+  { key: "ca_merch_ht", label: "Merch Hypernova", color: "hsl(355 100% 59%)" },   // Turbo Red #FF2D41
+  { key: "ca_vending_pokemon_ht", label: "Vending Pokémon", color: "hsl(45 100% 55%)" },   // jaune-or
+  { key: "ca_vending_blindbox_ht", label: "Vending Blind Box", color: "hsl(273 87% 85%)" }, // violet clair
+  { key: "ca_photomaton_ht", label: "Photomaton", color: "hsl(0 0% 88%)" },       // blanc/gris clair
 ];
 const TVA = 0.2;
 

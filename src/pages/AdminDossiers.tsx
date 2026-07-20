@@ -255,7 +255,7 @@ export default function AdminDossiers() {
               <TableBody>
                 {Object.values(profiles).length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="py-6 text-center text-muted-foreground">
+                    <TableCell colSpan={5} className="py-6 text-center text-muted-foreground">
                       Aucun utilisateur.
                     </TableCell>
                   </TableRow>

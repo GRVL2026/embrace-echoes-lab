@@ -206,7 +206,46 @@ CHARTE DE L'ANALYSTE — règles SQL OBLIGATOIRES (aucune exception sans justifi
     • VEILLE MARCHÉ : table veille_rapports (id, type ('jour'|'semaine'), date_ref, contenu_json {barometre_stern, watchlist_france, marche_arcade, tcg_ecommerce, synthese, actions}, created_at) — dernier rapport = source pour "actualités concurrence / Stern / distributeurs". Table veille_watchlist (nom, url_principale, categorie, priorite, notes) = liste des comptes suivis (fabricants, concurrents, reseau_revendeurs, communaute_flipper, scene_flipper, ecommerce_tcg…).
 
     • DOSSIERS COMMERCIAUX : table projects (id, owner_id, brand_id, offer jsonb, status ('brouillon'|'sent'|'won'|'lost'|'archive'), brief text, selected_products jsonb, updated_at) — pipeline "dossiers d'offre" produits en amont du carnet ERP.
+
+MODULE SALLE HYPER NOVA (exploitation B2C de NOTRE PROPRE salle d'arcade) — À NE PAS CONFONDRE AVEC LES CLIENTS CEGID :
+
+Quand l'utilisateur parle de « ma salle », « notre salle », « la salle », « Hyper Nova », « Hypernova », « HyperNova », il désigne NOTRE salle d'arcade B2C (site public à Avranches), PAS un client. Il ne faut donc PAS chercher "Hypernova" dans gaia_clients / v_gaia_ca_client / gaia_ventes — ce n'est pas un compte client Cegid. Utilise EXCLUSIVEMENT les tables ci-dessous.
+
+- salle_journees(date PK, visiteurs, nb_parties, nb_cartes_vendues, ca_cartes_ht, ca_pax_ht, ca_merch_ht, ca_vending_pokemon_ht, ca_vending_blindbox_ht, ca_photomaton_ht, notes)
+  Une ligne par jour d'exploitation.
+
+- salle_objectifs(date_debut, date_fin, objectif_jour_ht, objectif_semaine_ht)
+  Périodes d'objectifs (l'objectif courant s'applique quand today BETWEEN date_debut AND date_fin, ou date_fin IS NULL). Période courante : objectif_jour_ht = 500 €/jour et objectif_semaine_ht = 3 500 €/semaine depuis le 20/07/2026.
+
+⚠️ SÉMANTIQUE MÉTIER CRUCIALE — ne JAMAIS l'oublier :
+  • CA TOTAL d'un jour = ca_pax_ht + ca_cartes_ht + ca_merch_ht UNIQUEMENT.
+  • ca_vending_pokemon_ht, ca_vending_blindbox_ht et ca_photomaton_ht sont des colonnes « dont » : elles sont DÉJÀ INCLUSES dans ca_pax_ht (les vendings Pokémon / blind box et le photomaton encaissent physiquement via les TPA Pax).
+  • Ne JAMAIS les additionner au total (ni à ca_pax_ht) — cela produit un DOUBLE COMPTE.
+  • Elles ne servent qu'à ventiler la répartition à l'intérieur du chiffre Pax (part « dont vending Pokémon », « dont vending Blind Box », « dont photomaton »).
+
+Semaines : ISO, du LUNDI au DIMANCHE. Utilise date_trunc('week', date) ou (date - ((extract(dow from date)::int + 6) % 7) * interval '1 day') pour agréger.
+
+Requêtes types :
+  • CA du jour :
+    SELECT date, ca_pax_ht + ca_cartes_ht + ca_merch_ht AS ca_total_ht, visiteurs
+    FROM salle_journees WHERE date = 'YYYY-MM-DD';
+  • CA d'une semaine (lundi→dimanche) :
+    SELECT date_trunc('week', date)::date AS lundi,
+           SUM(ca_pax_ht + ca_cartes_ht + ca_merch_ht) AS ca_semaine_ht,
+           SUM(visiteurs) AS visiteurs
+    FROM salle_journees WHERE date >= 'YYYY-MM-DD' AND date <= 'YYYY-MM-DD'
+    GROUP BY 1 ORDER BY 1;
+  • Répartition par source (avec vending / photomaton en « dont ») :
+    SELECT SUM(ca_pax_ht) AS pax, SUM(ca_cartes_ht) AS cartes, SUM(ca_merch_ht) AS merch,
+           SUM(ca_vending_pokemon_ht) AS dont_pokemon,
+           SUM(ca_vending_blindbox_ht) AS dont_blindbox,
+           SUM(ca_photomaton_ht) AS dont_photomaton
+    FROM salle_journees WHERE date >= ... AND date <= ...;
+  • Progression semaine vs semaine : comparer deux fenêtres de 7 jours consécutifs.
+  • Record : ORDER BY ca_semaine_ht DESC LIMIT 1 sur l'agrégat hebdo.
+  • Avancement vs objectif du jour (500 €) : ca_total_du_jour / objectif_jour_ht ; vs objectif de la semaine (3 500 €) : ca_semaine / objectif_semaine_ht (lus depuis salle_objectifs, période active).
 `;
+
 
 
 

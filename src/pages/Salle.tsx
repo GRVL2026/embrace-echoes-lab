@@ -16,7 +16,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Loader2, Save, Gamepad2, CalendarDays } from "lucide-react";
+import { Loader2, Save, Gamepad2, CalendarDays, Info } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppTopNav } from "@/components/AppTopNav";
@@ -29,7 +29,16 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
+import { barTooltipCursor, ChartTooltipContent } from "@/components/admin/chartTooltip";
 import logoImg from "@/assets/logo.png";
+
+// Axe Y euros lisible pour petits montants : 0, 200 €, 400 €… ou 1k € au-delà.
+const eurAxis = (v: number) => {
+  const n = Number(v) || 0;
+  if (n === 0) return "0";
+  if (Math.abs(n) >= 1000) return `${Math.round(n / 100) / 10}k €`;
+  return `${n} €`;
+};
 
 // ------------------------------------------------------------
 // Types & constantes

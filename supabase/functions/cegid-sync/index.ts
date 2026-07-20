@@ -577,9 +577,10 @@ async function syncFeedChunk(
 
 const SELF_INVOKE_BUDGET_MS = 90_000;
 
-async function resolveCronSecret(): Promise<string | null> {
+async function resolveCronSecrets(): Promise<string[]> {
+  const secrets: string[] = [];
   const envSecret = Deno.env.get('CRON_SECRET') ?? '';
-  if (envSecret) return envSecret;
+  if (envSecret) secrets.push(envSecret);
   try {
     const admin = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -587,10 +588,14 @@ async function resolveCronSecret(): Promise<string | null> {
     );
     const { data } = await admin.from('gaia_config').select('value').eq('key', 'cron_secret').maybeSingle();
     const v = (data?.value ?? '') as string;
-    return v ? v : null;
-  } catch {
-    return null;
-  }
+    if (v && !secrets.includes(v)) secrets.push(v);
+  } catch { /* ignore */ }
+  return secrets;
+}
+
+async function resolveCronSecret(): Promise<string | null> {
+  const s = await resolveCronSecrets();
+  return s[0] ?? null;
 }
 
 async function authorize(req: Request): Promise<
@@ -603,8 +608,8 @@ async function authorize(req: Request): Promise<
   const hasBearer = !!authHeader?.startsWith('Bearer ');
 
   if (cronHeader) {
-    const secret = await resolveCronSecret();
-    if (secret && cronHeader === secret) {
+    const secrets = await resolveCronSecrets();
+    if (secrets.some((s) => s === cronHeader)) {
       return { ok: true, viaCron: true };
     }
     if (!hasBearer) {

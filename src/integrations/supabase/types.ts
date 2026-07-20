@@ -1366,6 +1366,7 @@ export type Database = {
           email: string | null
           full_name: string | null
           id: string
+          salle_enabled: boolean
         }
         Insert: {
           copilote_enabled?: boolean
@@ -1374,6 +1375,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id: string
+          salle_enabled?: boolean
         }
         Update: {
           copilote_enabled?: boolean
@@ -1382,6 +1384,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id?: string
+          salle_enabled?: boolean
         }
         Relationships: []
       }
@@ -1537,6 +1540,87 @@ export type Database = {
           p256dh?: string
           user_agent?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      salle_journees: {
+        Row: {
+          ca_cartes_ht: number
+          ca_merch_ht: number
+          ca_pax_ht: number
+          ca_photomaton_ht: number
+          ca_vending_blindbox_ht: number
+          ca_vending_pokemon_ht: number
+          created_at: string
+          date: string
+          nb_cartes_vendues: number
+          nb_parties: number
+          notes: string | null
+          saisi_par: string | null
+          updated_at: string
+          visiteurs: number
+        }
+        Insert: {
+          ca_cartes_ht?: number
+          ca_merch_ht?: number
+          ca_pax_ht?: number
+          ca_photomaton_ht?: number
+          ca_vending_blindbox_ht?: number
+          ca_vending_pokemon_ht?: number
+          created_at?: string
+          date: string
+          nb_cartes_vendues?: number
+          nb_parties?: number
+          notes?: string | null
+          saisi_par?: string | null
+          updated_at?: string
+          visiteurs?: number
+        }
+        Update: {
+          ca_cartes_ht?: number
+          ca_merch_ht?: number
+          ca_pax_ht?: number
+          ca_photomaton_ht?: number
+          ca_vending_blindbox_ht?: number
+          ca_vending_pokemon_ht?: number
+          created_at?: string
+          date?: string
+          nb_cartes_vendues?: number
+          nb_parties?: number
+          notes?: string | null
+          saisi_par?: string | null
+          updated_at?: string
+          visiteurs?: number
+        }
+        Relationships: []
+      }
+      salle_objectifs: {
+        Row: {
+          created_at: string
+          date_debut: string
+          date_fin: string | null
+          id: string
+          objectif_jour_ht: number
+          objectif_semaine_ht: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          date_debut: string
+          date_fin?: string | null
+          id?: string
+          objectif_jour_ht: number
+          objectif_semaine_ht: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          date_debut?: string
+          date_fin?: string | null
+          id?: string
+          objectif_jour_ht?: number
+          objectif_semaine_ht?: number
+          updated_at?: string
         }
         Relationships: []
       }
@@ -2169,6 +2253,7 @@ export type Database = {
     }
     Functions: {
       can_access_dashboard: { Args: { _uid?: string }; Returns: boolean }
+      can_access_salle: { Args: { _uid?: string }; Returns: boolean }
       dispatch_notification: {
         Args: {
           _corps?: string

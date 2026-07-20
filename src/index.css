@@ -56,12 +56,13 @@
     --glow-green: 0 0% 0% / 0;
 
     /* Couleurs d'identité par espace de navigation (accents subtils) */
-    --space-commerce: 263 85% 68%;   /* violet — primaire */
-    --space-pilotage: 210 100% 62%;  /* bleu */
-    --space-ecommerce: 142 71% 45%;  /* vert */
-    --space-sav: 30 95% 55%;         /* orange / ambre */
-    --space-logistique: 188 94% 55%; /* cyan */
-    --space-reglages: 240 5% 60%;    /* gris neutre */
+   --space-commerce: 263 85% 68%;   /* violet — primaire */
+   --space-pilotage: 210 100% 62%;  /* bleu */
+   --space-salle: 320 85% 62%;      /* magenta néon Hyper Nova */
+   --space-ecommerce: 142 71% 45%;  /* vert */
+   --space-sav: 30 95% 55%;         /* orange / ambre */
+   --space-logistique: 188 94% 55%; /* cyan */
+   --space-reglages: 240 5% 60%;    /* gris neutre */
 
 
     /* iOS PWA safe-area insets (0 in normal browsers) */

@@ -23,7 +23,7 @@ import logoImg from "@/assets/logo.png";
 
 
 type Brand = { id: string; name: string };
-type Profile = { id: string; email: string | null; full_name: string | null; copilote_enabled?: boolean; dashboard_enabled?: boolean };
+type Profile = { id: string; email: string | null; full_name: string | null; copilote_enabled?: boolean; dashboard_enabled?: boolean; salle_enabled?: boolean };
 type Project = {
   id: string;
   brand_id: string | null;

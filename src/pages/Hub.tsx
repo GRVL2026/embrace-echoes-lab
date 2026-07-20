@@ -20,6 +20,8 @@ export default function Hub() {
     canAccessGaia,
     canAccessDashboard,
     copilotEnabled,
+    canAccessSalle,
+    salleOnly,
     isLoading,
   } = useAuth();
 
@@ -31,6 +33,9 @@ export default function Hub() {
     );
   }
 
+  // Responsable de salle (ex. Martin) : direct sur son espace.
+  if (salleOnly) return <Navigate to="/salle" replace />;
+
   // Les non-admins sont envoyés directement dans leur espace de travail.
   if (!isAdmin && !isDirection) return <Navigate to="/dossiers" replace />;
 
@@ -40,6 +45,8 @@ export default function Hub() {
     canAccessGaia,
     canAccessDashboard,
     copilotEnabled,
+    canAccessSalle,
+    salleOnly,
   };
 
   const DESCRIPTIONS: Record<string, string> = {

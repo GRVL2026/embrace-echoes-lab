@@ -19,11 +19,13 @@ import {
   RefreshCw,
   Cog,
   Bell,
+  Gamepad2,
   type LucideIcon,
 } from "lucide-react";
 
 export type SpaceKey =
   | "commerce"
+  | "salle"
   | "pilotage"
   | "ecommerce"
   | "sav"
@@ -36,6 +38,8 @@ export type NavCtx = {
   canAccessGaia: boolean;
   canAccessDashboard: boolean;
   copilotEnabled: boolean;
+  canAccessSalle: boolean;
+  salleOnly: boolean;
 };
 
 export type NavEntry = {
@@ -67,6 +71,7 @@ export const SPACES: Space[] = [
     label: "Commerce",
     icon: ShoppingCart,
     colorToken: "--space-commerce",
+    show: (c) => !c.salleOnly,
     entries: [
       {
         label: "Clients",
@@ -144,6 +149,27 @@ export const SPACES: Space[] = [
     ],
   },
   {
+    key: "salle",
+    label: "Salle Hyper Nova",
+    icon: Gamepad2,
+    colorToken: "--space-salle",
+    show: (c) => c.canAccessSalle,
+    entries: [
+      {
+        label: "Saisie du jour",
+        to: "/salle#saisie",
+        icon: ClipboardCheck,
+        match: (p, h) => p === "/salle" && (h === "" || h === "#saisie"),
+      },
+      {
+        label: "Dashboard salle",
+        to: "/salle#dashboard",
+        icon: BarChart3,
+        match: (p, h) => p === "/salle" && h === "#dashboard",
+      },
+    ],
+  },
+  {
     key: "ecommerce",
     label: "E-commerce",
     icon: Globe,
@@ -193,7 +219,7 @@ export const SPACES: Space[] = [
     label: "Réglages",
     icon: Settings,
     colorToken: "--space-reglages",
-    show: (c) => c.isAdmin || true,
+    show: (c) => c.isAdmin || c.isDirection,
     entries: [
       {
         label: "Notifications",

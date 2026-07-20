@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { scheduleSelfInvoke } from '../_shared/self-invoke.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -646,18 +647,16 @@ async function authorize(req: Request): Promise<
 
 
 async function selfInvoke(payload: Record<string, unknown>) {
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const cronSecret = (await resolveCronSecret()) ?? '';
-  const url = `${supabaseUrl}/functions/v1/cegid-sync`;
-  // fire-and-forget
-  fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-cron-secret': cronSecret,
-    },
-    body: JSON.stringify(payload),
-  }).catch((e) => console.error('[cegid-sync] selfInvoke error:', e?.message ?? String(e)));
+  if (!cronSecret) {
+    console.error('[cegid-sync] selfInvoke: aucun cron_secret disponible, chaîne interrompue.');
+    return;
+  }
+  console.log(`[cegid-sync] selfInvoke payload=${JSON.stringify(payload)} (secret len=${cronSecret.length})`);
+  // Le helper enveloppe l'appel dans EdgeRuntime.waitUntil ⇒ la promesse
+  // survit au retour de la fonction courante (indispensable en mode cron où
+  // le déclencheur ne maintient pas la connexion).
+  scheduleSelfInvoke('cegid-sync', payload, { 'x-cron-secret': cronSecret });
 }
 
 
@@ -800,9 +799,9 @@ Deno.serve(async (req) => {
           startedAt = s.started_at ?? startedAt;
         }
 
-        // Budget temps — au-delà, on relance
+        // Budget temps — au-delà, on relance via un self-invoke garanti (waitUntil).
         if (Date.now() - globalStart >= SELF_INVOKE_BUDGET_MS) {
-          selfInvoke({
+          await selfInvoke({
             action: 'sync-all',
             feed: feedName,
             skip,

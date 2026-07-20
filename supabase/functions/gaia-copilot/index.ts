@@ -1350,7 +1350,9 @@ Deno.serve(async (req) => {
         .slice(-6)
         .map((m: any) => ({ role: m.role as 'user' | 'assistant', content: m.content as any }));
 
-      const contextMsg = `Voici les données commerciales agrégées (JSON) à utiliser pour répondre :\n\n\`\`\`json\n${dataJson}\n\`\`\``;
+      const contextMsg = salleOnly
+        ? `Tu réponds à un exploitant de la salle Hyper Nova. Voici les données du module Salle (JSON) — utilise-les EXCLUSIVEMENT, n'invoque pas les tables commerciales Cegid (gaia_*).\n\n\`\`\`json\n${dataJson}\n\`\`\``
+        : `Voici les données commerciales agrégées (JSON) à utiliser pour répondre :\n\n\`\`\`json\n${dataJson}\n\`\`\``;
       const initialMessages: Array<{ role: 'user' | 'assistant'; content: any }> = [
         { role: 'user', content: contextMsg },
         { role: 'assistant', content: 'Données reçues. Je réponds en m\'appuyant sur ces chiffres, sur ma mémoire persistante, et j\'appellerai executer_sql / memoriser / oublier / afficher_graphique au besoin.' },
@@ -1371,8 +1373,12 @@ Deno.serve(async (req) => {
         contextBlock = `CONTEXTE DE PAGE (à utiliser pour interpréter les questions elliptiques du type "pourquoi il baisse ?", "et sur ce client ?", "et sur cette catégorie ?") :\n- Page : ${pageTitle || 'inconnue'} (${route || 'route inconnue'})\n${entityLine}\nQuand l'utilisateur emploie un pronom ("il", "ça", "cette") sans nommer d'entité, applique-le à l'entité ci-dessus par défaut.`;
       }
 
+      const salleOnlyPreamble = salleOnly
+        ? `Tu es le copilote de la salle d'arcade B2C Hyper Nova (Avranches). L'utilisateur en est l'exploitant. Tu ne réponds QU'aux questions sur cette salle et ne consultes QUE les tables salle_journees et salle_objectifs. Tu ignores strictement les clients Cegid, la marge, les dossiers, le SAV, la logistique et toute donnée commerciale B2B — refuse poliment ces sujets s'ils sont abordés. Rappels sémantiques : CA total d'un jour = ca_pax_ht + ca_cartes_ht + ca_merch_ht ; les colonnes vending/photomaton sont des « dont » DÉJÀ INCLUS dans ca_pax_ht et ne doivent JAMAIS être additionnés au total. Semaines ISO (lundi→dimanche). Objectif courant : 500 €/jour, 3 500 €/semaine (à lire dans salle_objectifs). Réponds en français, en Markdown clair, avec des chiffres.`
+        : '';
+
       const chatSystem = [
-        SYSTEM_PROMPT,
+        salleOnlyPreamble || SYSTEM_PROMPT,
         SUIVI_INSTRUCTION,
         userProfileSuffix,
         contextBlock,
@@ -1403,6 +1409,7 @@ Deno.serve(async (req) => {
               initialMessages,
               onEvent: (evt, data) => send(evt, data),
               userId: currentUserId,
+              salleOnly,
             });
 
             const lastContent = Array.isArray(last?.content) ? last.content : [];

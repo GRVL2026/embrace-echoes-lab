@@ -32,6 +32,7 @@ import { toast } from "@/hooks/use-toast";
 import { barTooltipCursor, ChartTooltipContent } from "@/components/admin/chartTooltip";
 import logoImg from "@/assets/logo.png";
 import { KpiImportCard } from "@/components/salle/KpiImportCard";
+import { DonutHoverCenter } from "@/components/admin/DonutHoverCenter";
 
 // Axe Y euros lisible pour petits montants : 0, 200 €, 400 €… ou 1k € au-delà.
 const eurAxis = (v: number) => {

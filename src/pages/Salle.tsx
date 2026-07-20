@@ -306,9 +306,33 @@ function SaisieTab({ userId }: { userId: string | null }) {
 
   const totalHT = SOURCES.reduce((s, src) => s + Number((form as any)[src.key] ?? 0), 0);
 
+  // Records historiques (hors journée en cours d'édition) pour badge "NOUVEAU RECORD"
+  const { data: records } = useQuery({
+    queryKey: ["salle_records", date],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("salle_journees")
+        .select("date, visiteurs, ca_cartes_ht, ca_pax_ht, ca_merch_ht, ca_vending_pokemon_ht, ca_vending_blindbox_ht, ca_photomaton_ht")
+        .neq("date", date);
+      if (error) throw error;
+      const arr = (data ?? []) as SalleJournee[];
+      let maxCa = 0;
+      let maxVis = 0;
+      for (const r of arr) {
+        const ca = journeeCaTotal(r);
+        if (ca > maxCa) maxCa = ca;
+        if (Number(r.visiteurs ?? 0) > maxVis) maxVis = Number(r.visiteurs ?? 0);
+      }
+      return { maxCa, maxVis };
+    },
+  });
+  const isRecordCa = !!records && totalHT > 0 && totalHT > (records.maxCa ?? 0);
+  const isRecordVis = !!records && form.visiteurs > 0 && form.visiteurs > (records.maxVis ?? 0);
+
   const save = async () => {
     setSaving(true);
     const payload = { date, ...form, saisi_par: userId };
+    const beatRecord = isRecordCa || isRecordVis;
     const { error } = await (supabase as any)
       .from("salle_journees")
       .upsert(payload, { onConflict: "date" });
@@ -317,10 +341,16 @@ function SaisieTab({ userId }: { userId: string | null }) {
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: existing ? "Journée mise à jour" : "Journée enregistrée", description: date });
+    toast({
+      title: beatRecord ? "🚀 Nouveau record !" : (existing ? "Ta journée est mise à jour" : "Ta journée est enregistrée"),
+      description: beatRecord
+        ? `Tu viens de battre ${isRecordCa && isRecordVis ? "le CA et les visiteurs" : isRecordCa ? "le CA historique" : "le record de visiteurs"}. Le Pulse monte !`
+        : "Le Pulse monte !",
+    });
     qc.invalidateQueries({ queryKey: ["salle_journee", date] });
     qc.invalidateQueries({ queryKey: ["salle_semaine", weekMondayStr] });
     qc.invalidateQueries({ queryKey: ["salle_dashboard"] });
+    qc.invalidateQueries({ queryKey: ["salle_records"] });
   };
 
   return (

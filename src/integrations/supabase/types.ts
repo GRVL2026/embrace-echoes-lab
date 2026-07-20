@@ -1123,6 +1123,36 @@ export type Database = {
         }
         Relationships: []
       }
+      invitations_config: {
+        Row: {
+          copilote_enabled: boolean
+          created_at: string
+          dashboard_enabled: boolean
+          email: string
+          invited_by: string | null
+          salle_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          copilote_enabled?: boolean
+          created_at?: string
+          dashboard_enabled?: boolean
+          email: string
+          invited_by?: string | null
+          salle_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          copilote_enabled?: boolean
+          created_at?: string
+          dashboard_enabled?: boolean
+          email?: string
+          invited_by?: string | null
+          salle_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       layout_snapshots: {
         Row: {
           ai_analysis: Json | null

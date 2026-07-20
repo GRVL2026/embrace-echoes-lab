@@ -162,20 +162,42 @@ export default function Salle() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-background text-foreground">
+    <div className="hn-brand min-h-screen w-full bg-background text-foreground">
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-card/70 backdrop-blur-md px-3 sm:px-6 gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <MobileNav />
           <img src={logoImg} alt="Arcade OS logo" className="h-7 w-auto object-contain flex-shrink-0" />
-          <h1 className="font-display text-base sm:text-xl font-bold tracking-tight truncate flex items-center gap-2">
-            <Gamepad2 className="h-5 w-5" style={{ color: "hsl(var(--space-salle))" }} />
-            Salle <span className="text-primary text-glow-purple">Hyper</span>{" "}
-            <span className="text-secondary text-glow-green">Nova</span>
+          <h1 className="font-display text-base sm:text-lg font-bold tracking-tight truncate flex items-center gap-2">
+            <Gamepad2 className="h-5 w-5" style={{ color: "hsl(var(--hn-purple))" }} />
+            Salle Hypernova
           </h1>
           <AppTopNav />
         </div>
         <UserMenu />
       </header>
+
+      {/* Bandeau de marque HYPERNOVA — portail stellaire, en tête uniquement */}
+      <section className="hn-hero-bg border-b border-border/60">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 py-6 sm:py-8 flex items-end justify-between gap-4 flex-wrap">
+          <div>
+            <div
+              className="hn-goldman font-bold text-3xl sm:text-5xl tracking-[0.08em] leading-none"
+              style={{ color: "#fff", textShadow: "0 0 24px hsl(var(--hn-purple) / 0.55)" }}
+            >
+              HYPERNOVA
+            </div>
+            <div
+              className="mt-2 text-xs sm:text-sm uppercase tracking-[0.3em]"
+              style={{ color: "hsl(var(--hn-purple))" }}
+            >
+              Battle for fun
+            </div>
+          </div>
+          <div className="text-[11px] uppercase tracking-widest text-white/60">
+            Dashboard opérationnel · saisie du jour
+          </div>
+        </div>
+      </section>
 
       <main className="mx-auto max-w-7xl px-3 sm:px-6 py-4 sm:py-6">
         <Tabs value={tab} onValueChange={changeTab}>

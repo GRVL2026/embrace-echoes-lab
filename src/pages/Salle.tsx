@@ -16,7 +16,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Loader2, Save, Gamepad2, CalendarDays } from "lucide-react";
+import { Loader2, Save, Gamepad2, CalendarDays, Info } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppTopNav } from "@/components/AppTopNav";
@@ -29,7 +29,16 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
+import { barTooltipCursor, ChartTooltipContent } from "@/components/admin/chartTooltip";
 import logoImg from "@/assets/logo.png";
+
+// Axe Y euros lisible pour petits montants : 0, 200 €, 400 €… ou 1k € au-delà.
+const eurAxis = (v: number) => {
+  const n = Number(v) || 0;
+  if (n === 0) return "0";
+  if (Math.abs(n) >= 1000) return `${Math.round(n / 100) / 10}k €`;
+  return `${n} €`;
+};
 
 // ------------------------------------------------------------
 // Types & constantes
@@ -547,20 +556,86 @@ function DashboardTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, objectifs]);
 
-  // Semaine courante & précédente
+  // Semaine courante & précédente (index dans weeks[])
   const currentWeek = weeks[weeks.length - 1];
   const prevWeek = weeks[weeks.length - 2];
+
+  // Est-ce que la semaine courante contient AU MOINS une saisie ?
+  const currentWeekDates = useMemo(() => {
+    if (!currentWeek || !rows) return [];
+    const start = currentWeek.monday;
+    const end = addDays(start, 6);
+    return rows
+      .filter((r) => {
+        const d = parseYmd(r.date);
+        return d >= start && d <= end;
+      })
+      .map((r) => r.date);
+  }, [currentWeek, rows]);
+  const hasCurrentData = currentWeekDates.length > 0;
+
+  // Dernière semaine avec des saisies (pour repli lundi matin)
+  const lastFilledWeek = useMemo<WeekAgg | undefined>(() => {
+    for (let i = weeks.length - 1; i >= 0; i--) {
+      if (weeks[i].ca > 0 || weeks[i].visiteurs > 0) return weeks[i];
+    }
+    return undefined;
+  }, [weeks]);
+
+  // Semaine à afficher dans les tuiles & le donut : la courante si saisie, sinon la dernière remplie.
+  const displayWeek = hasCurrentData ? currentWeek : lastFilledWeek ?? currentWeek;
+  const isFallback = !hasCurrentData && lastFilledWeek && lastFilledWeek.key !== currentWeek?.key;
+
+  // Semaine de comparaison — celle qui précède displayWeek dans weeks[]
+  const displayIdx = weeks.findIndex((w) => w.key === displayWeek?.key);
+  const comparePrev = displayIdx > 0 ? weeks[displayIdx - 1] : undefined;
+
+  // Comparaison à jours comparables : quand la semaine courante est partielle,
+  // on somme uniquement les mêmes jours de la semaine précédente.
+  const { compareCurrent, comparePrevValue, comparePrevVisitors, compareCurrentVisitors } =
+    useMemo(() => {
+      // Cas plein / repli : totaux entiers.
+      if (!hasCurrentData || currentWeekDates.length === 7 || !prevWeek) {
+        return {
+          compareCurrent: displayWeek?.ca ?? 0,
+          comparePrevValue: comparePrev?.ca ?? 0,
+          compareCurrentVisitors: displayWeek?.visiteurs ?? 0,
+          comparePrevVisitors: comparePrev?.visiteurs ?? 0,
+        };
+      }
+      // Cas partiel : on filtre les mêmes weekdays côté S-1.
+      const weekdays = new Set(currentWeekDates.map((ymd) => (parseYmd(ymd).getDay() + 6) % 7));
+      const prevStart = prevWeek.monday;
+      const prevEnd = addDays(prevStart, 6);
+      let pCa = 0;
+      let pVis = 0;
+      for (const r of rows ?? []) {
+        const d = parseYmd(r.date);
+        if (d < prevStart || d > prevEnd) continue;
+        const dow = (d.getDay() + 6) % 7;
+        if (!weekdays.has(dow)) continue;
+        pCa += journeeCaTotal(r);
+        pVis += Number(r.visiteurs ?? 0);
+      }
+      return {
+        compareCurrent: currentWeek.ca,
+        comparePrevValue: pCa,
+        compareCurrentVisitors: currentWeek.visiteurs,
+        comparePrevVisitors: pVis,
+      };
+    }, [hasCurrentData, currentWeekDates, prevWeek, displayWeek, comparePrev, rows, currentWeek]);
+
   const bestSource = useMemo(() => {
-    if (!currentWeek) return null;
+    if (!displayWeek) return null;
     let best: { label: string; value: number; color: string } | null = null;
     for (const s of SOURCES) {
-      const v = currentWeek.bySource[s.key as string] ?? 0;
+      const v = displayWeek.bySource[s.key as string] ?? 0;
       if (!best || v > best.value) best = { label: s.label, value: v, color: s.color };
     }
     return best;
-  }, [currentWeek]);
+  }, [displayWeek]);
 
-  // Semaine courante : barres empilées par jour
+  // Barres empilées par jour — TOUJOURS la semaine courante (montre l'état réel du calendrier).
   const currentWeekDays = useMemo(() => {
     if (!currentWeek) return [];
     const mon = currentWeek.monday;
@@ -574,7 +649,7 @@ function DashboardTab() {
     });
   }, [currentWeek, rows]);
 
-  // Progression semaine (courbe + variation %)
+  // Progression semaine (barres + variation %)
   const weekSeries = useMemo(() => {
     return weeks.map((w, i) => {
       const prev = i > 0 ? weeks[i - 1].ca : 0;
@@ -632,15 +707,15 @@ function DashboardTab() {
     }));
   }, [weeks]);
 
-  // Donut sur période sélectionnée (par défaut : semaine courante)
+  // Donut sur displayWeek
   const donutData = useMemo(() => {
-    if (!currentWeek) return [];
+    if (!displayWeek) return [];
     return SOURCES.map((s) => ({
       name: s.label,
-      value: Math.round(currentWeek.bySource[s.key as string] ?? 0),
+      value: Math.round(displayWeek.bySource[s.key as string] ?? 0),
       color: s.color,
     })).filter((d) => d.value > 0);
-  }, [currentWeek]);
+  }, [displayWeek]);
   const donutTotal = donutData.reduce((s, d) => s + d.value, 0);
 
   if (isLoading || !currentWeek) {
@@ -653,35 +728,78 @@ function DashboardTab() {
   }
 
   const caVariation =
-    prevWeek && prevWeek.ca > 0 ? ((currentWeek.ca - prevWeek.ca) / prevWeek.ca) * 100 : 0;
+    comparePrevValue > 0 ? ((compareCurrent - comparePrevValue) / comparePrevValue) * 100 : 0;
   const visVariation =
-    prevWeek && prevWeek.visiteurs > 0
-      ? ((currentWeek.visiteurs - prevWeek.visiteurs) / prevWeek.visiteurs) * 100
+    comparePrevVisitors > 0
+      ? ((compareCurrentVisitors - comparePrevVisitors) / comparePrevVisitors) * 100
       : 0;
-  const objPct = currentWeek.objectif > 0 ? (currentWeek.ca / currentWeek.objectif) * 100 : 0;
+  const objPct = displayWeek && displayWeek.objectif > 0 ? (displayWeek.ca / displayWeek.objectif) * 100 : 0;
+
+  const weekLabel = displayWeek
+    ? `Semaine du ${displayWeek.monday.toLocaleDateString("fr-FR", { day: "2-digit", month: "long" })} au ${addDays(displayWeek.monday, 6).toLocaleDateString("fr-FR", { day: "2-digit", month: "long" })}`
+    : "";
+  const compareLabel =
+    hasCurrentData && currentWeekDates.length < 7
+      ? `${pct(caVariation)} vs S-1 (à ${currentWeekDates.length} j comparables)`
+      : comparePrev
+        ? `${pct(caVariation)} vs S-1`
+        : "—";
+  const compareVisLabel =
+    hasCurrentData && currentWeekDates.length < 7
+      ? `${pct(visVariation)} vs S-1 (à ${currentWeekDates.length} j comparables)`
+      : comparePrev
+        ? `${pct(visVariation)} vs S-1`
+        : "—";
+
 
   return (
     <div className="space-y-4">
+      {/* Bandeau de contexte semaine */}
+      <Card
+        className="p-3 sm:p-4 flex flex-wrap items-center gap-3 border-l-4"
+        style={{ borderLeftColor: "hsl(var(--space-salle))" }}
+      >
+        <div className="text-sm">
+          <span className="text-muted-foreground">Affichage : </span>
+          <span className="font-semibold">{weekLabel}</span>
+          {isFallback && (
+            <span className="ml-2 text-xs text-muted-foreground">— dernière semaine saisie</span>
+          )}
+        </div>
+        {isFallback && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-medium text-amber-200">
+            <Info className="h-3 w-3" />
+            Aucune saisie cette semaine pour l'instant
+          </span>
+        )}
+        {hasCurrentData && currentWeekDates.length < 7 && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary">
+            <Info className="h-3 w-3" />
+            {currentWeekDates.length}/7 jours saisis — comparaisons à jours comparables
+          </span>
+        )}
+      </Card>
+
       {/* KPI tiles */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiTile
-          label="CA semaine en cours"
-          value={eur(currentWeek.ca)}
-          sub={prevWeek ? `${pct(caVariation)} vs S-1` : "—"}
+          label={isFallback ? "CA (dernière semaine saisie)" : "CA semaine en cours"}
+          value={eur(displayWeek?.ca ?? 0)}
+          sub={compareLabel}
           accent="hsl(var(--space-salle))"
           positive={caVariation >= 0}
         />
         <KpiTile
-          label="Visiteurs semaine"
-          value={currentWeek.visiteurs.toLocaleString("fr-FR")}
-          sub={prevWeek ? `${pct(visVariation)} vs S-1` : "—"}
+          label={isFallback ? "Visiteurs (dernière semaine)" : "Visiteurs semaine"}
+          value={(displayWeek?.visiteurs ?? 0).toLocaleString("fr-FR")}
+          sub={compareVisLabel}
           accent="hsl(var(--space-pilotage))"
           positive={visVariation >= 0}
         />
         <KpiTile
           label="Objectif semaine"
           value={`${Math.round(objPct)} %`}
-          sub={currentWeek.objectif ? `Cible ${eur(currentWeek.objectif)}` : "Pas d'objectif"}
+          sub={displayWeek && displayWeek.objectif ? `Cible ${eur(displayWeek.objectif)}` : "Pas d'objectif"}
           accent="hsl(var(--space-ecommerce))"
           progress={Math.min(100, objPct)}
         />
@@ -702,8 +820,15 @@ function DashboardTab() {
               <BarChart data={currentWeekDays}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={(v) => `${Math.round(v / 100) / 10}k`} />
-                <Tooltip content={<StackTooltip />} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={eurAxis} />
+                <Tooltip
+                  cursor={barTooltipCursor}
+                  content={
+                    <ChartTooltipContent
+                      formatter={(value: any, name: any) => [eur(Number(value)), name]}
+                    />
+                  }
+                />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 {SOURCES.map((s) => (
                   <Bar key={s.key as string} dataKey={s.key as string} stackId="a" fill={s.color} name={s.label} />
@@ -724,10 +849,16 @@ function DashboardTab() {
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(value: any, name: any) => {
-                    const share = donutTotal > 0 ? (Number(value) / donutTotal) * 100 : 0;
-                    return [`${eur(Number(value))} (${share.toFixed(1)}%)`, name];
-                  }}
+                  cursor={false}
+                  content={
+                    <ChartTooltipContent
+                      hideLabel
+                      formatter={(value: any, name: any) => {
+                        const share = donutTotal > 0 ? (Number(value) / donutTotal) * 100 : 0;
+                        return [`${eur(Number(value))} (${share.toFixed(1)}%)`, name];
+                      }}
+                    />
+                  }
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -746,15 +877,20 @@ function DashboardTab() {
             <BarChart data={weekSeries}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={(v) => `${Math.round(v / 100) / 10}k`} />
+              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={eurAxis} />
               <Tooltip
-                formatter={(v: any, name: any, item: any) => {
-                  if (name === "CA HT") {
-                    const variation = item?.payload?.variation ?? 0;
-                    return [`${eur(Number(v))} (${pct(variation)} vs S-1)`, name];
-                  }
-                  return [eur(Number(v)), name];
-                }}
+                cursor={barTooltipCursor}
+                content={
+                  <ChartTooltipContent
+                    formatter={(v: any, name: any, item: any) => {
+                      if (name === "CA HT") {
+                        const variation = item?.payload?.variation ?? 0;
+                        return [`${eur(Number(v))} (${pct(variation)} vs S-1)`, name];
+                      }
+                      return [eur(Number(v)), name];
+                    }}
+                  />
+                }
               />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Bar dataKey="ca" name="CA HT" fill="hsl(var(--space-salle))" radius={[4, 4, 0, 0]} />
@@ -772,8 +908,15 @@ function DashboardTab() {
             <BarChart data={weekdayCompare}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={(v) => `${Math.round(v / 100) / 10}k`} />
-              <Tooltip formatter={(v: any) => eur(Number(v))} />
+              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={eurAxis} />
+              <Tooltip
+                cursor={barTooltipCursor}
+                content={
+                  <ChartTooltipContent
+                    formatter={(v: any, name: any) => [eur(Number(v)), name]}
+                  />
+                }
+              />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Bar dataKey="4 précédentes" fill="hsl(var(--muted-foreground) / 0.4)" radius={[4, 4, 0, 0]} />
               <Bar dataKey="4 dernières" fill="hsl(var(--space-salle))" radius={[4, 4, 0, 0]} />
@@ -792,7 +935,14 @@ function DashboardTab() {
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} />
                 <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
-                <Tooltip />
+                <Tooltip
+                  cursor={{ stroke: "hsl(var(--primary) / 0.45)", strokeWidth: 1 }}
+                  content={
+                    <ChartTooltipContent
+                      formatter={(v: any, name: any) => [Number(v).toLocaleString("fr-FR"), name]}
+                    />
+                  }
+                />
                 <Line type="monotone" dataKey="visiteurs" stroke="hsl(var(--space-pilotage))" strokeWidth={2} dot={false} name="Visiteurs" />
               </LineChart>
             </ResponsiveContainer>
@@ -805,14 +955,22 @@ function DashboardTab() {
               <LineChart data={visitorsSeries}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={(v) => `${v}€`} />
-                <Tooltip formatter={(v: any) => eur(Number(v))} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={eurAxis} />
+                <Tooltip
+                  cursor={{ stroke: "hsl(var(--primary) / 0.45)", strokeWidth: 1 }}
+                  content={
+                    <ChartTooltipContent
+                      formatter={(v: any, name: any) => [eur(Number(v)), name]}
+                    />
+                  }
+                />
                 <Line type="monotone" dataKey="panier" stroke="hsl(var(--space-salle))" strokeWidth={2} dot={false} name="Panier moyen" />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </Card>
       </div>
+
 
       {/* Atteinte objectifs */}
       <Card className="p-4">
@@ -887,23 +1045,3 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
-function StackTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null;
-  const total = payload.reduce((s: number, p: any) => s + Number(p.value ?? 0), 0);
-  return (
-    <div className="rounded-md border border-border bg-popover text-popover-foreground p-2 text-xs shadow-lg">
-      <div className="font-semibold mb-1">{label}</div>
-      {payload.map((p: any) => (
-        <div key={p.dataKey} className="flex items-center gap-2">
-          <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: p.color }} />
-          <span className="flex-1">{p.name}</span>
-          <span className="tabular-nums font-medium">{eur(Number(p.value))}</span>
-        </div>
-      ))}
-      <div className="mt-1 pt-1 border-t border-border flex justify-between font-semibold">
-        <span>Total</span>
-        <span className="tabular-nums">{eur(total)}</span>
-      </div>
-    </div>
-  );
-}

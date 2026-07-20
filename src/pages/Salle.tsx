@@ -406,6 +406,8 @@ function SaisieTab({ userId }: { userId: string | null }) {
           Clique un jour pour saisir/modifier. Les jours en pointillés n'ont pas encore de saisie.
         </p>
       </Card>
+
+      <KpiImportCard userId={userId} />
     </div>
   );
 }

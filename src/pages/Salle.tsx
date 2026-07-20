@@ -16,7 +16,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Loader2, Save, Gamepad2, CalendarDays, Info } from "lucide-react";
+import { Loader2, Save, Gamepad2, CalendarDays, Info, ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppTopNav } from "@/components/AppTopNav";
@@ -648,20 +648,27 @@ function DashboardTab() {
     return undefined;
   }, [weeks]);
 
-  // Semaine à afficher dans les tuiles & le donut : la courante si saisie, sinon la dernière remplie.
-  const displayWeek = hasCurrentData ? currentWeek : lastFilledWeek ?? currentWeek;
-  const isFallback = !hasCurrentData && lastFilledWeek && lastFilledWeek.key !== currentWeek?.key;
+  // Sélecteur de semaine — null = comportement par défaut (courante si saisie, sinon dernière remplie).
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const defaultWeek = hasCurrentData ? currentWeek : lastFilledWeek ?? currentWeek;
+  const selectedWeek = selectedKey ? weeks.find((w) => w.key === selectedKey) : undefined;
+  const displayWeek = selectedWeek ?? defaultWeek;
+  const isFallback =
+    !selectedKey && !hasCurrentData && lastFilledWeek && lastFilledWeek.key !== currentWeek?.key;
 
-  // Semaine de comparaison — celle qui précède displayWeek dans weeks[]
+  // Navigation semaine
   const displayIdx = weeks.findIndex((w) => w.key === displayWeek?.key);
+  const canPrev = displayIdx > 0;
+  const canNext = displayIdx >= 0 && displayIdx < weeks.length - 1;
+  const isCurrentSelected = displayWeek?.key === currentWeek?.key;
   const comparePrev = displayIdx > 0 ? weeks[displayIdx - 1] : undefined;
 
   // Comparaison à jours comparables : quand la semaine courante est partielle,
   // on somme uniquement les mêmes jours de la semaine précédente.
   const { compareCurrent, comparePrevValue, comparePrevVisitors, compareCurrentVisitors } =
     useMemo(() => {
-      // Cas plein / repli : totaux entiers.
-      if (!hasCurrentData || currentWeekDates.length === 7 || !prevWeek) {
+      // Cas plein / repli / semaine passée sélectionnée : totaux entiers.
+      if (!isCurrentSelected || !hasCurrentData || currentWeekDates.length === 7 || !prevWeek) {
         return {
           compareCurrent: displayWeek?.ca ?? 0,
           comparePrevValue: comparePrev?.ca ?? 0,
@@ -689,7 +696,7 @@ function DashboardTab() {
         compareCurrentVisitors: currentWeek.visiteurs,
         comparePrevVisitors: pVis,
       };
-    }, [hasCurrentData, currentWeekDates, prevWeek, displayWeek, comparePrev, rows, currentWeek]);
+    }, [hasCurrentData, currentWeekDates, prevWeek, displayWeek, comparePrev, rows, currentWeek, isCurrentSelected]);
 
   const bestSource = useMemo(() => {
     if (!displayWeek) return null;
@@ -842,18 +849,20 @@ function DashboardTab() {
   const weekLabel = displayWeek
     ? `Semaine du ${displayWeek.monday.toLocaleDateString("fr-FR", { day: "2-digit", month: "long" })} au ${addDays(displayWeek.monday, 6).toLocaleDateString("fr-FR", { day: "2-digit", month: "long" })}`
     : "";
-  const compareLabel =
-    hasCurrentData && currentWeekDates.length < 7
-      ? `${pct(caVariation)} vs S-1 (à ${currentWeekDates.length} j comparables)`
-      : comparePrev
-        ? `${pct(caVariation)} vs S-1`
-        : "—";
-  const compareVisLabel =
-    hasCurrentData && currentWeekDates.length < 7
-      ? `${pct(visVariation)} vs S-1 (à ${currentWeekDates.length} j comparables)`
-      : comparePrev
-        ? `${pct(visVariation)} vs S-1`
-        : "—";
+  const isPartialCurrent = isCurrentSelected && hasCurrentData && currentWeekDates.length < 7;
+  const compareLabel = isPartialCurrent
+    ? `${pct(caVariation)} vs S-1 (à ${currentWeekDates.length} j comparables)`
+    : comparePrev
+      ? `${pct(caVariation)} vs S-1`
+      : "—";
+  const compareVisLabel = isPartialCurrent
+    ? `${pct(visVariation)} vs S-1 (à ${currentWeekDates.length} j comparables)`
+    : comparePrev
+      ? `${pct(visVariation)} vs S-1`
+      : "—";
+
+  // Objectif intermédiaire actuellement en vigueur (affiché en permanence)
+  const objectifActuel = objectifAtDate(new Date());
 
 
   return (
@@ -863,6 +872,28 @@ function DashboardTab() {
         className="p-3 sm:p-4 flex flex-wrap items-center gap-3 border-l-4"
         style={{ borderLeftColor: "hsl(var(--space-salle))" }}
       >
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => canPrev && setSelectedKey(weeks[displayIdx - 1].key)}
+            disabled={!canPrev}
+            aria-label="Semaine précédente"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => canNext && setSelectedKey(weeks[displayIdx + 1].key)}
+            disabled={!canNext}
+            aria-label="Semaine suivante"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
         <div className="text-sm">
           <span className="text-muted-foreground">Affichage : </span>
           <span className="font-semibold">{weekLabel}</span>
@@ -870,13 +901,23 @@ function DashboardTab() {
             <span className="ml-2 text-xs text-muted-foreground">— dernière semaine saisie</span>
           )}
         </div>
+        {!isCurrentSelected && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => setSelectedKey(currentWeek.key)}
+          >
+            Cette semaine
+          </Button>
+        )}
         {isFallback && (
           <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-medium text-amber-200">
             <Info className="h-3 w-3" />
             Aucune saisie cette semaine pour l'instant
           </span>
         )}
-        {hasCurrentData && currentWeekDates.length < 7 && (
+        {isPartialCurrent && (
           <span className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary">
             <Info className="h-3 w-3" />
             {currentWeekDates.length}/7 jours saisis — comparaisons à jours comparables
@@ -907,7 +948,10 @@ function DashboardTab() {
           ca={displayWeek?.ca ?? 0}
           objectif={displayWeek?.objectif ?? 0}
           capLT={capLTSemaine}
+          objectifActuelJour={Number(objectifActuel?.objectif_jour_ht ?? 0)}
+          objectifActuelSemaine={Number(objectifActuel?.objectif_semaine_ht ?? 0)}
         />
+
         <KpiTile
           label="Meilleure source"
           value={bestSource ? bestSource.label : "—"}
@@ -1235,16 +1279,21 @@ function ObjectifKpiTile({
   ca,
   objectif,
   capLT,
+  objectifActuelJour,
+  objectifActuelSemaine,
 }: {
   ca: number;
   objectif: number;
   capLT: number;
+  objectifActuelJour?: number;
+  objectifActuelSemaine?: number;
 }) {
   const eur0 = (n: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
   const pct = objectif > 0 ? (ca / objectif) * 100 : 0;
   const reached = objectif > 0 && ca >= objectif;
   const accent = reached ? "hsl(var(--space-ecommerce))" : "hsl(var(--space-salle))";
+  const hasActuel = (objectifActuelJour ?? 0) > 0 || (objectifActuelSemaine ?? 0) > 0;
   return (
     <Card className="p-4 border-l-4" style={{ borderLeftColor: accent }}>
       <div className="flex items-center justify-between gap-2">
@@ -1283,6 +1332,11 @@ function ObjectifKpiTile({
         </span>
         <span className="tabular-nums">{eur0(ca)}</span>
       </div>
+      {hasActuel && (
+        <div className="mt-2 pt-2 border-t border-border/50 text-[10px] text-muted-foreground">
+          Objectif actuel : {eur0(objectifActuelJour ?? 0)}/jour · {eur0(objectifActuelSemaine ?? 0)}/semaine
+        </div>
+      )}
     </Card>
   );
 }

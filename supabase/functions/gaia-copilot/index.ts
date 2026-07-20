@@ -716,13 +716,14 @@ async function toolLoop(params: {
   extraPayload?: Record<string, unknown>;
   onEvent?: (event: string, data: unknown) => void;
   userId?: string | null;
+  salleOnly?: boolean;
 }): Promise<{
   messages: Array<{ role: 'user' | 'assistant'; content: any }>;
   last: any;
   rounds: number;
   journal: TurnLog[];
 }> {
-  const { admin, model, system, dynamicSuffix, initialMessages, extraTools = [], toolChoice, extraPayload, onEvent, userId = null } = params;
+  const { admin, model, system, dynamicSuffix, initialMessages, extraTools = [], toolChoice, extraPayload, onEvent, userId = null, salleOnly = false } = params;
   const tools = [SQL_TOOL, MEMORISE_TOOL, OUBLIER_TOOL, CHART_TOOL, ...extraTools];
   const messages = [...initialMessages];
   const journal: TurnLog[] = [];

@@ -1316,28 +1316,31 @@ function DualTargetBar({
 }
 
 /**
- * Tuile KPI "Objectif semaine" avec lecture à deux niveaux :
- *  - % principal = ca / objectif intermédiaire
- *  - barre = progression vers cap long terme + marqueur objectif intermédiaire
+ * Tuile KPI "Objectif semaine" — DEUX barres de progression :
+ *  1) Objectif intermédiaire courant (Neon Purple, célébration ≥100 %)
+ *  2) Cap long terme (barre fine, discrète)
  */
 function ObjectifKpiTile({
   ca,
-  objectif,
+  objectifInter,
   capLT,
   objectifActuelJour,
   objectifActuelSemaine,
 }: {
   ca: number;
-  objectif: number;
+  objectifInter: number;
   capLT: number;
   objectifActuelJour?: number;
   objectifActuelSemaine?: number;
 }) {
   const eur0 = (n: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
-  const pct = objectif > 0 ? (ca / objectif) * 100 : 0;
-  const reached = objectif > 0 && ca >= objectif;
-  const accent = reached ? "hsl(var(--space-ecommerce))" : "hsl(var(--space-salle))";
+  const pctInter = objectifInter > 0 ? (ca / objectifInter) * 100 : 0;
+  const pctLT = capLT > 0 ? (ca / capLT) * 100 : 0;
+  const reached = objectifInter > 0 && ca >= objectifInter;
+  const accent = reached ? "hsl(var(--space-ecommerce))" : "hsl(var(--hn-purple))";
+  const interFill = Math.min(100, pctInter);
+  const ltFill = Math.min(100, pctLT);
   const hasActuel = (objectifActuelJour ?? 0) > 0 || (objectifActuelSemaine ?? 0) > 0;
   return (
     <Card className="p-4 border-l-4" style={{ borderLeftColor: accent }}>
@@ -1358,31 +1361,63 @@ function ObjectifKpiTile({
           </span>
         )}
       </div>
-      <div className="hn-kpi-value mt-1 text-2xl font-bold" style={{ color: accent }}>
-        {Math.round(pct)} %
-      </div>
-      <div className="text-xs mt-1 text-muted-foreground">
-        {objectif > 0 ? `Cible ${eur0(objectif)}` : "Pas d'objectif"}
-      </div>
-      <div className="mt-2">
-        <DualTargetBar ca={ca} objectif={objectif} capLT={capLT} heightClass="h-2" />
-      </div>
-      <div className="mt-1.5 flex items-center justify-between text-[10px] text-muted-foreground">
-        <span className="inline-flex items-center gap-1">
-          <span
-            className="inline-block h-2 w-px"
-            style={{ background: "hsl(var(--hn-purple))" }}
+
+      {/* Barre 1 — Objectif intermédiaire courant */}
+      <div className="mt-2.5">
+        <div className="flex items-baseline justify-between gap-2 mb-1">
+          <div className="text-[11px] font-medium text-foreground/85">
+            Objectif {eur0(objectifInter)}/semaine
+          </div>
+          <div
+            className="hn-kpi-value text-base font-bold tabular-nums"
+            style={{ color: accent }}
+          >
+            {Math.round(pctInter)} %
+          </div>
+        </div>
+        <div className="relative w-full h-2.5 rounded-full bg-muted/50 overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all"
+            style={{
+              width: `${interFill}%`,
+              background: reached
+                ? "linear-gradient(90deg, hsl(var(--space-ecommerce)) 0%, hsl(var(--hn-purple)) 100%)"
+                : "hsl(var(--hn-purple))",
+              boxShadow: reached ? "0 0 10px hsl(var(--hn-purple) / 0.6)" : undefined,
+            }}
           />
-          Cap long terme {eur0(capLT)}
-        </span>
+        </div>
+      </div>
+
+      {/* Barre 2 — Cap long terme (fine, discrète) */}
+      <div className="mt-2.5">
+        <div className="flex items-baseline justify-between gap-2 mb-1">
+          <div className="text-[10px] text-muted-foreground">
+            Cap long terme {eur0(capLT)}/semaine
+          </div>
+          <div className="text-[11px] font-semibold tabular-nums text-muted-foreground">
+            {Math.round(pctLT)} %
+          </div>
+        </div>
+        <div className="relative w-full h-1 rounded-full bg-muted/30 overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all"
+            style={{ width: `${ltFill}%`, background: "hsl(var(--hn-blue) / 0.7)" }}
+          />
+        </div>
+      </div>
+
+      <div className="mt-2 flex items-center justify-end text-[10px] text-muted-foreground">
         <span className="tabular-nums">{eur0(ca)}</span>
       </div>
+
       {hasActuel && (
         <div className="mt-2 pt-2 border-t border-border/50 text-[10px] text-muted-foreground">
           Objectif actuel : {eur0(objectifActuelJour ?? 0)}/jour · {eur0(objectifActuelSemaine ?? 0)}/semaine
         </div>
       )}
     </Card>
+
   );
 }
 

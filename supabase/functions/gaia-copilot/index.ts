@@ -909,38 +909,49 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, error: `Unauthorized: ${userErr?.message ?? 'session invalide'}` }, 401);
     }
 
-    const { data: roleRows, error: roleErr } = await supabase
+    const { data: roleRows } = await supabase
       .from('user_roles')
       .select('role')
-      .eq('user_id', userData.user.id)
-      .in('role', ['admin', 'direction']);
+      .eq('user_id', userData.user.id);
+    const roles = ((roleRows ?? []) as any[]).map((r) => r.role);
+    const hasCommercialAccess = roles.includes('admin') || roles.includes('direction');
 
-    if (roleErr || !roleRows || roleRows.length === 0) {
-      return jsonResponse({ ok: false, error: 'Forbidden: admin or direction only' }, 403);
-    }
+    const admin0 = createClient(supabaseUrl, serviceKey);
+    const { data: profile } = await admin0
+      .from('profiles')
+      .select('copilote_enabled, salle_enabled')
+      .eq('id', userData.user.id)
+      .maybeSingle();
 
-    // Vérification du drapeau copilote_enabled (peut être désactivé par un admin)
-    {
-      const admin0 = createClient(supabaseUrl, serviceKey);
-      const { data: profile } = await admin0
-        .from('profiles')
-        .select('copilote_enabled')
-        .eq('id', userData.user.id)
-        .maybeSingle();
-      if (profile && profile.copilote_enabled === false) {
-        return jsonResponse({ ok: false, error: 'Accès au copilote non actif pour votre compte' }, 403);
-      }
+    const salleEnabled = profile?.salle_enabled === true;
+    const hasSalleAccess = hasCommercialAccess || salleEnabled;
+
+    if (!hasCommercialAccess && !hasSalleAccess) {
+      return jsonResponse({ ok: false, error: 'Forbidden' }, 403);
     }
+    if (profile && profile.copilote_enabled === false) {
+      return jsonResponse({ ok: false, error: 'Accès au copilote non actif pour votre compte' }, 403);
+    }
+    // Utilisateur "salle uniquement" : pas de rôle admin/direction, mais salle_enabled = true.
+    // Il n'accède qu'aux tables salle_* via le copilote.
+    const salleOnly = !hasCommercialAccess && salleEnabled;
 
 
     let body: any = {};
     try { body = await req.json(); } catch { body = {}; }
     const action = body?.action;
 
+    if (salleOnly && action === 'revue') {
+      return jsonResponse({ ok: false, error: 'La revue commerciale est réservée à la direction.' }, 403);
+    }
+
     const admin = createClient(supabaseUrl, serviceKey);
-    const data = await loadData(admin);
+
+    // Chargement des données agrégées : soit le commercial complet (admin/direction),
+    // soit uniquement le module Salle Hyper Nova pour les utilisateurs salle_enabled.
+    const data = salleOnly ? await loadSalleData(admin) : await loadData(admin);
     const dataJson = JSON.stringify(data);
-    console.log(`[gaia-copilot] dataJson size=${dataJson.length} chars (${Object.keys(data ?? {}).length} clés)`);
+    console.log(`[gaia-copilot] dataJson size=${dataJson.length} chars (${Object.keys(data ?? {}).length} clés) salleOnly=${salleOnly}`);
     if (dataJson.length < 200) {
       console.log(`[gaia-copilot] ⚠️ dataJson suspicieusement petit: ${dataJson.slice(0, 500)}`);
     }

@@ -234,9 +234,9 @@ const MAPPERS: Record<string, { table: string; map: Mapper; pk?: string }> = {
     pk: 'customer_id',
     map: (r) => ({
       customer_id: trim(r.CustomerID),
-      name: str(r.CustomerName),
-      status: str(r.CustomerStatus),
-      typologie: str(r.Typologiedeclient ?? r['Typologiedeclient']),
+      name: trim(r.CustomerName),
+      status: trim(r.CustomerStatus),
+      typologie: trim(r.Typologiedeclient ?? r['Typologiedeclient']),
     }),
   },
   'BD-Ventes': {
@@ -256,22 +256,22 @@ const MAPPERS: Record<string, { table: string; map: Mapper; pk?: string }> = {
         return undefined;
       };
       return {
-        code_client: str(r.CodeClient),
-        n_fact: str(r.NFactAvoir),
+        code_client: trim(r.CodeClient),
+        n_fact: trim(r.NFactAvoir),
         code_article: trim(r.CodeArticle),
         invoice_date: date(r.InvoiceDate),
         qty: num(r.Qte),
         pu_rem: num(r.PURem),
         montant_ht: num(r.MontantHTRemTot),
-        tran_type: str(r.TranType),
-        reference_nbr: str(r.ReferenceNbr),
+        tran_type: trim(r.TranType),
+        reference_nbr: trim(r.ReferenceNbr),
         line_nbr: intNum(r.LineNbr),
-        classe_client: str(r.ClassID),
+        classe_client: trim(r.ClassID),
         classe_article: trim(r.ClassID_2),
-        vendeur: str(r.SalespersonID),
-        branch: str(r.BranchID),
+        vendeur: trim(r.SalespersonID),
+        branch: trim(r.BranchID),
         inventory_id: trim(r.InventoryID),
-        devise: str(r.CuryID),
+        devise: trim(r.CuryID),
         cout_total: num(pickKey(r, ['CoutTotal', 'CoûtTotal', 'Coûttotal', 'Couttotal', 'Cout total', 'Coût total'])),
         marge_ligne: num(pickKey(r, ['Margeligne', 'MargeEnLigne', 'Margeenligne', 'Marge en ligne', 'MargeLigne'])),
         taux_marque: num(pickKey(r, ['Tauxdemarqueligne', 'TauxDeMarqueLigne', 'TauxDeMarque', 'Tauxdemarque', 'Taux de marque', 'TauxMarque'])),
@@ -282,21 +282,21 @@ const MAPPERS: Record<string, { table: string; map: Mapper; pk?: string }> = {
   'BD-Historique': {
     table: 'gaia_historique',
     map: (r) => ({
-      code_client: str(r.CodeClient),
-      n_cde: str(r.NCde),
+      code_client: trim(r.CodeClient),
+      n_cde: trim(r.NCde),
       code_article: trim(r.CodeArticle),
       invoice_date: date(r.InvoiceDate),
       qty: num(r.Qty),
       pu_rem: num(r.PURem),
       montant_ht: num(r.MontantHTRemTot),
-      order_type: str(r.OrderType),
-      order_nbr: str(r.OrderNbr),
+      order_type: trim(r.OrderType),
+      order_nbr: trim(r.OrderNbr),
       line_nbr: intNum(r.LineNbr),
-      classe_client: str(r.ClassID),
-      classe_article: str(r.ClassID_2),
-      branch: str(r.BranchID),
+      classe_client: trim(r.ClassID),
+      classe_article: trim(r.ClassID_2),
+      branch: trim(r.BranchID),
       inventory_id: trim(r.InventoryID),
-      devise: str(r.CuryID),
+      devise: trim(r.CuryID),
     }),
   },
   'BD-Commandes': {
@@ -317,9 +317,9 @@ const MAPPERS: Record<string, { table: string; map: Mapper; pk?: string }> = {
         return undefined;
       };
       return {
-        code_client: str(r?.CodeClient),
-        type_cde: str(r?.TypeCde),
-        n_cde: str(r?.NCde),
+        code_client: trim(r?.CodeClient),
+        type_cde: trim(r?.TypeCde),
+        n_cde: trim(r?.NCde),
         code_article: trim(r?.CodeArticle),
         invoice_date: date(r?.InvoiceDate),
         qty: num(r?.Qty),
@@ -327,17 +327,17 @@ const MAPPERS: Record<string, { table: string; map: Mapper; pk?: string }> = {
         pu_rem: num(r?.PURem),
         montant_ht: num(r?.MontantHTRemTot),
         marge_brut: num(r?.MargeBrut),
-        statut: str(r?.Status),
+        statut: trim(r?.Status),
         date_liv: date(pickKey(r, ['DateLivEstimée', 'DateLivEstimee', 'DateLivEstim_e', 'DateLivEstimC3A9e'])),
         completed: bool(r?.Completed),
-        order_type: str(r?.OrderType),
-        order_nbr: str(r?.OrderNbr),
+        order_type: trim(r?.OrderType),
+        order_nbr: trim(r?.OrderNbr),
         line_nbr: intNum(r?.LineNbr),
-        classe_client: str(r?.ClassID),
-        classe_article: str(r?.ClassID_2),
-        branch: str(r?.BranchID),
+        classe_client: trim(r?.ClassID),
+        classe_article: trim(r?.ClassID_2),
+        branch: trim(r?.BranchID),
         inventory_id: trim(r?.InventoryID),
-        devise: str(r?.CuryID),
+        devise: trim(r?.CuryID),
       };
     },
   },
@@ -347,19 +347,19 @@ const MAPPERS: Record<string, { table: string; map: Mapper; pk?: string }> = {
       // Sous-familles ERP par domaine — les noms techniques Cegid varient selon
       // la casse et l'espacement du libellé source. On tente plusieurs variantes
       // pour rester tolérant à un futur renommage du flux.
-      const jeux = str(r.Jeuxfamille2 ?? r['Jeux famille 2'] ?? r.JeuxFamille2);
-      const magasin = str(r.Magasinfamille2 ?? r['Magasin famille 2'] ?? r.MagasinFamille2);
-      const atelier = str(r.Atelierfamille2 ?? r['Atelier famille 2'] ?? r.AtelierFamille2);
-      const divers = str(r.Diversfamille2 ?? r['Divers famille 2'] ?? r.DiversFamille2);
+      const jeux = trim(r.Jeuxfamille2 ?? r['Jeux famille 2'] ?? r.JeuxFamille2);
+      const magasin = trim(r.Magasinfamille2 ?? r['Magasin famille 2'] ?? r.MagasinFamille2);
+      const atelier = trim(r.Atelierfamille2 ?? r['Atelier famille 2'] ?? r.AtelierFamille2);
+      const divers = trim(r.Diversfamille2 ?? r['Divers famille 2'] ?? r.DiversFamille2);
       // famille2 unifiée : jeux prioritaire, sinon la sous-famille du domaine correspondant
       const famille2 = jeux || magasin || atelier || divers || '';
       return {
         inventory_id: trim(r.InventoryID),
-        description: str(r.Description),
-        item_status: str(r.ItemStatus),
+        description: trim(r.Description),
+        item_status: trim(r.ItemStatus),
         item_class: trim(r.ItemClass),
         famille2,
-        famille3: str(r.Jeuxfamille3),
+        famille3: trim(r.Jeuxfamille3),
         magasin_famille2: magasin,
         atelier_famille2: atelier,
         divers_famille2: divers,
@@ -374,6 +374,7 @@ const MAPPERS: Record<string, { table: string; map: Mapper; pk?: string }> = {
   },
 
 };
+
 
 async function fetchAllRows(url: string, token: string): Promise<any[]> {
   const all: any[] = [];

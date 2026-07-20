@@ -648,12 +648,19 @@ function DashboardTab() {
     return undefined;
   }, [weeks]);
 
-  // Semaine à afficher dans les tuiles & le donut : la courante si saisie, sinon la dernière remplie.
-  const displayWeek = hasCurrentData ? currentWeek : lastFilledWeek ?? currentWeek;
-  const isFallback = !hasCurrentData && lastFilledWeek && lastFilledWeek.key !== currentWeek?.key;
+  // Sélecteur de semaine — null = comportement par défaut (courante si saisie, sinon dernière remplie).
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const defaultWeek = hasCurrentData ? currentWeek : lastFilledWeek ?? currentWeek;
+  const selectedWeek = selectedKey ? weeks.find((w) => w.key === selectedKey) : undefined;
+  const displayWeek = selectedWeek ?? defaultWeek;
+  const isFallback =
+    !selectedKey && !hasCurrentData && lastFilledWeek && lastFilledWeek.key !== currentWeek?.key;
 
-  // Semaine de comparaison — celle qui précède displayWeek dans weeks[]
+  // Navigation semaine
   const displayIdx = weeks.findIndex((w) => w.key === displayWeek?.key);
+  const canPrev = displayIdx > 0;
+  const canNext = displayIdx >= 0 && displayIdx < weeks.length - 1;
+  const isCurrentSelected = displayWeek?.key === currentWeek?.key;
   const comparePrev = displayIdx > 0 ? weeks[displayIdx - 1] : undefined;
 
   // Comparaison à jours comparables : quand la semaine courante est partielle,

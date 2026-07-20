@@ -556,20 +556,86 @@ function DashboardTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, objectifs]);
 
-  // Semaine courante & précédente
+  // Semaine courante & précédente (index dans weeks[])
   const currentWeek = weeks[weeks.length - 1];
   const prevWeek = weeks[weeks.length - 2];
+
+  // Est-ce que la semaine courante contient AU MOINS une saisie ?
+  const currentWeekDates = useMemo(() => {
+    if (!currentWeek || !rows) return [];
+    const start = currentWeek.monday;
+    const end = addDays(start, 6);
+    return rows
+      .filter((r) => {
+        const d = parseYmd(r.date);
+        return d >= start && d <= end;
+      })
+      .map((r) => r.date);
+  }, [currentWeek, rows]);
+  const hasCurrentData = currentWeekDates.length > 0;
+
+  // Dernière semaine avec des saisies (pour repli lundi matin)
+  const lastFilledWeek = useMemo<WeekAgg | undefined>(() => {
+    for (let i = weeks.length - 1; i >= 0; i--) {
+      if (weeks[i].ca > 0 || weeks[i].visiteurs > 0) return weeks[i];
+    }
+    return undefined;
+  }, [weeks]);
+
+  // Semaine à afficher dans les tuiles & le donut : la courante si saisie, sinon la dernière remplie.
+  const displayWeek = hasCurrentData ? currentWeek : lastFilledWeek ?? currentWeek;
+  const isFallback = !hasCurrentData && lastFilledWeek && lastFilledWeek.key !== currentWeek?.key;
+
+  // Semaine de comparaison — celle qui précède displayWeek dans weeks[]
+  const displayIdx = weeks.findIndex((w) => w.key === displayWeek?.key);
+  const comparePrev = displayIdx > 0 ? weeks[displayIdx - 1] : undefined;
+
+  // Comparaison à jours comparables : quand la semaine courante est partielle,
+  // on somme uniquement les mêmes jours de la semaine précédente.
+  const { compareCurrent, comparePrevValue, comparePrevVisitors, compareCurrentVisitors } =
+    useMemo(() => {
+      // Cas plein / repli : totaux entiers.
+      if (!hasCurrentData || currentWeekDates.length === 7 || !prevWeek) {
+        return {
+          compareCurrent: displayWeek?.ca ?? 0,
+          comparePrevValue: comparePrev?.ca ?? 0,
+          compareCurrentVisitors: displayWeek?.visiteurs ?? 0,
+          comparePrevVisitors: comparePrev?.visiteurs ?? 0,
+        };
+      }
+      // Cas partiel : on filtre les mêmes weekdays côté S-1.
+      const weekdays = new Set(currentWeekDates.map((ymd) => (parseYmd(ymd).getDay() + 6) % 7));
+      const prevStart = prevWeek.monday;
+      const prevEnd = addDays(prevStart, 6);
+      let pCa = 0;
+      let pVis = 0;
+      for (const r of rows ?? []) {
+        const d = parseYmd(r.date);
+        if (d < prevStart || d > prevEnd) continue;
+        const dow = (d.getDay() + 6) % 7;
+        if (!weekdays.has(dow)) continue;
+        pCa += journeeCaTotal(r);
+        pVis += Number(r.visiteurs ?? 0);
+      }
+      return {
+        compareCurrent: currentWeek.ca,
+        comparePrevValue: pCa,
+        compareCurrentVisitors: currentWeek.visiteurs,
+        comparePrevVisitors: pVis,
+      };
+    }, [hasCurrentData, currentWeekDates, prevWeek, displayWeek, comparePrev, rows, currentWeek]);
+
   const bestSource = useMemo(() => {
-    if (!currentWeek) return null;
+    if (!displayWeek) return null;
     let best: { label: string; value: number; color: string } | null = null;
     for (const s of SOURCES) {
-      const v = currentWeek.bySource[s.key as string] ?? 0;
+      const v = displayWeek.bySource[s.key as string] ?? 0;
       if (!best || v > best.value) best = { label: s.label, value: v, color: s.color };
     }
     return best;
-  }, [currentWeek]);
+  }, [displayWeek]);
 
-  // Semaine courante : barres empilées par jour
+  // Barres empilées par jour — TOUJOURS la semaine courante (montre l'état réel du calendrier).
   const currentWeekDays = useMemo(() => {
     if (!currentWeek) return [];
     const mon = currentWeek.monday;
@@ -583,7 +649,7 @@ function DashboardTab() {
     });
   }, [currentWeek, rows]);
 
-  // Progression semaine (courbe + variation %)
+  // Progression semaine (barres + variation %)
   const weekSeries = useMemo(() => {
     return weeks.map((w, i) => {
       const prev = i > 0 ? weeks[i - 1].ca : 0;
@@ -641,15 +707,15 @@ function DashboardTab() {
     }));
   }, [weeks]);
 
-  // Donut sur période sélectionnée (par défaut : semaine courante)
+  // Donut sur displayWeek
   const donutData = useMemo(() => {
-    if (!currentWeek) return [];
+    if (!displayWeek) return [];
     return SOURCES.map((s) => ({
       name: s.label,
-      value: Math.round(currentWeek.bySource[s.key as string] ?? 0),
+      value: Math.round(displayWeek.bySource[s.key as string] ?? 0),
       color: s.color,
     })).filter((d) => d.value > 0);
-  }, [currentWeek]);
+  }, [displayWeek]);
   const donutTotal = donutData.reduce((s, d) => s + d.value, 0);
 
   if (isLoading || !currentWeek) {
@@ -662,12 +728,29 @@ function DashboardTab() {
   }
 
   const caVariation =
-    prevWeek && prevWeek.ca > 0 ? ((currentWeek.ca - prevWeek.ca) / prevWeek.ca) * 100 : 0;
+    comparePrevValue > 0 ? ((compareCurrent - comparePrevValue) / comparePrevValue) * 100 : 0;
   const visVariation =
-    prevWeek && prevWeek.visiteurs > 0
-      ? ((currentWeek.visiteurs - prevWeek.visiteurs) / prevWeek.visiteurs) * 100
+    comparePrevVisitors > 0
+      ? ((compareCurrentVisitors - comparePrevVisitors) / comparePrevVisitors) * 100
       : 0;
-  const objPct = currentWeek.objectif > 0 ? (currentWeek.ca / currentWeek.objectif) * 100 : 0;
+  const objPct = displayWeek && displayWeek.objectif > 0 ? (displayWeek.ca / displayWeek.objectif) * 100 : 0;
+
+  const weekLabel = displayWeek
+    ? `Semaine du ${displayWeek.monday.toLocaleDateString("fr-FR", { day: "2-digit", month: "long" })} au ${addDays(displayWeek.monday, 6).toLocaleDateString("fr-FR", { day: "2-digit", month: "long" })}`
+    : "";
+  const compareLabel =
+    hasCurrentData && currentWeekDates.length < 7
+      ? `${pct(caVariation)} vs S-1 (à ${currentWeekDates.length} j comparables)`
+      : comparePrev
+        ? `${pct(caVariation)} vs S-1`
+        : "—";
+  const compareVisLabel =
+    hasCurrentData && currentWeekDates.length < 7
+      ? `${pct(visVariation)} vs S-1 (à ${currentWeekDates.length} j comparables)`
+      : comparePrev
+        ? `${pct(visVariation)} vs S-1`
+        : "—";
+
 
   return (
     <div className="space-y-4">

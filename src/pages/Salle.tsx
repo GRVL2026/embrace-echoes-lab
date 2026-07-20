@@ -1434,3 +1434,160 @@ function ObjectifKpiTile({
   );
 }
 
+/**
+ * Carte "Semaine jour par jour" — 7 cases lundi → dimanche pour la semaine sélectionnée.
+ * Chaque case : jour + date, CA total, variation % vs même jour S-1, visiteurs.
+ * Etats : aujourd'hui (bordure Neon Purple), futur (grisé), passé non saisi (ambre cliquable).
+ */
+function DayByDayCard({
+  weekMonday,
+  rows,
+  onOpenSaisie,
+}: {
+  weekMonday: Date;
+  rows: SalleJournee[];
+  onOpenSaisie: (ymd: string) => void;
+}) {
+  const todayYmd = toYmd(new Date());
+  const rowByDate = useMemo(() => {
+    const m = new Map<string, SalleJournee>();
+    for (const r of rows) m.set(r.date, r);
+    return m;
+  }, [rows]);
+  const dayNames = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = addDays(weekMonday, i);
+    const ymd = toYmd(d);
+    const row = rowByDate.get(ymd) ?? null;
+    const prevRow = rowByDate.get(toYmd(addDays(d, -7))) ?? null;
+    const ca = row ? journeeCaTotal(row) : 0;
+    const prevCa = prevRow ? journeeCaTotal(prevRow) : 0;
+    const variation = row && prevCa > 0 ? ((ca - prevCa) / prevCa) * 100 : null;
+    const isToday = ymd === todayYmd;
+    const isFuture = ymd > todayYmd;
+    const isPastEmpty = ymd < todayYmd && !row;
+    return {
+      ymd,
+      dayName: dayNames[i],
+      dayShort: d.toLocaleDateString("fr-FR", { weekday: "short" }),
+      dateLabel: d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }),
+      ca,
+      variation,
+      visiteurs: row ? Number(row.visiteurs ?? 0) : 0,
+      row,
+      isToday,
+      isFuture,
+      isPastEmpty,
+    };
+  });
+
+  return (
+    <Card className="p-3 sm:p-4">
+      <div className="mb-3 flex items-baseline justify-between gap-2">
+        <SectionTitle>Semaine jour par jour</SectionTitle>
+        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+          CA total du jour vs même jour S-1
+        </span>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
+        {days.map((d) => {
+          const clickable = d.isPastEmpty;
+          const Tag: any = clickable ? "button" : "div";
+          const base =
+            "flex flex-col rounded-lg border p-2.5 text-left transition min-w-0";
+          let cls = "";
+          let style: React.CSSProperties = {};
+          if (d.isToday) {
+            cls = "bg-card";
+            style = {
+              borderColor: "hsl(var(--hn-purple))",
+              boxShadow: "0 0 0 1px hsl(var(--hn-purple) / 0.35), 0 0 12px hsl(var(--hn-purple) / 0.25)",
+            };
+          } else if (d.isFuture) {
+            cls = "border-dashed border-border/50 bg-muted/10 text-muted-foreground/70";
+          } else if (d.isPastEmpty) {
+            cls =
+              "border-dashed border-amber-500/50 bg-amber-500/5 hover:bg-amber-500/10 cursor-pointer";
+          } else {
+            cls = "border-border bg-card";
+          }
+
+          return (
+            <Tag
+              key={d.ymd}
+              type={clickable ? "button" : undefined}
+              onClick={clickable ? () => onOpenSaisie(d.ymd) : undefined}
+              className={`${base} ${cls}`}
+              style={style}
+            >
+              <div className="flex items-baseline justify-between gap-1">
+                <span className="text-[11px] font-semibold uppercase tracking-wider truncate">
+                  {d.dayShort}
+                </span>
+                <span className="text-[10px] tabular-nums text-muted-foreground">
+                  {d.dateLabel}
+                </span>
+              </div>
+
+              {d.isToday && (
+                <span
+                  className="mt-0.5 text-[9px] font-bold uppercase tracking-widest"
+                  style={{ color: "hsl(var(--hn-purple))" }}
+                >
+                  Aujourd'hui
+                </span>
+              )}
+
+              {d.isFuture ? (
+                <div className="mt-2 text-[11px] text-muted-foreground/60">—</div>
+              ) : d.isPastEmpty ? (
+                <div className="mt-2 text-[11px] font-medium text-amber-300">
+                  à saisir
+                </div>
+              ) : d.row ? (
+                <>
+                  <div
+                    className="hn-kpi-value mt-1.5 text-base sm:text-lg font-bold tabular-nums leading-none"
+                    style={{ color: "hsl(var(--hn-purple))" }}
+                  >
+                    {eur(d.ca)}
+                  </div>
+                  <div className="mt-1 flex items-center justify-between gap-1 text-[10px]">
+                    {d.variation === null ? (
+                      <span className="inline-flex items-center gap-0.5 text-muted-foreground">
+                        <Minus className="h-2.5 w-2.5" /> —
+                      </span>
+                    ) : d.variation >= 0 ? (
+                      <span
+                        className="inline-flex items-center gap-0.5 font-semibold tabular-nums"
+                        style={{ color: "hsl(var(--space-ecommerce))" }}
+                      >
+                        <ArrowUp className="h-2.5 w-2.5" />
+                        {pct(d.variation)}
+                      </span>
+                    ) : (
+                      <span
+                        className="inline-flex items-center gap-0.5 font-semibold tabular-nums"
+                        style={{ color: "hsl(var(--space-sav))" }}
+                      >
+                        <ArrowDown className="h-2.5 w-2.5" />
+                        {pct(d.variation)}
+                      </span>
+                    )}
+                    <span className="tabular-nums text-muted-foreground">
+                      {d.visiteurs.toLocaleString("fr-FR")} vis.
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div className="mt-2 text-[11px] text-muted-foreground/70">non saisi</div>
+              )}
+            </Tag>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+

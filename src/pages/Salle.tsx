@@ -1279,16 +1279,21 @@ function ObjectifKpiTile({
   ca,
   objectif,
   capLT,
+  objectifActuelJour,
+  objectifActuelSemaine,
 }: {
   ca: number;
   objectif: number;
   capLT: number;
+  objectifActuelJour?: number;
+  objectifActuelSemaine?: number;
 }) {
   const eur0 = (n: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
   const pct = objectif > 0 ? (ca / objectif) * 100 : 0;
   const reached = objectif > 0 && ca >= objectif;
   const accent = reached ? "hsl(var(--space-ecommerce))" : "hsl(var(--space-salle))";
+  const hasActuel = (objectifActuelJour ?? 0) > 0 || (objectifActuelSemaine ?? 0) > 0;
   return (
     <Card className="p-4 border-l-4" style={{ borderLeftColor: accent }}>
       <div className="flex items-center justify-between gap-2">
@@ -1327,6 +1332,11 @@ function ObjectifKpiTile({
         </span>
         <span className="tabular-nums">{eur0(ca)}</span>
       </div>
+      {hasActuel && (
+        <div className="mt-2 pt-2 border-t border-border/50 text-[10px] text-muted-foreground">
+          Objectif actuel : {eur0(objectifActuelJour ?? 0)}/jour · {eur0(objectifActuelSemaine ?? 0)}/semaine
+        </div>
+      )}
     </Card>
   );
 }

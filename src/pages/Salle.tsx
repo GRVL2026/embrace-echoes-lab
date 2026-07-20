@@ -866,8 +866,8 @@ function DashboardTab() {
       ? `${pct(visVariation)} vs S-1`
       : "—";
 
-  // Objectif intermédiaire actuellement en vigueur (affiché en permanence)
-  const objectifActuel = objectifAtDate(new Date());
+  const objectifActuel = objectifActuelObj;
+
 
 
   return (

@@ -295,30 +295,44 @@ function NumbersSection({
 
 function SalleCard() {
   const { data } = useQuery({
-    queryKey: ["hub-salle-jour"],
+    queryKey: ["hub-salle-semaine"],
     refetchInterval: 5 * 60_000,
     queryFn: async () => {
-      const today = toISODate(new Date());
+      const today = new Date();
+      const monday = startOfWeekMonday(today);
       const { data, error } = await (supabase as any)
         .from("salle_journees")
-        .select("ca_pax_ht, ca_cartes_ht, ca_merch_ht")
-        .eq("date", today)
-        .maybeSingle();
+        .select("date, ca_pax_ht, ca_cartes_ht, ca_merch_ht")
+        .gte("date", toISODate(monday))
+        .lte("date", toISODate(today))
+        .order("date", { ascending: true });
       if (error) throw error;
-      const total = data
-        ? TOTAL_KEYS.reduce((s, k) => s + Number((data as any)[k] ?? 0), 0)
+      const rows = (data ?? []) as Array<Record<string, any>>;
+      const total = rows.reduce(
+        (s, r) => s + TOTAL_KEYS.reduce((a, k) => a + Number(r[k] ?? 0), 0),
+        0,
+      );
+      const last = rows.length ? rows[rows.length - 1] : null;
+      const lastTotal = last
+        ? TOTAL_KEYS.reduce((a, k) => a + Number((last as any)[k] ?? 0), 0)
         : 0;
-      return { total, hasEntry: !!data };
+      const lastLabel = last
+        ? new Date((last as any).date + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "long" })
+        : null;
+      return { total, lastLabel, lastTotal };
     },
   });
   const total = data?.total ?? 0;
-  const pct = OBJ_JOUR ? Math.round((total / OBJ_JOUR) * 100) : 0;
+  const pct = OBJ_SEMAINE ? Math.round((total / OBJ_SEMAINE) * 100) : 0;
+  const hint = data?.lastLabel
+    ? `${pct}% de 3 500 € · Dernier jour saisi : ${data.lastLabel} — ${eur(data.lastTotal)}`
+    : `${pct}% de l'objectif 3 500 €`;
   return (
     <KpiCard
       space="salle"
-      label="CA salle du jour"
+      label="CA salle — semaine en cours"
       value={eur(total)}
-      hint={data?.hasEntry ? `${pct}% de l'objectif 500 €` : "Journée non saisie"}
+      hint={hint}
       to="/salle#dashboard"
     />
   );

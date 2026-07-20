@@ -951,11 +951,12 @@ function DashboardTab() {
         />
         <ObjectifKpiTile
           ca={displayWeek?.ca ?? 0}
-          objectif={displayWeek?.objectif ?? 0}
+          objectifInter={objectifInterCourant}
           capLT={capLTSemaine}
           objectifActuelJour={Number(objectifActuel?.objectif_jour_ht ?? 0)}
           objectifActuelSemaine={Number(objectifActuel?.objectif_semaine_ht ?? 0)}
         />
+
 
         <KpiTile
           label="Meilleure source"

@@ -781,15 +781,20 @@ function DashboardTab() {
     return max > 0 ? max : 20167;
   }, [objectifs]);
 
-  // Objectif — donnée dérivée
+  // Objectif intermédiaire actuellement en vigueur, appliqué RÉTROACTIVEMENT à toutes les semaines
+  const objectifActuelObj = objectifAtDate(new Date());
+  const objectifInterCourant = Number(objectifActuelObj?.objectif_semaine_ht ?? 0) || 3500;
+
+  // Objectif — donnée dérivée (pct = ca / objectif intermédiaire courant)
   const objectifSeries = useMemo(() => {
     return weeks.map((w) => ({
       label: w.label,
       ca: Math.round(w.ca),
-      objectif: Math.round(w.objectif),
-      pct: w.objectif > 0 ? Math.min(200, Math.round((w.ca / w.objectif) * 100)) : 0,
+      objectif: objectifInterCourant,
+      pct: objectifInterCourant > 0 ? Math.min(300, Math.round((w.ca / objectifInterCourant) * 100)) : 0,
+      pctLT: capLTSemaine > 0 ? Math.min(200, Math.round((w.ca / capLTSemaine) * 100)) : 0,
     }));
-  }, [weeks]);
+  }, [weeks, objectifInterCourant, capLTSemaine]);
 
   // Donut sur displayWeek
   const donutData = useMemo(() => {
@@ -861,8 +866,8 @@ function DashboardTab() {
       ? `${pct(visVariation)} vs S-1`
       : "—";
 
-  // Objectif intermédiaire actuellement en vigueur (affiché en permanence)
-  const objectifActuel = objectifAtDate(new Date());
+  const objectifActuel = objectifActuelObj;
+
 
 
   return (
@@ -946,11 +951,12 @@ function DashboardTab() {
         />
         <ObjectifKpiTile
           ca={displayWeek?.ca ?? 0}
-          objectif={displayWeek?.objectif ?? 0}
+          objectifInter={objectifInterCourant}
           capLT={capLTSemaine}
           objectifActuelJour={Number(objectifActuel?.objectif_jour_ht ?? 0)}
           objectifActuelSemaine={Number(objectifActuel?.objectif_semaine_ht ?? 0)}
         />
+
 
         <KpiTile
           label="Meilleure source"
@@ -1132,32 +1138,71 @@ function DashboardTab() {
       </div>
 
 
-      {/* Atteinte objectifs */}
+      {/* Atteinte objectifs — double lecture % (intermédiaire courant + cap long terme) */}
       <Card className="p-4">
         <SectionTitle>Atteinte des objectifs par semaine</SectionTitle>
-        <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
-          {objectifSeries.map((w) => (
-            <div key={w.label} className="grid grid-cols-[60px_1fr_60px] items-center gap-3">
-              <div className="text-xs font-medium tabular-nums">{w.label}</div>
-              <DualTargetBar
-                ca={w.ca}
-                objectif={w.objectif}
-                capLT={capLTSemaine}
-                heightClass="h-2"
-              />
-              <div
-                className="text-right text-xs tabular-nums font-semibold"
-                style={{ color: w.pct >= 100 ? "hsl(var(--space-ecommerce))" : "hsl(var(--space-salle))" }}
-              >
-                {w.pct} %
+        <div className="mb-2 flex flex-wrap items-center gap-3 text-[10px] uppercase tracking-wider text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block h-2 w-3 rounded-sm" style={{ background: "hsl(var(--hn-purple))" }} />
+            Objectif {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(objectifInterCourant)}/sem.
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block h-1 w-3 rounded-sm" style={{ background: "hsl(var(--hn-blue) / 0.7)" }} />
+            Cap long terme {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(capLTSemaine)}/sem.
+          </span>
+        </div>
+        <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+          {objectifSeries.map((w) => {
+            const reached = w.pct >= 100;
+            const interFill = Math.min(100, w.pct);
+            const ltFill = Math.min(100, w.pctLT);
+            return (
+              <div key={w.label} className="grid grid-cols-[70px_1fr] items-center gap-3">
+                <div className="text-xs font-medium tabular-nums">{w.label}</div>
+                <div className="space-y-1">
+                  {/* Barre 1 — Objectif intermédiaire */}
+                  <div className="grid grid-cols-[1fr_44px] items-center gap-2">
+                    <div className="relative w-full h-2 rounded-full bg-muted/50 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: `${interFill}%`,
+                          background: reached
+                            ? "linear-gradient(90deg, hsl(var(--space-ecommerce)) 0%, hsl(var(--hn-purple)) 100%)"
+                            : "hsl(var(--hn-purple))",
+                          boxShadow: reached ? "0 0 8px hsl(var(--hn-purple) / 0.55)" : undefined,
+                        }}
+                      />
+                    </div>
+                    <div
+                      className="text-right text-xs tabular-nums font-semibold"
+                      style={{ color: reached ? "hsl(var(--space-ecommerce))" : "hsl(var(--hn-purple))" }}
+                    >
+                      {w.pct} %
+                    </div>
+                  </div>
+                  {/* Barre 2 — Cap long terme (plus fine, discrète) */}
+                  <div className="grid grid-cols-[1fr_44px] items-center gap-2">
+                    <div className="relative w-full h-1 rounded-full bg-muted/30 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${ltFill}%`, background: "hsl(var(--hn-blue) / 0.7)" }}
+                      />
+                    </div>
+                    <div className="text-right text-[10px] tabular-nums text-muted-foreground">
+                      {w.pctLT} %
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Card>
     </div>
   );
 }
+
 
 function KpiTile({
   label,
@@ -1271,28 +1316,31 @@ function DualTargetBar({
 }
 
 /**
- * Tuile KPI "Objectif semaine" avec lecture à deux niveaux :
- *  - % principal = ca / objectif intermédiaire
- *  - barre = progression vers cap long terme + marqueur objectif intermédiaire
+ * Tuile KPI "Objectif semaine" — DEUX barres de progression :
+ *  1) Objectif intermédiaire courant (Neon Purple, célébration ≥100 %)
+ *  2) Cap long terme (barre fine, discrète)
  */
 function ObjectifKpiTile({
   ca,
-  objectif,
+  objectifInter,
   capLT,
   objectifActuelJour,
   objectifActuelSemaine,
 }: {
   ca: number;
-  objectif: number;
+  objectifInter: number;
   capLT: number;
   objectifActuelJour?: number;
   objectifActuelSemaine?: number;
 }) {
   const eur0 = (n: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
-  const pct = objectif > 0 ? (ca / objectif) * 100 : 0;
-  const reached = objectif > 0 && ca >= objectif;
-  const accent = reached ? "hsl(var(--space-ecommerce))" : "hsl(var(--space-salle))";
+  const pctInter = objectifInter > 0 ? (ca / objectifInter) * 100 : 0;
+  const pctLT = capLT > 0 ? (ca / capLT) * 100 : 0;
+  const reached = objectifInter > 0 && ca >= objectifInter;
+  const accent = reached ? "hsl(var(--space-ecommerce))" : "hsl(var(--hn-purple))";
+  const interFill = Math.min(100, pctInter);
+  const ltFill = Math.min(100, pctLT);
   const hasActuel = (objectifActuelJour ?? 0) > 0 || (objectifActuelSemaine ?? 0) > 0;
   return (
     <Card className="p-4 border-l-4" style={{ borderLeftColor: accent }}>
@@ -1313,31 +1361,63 @@ function ObjectifKpiTile({
           </span>
         )}
       </div>
-      <div className="hn-kpi-value mt-1 text-2xl font-bold" style={{ color: accent }}>
-        {Math.round(pct)} %
-      </div>
-      <div className="text-xs mt-1 text-muted-foreground">
-        {objectif > 0 ? `Cible ${eur0(objectif)}` : "Pas d'objectif"}
-      </div>
-      <div className="mt-2">
-        <DualTargetBar ca={ca} objectif={objectif} capLT={capLT} heightClass="h-2" />
-      </div>
-      <div className="mt-1.5 flex items-center justify-between text-[10px] text-muted-foreground">
-        <span className="inline-flex items-center gap-1">
-          <span
-            className="inline-block h-2 w-px"
-            style={{ background: "hsl(var(--hn-purple))" }}
+
+      {/* Barre 1 — Objectif intermédiaire courant */}
+      <div className="mt-2.5">
+        <div className="flex items-baseline justify-between gap-2 mb-1">
+          <div className="text-[11px] font-medium text-foreground/85">
+            Objectif {eur0(objectifInter)}/semaine
+          </div>
+          <div
+            className="hn-kpi-value text-base font-bold tabular-nums"
+            style={{ color: accent }}
+          >
+            {Math.round(pctInter)} %
+          </div>
+        </div>
+        <div className="relative w-full h-2.5 rounded-full bg-muted/50 overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all"
+            style={{
+              width: `${interFill}%`,
+              background: reached
+                ? "linear-gradient(90deg, hsl(var(--space-ecommerce)) 0%, hsl(var(--hn-purple)) 100%)"
+                : "hsl(var(--hn-purple))",
+              boxShadow: reached ? "0 0 10px hsl(var(--hn-purple) / 0.6)" : undefined,
+            }}
           />
-          Cap long terme {eur0(capLT)}
-        </span>
+        </div>
+      </div>
+
+      {/* Barre 2 — Cap long terme (fine, discrète) */}
+      <div className="mt-2.5">
+        <div className="flex items-baseline justify-between gap-2 mb-1">
+          <div className="text-[10px] text-muted-foreground">
+            Cap long terme {eur0(capLT)}/semaine
+          </div>
+          <div className="text-[11px] font-semibold tabular-nums text-muted-foreground">
+            {Math.round(pctLT)} %
+          </div>
+        </div>
+        <div className="relative w-full h-1 rounded-full bg-muted/30 overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all"
+            style={{ width: `${ltFill}%`, background: "hsl(var(--hn-blue) / 0.7)" }}
+          />
+        </div>
+      </div>
+
+      <div className="mt-2 flex items-center justify-end text-[10px] text-muted-foreground">
         <span className="tabular-nums">{eur0(ca)}</span>
       </div>
+
       {hasActuel && (
         <div className="mt-2 pt-2 border-t border-border/50 text-[10px] text-muted-foreground">
           Objectif actuel : {eur0(objectifActuelJour ?? 0)}/jour · {eur0(objectifActuelSemaine ?? 0)}/semaine
         </div>
       )}
     </Card>
+
   );
 }
 

@@ -128,8 +128,13 @@ const eur2 = (n: number) =>
   n.toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 2 });
 const pct = (n: number) => `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
 
+// Les vending (Pokémon, blind box) et le photomaton encaissent VIA les TPA Pax :
+// leurs recettes sont déjà incluses dans ca_pax_ht. Le total ne compte donc que
+// ca_pax_ht + ca_cartes_ht + ca_merch_ht pour éviter le double comptage.
+const TOTAL_KEYS: Array<keyof SalleJournee> = ["ca_pax_ht", "ca_cartes_ht", "ca_merch_ht"];
+
 const journeeCaTotal = (j: SalleJournee): number =>
-  SOURCES.reduce((s, src) => s + Number(j[src.key] ?? 0), 0);
+  TOTAL_KEYS.reduce((s, k) => s + Number((j as any)[k] ?? 0), 0);
 
 // ------------------------------------------------------------
 // Page
@@ -304,7 +309,7 @@ function SaisieTab({ userId }: { userId: string | null }) {
     });
   }, [weekMondayStr, filled]);
 
-  const totalHT = SOURCES.reduce((s, src) => s + Number((form as any)[src.key] ?? 0), 0);
+  const totalHT = TOTAL_KEYS.reduce((s, k) => s + Number((form as any)[k] ?? 0), 0);
 
   // Records historiques (hors journée en cours d'édition) pour badge "NOUVEAU RECORD"
   const { data: records } = useQuery({
@@ -788,7 +793,7 @@ function DashboardTab() {
       color: s.color,
     })).filter((d) => d.value > 0);
   }, [displayWeek]);
-  const donutTotal = donutData.reduce((s, d) => s + d.value, 0);
+  const donutTotal = displayWeek?.ca ?? 0;
 
   // Records historiques (tous les jours saisis) — pour badge "NOUVEAU RECORD"
   const { data: histRecords } = useQuery({

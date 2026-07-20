@@ -779,6 +779,33 @@ function DashboardTab() {
   }, [displayWeek]);
   const donutTotal = donutData.reduce((s, d) => s + d.value, 0);
 
+  // Records historiques (tous les jours saisis) — pour badge "NOUVEAU RECORD"
+  const { data: histRecords } = useQuery({
+    queryKey: ["salle_records_all"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("salle_journees")
+        .select("date, visiteurs, ca_cartes_ht, ca_pax_ht, ca_merch_ht, ca_vending_pokemon_ht, ca_vending_blindbox_ht, ca_photomaton_ht");
+      if (error) throw error;
+      const arr = (data ?? []) as SalleJournee[];
+      let maxCa = 0, maxCaDate = "";
+      let maxVis = 0, maxVisDate = "";
+      for (const r of arr) {
+        const ca = journeeCaTotal(r);
+        if (ca > maxCa) { maxCa = ca; maxCaDate = r.date; }
+        const v = Number(r.visiteurs ?? 0);
+        if (v > maxVis) { maxVis = v; maxVisDate = r.date; }
+      }
+      return { maxCa, maxCaDate, maxVis, maxVisDate };
+    },
+  });
+  const weekHoldsRecordCa = !!(histRecords && displayWeek && histRecords.maxCaDate &&
+    parseYmd(histRecords.maxCaDate) >= displayWeek.monday &&
+    parseYmd(histRecords.maxCaDate) <= addDays(displayWeek.monday, 6));
+  const weekHoldsRecordVis = !!(histRecords && displayWeek && histRecords.maxVisDate &&
+    parseYmd(histRecords.maxVisDate) >= displayWeek.monday &&
+    parseYmd(histRecords.maxVisDate) <= addDays(displayWeek.monday, 6));
+
   if (isLoading || !currentWeek) {
     return (
       <div className="py-20 text-center text-muted-foreground">

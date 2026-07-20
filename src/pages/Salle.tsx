@@ -898,12 +898,10 @@ function DashboardTab() {
           positive={visVariation >= 0}
           badge={weekHoldsRecordVis ? "Record visiteurs" : undefined}
         />
-        <KpiTile
-          label="Objectif semaine"
-          value={`${Math.round(objPct)} %`}
-          sub={displayWeek && displayWeek.objectif ? `Cible ${eur(displayWeek.objectif)}` : "Pas d'objectif"}
-          accent="hsl(var(--space-ecommerce))"
-          progress={Math.min(100, objPct)}
+        <ObjectifKpiTile
+          ca={displayWeek?.ca ?? 0}
+          objectif={displayWeek?.objectif ?? 0}
+          capLT={capLTSemaine}
         />
         <KpiTile
           label="Meilleure source"

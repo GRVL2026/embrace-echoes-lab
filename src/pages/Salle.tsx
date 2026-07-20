@@ -1121,15 +1121,15 @@ function KpiTile({
 }) {
   return (
     <Card
-      className={`p-4 border-l-4 relative ${pulse ? "hn-pulse" : ""}`}
+      className={`p-4 border-l-4 ${pulse ? "hn-pulse" : ""}`}
       style={{ borderLeftColor: accent }}
     >
-      {badge && (
-        <div className="absolute top-2 right-2">
-          <span className="hn-record-badge">⚡ {badge}</span>
-        </div>
-      )}
-      <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">{label}</div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">{label}</div>
+        {badge && (
+          <span className="hn-record-badge hn-record-badge--sm shrink-0" title={badge}>⚡ {badge}</span>
+        )}
+      </div>
       <div className="hn-kpi-value mt-1 text-2xl font-bold" style={{ color: accent }}>
         {value}
       </div>

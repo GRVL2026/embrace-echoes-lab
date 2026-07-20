@@ -30,7 +30,12 @@ function startOfWeekMonday(d: Date) {
   return x;
 }
 function toISODate(d: Date) {
-  return d.toISOString().slice(0, 10);
+  // Date locale (YYYY-MM-DD) — évite le décalage UTC qui, un lundi matin à Paris,
+  // renverrait la date du dimanche et casserait la borne de semaine ISO.
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 export default function Hub() {

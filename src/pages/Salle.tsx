@@ -399,10 +399,14 @@ function SaisieTab({ userId }: { userId: string | null }) {
           ))}
         </div>
 
-        <div className="mt-4 rounded-md border border-border bg-muted/30 p-3 flex items-center justify-between">
-          <div className="text-sm text-muted-foreground">Total journée</div>
+        <div className="mt-4 rounded-md border border-border bg-muted/30 p-3 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Total journée</span>
+            {isRecordCa && <span className="hn-record-badge">⚡ Nouveau record CA</span>}
+            {isRecordVis && <span className="hn-record-badge">👥 Record visiteurs</span>}
+          </div>
           <div className="text-right">
-            <div className="text-2xl font-semibold" style={{ color: "hsl(var(--space-salle))" }}>
+            <div className="hn-kpi-value text-2xl font-bold" style={{ color: "hsl(var(--hn-purple))" }}>
               {eur2(totalHT)} HT
             </div>
             <div className="text-xs text-muted-foreground">{eur2(totalHT * (1 + TVA))} TTC</div>

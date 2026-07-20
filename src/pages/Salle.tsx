@@ -871,18 +871,21 @@ function DashboardTab() {
       {/* KPI tiles */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiTile
-          label={isFallback ? "CA (dernière semaine saisie)" : "CA semaine en cours"}
+          label={isFallback ? "Le Pulse — dernière semaine saisie" : "Le Pulse de la semaine"}
           value={eur(displayWeek?.ca ?? 0)}
           sub={compareLabel}
-          accent="hsl(var(--space-salle))"
+          accent="hsl(var(--hn-purple))"
           positive={caVariation >= 0}
+          pulse={!isFallback && caVariation > 0}
+          badge={weekHoldsRecordCa ? "Nouveau record" : undefined}
         />
         <KpiTile
           label={isFallback ? "Visiteurs (dernière semaine)" : "Visiteurs semaine"}
           value={(displayWeek?.visiteurs ?? 0).toLocaleString("fr-FR")}
           sub={compareVisLabel}
-          accent="hsl(var(--space-pilotage))"
+          accent="hsl(var(--hn-blue))"
           positive={visVariation >= 0}
+          badge={weekHoldsRecordVis ? "Record visiteurs" : undefined}
         />
         <KpiTile
           label="Objectif semaine"
@@ -895,7 +898,7 @@ function DashboardTab() {
           label="Meilleure source"
           value={bestSource ? bestSource.label : "—"}
           sub={bestSource ? eur(bestSource.value) : ""}
-          accent={bestSource?.color ?? "hsl(var(--space-commerce))"}
+          accent={bestSource?.color ?? "hsl(var(--hn-purple))"}
         />
       </div>
 

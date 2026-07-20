@@ -147,6 +147,7 @@ export default function Salle() {
 
   const initialTab = location.hash === "#dashboard" ? "dashboard" : "saisie";
   const [tab, setTab] = useState<"saisie" | "dashboard">(initialTab);
+  const searchDate = new URLSearchParams(location.search).get("d") ?? undefined;
 
   useEffect(() => {
     setTab(location.hash === "#dashboard" ? "dashboard" : "saisie");

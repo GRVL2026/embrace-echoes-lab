@@ -667,8 +667,8 @@ function DashboardTab() {
   // on somme uniquement les mêmes jours de la semaine précédente.
   const { compareCurrent, comparePrevValue, comparePrevVisitors, compareCurrentVisitors } =
     useMemo(() => {
-      // Cas plein / repli : totaux entiers.
-      if (!hasCurrentData || currentWeekDates.length === 7 || !prevWeek) {
+      // Cas plein / repli / semaine passée sélectionnée : totaux entiers.
+      if (!isCurrentSelected || !hasCurrentData || currentWeekDates.length === 7 || !prevWeek) {
         return {
           compareCurrent: displayWeek?.ca ?? 0,
           comparePrevValue: comparePrev?.ca ?? 0,

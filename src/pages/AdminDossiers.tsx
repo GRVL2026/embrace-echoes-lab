@@ -20,6 +20,7 @@ import { Loader2, Shield, Database, Link2, Sparkles } from "lucide-react";
 import { MobileNav } from "@/components/MobileNav";
 import { AppTopNav } from "@/components/AppTopNav";
 import logoImg from "@/assets/logo.png";
+import { InviteUserDialog } from "@/components/admin/InviteUserDialog";
 
 
 type Brand = { id: string; name: string };
@@ -234,9 +235,12 @@ export default function AdminDossiers() {
 
         {/* Utilisateurs & accès copilote */}
         <section className="mt-10">
-          <div className="mb-3 flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
-            <h3 className="font-display text-lg font-semibold">Utilisateurs — Accès copilote & dashboard</h3>
+          <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <h3 className="font-display text-lg font-semibold">Utilisateurs — Accès copilote & dashboard</h3>
+            </div>
+            <InviteUserDialog />
           </div>
           <p className="mb-4 text-sm text-muted-foreground">
             Activer/désactiver l'accès au copilote et au Dashboard (AA + Magasin) pour chaque utilisateur. Par défaut, le copilote est actif, le dashboard est réservé aux admins/direction.

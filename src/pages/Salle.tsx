@@ -212,7 +212,7 @@ export default function Salle() {
             <TabsTrigger value="dashboard" className="text-base">Dashboard</TabsTrigger>
           </TabsList>
           <TabsContent value="saisie">
-            <SaisieTab userId={user?.id ?? null} />
+            <SaisieTab userId={user?.id ?? null} initialDate={searchDate} />
           </TabsContent>
           <TabsContent value="dashboard">
             <DashboardTab />

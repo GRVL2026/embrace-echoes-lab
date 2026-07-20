@@ -781,15 +781,20 @@ function DashboardTab() {
     return max > 0 ? max : 20167;
   }, [objectifs]);
 
-  // Objectif — donnée dérivée
+  // Objectif intermédiaire actuellement en vigueur, appliqué RÉTROACTIVEMENT à toutes les semaines
+  const objectifActuelObj = objectifAtDate(new Date());
+  const objectifInterCourant = Number(objectifActuelObj?.objectif_semaine_ht ?? 0) || 3500;
+
+  // Objectif — donnée dérivée (pct = ca / objectif intermédiaire courant)
   const objectifSeries = useMemo(() => {
     return weeks.map((w) => ({
       label: w.label,
       ca: Math.round(w.ca),
-      objectif: Math.round(w.objectif),
-      pct: w.objectif > 0 ? Math.min(200, Math.round((w.ca / w.objectif) * 100)) : 0,
+      objectif: objectifInterCourant,
+      pct: objectifInterCourant > 0 ? Math.min(300, Math.round((w.ca / objectifInterCourant) * 100)) : 0,
+      pctLT: capLTSemaine > 0 ? Math.min(200, Math.round((w.ca / capLTSemaine) * 100)) : 0,
     }));
-  }, [weeks]);
+  }, [weeks, objectifInterCourant, capLTSemaine]);
 
   // Donut sur displayWeek
   const donutData = useMemo(() => {

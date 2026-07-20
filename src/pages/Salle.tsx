@@ -971,6 +971,14 @@ function DashboardTab() {
         />
       </div>
 
+      {/* Semaine jour par jour — rituel quotidien */}
+      <DayByDayCard
+        weekMonday={displayWeek?.monday ?? currentWeek.monday}
+        rows={rows ?? []}
+        onOpenSaisie={(ymd) => navigate(`/salle?d=${ymd}#saisie`)}
+      />
+
+
       {/* Répartition par source — donut + légende détaillée */}
       <div>
         <Card className="p-4">

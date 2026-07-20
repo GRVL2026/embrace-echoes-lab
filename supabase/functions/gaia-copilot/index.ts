@@ -496,8 +496,23 @@ async function loadData(admin: any) {
   };
 }
 
-async function runGaiaQuery(admin: any, sql: string): Promise<unknown> {
+// Autorise uniquement des requêtes qui ne touchent QUE les tables du module Salle
+// (utilisé pour les utilisateurs salle_enabled sans rôle admin/direction).
+function sqlTouchesOnlySalle(sql: string): boolean {
+  const s = (sql || '').toLowerCase();
+  const refs = Array.from(s.matchAll(/\b(?:from|join)\s+([a-z_0-9."]+)/g)).map((m) => m[1].replace(/"/g, ''));
+  if (refs.length === 0) return false;
+  return refs.every((r) => {
+    const bare = r.split('.').pop() ?? r;
+    return bare === 'salle_journees' || bare === 'salle_objectifs';
+  });
+}
+
+async function runGaiaQuery(admin: any, sql: string, salleOnly = false): Promise<unknown> {
   try {
+    if (salleOnly && !sqlTouchesOnlySalle(sql)) {
+      return { error: "Accès restreint : votre compte n'autorise que les requêtes sur salle_journees et salle_objectifs (module Salle Hyper Nova)." };
+    }
     const { data, error } = await admin.rpc('gaia_query', { sql_query: sql });
     if (error) return { error: error.message };
     return data;

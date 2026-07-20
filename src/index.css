@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Exo+2:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Exo+2:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Inter:wght@300;400;500;600;700&family=Goldman:wght@400;700&family=Montserrat:wght@300;400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -154,6 +154,105 @@
       linear-gradient(90deg, hsl(240 30% 18% / 0.5) 1px, transparent 1px);
   }
 }
+
+/* ============================================================
+   HABILLAGE DE MARQUE HYPERNOVA — scoped à la page /salle
+   Livret officiel : Deep Black, Bright White, Neon Purple #B97DF5,
+   Glitch Blue #5078DE, Turbo Red #FF2D41. Goldman + Montserrat.
+   ============================================================ */
+.hn-brand {
+  /* Override de l'accent d'espace Salle vers le Neon Purple officiel */
+  --space-salle: 273 87% 72%;              /* #B97DF5 */
+  --hn-purple: 273 87% 72%;                /* #B97DF5 */
+  --hn-blue: 224 68% 59%;                  /* #5078DE */
+  --hn-red: 355 100% 59%;                  /* #FF2D41 */
+  --hn-yellow: 45 100% 55%;                /* jaune-or */
+  --hn-lilac: 273 87% 85%;                 /* déclinaison violette claire */
+  --hn-white: 0 0% 96%;
+
+  font-family: 'Montserrat', 'Inter', system-ui, sans-serif;
+}
+.hn-brand .font-display,
+.hn-brand h1, .hn-brand h2, .hn-brand h3,
+.hn-brand .hn-goldman {
+  font-family: 'Goldman', 'Exo 2', system-ui, sans-serif;
+  letter-spacing: 0.01em;
+}
+.hn-brand .hn-kpi-value {
+  font-family: 'Goldman', 'Exo 2', system-ui, sans-serif;
+  letter-spacing: 0.02em;
+}
+
+/* Fond décoratif "portail stellaire" — bandes obliques sur noir profond.
+   Réservé au bandeau d'en-tête de la page Salle, jamais derrière les graphiques. */
+.hn-hero-bg {
+  position: relative;
+  background:
+    linear-gradient(120deg,
+      hsl(var(--hn-purple) / 0.14) 0%,
+      hsl(var(--hn-purple) / 0) 22%,
+      hsl(var(--hn-blue) / 0.12) 40%,
+      hsl(var(--hn-blue) / 0) 60%,
+      hsl(var(--hn-red) / 0.10) 78%,
+      hsl(var(--hn-red) / 0) 100%),
+    radial-gradient(120% 60% at 50% 0%,
+      hsl(var(--hn-purple) / 0.18) 0%,
+      transparent 55%),
+    #000;
+  overflow: hidden;
+  isolation: isolate;
+}
+.hn-hero-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(115deg,
+      transparent 0 40px,
+      hsl(var(--hn-purple) / 0.05) 40px 42px,
+      transparent 42px 90px,
+      hsl(var(--hn-blue) / 0.04) 90px 92px);
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Pulse subtile — glow Neon Purple, activée quand la semaine bat la précédente. */
+@keyframes hn-pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 hsl(var(--hn-purple) / 0);
+    border-color: hsl(var(--hn-purple) / 0.55);
+  }
+  50% {
+    box-shadow: 0 0 22px 2px hsl(var(--hn-purple) / 0.45);
+    border-color: hsl(var(--hn-purple) / 0.95);
+  }
+}
+.hn-pulse {
+  animation: hn-pulse-glow 2.4s ease-in-out infinite;
+}
+
+/* Badge "NOUVEAU RECORD" — pop rouge Turbo. */
+@keyframes hn-record-pop {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 hsl(var(--hn-red) / 0); }
+  50%      { transform: scale(1.04); box-shadow: 0 0 18px 2px hsl(var(--hn-red) / 0.55); }
+}
+.hn-record-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  font-family: 'Goldman', 'Exo 2', system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+  background: hsl(var(--hn-red));
+  border: 1px solid hsl(var(--hn-red) / 0.7);
+  animation: hn-record-pop 1.8s ease-in-out infinite;
+}
+
 
 /* Impression du dossier — une slide 16:9 par page paysage */
 @media print {

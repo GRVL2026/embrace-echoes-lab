@@ -75,12 +75,13 @@ const SOURCES: Array<{
   label: string;
   color: string;
 }> = [
-  { key: "ca_cartes_ht", label: "Cartes cashless", color: "hsl(320 85% 62%)" },
-  { key: "ca_pax_ht", label: "TPA jeux (CB)", color: "hsl(263 85% 68%)" },
-  { key: "ca_merch_ht", label: "Merch Hypernova", color: "hsl(30 95% 55%)" },
-  { key: "ca_vending_pokemon_ht", label: "Vending Pokémon", color: "hsl(210 100% 62%)" },
-  { key: "ca_vending_blindbox_ht", label: "Vending Blind Box", color: "hsl(142 71% 45%)" },
-  { key: "ca_photomaton_ht", label: "Photomaton", color: "hsl(188 94% 55%)" },
+  // Palette officielle Hypernova (livret de marque)
+  { key: "ca_cartes_ht", label: "Cartes cashless", color: "hsl(273 87% 72%)" },   // Neon Purple #B97DF5
+  { key: "ca_pax_ht", label: "TPA jeux (CB)", color: "hsl(224 68% 59%)" },        // Glitch Blue #5078DE
+  { key: "ca_merch_ht", label: "Merch Hypernova", color: "hsl(355 100% 59%)" },   // Turbo Red #FF2D41
+  { key: "ca_vending_pokemon_ht", label: "Vending Pokémon", color: "hsl(45 100% 55%)" },   // jaune-or
+  { key: "ca_vending_blindbox_ht", label: "Vending Blind Box", color: "hsl(273 87% 85%)" }, // violet clair
+  { key: "ca_photomaton_ht", label: "Photomaton", color: "hsl(0 0% 88%)" },       // blanc/gris clair
 ];
 const TVA = 0.2;
 
@@ -161,20 +162,42 @@ export default function Salle() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-background text-foreground">
+    <div className="hn-brand min-h-screen w-full bg-background text-foreground">
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-card/70 backdrop-blur-md px-3 sm:px-6 gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <MobileNav />
           <img src={logoImg} alt="Arcade OS logo" className="h-7 w-auto object-contain flex-shrink-0" />
-          <h1 className="font-display text-base sm:text-xl font-bold tracking-tight truncate flex items-center gap-2">
-            <Gamepad2 className="h-5 w-5" style={{ color: "hsl(var(--space-salle))" }} />
-            Salle <span className="text-primary text-glow-purple">Hyper</span>{" "}
-            <span className="text-secondary text-glow-green">Nova</span>
+          <h1 className="font-display text-base sm:text-lg font-bold tracking-tight truncate flex items-center gap-2">
+            <Gamepad2 className="h-5 w-5" style={{ color: "hsl(var(--hn-purple))" }} />
+            Salle Hypernova
           </h1>
           <AppTopNav />
         </div>
         <UserMenu />
       </header>
+
+      {/* Bandeau de marque HYPERNOVA — portail stellaire, en tête uniquement */}
+      <section className="hn-hero-bg border-b border-border/60">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 py-6 sm:py-8 flex items-end justify-between gap-4 flex-wrap">
+          <div>
+            <div
+              className="hn-goldman font-bold text-3xl sm:text-5xl tracking-[0.08em] leading-none"
+              style={{ color: "#fff", textShadow: "0 0 24px hsl(var(--hn-purple) / 0.55)" }}
+            >
+              HYPERNOVA
+            </div>
+            <div
+              className="mt-2 text-xs sm:text-sm uppercase tracking-[0.3em]"
+              style={{ color: "hsl(var(--hn-purple))" }}
+            >
+              Battle for fun
+            </div>
+          </div>
+          <div className="text-[11px] uppercase tracking-widest text-white/60">
+            Dashboard opérationnel · saisie du jour
+          </div>
+        </div>
+      </section>
 
       <main className="mx-auto max-w-7xl px-3 sm:px-6 py-4 sm:py-6">
         <Tabs value={tab} onValueChange={changeTab}>
@@ -283,9 +306,33 @@ function SaisieTab({ userId }: { userId: string | null }) {
 
   const totalHT = SOURCES.reduce((s, src) => s + Number((form as any)[src.key] ?? 0), 0);
 
+  // Records historiques (hors journée en cours d'édition) pour badge "NOUVEAU RECORD"
+  const { data: records } = useQuery({
+    queryKey: ["salle_records", date],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("salle_journees")
+        .select("date, visiteurs, ca_cartes_ht, ca_pax_ht, ca_merch_ht, ca_vending_pokemon_ht, ca_vending_blindbox_ht, ca_photomaton_ht")
+        .neq("date", date);
+      if (error) throw error;
+      const arr = (data ?? []) as SalleJournee[];
+      let maxCa = 0;
+      let maxVis = 0;
+      for (const r of arr) {
+        const ca = journeeCaTotal(r);
+        if (ca > maxCa) maxCa = ca;
+        if (Number(r.visiteurs ?? 0) > maxVis) maxVis = Number(r.visiteurs ?? 0);
+      }
+      return { maxCa, maxVis };
+    },
+  });
+  const isRecordCa = !!records && totalHT > 0 && totalHT > (records.maxCa ?? 0);
+  const isRecordVis = !!records && form.visiteurs > 0 && form.visiteurs > (records.maxVis ?? 0);
+
   const save = async () => {
     setSaving(true);
     const payload = { date, ...form, saisi_par: userId };
+    const beatRecord = isRecordCa || isRecordVis;
     const { error } = await (supabase as any)
       .from("salle_journees")
       .upsert(payload, { onConflict: "date" });
@@ -294,10 +341,16 @@ function SaisieTab({ userId }: { userId: string | null }) {
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: existing ? "Journée mise à jour" : "Journée enregistrée", description: date });
+    toast({
+      title: beatRecord ? "🚀 Nouveau record !" : (existing ? "Ta journée est mise à jour" : "Ta journée est enregistrée"),
+      description: beatRecord
+        ? `Tu viens de battre ${isRecordCa && isRecordVis ? "le CA et les visiteurs" : isRecordCa ? "le CA historique" : "le record de visiteurs"}. Le Pulse monte !`
+        : "Le Pulse monte !",
+    });
     qc.invalidateQueries({ queryKey: ["salle_journee", date] });
     qc.invalidateQueries({ queryKey: ["salle_semaine", weekMondayStr] });
     qc.invalidateQueries({ queryKey: ["salle_dashboard"] });
+    qc.invalidateQueries({ queryKey: ["salle_records"] });
   };
 
   return (
@@ -346,10 +399,14 @@ function SaisieTab({ userId }: { userId: string | null }) {
           ))}
         </div>
 
-        <div className="mt-4 rounded-md border border-border bg-muted/30 p-3 flex items-center justify-between">
-          <div className="text-sm text-muted-foreground">Total journée</div>
+        <div className="mt-4 rounded-md border border-border bg-muted/30 p-3 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Total journée</span>
+            {isRecordCa && <span className="hn-record-badge">⚡ Nouveau record CA</span>}
+            {isRecordVis && <span className="hn-record-badge">👥 Record visiteurs</span>}
+          </div>
           <div className="text-right">
-            <div className="text-2xl font-semibold" style={{ color: "hsl(var(--space-salle))" }}>
+            <div className="hn-kpi-value text-2xl font-bold" style={{ color: "hsl(var(--hn-purple))" }}>
               {eur2(totalHT)} HT
             </div>
             <div className="text-xs text-muted-foreground">{eur2(totalHT * (1 + TVA))} TTC</div>
@@ -722,6 +779,33 @@ function DashboardTab() {
   }, [displayWeek]);
   const donutTotal = donutData.reduce((s, d) => s + d.value, 0);
 
+  // Records historiques (tous les jours saisis) — pour badge "NOUVEAU RECORD"
+  const { data: histRecords } = useQuery({
+    queryKey: ["salle_records_all"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("salle_journees")
+        .select("date, visiteurs, ca_cartes_ht, ca_pax_ht, ca_merch_ht, ca_vending_pokemon_ht, ca_vending_blindbox_ht, ca_photomaton_ht");
+      if (error) throw error;
+      const arr = (data ?? []) as SalleJournee[];
+      let maxCa = 0, maxCaDate = "";
+      let maxVis = 0, maxVisDate = "";
+      for (const r of arr) {
+        const ca = journeeCaTotal(r);
+        if (ca > maxCa) { maxCa = ca; maxCaDate = r.date; }
+        const v = Number(r.visiteurs ?? 0);
+        if (v > maxVis) { maxVis = v; maxVisDate = r.date; }
+      }
+      return { maxCa, maxCaDate, maxVis, maxVisDate };
+    },
+  });
+  const weekHoldsRecordCa = !!(histRecords && displayWeek && histRecords.maxCaDate &&
+    parseYmd(histRecords.maxCaDate) >= displayWeek.monday &&
+    parseYmd(histRecords.maxCaDate) <= addDays(displayWeek.monday, 6));
+  const weekHoldsRecordVis = !!(histRecords && displayWeek && histRecords.maxVisDate &&
+    parseYmd(histRecords.maxVisDate) >= displayWeek.monday &&
+    parseYmd(histRecords.maxVisDate) <= addDays(displayWeek.monday, 6));
+
   if (isLoading || !currentWeek) {
     return (
       <div className="py-20 text-center text-muted-foreground">
@@ -787,18 +871,21 @@ function DashboardTab() {
       {/* KPI tiles */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiTile
-          label={isFallback ? "CA (dernière semaine saisie)" : "CA semaine en cours"}
+          label={isFallback ? "Le Pulse — dernière semaine saisie" : "Le Pulse de la semaine"}
           value={eur(displayWeek?.ca ?? 0)}
           sub={compareLabel}
-          accent="hsl(var(--space-salle))"
+          accent="hsl(var(--hn-purple))"
           positive={caVariation >= 0}
+          pulse={!isFallback && caVariation > 0}
+          badge={weekHoldsRecordCa ? "Nouveau record" : undefined}
         />
         <KpiTile
           label={isFallback ? "Visiteurs (dernière semaine)" : "Visiteurs semaine"}
           value={(displayWeek?.visiteurs ?? 0).toLocaleString("fr-FR")}
           sub={compareVisLabel}
-          accent="hsl(var(--space-pilotage))"
+          accent="hsl(var(--hn-blue))"
           positive={visVariation >= 0}
+          badge={weekHoldsRecordVis ? "Record visiteurs" : undefined}
         />
         <KpiTile
           label="Objectif semaine"
@@ -811,7 +898,7 @@ function DashboardTab() {
           label="Meilleure source"
           value={bestSource ? bestSource.label : "—"}
           sub={bestSource ? eur(bestSource.value) : ""}
-          accent={bestSource?.color ?? "hsl(var(--space-commerce))"}
+          accent={bestSource?.color ?? "hsl(var(--hn-purple))"}
         />
       </div>
 
@@ -1020,6 +1107,8 @@ function KpiTile({
   accent,
   progress,
   positive,
+  pulse,
+  badge,
 }: {
   label: string;
   value: string;
@@ -1027,11 +1116,21 @@ function KpiTile({
   accent: string;
   progress?: number;
   positive?: boolean;
+  pulse?: boolean;
+  badge?: string;
 }) {
   return (
-    <Card className="p-4 border-l-4" style={{ borderLeftColor: accent }}>
+    <Card
+      className={`p-4 border-l-4 relative ${pulse ? "hn-pulse" : ""}`}
+      style={{ borderLeftColor: accent }}
+    >
+      {badge && (
+        <div className="absolute top-2 right-2">
+          <span className="hn-record-badge">⚡ {badge}</span>
+        </div>
+      )}
       <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">{label}</div>
-      <div className="mt-1 text-2xl font-bold" style={{ color: accent }}>
+      <div className="hn-kpi-value mt-1 text-2xl font-bold" style={{ color: accent }}>
         {value}
       </div>
       {sub && (

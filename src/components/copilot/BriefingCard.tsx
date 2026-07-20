@@ -24,10 +24,10 @@ type Briefing = {
  * Repliable, avec bouton "En parler au copilote" qui ouvre le panneau global
  * avec le contexte du briefing pré-rempli.
  */
-export function BriefingCard() {
+export function BriefingCard({ defaultExpanded = true }: { defaultExpanded?: boolean } = {}) {
   const { copilotEnabled } = useAuth();
   const { open: openCopilot } = useCopilot();
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(defaultExpanded);
 
   const { data, isLoading } = useQuery({
     queryKey: ["copilot-briefing-today"],

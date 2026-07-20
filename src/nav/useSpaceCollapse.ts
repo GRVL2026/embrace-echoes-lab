@@ -38,7 +38,9 @@ export function useSpaceCollapse(spaceKeys: string[], activeSpaceKey: string | n
     const next = { ...stored };
     for (const key of spaceKeys) {
       if (next[key] === undefined) {
-        next[key] = activeSpaceKey ? key !== activeSpaceKey : false;
+        // Par défaut : espace courant déplié, tous les autres repliés
+        // (y compris quand aucun n'est actif — cas du Hub).
+        next[key] = activeSpaceKey ? key !== activeSpaceKey : true;
         mutated = true;
       }
     }

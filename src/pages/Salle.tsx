@@ -1138,32 +1138,71 @@ function DashboardTab() {
       </div>
 
 
-      {/* Atteinte objectifs */}
+      {/* Atteinte objectifs — double lecture % (intermédiaire courant + cap long terme) */}
       <Card className="p-4">
         <SectionTitle>Atteinte des objectifs par semaine</SectionTitle>
-        <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
-          {objectifSeries.map((w) => (
-            <div key={w.label} className="grid grid-cols-[60px_1fr_60px] items-center gap-3">
-              <div className="text-xs font-medium tabular-nums">{w.label}</div>
-              <DualTargetBar
-                ca={w.ca}
-                objectif={w.objectif}
-                capLT={capLTSemaine}
-                heightClass="h-2"
-              />
-              <div
-                className="text-right text-xs tabular-nums font-semibold"
-                style={{ color: w.pct >= 100 ? "hsl(var(--space-ecommerce))" : "hsl(var(--space-salle))" }}
-              >
-                {w.pct} %
+        <div className="mb-2 flex flex-wrap items-center gap-3 text-[10px] uppercase tracking-wider text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block h-2 w-3 rounded-sm" style={{ background: "hsl(var(--hn-purple))" }} />
+            Objectif {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(objectifInterCourant)}/sem.
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block h-1 w-3 rounded-sm" style={{ background: "hsl(var(--hn-blue) / 0.7)" }} />
+            Cap long terme {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(capLTSemaine)}/sem.
+          </span>
+        </div>
+        <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+          {objectifSeries.map((w) => {
+            const reached = w.pct >= 100;
+            const interFill = Math.min(100, w.pct);
+            const ltFill = Math.min(100, w.pctLT);
+            return (
+              <div key={w.label} className="grid grid-cols-[70px_1fr] items-center gap-3">
+                <div className="text-xs font-medium tabular-nums">{w.label}</div>
+                <div className="space-y-1">
+                  {/* Barre 1 — Objectif intermédiaire */}
+                  <div className="grid grid-cols-[1fr_44px] items-center gap-2">
+                    <div className="relative w-full h-2 rounded-full bg-muted/50 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: `${interFill}%`,
+                          background: reached
+                            ? "linear-gradient(90deg, hsl(var(--space-ecommerce)) 0%, hsl(var(--hn-purple)) 100%)"
+                            : "hsl(var(--hn-purple))",
+                          boxShadow: reached ? "0 0 8px hsl(var(--hn-purple) / 0.55)" : undefined,
+                        }}
+                      />
+                    </div>
+                    <div
+                      className="text-right text-xs tabular-nums font-semibold"
+                      style={{ color: reached ? "hsl(var(--space-ecommerce))" : "hsl(var(--hn-purple))" }}
+                    >
+                      {w.pct} %
+                    </div>
+                  </div>
+                  {/* Barre 2 — Cap long terme (plus fine, discrète) */}
+                  <div className="grid grid-cols-[1fr_44px] items-center gap-2">
+                    <div className="relative w-full h-1 rounded-full bg-muted/30 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${ltFill}%`, background: "hsl(var(--hn-blue) / 0.7)" }}
+                      />
+                    </div>
+                    <div className="text-right text-[10px] tabular-nums text-muted-foreground">
+                      {w.pctLT} %
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Card>
     </div>
   );
 }
+
 
 function KpiTile({
   label,

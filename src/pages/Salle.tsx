@@ -793,7 +793,7 @@ function DashboardTab() {
       color: s.color,
     })).filter((d) => d.value > 0);
   }, [displayWeek]);
-  const donutTotal = donutData.reduce((s, d) => s + d.value, 0);
+  const donutTotal = displayWeek?.ca ?? 0;
 
   // Records historiques (tous les jours saisis) — pour badge "NOUVEAU RECORD"
   const { data: histRecords } = useQuery({

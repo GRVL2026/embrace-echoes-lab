@@ -20,6 +20,7 @@ import { Loader2, Shield, Database, Link2, Sparkles } from "lucide-react";
 import { MobileNav } from "@/components/MobileNav";
 import { AppTopNav } from "@/components/AppTopNav";
 import logoImg from "@/assets/logo.png";
+import { InviteUserDialog } from "@/components/admin/InviteUserDialog";
 
 
 type Brand = { id: string; name: string };

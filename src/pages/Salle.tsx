@@ -760,10 +760,21 @@ function DashboardTab() {
     }));
   }, [weeks]);
 
+  // Cap long terme = MAX des objectifs hebdo historiques (fallback 20167)
+  const capLTSemaine = useMemo(() => {
+    const max = Math.max(
+      0,
+      ...((objectifs ?? []).map((o) => Number(o.objectif_semaine_ht ?? 0))),
+    );
+    return max > 0 ? max : 20167;
+  }, [objectifs]);
+
   // Objectif — donnée dérivée
   const objectifSeries = useMemo(() => {
     return weeks.map((w) => ({
       label: w.label,
+      ca: Math.round(w.ca),
+      objectif: Math.round(w.objectif),
       pct: w.objectif > 0 ? Math.min(200, Math.round((w.ca / w.objectif) * 100)) : 0,
     }));
   }, [weeks]);

@@ -849,18 +849,20 @@ function DashboardTab() {
   const weekLabel = displayWeek
     ? `Semaine du ${displayWeek.monday.toLocaleDateString("fr-FR", { day: "2-digit", month: "long" })} au ${addDays(displayWeek.monday, 6).toLocaleDateString("fr-FR", { day: "2-digit", month: "long" })}`
     : "";
-  const compareLabel =
-    hasCurrentData && currentWeekDates.length < 7
-      ? `${pct(caVariation)} vs S-1 (à ${currentWeekDates.length} j comparables)`
-      : comparePrev
-        ? `${pct(caVariation)} vs S-1`
-        : "—";
-  const compareVisLabel =
-    hasCurrentData && currentWeekDates.length < 7
-      ? `${pct(visVariation)} vs S-1 (à ${currentWeekDates.length} j comparables)`
-      : comparePrev
-        ? `${pct(visVariation)} vs S-1`
-        : "—";
+  const isPartialCurrent = isCurrentSelected && hasCurrentData && currentWeekDates.length < 7;
+  const compareLabel = isPartialCurrent
+    ? `${pct(caVariation)} vs S-1 (à ${currentWeekDates.length} j comparables)`
+    : comparePrev
+      ? `${pct(caVariation)} vs S-1`
+      : "—";
+  const compareVisLabel = isPartialCurrent
+    ? `${pct(visVariation)} vs S-1 (à ${currentWeekDates.length} j comparables)`
+    : comparePrev
+      ? `${pct(visVariation)} vs S-1`
+      : "—";
+
+  // Objectif intermédiaire actuellement en vigueur (affiché en permanence)
+  const objectifActuel = objectifAtDate(new Date());
 
 
   return (
@@ -870,6 +872,28 @@ function DashboardTab() {
         className="p-3 sm:p-4 flex flex-wrap items-center gap-3 border-l-4"
         style={{ borderLeftColor: "hsl(var(--space-salle))" }}
       >
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => canPrev && setSelectedKey(weeks[displayIdx - 1].key)}
+            disabled={!canPrev}
+            aria-label="Semaine précédente"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => canNext && setSelectedKey(weeks[displayIdx + 1].key)}
+            disabled={!canNext}
+            aria-label="Semaine suivante"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
         <div className="text-sm">
           <span className="text-muted-foreground">Affichage : </span>
           <span className="font-semibold">{weekLabel}</span>
@@ -877,13 +901,23 @@ function DashboardTab() {
             <span className="ml-2 text-xs text-muted-foreground">— dernière semaine saisie</span>
           )}
         </div>
+        {!isCurrentSelected && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => setSelectedKey(currentWeek.key)}
+          >
+            Cette semaine
+          </Button>
+        )}
         {isFallback && (
           <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-medium text-amber-200">
             <Info className="h-3 w-3" />
             Aucune saisie cette semaine pour l'instant
           </span>
         )}
-        {hasCurrentData && currentWeekDates.length < 7 && (
+        {isPartialCurrent && (
           <span className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary">
             <Info className="h-3 w-3" />
             {currentWeekDates.length}/7 jours saisis — comparaisons à jours comparables

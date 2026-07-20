@@ -1086,14 +1086,15 @@ function DashboardTab() {
       {/* Atteinte objectifs */}
       <Card className="p-4">
         <SectionTitle>Atteinte des objectifs par semaine</SectionTitle>
-        <div className="space-y-2 max-h-72 overflow-y-auto">
+        <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
           {objectifSeries.map((w) => (
             <div key={w.label} className="grid grid-cols-[60px_1fr_60px] items-center gap-3">
               <div className="text-xs font-medium tabular-nums">{w.label}</div>
-              <Progress
-                value={Math.min(100, w.pct)}
-                className="h-2"
-                indicatorColor={w.pct >= 100 ? "hsl(var(--space-ecommerce))" : "hsl(var(--space-salle))"}
+              <DualTargetBar
+                ca={w.ca}
+                objectif={w.objectif}
+                capLT={capLTSemaine}
+                heightClass="h-2"
               />
               <div
                 className="text-right text-xs tabular-nums font-semibold"

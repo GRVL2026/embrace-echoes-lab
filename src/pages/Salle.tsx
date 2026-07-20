@@ -553,6 +553,7 @@ type WeekAgg = {
 };
 
 function DashboardTab() {
+  const navigate = useNavigate();
   // 12 dernières semaines
   const start = useMemo(() => {
     const m = mondayOf(new Date());

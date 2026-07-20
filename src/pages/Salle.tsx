@@ -1045,23 +1045,3 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
-function StackTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null;
-  const total = payload.reduce((s: number, p: any) => s + Number(p.value ?? 0), 0);
-  return (
-    <div className="rounded-md border border-border bg-popover text-popover-foreground p-2 text-xs shadow-lg">
-      <div className="font-semibold mb-1">{label}</div>
-      {payload.map((p: any) => (
-        <div key={p.dataKey} className="flex items-center gap-2">
-          <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: p.color }} />
-          <span className="flex-1">{p.name}</span>
-          <span className="tabular-nums font-medium">{eur(Number(p.value))}</span>
-        </div>
-      ))}
-      <div className="mt-1 pt-1 border-t border-border flex justify-between font-semibold">
-        <span>Total</span>
-        <span className="tabular-nums">{eur(total)}</span>
-      </div>
-    </div>
-  );
-}

@@ -754,26 +754,52 @@ function DashboardTab() {
 
   return (
     <div className="space-y-4">
+      {/* Bandeau de contexte semaine */}
+      <Card
+        className="p-3 sm:p-4 flex flex-wrap items-center gap-3 border-l-4"
+        style={{ borderLeftColor: "hsl(var(--space-salle))" }}
+      >
+        <div className="text-sm">
+          <span className="text-muted-foreground">Affichage : </span>
+          <span className="font-semibold">{weekLabel}</span>
+          {isFallback && (
+            <span className="ml-2 text-xs text-muted-foreground">— dernière semaine saisie</span>
+          )}
+        </div>
+        {isFallback && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-medium text-amber-200">
+            <Info className="h-3 w-3" />
+            Aucune saisie cette semaine pour l'instant
+          </span>
+        )}
+        {hasCurrentData && currentWeekDates.length < 7 && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary">
+            <Info className="h-3 w-3" />
+            {currentWeekDates.length}/7 jours saisis — comparaisons à jours comparables
+          </span>
+        )}
+      </Card>
+
       {/* KPI tiles */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiTile
-          label="CA semaine en cours"
-          value={eur(currentWeek.ca)}
-          sub={prevWeek ? `${pct(caVariation)} vs S-1` : "—"}
+          label={isFallback ? "CA (dernière semaine saisie)" : "CA semaine en cours"}
+          value={eur(displayWeek?.ca ?? 0)}
+          sub={compareLabel}
           accent="hsl(var(--space-salle))"
           positive={caVariation >= 0}
         />
         <KpiTile
-          label="Visiteurs semaine"
-          value={currentWeek.visiteurs.toLocaleString("fr-FR")}
-          sub={prevWeek ? `${pct(visVariation)} vs S-1` : "—"}
+          label={isFallback ? "Visiteurs (dernière semaine)" : "Visiteurs semaine"}
+          value={(displayWeek?.visiteurs ?? 0).toLocaleString("fr-FR")}
+          sub={compareVisLabel}
           accent="hsl(var(--space-pilotage))"
           positive={visVariation >= 0}
         />
         <KpiTile
           label="Objectif semaine"
           value={`${Math.round(objPct)} %`}
-          sub={currentWeek.objectif ? `Cible ${eur(currentWeek.objectif)}` : "Pas d'objectif"}
+          sub={displayWeek && displayWeek.objectif ? `Cible ${eur(displayWeek.objectif)}` : "Pas d'objectif"}
           accent="hsl(var(--space-ecommerce))"
           progress={Math.min(100, objPct)}
         />
@@ -794,8 +820,15 @@ function DashboardTab() {
               <BarChart data={currentWeekDays}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={(v) => `${Math.round(v / 100) / 10}k`} />
-                <Tooltip content={<StackTooltip />} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={eurAxis} />
+                <Tooltip
+                  cursor={barTooltipCursor}
+                  content={
+                    <ChartTooltipContent
+                      formatter={(value: any, name: any) => [eur(Number(value)), name]}
+                    />
+                  }
+                />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 {SOURCES.map((s) => (
                   <Bar key={s.key as string} dataKey={s.key as string} stackId="a" fill={s.color} name={s.label} />
@@ -816,10 +849,16 @@ function DashboardTab() {
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(value: any, name: any) => {
-                    const share = donutTotal > 0 ? (Number(value) / donutTotal) * 100 : 0;
-                    return [`${eur(Number(value))} (${share.toFixed(1)}%)`, name];
-                  }}
+                  cursor={false}
+                  content={
+                    <ChartTooltipContent
+                      hideLabel
+                      formatter={(value: any, name: any) => {
+                        const share = donutTotal > 0 ? (Number(value) / donutTotal) * 100 : 0;
+                        return [`${eur(Number(value))} (${share.toFixed(1)}%)`, name];
+                      }}
+                    />
+                  }
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -838,15 +877,20 @@ function DashboardTab() {
             <BarChart data={weekSeries}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={(v) => `${Math.round(v / 100) / 10}k`} />
+              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={eurAxis} />
               <Tooltip
-                formatter={(v: any, name: any, item: any) => {
-                  if (name === "CA HT") {
-                    const variation = item?.payload?.variation ?? 0;
-                    return [`${eur(Number(v))} (${pct(variation)} vs S-1)`, name];
-                  }
-                  return [eur(Number(v)), name];
-                }}
+                cursor={barTooltipCursor}
+                content={
+                  <ChartTooltipContent
+                    formatter={(v: any, name: any, item: any) => {
+                      if (name === "CA HT") {
+                        const variation = item?.payload?.variation ?? 0;
+                        return [`${eur(Number(v))} (${pct(variation)} vs S-1)`, name];
+                      }
+                      return [eur(Number(v)), name];
+                    }}
+                  />
+                }
               />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Bar dataKey="ca" name="CA HT" fill="hsl(var(--space-salle))" radius={[4, 4, 0, 0]} />
@@ -864,8 +908,15 @@ function DashboardTab() {
             <BarChart data={weekdayCompare}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={(v) => `${Math.round(v / 100) / 10}k`} />
-              <Tooltip formatter={(v: any) => eur(Number(v))} />
+              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={eurAxis} />
+              <Tooltip
+                cursor={barTooltipCursor}
+                content={
+                  <ChartTooltipContent
+                    formatter={(v: any, name: any) => [eur(Number(v)), name]}
+                  />
+                }
+              />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Bar dataKey="4 précédentes" fill="hsl(var(--muted-foreground) / 0.4)" radius={[4, 4, 0, 0]} />
               <Bar dataKey="4 dernières" fill="hsl(var(--space-salle))" radius={[4, 4, 0, 0]} />
@@ -884,7 +935,14 @@ function DashboardTab() {
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} />
                 <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
-                <Tooltip />
+                <Tooltip
+                  cursor={{ stroke: "hsl(var(--primary) / 0.45)", strokeWidth: 1 }}
+                  content={
+                    <ChartTooltipContent
+                      formatter={(v: any, name: any) => [Number(v).toLocaleString("fr-FR"), name]}
+                    />
+                  }
+                />
                 <Line type="monotone" dataKey="visiteurs" stroke="hsl(var(--space-pilotage))" strokeWidth={2} dot={false} name="Visiteurs" />
               </LineChart>
             </ResponsiveContainer>
@@ -897,14 +955,22 @@ function DashboardTab() {
               <LineChart data={visitorsSeries}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={(v) => `${v}€`} />
-                <Tooltip formatter={(v: any) => eur(Number(v))} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={eurAxis} />
+                <Tooltip
+                  cursor={{ stroke: "hsl(var(--primary) / 0.45)", strokeWidth: 1 }}
+                  content={
+                    <ChartTooltipContent
+                      formatter={(v: any, name: any) => [eur(Number(v)), name]}
+                    />
+                  }
+                />
                 <Line type="monotone" dataKey="panier" stroke="hsl(var(--space-salle))" strokeWidth={2} dot={false} name="Panier moyen" />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </Card>
       </div>
+
 
       {/* Atteinte objectifs */}
       <Card className="p-4">

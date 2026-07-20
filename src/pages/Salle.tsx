@@ -240,9 +240,12 @@ const EMPTY_FORM = {
   notes: "",
 };
 
-function SaisieTab({ userId }: { userId: string | null }) {
+function SaisieTab({ userId, initialDate }: { userId: string | null; initialDate?: string }) {
   const qc = useQueryClient();
-  const [date, setDate] = useState<string>(toYmd(new Date()));
+  const [date, setDate] = useState<string>(initialDate ?? toYmd(new Date()));
+  useEffect(() => {
+    if (initialDate) setDate(initialDate);
+  }, [initialDate]);
   const [form, setForm] = useState<typeof EMPTY_FORM>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
 

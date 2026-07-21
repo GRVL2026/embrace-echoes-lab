@@ -468,8 +468,14 @@ export default function Clients() {
       )}
 
       {!isPending && (
-        <div className="text-xs text-muted-foreground text-right">
-          {filtered.length} client{filtered.length > 1 ? "s" : ""} affiché{filtered.length > 1 ? "s" : ""}
+        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1.5">
+            <Info className="h-3 w-3" />
+            <span>Ancienneté calculée depuis septembre 2022 — un client dont la première facture connue tombe dans l'exercice 2023 pourrait être plus ancien.</span>
+          </div>
+          <div className="shrink-0">
+            {filtered.length} client{filtered.length > 1 ? "s" : ""} affiché{filtered.length > 1 ? "s" : ""}
+          </div>
         </div>
       )}
       </div>

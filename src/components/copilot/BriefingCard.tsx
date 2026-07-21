@@ -16,8 +16,10 @@ type Briefing = {
     changements: { titre: string; detail: string }[];
     alertes_nouvelles: string[];
     opportunites: { titre: string; detail: string; lien?: string }[];
+    mouvements_commerce?: { resume: string; lignes: string[] };
   };
 };
+
 
 /**
  * Carte "Briefing du matin" affichée en haut du Hub.

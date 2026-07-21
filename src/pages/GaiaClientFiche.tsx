@@ -26,8 +26,10 @@ import {
 } from "@/components/ui/accordion";
 import {
   ArrowLeft,
+  Building2,
   CalendarClock,
   Database,
+  ExternalLink,
   FileText,
   Flame,
   Gamepad2,

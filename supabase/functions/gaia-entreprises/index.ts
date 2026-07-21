@@ -21,10 +21,34 @@ const REFRESH_BATCH_SIZE = 40;
 const RATE_LIMIT_MS = 550; // ~2 req/s max
 
 const CURSOR_KEY = "entreprises_cursor";
+const REMATCH_CURSOR_KEY = "rematch_cursor";
+const REMATCH_BATCH_SIZE = 30;
 const BILANS_CURSOR_KEY = "bilans_cursor";
 const BILANS_BATCH_SIZE = 25;
 const PAPPERS_API_KEY = Deno.env.get("PAPPERS_API_KEY") ?? "";
 const PAPPERS_URL = "https://api.pappers.fr/v2/entreprise";
+
+// ── NAF secteur (validé par Léopaul) ─────────────────────────────────────────
+// Clientèle : exploitants de jeux, forains, BEAUCOUP de bowlings, CHR, revendeurs, vending.
+// Comparaison avec OU sans point : on normalise les deux côtés.
+const NAF_SECTEUR_RAW = [
+  "93.29Z","93.21Z","93.11Z","92.00Z",
+  "56.30Z","56.10A",
+  "55.10Z","55.20Z","55.30Z",
+  "59.14Z",
+  "46.49Z","46.90Z",
+  "47.65Z","47.78C","47.91A","47.91B","47.99B",
+  "77.39Z","77.29Z",
+  "33.19Z","95.29Z","94.99Z","84.11Z",
+];
+function normalizeNaf(s: string | null | undefined): string {
+  return String(s ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+const NAF_SECTEUR = new Set(NAF_SECTEUR_RAW.map(normalizeNaf));
+function isSectorNaf(code: string | null | undefined): boolean {
+  const n = normalizeNaf(code);
+  return n.length > 0 && NAF_SECTEUR.has(n);
+}
 
 // ── Utilitaires ──────────────────────────────────────────────────────────────
 

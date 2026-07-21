@@ -76,12 +76,12 @@ function EvolutionCell({ ev, kind, dernier }: { ev: number | null; kind?: Client
     return (
       <span
         className="inline-flex flex-col items-end leading-tight"
-        title={dernier ? `Dernière activité : exercice ${dernier}` : undefined}
+        title={dernier ? `Dernier achat : exercice ${dernier}` : undefined}
       >
         <span className="inline-flex items-center gap-1 text-sm font-medium text-amber-500">
           <RotateCcw className="h-3.5 w-3.5" /> réactivé
         </span>
-        {dernier && <span className="text-[10px] text-muted-foreground">dernière act. {dernier}</span>}
+        {dernier && <span className="text-[10px] text-muted-foreground">absent depuis {dernier}</span>}
       </span>
     );
   }

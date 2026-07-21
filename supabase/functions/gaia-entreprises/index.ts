@@ -346,6 +346,7 @@ async function validateCandidate(code_client: string, siren: string | null) {
     return { ok: true };
   }
   const results = await apiSearch(siren);
+  if (results === null) return { ok: false, error: "API recherche-entreprises indisponible, réessayez" };
   const hit = results.find((r) => r.siren === siren) ?? results[0];
   if (!hit) return { ok: false, error: "SIREN introuvable dans l'API" };
   await admin.from("gaia_entreprises").update({

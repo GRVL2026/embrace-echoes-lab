@@ -288,6 +288,34 @@ export default function Clients() {
         </div>
       )}
 
+      <div className="flex flex-wrap items-center gap-2">
+        {([
+          ["all", "Tous"],
+          ["nouveau", "✨ Nouveaux"],
+          ["reactive", "🔄 Réactivés"],
+        ] as const).map(([key, label]) => {
+          const active = kindFilter === key;
+          const count = kindCounts[key as keyof typeof kindCounts];
+          return (
+            <button
+              key={key}
+              onClick={() => setKindFilter(key as ClientKind | "all")}
+              className={cn(
+                "text-xs px-3 py-1.5 rounded-full border transition-colors flex items-center gap-1.5",
+                active
+                  ? "bg-primary/15 border-primary/40 text-primary"
+                  : "bg-card/40 border-border hover:border-primary/30 text-muted-foreground",
+              )}
+            >
+              <span>{label}</span>
+              <span className={cn("text-[10px] font-mono", active ? "text-primary" : "text-muted-foreground/70")}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       {isPending && (
         <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
           <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Chargement…

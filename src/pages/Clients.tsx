@@ -367,13 +367,6 @@ export default function Clients() {
       {!isPending && filtered.length > 0 && (
         <div className="md:hidden space-y-2">
           {filtered.map((r) => {
-            const ev = r.evolution;
-            const evClass =
-              ev == null ? "text-secondary"
-              : ev >= 5 ? "text-secondary"
-              : ev <= -5 ? "text-destructive"
-              : "text-muted-foreground";
-            const Icon = ev == null ? TrendingUp : ev >= 5 ? TrendingUp : ev <= -5 ? TrendingDown : Minus;
             return (
               <Link
                 key={r.client}

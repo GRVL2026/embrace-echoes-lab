@@ -416,10 +416,7 @@ export default function Clients() {
                       {eur(r.ca_prev)}
                     </div>
                   </div>
-                  <div className={cn("flex items-center gap-1 text-sm font-medium", evClass)}>
-                    <Icon className="h-3.5 w-3.5" />
-                    {ev == null ? "nouveau" : `${ev >= 0 ? "+" : ""}${ev.toFixed(1)}%`}
-                  </div>
+                  <EvolutionCell ev={r.evolution} kind={r.kind} dernier={r.dernier_exercice_actif} />
                 </div>
               </Link>
             );

@@ -270,15 +270,22 @@ async function enrichBatch() {
     await saveCursor(null);
     return { ok: true, done: true, processed: 0, cursor: null };
   }
-  const stats = { auto: 0, a_valider: 0, introuvable: 0 };
+  const stats = { auto: 0, a_valider: 0, introuvable: 0, skipped: 0 };
   for (const t of targets) {
     try {
       const results = await apiSearch(t.name);
-      const outcome = chooseMatch(t.name, results);
-      await upsertResult(t.code_client, t.name, outcome);
-      stats[outcome.match_statut]++;
+      if (results === null) {
+        // Erreur transitoire (HTTP !ok / réseau) : on ne crée AUCUNE ligne,
+        // le client sera retenté au prochain lot.
+        stats.skipped++;
+      } else {
+        const outcome = chooseMatch(t.name, results);
+        await upsertResult(t.code_client, t.name, outcome);
+        stats[outcome.match_statut]++;
+      }
     } catch (e) {
       console.warn("enrich failed for", t.code_client, (e as Error).message);
+      stats.skipped++;
     }
     await sleep(RATE_LIMIT_MS);
   }

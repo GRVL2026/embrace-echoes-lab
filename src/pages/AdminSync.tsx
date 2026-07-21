@@ -250,25 +250,83 @@ export default function AdminSync() {
     }
     setProgress(initial);
 
-    const results: SyncSummary[] = [];
-    for (const feed of FEEDS) {
-      setProgress((p) => ({ ...p, [feed]: { ...p[feed], status: "running" } }));
-      const result = await syncOneFeed(feed);
-      results.push(result);
-      setProgress((p) => ({ ...p, [feed]: { ...result, status: "done" } }));
+    // Nouvelle architecture : on initialise l'état persisté côté serveur ; le
+    // cron `cegid-sync-stepper` (toutes les 2 min) continuera la progression
+    // même si l'utilisateur ferme la page.
+    try {
+      const { error } = await supabase.functions.invoke("cegid-sync", { body: { action: "sync-all" } });
+      if (error) throw error;
+      toast({
+        title: "Synchronisation démarrée",
+        description: "La progression continue en arrière-plan, même si vous fermez la page.",
+      });
+    } catch (error: unknown) {
+      const detail = await readFunctionError(error);
+      const msg = detail.error ?? "Impossible de démarrer la synchronisation.";
+      setGlobalError(msg);
+      toast({ title: "Erreur", description: msg, variant: "destructive" });
+      setSyncing(false);
+      return;
     }
 
-    setSummary(results);
-    await loadLogs();
-    const okCount = results.filter((r) => r.ok).length;
-    const totalRows = results.reduce((n, s) => n + (s.ok ? s.rows : 0), 0);
-    toast({
-      title: "Synchronisation terminée",
-      description: `${okCount}/${results.length} flux OK · ${totalRows} lignes chargées.`,
-      variant: okCount === results.length ? "default" : "destructive",
-    });
-    setSyncing(false);
+    // Poll toutes les 5s : lit cegid_sync_state pour afficher le flux courant,
+    // et gaia_sync_log pour marquer les flux terminés.
+    const startedAtMs = Date.now();
+    const doneFeeds = new Set<string>();
+    const pollInterval = window.setInterval(async () => {
+      const [{ data: state }, { data: logs }] = await Promise.all([
+        (supabase as any).from("cegid_sync_state").select("*").eq("id", 1).maybeSingle(),
+        (supabase as any).from("gaia_sync_log")
+          .select("feed,rows_loaded,ok,error,finished_at")
+          .gte("finished_at", new Date(startedAtMs - 5000).toISOString())
+          .order("finished_at", { ascending: false }),
+      ]);
+
+      setProgress((prev) => {
+        const next = { ...prev };
+        // Marque comme terminés les flux qui ont un log récent
+        for (const l of (logs ?? []) as SyncLogRow[]) {
+          if (!FEEDS.includes(l.feed as FeedName)) continue;
+          doneFeeds.add(l.feed);
+          next[l.feed] = {
+            feed: l.feed,
+            rows: l.rows_loaded ?? 0,
+            ok: l.ok,
+            error: l.error ?? undefined,
+            duration_ms: 0,
+            status: "done",
+          };
+        }
+        // Marque comme "running" le flux courant côté state
+        if (state?.feed && FEEDS.includes(state.feed) && !doneFeeds.has(state.feed)) {
+          next[state.feed] = {
+            ...(next[state.feed] ?? { feed: state.feed, rows: 0, ok: false, duration_ms: 0 }),
+            feed: state.feed,
+            rows: state.total_rows ?? 0,
+            status: "running",
+          };
+        }
+        return next;
+      });
+
+      const queueEmpty = !state?.feed && (!state?.queue || state.queue.length === 0);
+      if (queueEmpty) {
+        window.clearInterval(pollInterval);
+        await loadLogs();
+        const okCount = doneFeeds.size ? Array.from(doneFeeds).filter((f) => {
+          const l = (logs ?? []).find((x: any) => x.feed === f);
+          return l?.ok;
+        }).length : 0;
+        toast({
+          title: "Synchronisation terminée",
+          description: `${okCount}/${FEEDS.length} flux OK.`,
+          variant: okCount === FEEDS.length ? "default" : "destructive",
+        });
+        setSyncing(false);
+      }
+    }, 5000);
   };
+
 
   const retryFeed = async (feed: FeedName) => {
     setProgress((p) => ({

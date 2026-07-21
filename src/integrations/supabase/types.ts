@@ -2460,10 +2460,25 @@ export type Database = {
       }
       ensure_notification_prefs: { Args: { _uid: string }; Returns: undefined }
       gaia_query: { Args: { sql_query: string }; Returns: Json }
+      get_ca_client: {
+        Args: { _annee: number; _annee_prev: number }
+        Returns: {
+          ca_current: number
+          ca_prev: number
+          client: string
+          code_client: string
+        }[]
+      }
       get_cout_article_famille: {
         Args: { _famille: string }
         Returns: {
           code: string
+        }[]
+      }
+      get_gaia_exercices: {
+        Args: never
+        Returns: {
+          annee: number
         }[]
       }
       get_magasin_marge: {
@@ -2477,7 +2492,7 @@ export type Database = {
         }[]
       }
       get_marge_client: {
-        Args: never
+        Args: { _annee?: number }
         Returns: {
           annee: number
           ca_avec_cout: number
@@ -2497,6 +2512,17 @@ export type Database = {
           famille: string
           marge_estimee: number
           part_reelle: number
+        }[]
+      }
+      get_marge_totaux: {
+        Args: { _annee: number }
+        Returns: {
+          ca_avec_cout: number
+          ca_ht: number
+          couverture: number
+          marge_estimee: number
+          nb_clients: number
+          taux_moyen: number
         }[]
       }
       is_admin: { Args: never; Returns: boolean }

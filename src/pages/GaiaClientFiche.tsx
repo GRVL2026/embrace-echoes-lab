@@ -192,6 +192,27 @@ export default function GaiaClientFiche() {
   const firstSale = fiche?.firstSale ?? null;
   const reparations = fiche?.reparations ?? [];
 
+  // Code client (le premier trouvé côté CA ou parc) — pour requêter gaia_entreprises
+  const codeClient = useMemo(() => {
+    const c = (fiche?.ca ?? []).find((r: any) => r.code_client)?.code_client
+      ?? (fiche?.parc ?? []).find((r: any) => r.code_client)?.code_client
+      ?? null;
+    return c ? String(c).trim() : null;
+  }, [fiche]);
+
+  const { data: entreprise } = useQuery({
+    queryKey: ["gaia-entreprise", codeClient],
+    enabled: !!isDirection && !!codeClient,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("gaia_entreprises" as any)
+        .select("*")
+        .eq("code_client", codeClient!)
+        .maybeSingle();
+      return data as any;
+    },
+  });
+
   const caByYear = useMemo(() => {
     const m = new Map<number, number>();
     for (const r of ca) {

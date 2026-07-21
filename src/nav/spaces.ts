@@ -21,6 +21,7 @@ import {
   Bell,
   Building2,
   Gamepad2,
+  Grid2x2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -121,6 +122,13 @@ export const SPACES: Space[] = [
         to: "/admin/gaia#aa",
         icon: BarChart3,
         match: (p, h) => p === "/admin/gaia" && h === "#aa",
+      },
+      {
+        label: "Matrice CA × marge",
+        to: "/admin/matrice-clients",
+        icon: Grid2x2,
+        show: (c) => c.isDirection,
+        match: startsWith("/admin/matrice-clients"),
       },
       {
         label: "Dashboard Magasin",

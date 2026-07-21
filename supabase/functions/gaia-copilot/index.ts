@@ -119,6 +119,8 @@ Vues d'analyse déjà disponibles :
   v_gaia_devis_a_relancer, v_gaia_clients_dormants, v_gaia_stock_dormant,
   v_gaia_marge_famille, v_gaia_marge_client (marge = taux de marque : (ca - cout) / ca).
 
+Vue « Matrice CA × marge » (route /admin/matrice-clients, direction/admin uniquement) : nuage de points client par exercice fiscal, X = CA HT, Y = taux de marge, taille = marge €. Quatre quadrants : Piliers (CA élevé + marge élevée, à protéger), Pépites (CA faible + marge élevée, à développer), Volume (CA élevé + marge faible, à renégocier), Marginaux (CA faible + marge faible, à arbitrer). Seuils ajustables (défaut CA 200 000 €, marge = moyenne pondérée du portefeuille). Quand l'utilisateur demande « clients à gros CA et faible marge » / « à renégocier » / « pépites », renvoie vers cette matrice et liste les clients concernés depuis v_gaia_marge_client de l'exercice courant.
+
 Règles :
   • Uniquement des SELECT (WITH autorisé). Interdits : INSERT/UPDATE/DELETE/DROP/ALTER/CREATE/GRANT/TRUNCATE.
   • Limite tes requêtes (LIMIT 50 par défaut, LIMIT 200 maximum).

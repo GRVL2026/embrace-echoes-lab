@@ -778,6 +778,42 @@ export type Database = {
         }
         Relationships: []
       }
+      gaia_carnet_snapshot: {
+        Row: {
+          categorie: string | null
+          client: string | null
+          code_client: string | null
+          n_cde: string
+          order_type: string | null
+          sfa: boolean | null
+          snapshot_date: string
+          statut: string | null
+          total_ht: number | null
+        }
+        Insert: {
+          categorie?: string | null
+          client?: string | null
+          code_client?: string | null
+          n_cde: string
+          order_type?: string | null
+          sfa?: boolean | null
+          snapshot_date: string
+          statut?: string | null
+          total_ht?: number | null
+        }
+        Update: {
+          categorie?: string | null
+          client?: string | null
+          code_client?: string | null
+          n_cde?: string
+          order_type?: string | null
+          sfa?: boolean | null
+          snapshot_date?: string
+          statut?: string | null
+          total_ht?: number | null
+        }
+        Relationships: []
+      }
       gaia_client_groupes: {
         Row: {
           code_client: string

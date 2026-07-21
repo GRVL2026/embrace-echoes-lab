@@ -356,16 +356,26 @@ export default function Clients() {
         actions={<div className="flex items-center gap-1"><MobileNav /><UserMenu /></div>}
       />
       <div className="p-4 sm:p-6 space-y-4 max-w-6xl mx-auto w-full">
-      <header className="hidden md:flex items-center gap-3">
-        <div className="p-2 rounded-lg bg-primary/10 border border-primary/30">
-          <Users className="h-5 w-5 text-primary" />
+      <header className="hidden md:flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-primary/10 border border-primary/30">
+            <Users className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="font-display text-2xl font-bold">Clients</h1>
+            <p className="text-sm text-muted-foreground">
+              Chiffre d'affaires exercice {data?.current ?? "en cours"} — évolution vs {data?.prev ?? "N-1"}
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="font-display text-2xl font-bold">Clients</h1>
-          <p className="text-sm text-muted-foreground">
-            Chiffre d'affaires exercice {data?.current ?? "en cours"} — évolution vs {data?.prev ?? "N-1"}
-          </p>
-        </div>
+        {isDirection && (
+          <Link
+            to="/admin/matrice-clients"
+            className="inline-flex items-center gap-1.5 rounded-md border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 text-xs font-medium text-sky-500 hover:bg-sky-500/20 transition-colors"
+          >
+            <span className="text-base leading-none">▦</span> Voir la matrice CA × marge
+          </Link>
+        )}
       </header>
 
       <div className="relative">

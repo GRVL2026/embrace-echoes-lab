@@ -413,6 +413,8 @@ async function refresh() {
         effectif_tranche: hit.tranche_effectif_salarie || undefined,
         dirigeants: extractDirigeants(hit),
         adresse_siege: extractSiege(hit) || undefined,
+        code_naf: hit.activite_principale || undefined,
+        libelle_naf: hit.libelle_activite_principale || undefined,
         maj: new Date().toISOString(),
       }).eq("code_client", r.code_client);
       updated++;

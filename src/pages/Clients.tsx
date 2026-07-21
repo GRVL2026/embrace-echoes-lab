@@ -68,6 +68,7 @@ export default function Clients() {
   const { canAccessDashboard, isDirection, loading } = useAuth();
   const [search, setSearch] = useState("");
   const [stateFilter, setStateFilter] = useState<EntrepriseState | "all">("all");
+  const [kindFilter, setKindFilter] = useState<ClientKind | "all">("all");
 
   const { data, isPending } = useQuery({
     queryKey: ["clients-ca"],

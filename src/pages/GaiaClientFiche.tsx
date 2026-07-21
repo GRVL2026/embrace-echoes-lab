@@ -403,6 +403,14 @@ export default function GaiaClientFiche() {
         subtitle="Fiche client"
         actions={<div className="flex items-center gap-1"><MobileNav /><UserMenu /></div>}
       />
+      <DetailPageHeader
+        className="md:hidden"
+        onBack={handleBack}
+        backLabel={backLabel}
+        title={clientName}
+        subtitle="Fiche client"
+        actions={<div className="flex items-center gap-1"><MobileNav /><UserMenu /></div>}
+      />
       <header
         className="hidden md:flex sticky top-0 z-40 items-center justify-between border-b border-border bg-background/85 backdrop-blur px-3 sm:px-6 gap-2"
         style={{ paddingTop: "var(--safe-top)", minHeight: "calc(3.5rem + var(--safe-top))" }}
@@ -421,11 +429,10 @@ export default function GaiaClientFiche() {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 sm:px-6 py-4 sm:py-8">
-        <Button asChild variant="ghost" size="sm" className="mb-4 hidden md:inline-flex">
-          <Link to="/admin/gaia">
-            <ArrowLeft className="mr-2 h-4 w-4" /> Retour au dashboard
-          </Link>
+        <Button variant="ghost" size="sm" className="mb-4 hidden md:inline-flex" onClick={handleBack}>
+          <ArrowLeft className="mr-2 h-4 w-4" /> {backLabel}
         </Button>
+
 
 
         {/* 1) EN-TÊTE COMPACT */}

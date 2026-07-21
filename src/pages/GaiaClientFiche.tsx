@@ -473,6 +473,96 @@ export default function GaiaClientFiche() {
           </div>
         </div>
 
+        {/* Section ENTREPRISE — direction/admin uniquement */}
+        {isDirection && entreprise && (
+          <section className="mb-6 rounded-lg border border-border bg-card/40 p-4 sm:p-5">
+            <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
+              <h3 className="font-display text-sm font-semibold uppercase tracking-wider text-muted-foreground inline-flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-primary" /> Entreprise (INSEE)
+              </h3>
+              <div className="flex items-center gap-2 flex-wrap">
+                {entreprise.procedure_collective && (
+                  <Badge variant="destructive" className="text-[10px]">Procédure collective</Badge>
+                )}
+                {entreprise.etat_administratif === "C" ? (
+                  <Badge variant="destructive" className="text-[10px]">Cessée</Badge>
+                ) : entreprise.etat_administratif === "A" ? (
+                  <Badge className="text-[10px] bg-secondary text-secondary-foreground">Active</Badge>
+                ) : null}
+                {entreprise.match_statut === "a_valider" && (
+                  <Link to="/admin/entreprises" className="text-[11px] text-amber-500 underline underline-offset-2">
+                    Rapprochement à valider
+                  </Link>
+                )}
+              </div>
+            </div>
+
+            {entreprise.match_statut === "a_valider" || entreprise.match_statut === "introuvable" ? (
+              <div className="text-xs text-muted-foreground">
+                {entreprise.match_statut === "a_valider"
+                  ? "Plusieurs candidats INSEE possibles — à valider dans Réglages → Entreprises."
+                  : "Aucune correspondance INSEE trouvée pour ce client."}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Dénomination</div>
+                  <div className="mt-1 font-medium break-words">{entreprise.denomination ?? "—"}</div>
+                  {entreprise.siren && (
+                    <div className="text-[10px] text-muted-foreground mt-0.5">SIREN {entreprise.siren}</div>
+                  )}
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Forme juridique</div>
+                  <div className="mt-1 font-medium">{entreprise.forme_juridique ?? "—"}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Création</div>
+                  <div className="mt-1 font-medium">{entreprise.date_creation ? String(entreprise.date_creation).slice(0, 10) : "—"}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Effectif</div>
+                  <div className="mt-1 font-medium">{entreprise.effectif_tranche ?? "—"}</div>
+                </div>
+                {entreprise.adresse_siege && (
+                  <div className="col-span-2 md:col-span-2">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Siège</div>
+                    <div className="mt-1">{entreprise.adresse_siege}</div>
+                  </div>
+                )}
+                {Array.isArray(entreprise.dirigeants) && entreprise.dirigeants.length > 0 && (
+                  <div className="col-span-2 md:col-span-2">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Dirigeants</div>
+                    <ul className="mt-1 space-y-0.5">
+                      {entreprise.dirigeants.slice(0, 5).map((d: any, i: number) => (
+                        <li key={i} className="text-xs">
+                          {[d.prenoms, d.nom].filter(Boolean).join(" ") || d.raison_sociale || "—"}
+                          {d.qualite && <span className="text-muted-foreground"> — {d.qualite}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="mt-3 flex items-center justify-between gap-2 flex-wrap text-[11px] text-muted-foreground">
+              <div>Comptes annuels : non connectés (étage 2 – API Pappers, à venir).</div>
+              {entreprise.siren && (
+                <a
+                  href={`https://www.pappers.fr/entreprise/${entreprise.siren}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline inline-flex items-center gap-1"
+                >
+                  Voir plus sur Pappers <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+            </div>
+          </section>
+        )}
+
+
         {loading ? (
           <div className="flex h-40 items-center justify-center text-muted-foreground">
             <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Chargement de la fiche…

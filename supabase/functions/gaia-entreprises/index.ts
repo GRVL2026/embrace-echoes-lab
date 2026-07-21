@@ -309,6 +309,7 @@ async function refresh() {
   for (const r of list) {
     try {
       const results = await apiSearch(r.siren);
+      if (results === null) { await sleep(RATE_LIMIT_MS); continue; }
       const hit = results.find((x) => x.siren === r.siren) ?? results[0];
       if (!hit) { await sleep(RATE_LIMIT_MS); continue; }
       const proc = extractProcedure(hit);

@@ -345,6 +345,21 @@ function ValidationCard({ row, onValidate }: { row: EntrepriseRow; onValidate: (
                   SIREN {c.siren} · {c.forme || "—"} · {c.ville || "—"}
                   {c.date_creation && <> · créée {String(c.date_creation).slice(0, 4)}</>}
                 </div>
+                {(c.code_naf || c.libelle_naf) && (
+                  <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-border/60 bg-background/60">
+                      NAF {c.code_naf || "—"}
+                    </span>
+                    {c.is_secteur && (
+                      <Badge className="text-[10px] bg-secondary/20 text-secondary border-secondary/40 hover:bg-secondary/30">
+                        secteur
+                      </Badge>
+                    )}
+                    {c.libelle_naf && (
+                      <span className="text-[10px] text-muted-foreground truncate max-w-[280px]">{c.libelle_naf}</span>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 {c.procedure_collective && <Badge variant="destructive" className="text-[10px]">Procédure coll.</Badge>}

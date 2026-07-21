@@ -93,8 +93,8 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
         client.from("v_gaia_ecotaxe_mensuel").select("*"),
         client.from("v_gaia_ca_periode_egale").select("*"),
         client.from("v_gaia_retrocession_sfa").select("*"),
-        client.from("v_gaia_marge_famille").select("*"),
-        client.from("v_gaia_marge_client").select("*"),
+        client.rpc("get_marge_famille"),
+        client.rpc("get_marge_client"),
         client.from("gaia_sync_log").select("finished_at").order("finished_at", { ascending: false }).limit(1).maybeSingle(),
         client.from("v_gaia_pipeline").select("*"),
       ]);
@@ -938,11 +938,8 @@ function FamilleDetailSheet({
     enabled: !!famille,
     queryFn: async () => {
       const c: any = supabase;
-      // 1) Codes articles de la famille (via le cout_article qui expose la famille)
-      const { data: codes } = await c
-        .from("v_gaia_cout_article")
-        .select("code")
-        .eq("famille", famille);
+      // 1) Codes articles de la famille (RPC direction-only, ne renvoie que les codes)
+      const { data: codes } = await c.rpc("get_cout_article_famille", { _famille: famille });
       const codeList = ((codes ?? []) as { code: string }[]).map((x) => x.code).filter(Boolean);
       if (codeList.length === 0) return { articles: [], clients: [] };
 

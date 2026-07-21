@@ -2449,6 +2449,45 @@ export type Database = {
       }
       ensure_notification_prefs: { Args: { _uid: string }; Returns: undefined }
       gaia_query: { Args: { sql_query: string }; Returns: Json }
+      get_cout_article_famille: {
+        Args: { _famille: string }
+        Returns: {
+          code: string
+        }[]
+      }
+      get_magasin_marge: {
+        Args: never
+        Returns: {
+          annee: number
+          ca_avec_cout: number
+          ca_ht: number
+          marge_estimee: number
+          part_reelle: number
+        }[]
+      }
+      get_marge_client: {
+        Args: never
+        Returns: {
+          annee: number
+          ca_avec_cout: number
+          ca_ht: number
+          client: string
+          marge_estimee: number
+          part_reelle: number
+        }[]
+      }
+      get_marge_famille: {
+        Args: never
+        Returns: {
+          annee: number
+          ca_avec_cout: number
+          ca_ht: number
+          cout_estime: number
+          famille: string
+          marge_estimee: number
+          part_reelle: number
+        }[]
+      }
       is_admin: { Args: never; Returns: boolean }
       is_direction: { Args: never; Returns: boolean }
       notify_user: {

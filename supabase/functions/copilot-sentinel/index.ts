@@ -559,8 +559,8 @@ async function runSentinel() {
         alertes_nouvelles: [],
         opportunites: [],
         mouvements_commerce: mouvements.first_run
-          ? { resume: "Récap disponible dès demain.", lignes: [] }
-          : { resume: "Récap indisponible (IA injoignable).", lignes: [] },
+          ? { resume: "Récap disponible dès demain — première photo du carnet prise aujourd'hui, la comparaison démarrera au prochain briefing.", lignes: [], first_run: true }
+          : { resume: "Récap indisponible (IA injoignable).", lignes: [], first_run: false },
       },
     };
     console.error("sentinelle IA fallback:", (e as Error).message);

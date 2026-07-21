@@ -1,11 +1,14 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
-import { Search, TrendingUp, TrendingDown, Minus, Users, Loader2, ArrowRight } from "lucide-react";
+import { Search, TrendingUp, TrendingDown, Minus, Users, Loader2, ArrowRight, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DetailPageHeader } from "@/components/DetailPageHeader";
+import { UserMenu } from "@/components/UserMenu";
+import { MobileNav } from "@/components/MobileNav";
 
 type EntrepriseState = "ok" | "a_valider" | "introuvable" | "cessee";
 

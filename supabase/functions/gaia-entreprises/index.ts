@@ -78,12 +78,24 @@ function similarity(a: string, b: string): number {
   return common / Math.max(wa.size, wb.size);
 }
 
+// Normalisation TOLERANTE pour rematch : retire formes juridiques, ponctuation, accents.
+// Renvoie aussi une variante « 2-3 premiers mots significatifs » pour élargir la recherche
+// quand le nom Cegid est verbeux (ex. « BOWLING DE ST LO SAS EXPLOITATION LOISIRS »).
+function looseName(s: string): string {
+  return normalize(s);
+}
+function keywordsQuery(s: string): string {
+  const words = normalize(s).split(" ").filter((w) => w.length >= 3);
+  return words.slice(0, 3).join(" ");
+}
+
 type ApiResult = {
   siren: string;
   nom_complet?: string;
   nom_raison_sociale?: string;
   nature_juridique?: string;
   activite_principale?: string;
+  libelle_activite_principale?: string;
   date_creation?: string;
   tranche_effectif_salarie?: string;
   etat_administratif?: string;
@@ -98,12 +110,8 @@ type ApiResult = {
   matching_etablissements?: any[];
   complements?: {
     est_entrepreneur_individuel?: boolean;
-    // recherche-entreprises n'expose pas toujours la procédure collective directement.
-    // On garde le champ pour compatibilité future.
   };
-  // Champ éventuel selon la version d'API
   procedure_collective_en_cours?: boolean;
-  // Certains résultats exposent `bilans` / `finances`… on n'exploite pas ici.
 } & Record<string, any>;
 
 function extractProcedure(r: ApiResult): boolean {

@@ -938,11 +938,8 @@ function FamilleDetailSheet({
     enabled: !!famille,
     queryFn: async () => {
       const c: any = supabase;
-      // 1) Codes articles de la famille (via le cout_article qui expose la famille)
-      const { data: codes } = await c
-        .from("v_gaia_cout_article")
-        .select("code")
-        .eq("famille", famille);
+      // 1) Codes articles de la famille (RPC direction-only, ne renvoie que les codes)
+      const { data: codes } = await c.rpc("get_cout_article_famille", { _famille: famille });
       const codeList = ((codes ?? []) as { code: string }[]).map((x) => x.code).filter(Boolean);
       if (codeList.length === 0) return { articles: [], clients: [] };
 

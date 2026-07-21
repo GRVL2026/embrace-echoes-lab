@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
-import { Search, TrendingUp, TrendingDown, Minus, Users, Loader2, ArrowRight, ChevronRight } from "lucide-react";
+import { Search, TrendingUp, TrendingDown, Minus, Users, Loader2, ArrowRight, ChevronRight, Sparkles, RotateCcw, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DetailPageHeader } from "@/components/DetailPageHeader";
 import { UserMenu } from "@/components/UserMenu";
@@ -42,22 +42,68 @@ type CaClient = {
   ca_ht: number | null;
 };
 
+type Anciennete = {
+  client: string | null;
+  premier_exercice: number | null;
+  dernier_exercice_actif: number | null;
+};
+
+type ClientKind = "nouveau" | "reactive" | "normal";
+
 type Row = {
   client: string;
   code_client: string | null;
   ca_current: number;
   ca_prev: number;
   evolution: number | null; // %
+  kind?: ClientKind;
+  dernier_exercice_actif?: number | null;
 };
 
 const eur = (n: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+
+function EvolutionCell({ ev, kind, dernier }: { ev: number | null; kind?: ClientKind; dernier?: number | null }) {
+  if (kind === "nouveau") {
+    return (
+      <span className="inline-flex items-center gap-1 text-sm font-medium text-emerald-500" title="Première facture cet exercice">
+        <Sparkles className="h-3.5 w-3.5" /> nouveau
+      </span>
+    );
+  }
+  if (kind === "reactive") {
+    return (
+      <span
+        className="inline-flex flex-col items-end leading-tight"
+        title={dernier ? `Dernière activité : exercice ${dernier}` : undefined}
+      >
+        <span className="inline-flex items-center gap-1 text-sm font-medium text-amber-500">
+          <RotateCcw className="h-3.5 w-3.5" /> réactivé
+        </span>
+        {dernier && <span className="text-[10px] text-muted-foreground">dernière act. {dernier}</span>}
+      </span>
+    );
+  }
+  const evClass =
+    ev == null ? "text-muted-foreground"
+    : ev >= 5 ? "text-secondary"
+    : ev <= -5 ? "text-destructive"
+    : "text-muted-foreground";
+  const Icon = ev == null ? Minus : ev >= 5 ? TrendingUp : ev <= -5 ? TrendingDown : Minus;
+  return (
+    <span className={cn("inline-flex items-center gap-1 text-sm font-medium", evClass)}>
+      <Icon className="h-3.5 w-3.5" />
+      {ev == null ? "—" : `${ev >= 0 ? "+" : ""}${ev.toFixed(1)}%`}
+    </span>
+  );
+}
 
 /** Page /clients — liste des clients avec CA et évolution vs N-1. */
 export default function Clients() {
   const { canAccessDashboard, isDirection, loading } = useAuth();
   const [search, setSearch] = useState("");
   const [stateFilter, setStateFilter] = useState<EntrepriseState | "all">("all");
+  const [kindFilter, setKindFilter] = useState<ClientKind | "all">("all");
 
   const { data, isPending } = useQuery({
     queryKey: ["clients-ca"],
@@ -124,13 +170,43 @@ export default function Clients() {
     },
   });
 
+  const { data: ancMap } = useQuery({
+    queryKey: ["clients-anciennete"],
+    enabled: canAccessDashboard,
+    queryFn: async () => {
+      const { data: rows, error } = await (supabase as any)
+        .from("v_gaia_client_anciennete")
+        .select("client, premier_exercice, dernier_exercice_actif");
+      if (error) throw error;
+      const map = new Map<string, Anciennete>();
+      for (const r of (rows as Anciennete[]) ?? []) {
+        if (r.client) map.set(r.client.trim(), r);
+      }
+      return map;
+    },
+  });
+
   const rowsWithState = useMemo(() => {
     const list = data?.rows ?? [];
-    return list.map((r) => ({
-      ...r,
-      state: isDirection ? computeState(entMap?.get((r.code_client ?? "").trim())) : null,
-    }));
-  }, [data, entMap, isDirection]);
+    const current = data?.current;
+    return list.map((r) => {
+      const anc = ancMap?.get(r.client.trim());
+      let kind: ClientKind = "normal";
+      if (anc && current != null && anc.premier_exercice != null) {
+        if (anc.premier_exercice === current && r.ca_current > 0) kind = "nouveau";
+        else if (anc.premier_exercice < current && r.ca_prev === 0 && r.ca_current > 0) kind = "reactive";
+      } else if (r.ca_prev === 0 && r.ca_current > 0) {
+        // fallback si pas d'ancienneté connue
+        kind = "nouveau";
+      }
+      return {
+        ...r,
+        kind,
+        dernier_exercice_actif: anc?.dernier_exercice_actif ?? null,
+        state: isDirection ? computeState(entMap?.get((r.code_client ?? "").trim())) : null,
+      };
+    });
+  }, [data, entMap, ancMap, isDirection]);
 
   const stateCounts = useMemo(() => {
     const counts = { all: rowsWithState.length, ok: 0, a_valider: 0, introuvable: 0, cessee: 0 };
@@ -139,11 +215,20 @@ export default function Clients() {
     return counts;
   }, [rowsWithState, isDirection]);
 
+  const kindCounts = useMemo(() => {
+    const counts = { all: rowsWithState.length, nouveau: 0, reactive: 0, normal: 0 };
+    for (const r of rowsWithState) counts[r.kind ?? "normal"]++;
+    return counts;
+  }, [rowsWithState]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = rowsWithState;
     if (isDirection && stateFilter !== "all") {
       list = list.filter((r) => r.state === stateFilter);
+    }
+    if (kindFilter !== "all") {
+      list = list.filter((r) => r.kind === kindFilter);
     }
     if (!q) return list;
     return list.filter(
@@ -151,7 +236,7 @@ export default function Clients() {
         r.client.toLowerCase().includes(q) ||
         (r.code_client ?? "").toLowerCase().includes(q),
     );
-  }, [rowsWithState, search, stateFilter, isDirection]);
+  }, [rowsWithState, search, stateFilter, kindFilter, isDirection]);
 
   if (loading) return null;
   if (!canAccessDashboard) {
@@ -238,6 +323,34 @@ export default function Clients() {
         </div>
       )}
 
+      <div className="flex flex-wrap items-center gap-2">
+        {([
+          ["all", "Tous"],
+          ["nouveau", "✨ Nouveaux"],
+          ["reactive", "🔄 Réactivés"],
+        ] as const).map(([key, label]) => {
+          const active = kindFilter === key;
+          const count = kindCounts[key as keyof typeof kindCounts];
+          return (
+            <button
+              key={key}
+              onClick={() => setKindFilter(key as ClientKind | "all")}
+              className={cn(
+                "text-xs px-3 py-1.5 rounded-full border transition-colors flex items-center gap-1.5",
+                active
+                  ? "bg-primary/15 border-primary/40 text-primary"
+                  : "bg-card/40 border-border hover:border-primary/30 text-muted-foreground",
+              )}
+            >
+              <span>{label}</span>
+              <span className={cn("text-[10px] font-mono", active ? "text-primary" : "text-muted-foreground/70")}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       {isPending && (
         <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
           <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Chargement…
@@ -254,13 +367,6 @@ export default function Clients() {
       {!isPending && filtered.length > 0 && (
         <div className="md:hidden space-y-2">
           {filtered.map((r) => {
-            const ev = r.evolution;
-            const evClass =
-              ev == null ? "text-secondary"
-              : ev >= 5 ? "text-secondary"
-              : ev <= -5 ? "text-destructive"
-              : "text-muted-foreground";
-            const Icon = ev == null ? TrendingUp : ev >= 5 ? TrendingUp : ev <= -5 ? TrendingDown : Minus;
             return (
               <Link
                 key={r.client}
@@ -303,10 +409,7 @@ export default function Clients() {
                       {eur(r.ca_prev)}
                     </div>
                   </div>
-                  <div className={cn("flex items-center gap-1 text-sm font-medium", evClass)}>
-                    <Icon className="h-3.5 w-3.5" />
-                    {ev == null ? "nouveau" : `${ev >= 0 ? "+" : ""}${ev.toFixed(1)}%`}
-                  </div>
+                  <EvolutionCell ev={r.evolution} kind={r.kind} dernier={r.dernier_exercice_actif} />
                 </div>
               </Link>
             );
@@ -324,13 +427,6 @@ export default function Clients() {
             <div className="text-right">Évolution</div>
           </div>
           {filtered.map((r) => {
-            const ev = r.evolution;
-            const evClass =
-              ev == null ? "text-secondary"
-              : ev >= 5 ? "text-secondary"
-              : ev <= -5 ? "text-destructive"
-              : "text-muted-foreground";
-            const Icon = ev == null ? TrendingUp : ev >= 5 ? TrendingUp : ev <= -5 ? TrendingDown : Minus;
             return (
               <Link
                 key={r.client}
@@ -362,9 +458,8 @@ export default function Clients() {
                 <div className="text-right font-mono text-sm text-muted-foreground">
                   {eur(r.ca_prev)}
                 </div>
-                <div className={cn("text-right flex items-center justify-end gap-1 text-sm font-medium", evClass)}>
-                  <Icon className="h-3.5 w-3.5" />
-                  {ev == null ? "nouveau" : `${ev >= 0 ? "+" : ""}${ev.toFixed(1)}%`}
+                <div className="text-right flex items-center justify-end">
+                  <EvolutionCell ev={r.evolution} kind={r.kind} dernier={r.dernier_exercice_actif} />
                 </div>
               </Link>
             );
@@ -373,8 +468,14 @@ export default function Clients() {
       )}
 
       {!isPending && (
-        <div className="text-xs text-muted-foreground text-right">
-          {filtered.length} client{filtered.length > 1 ? "s" : ""} affiché{filtered.length > 1 ? "s" : ""}
+        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1.5">
+            <Info className="h-3 w-3" />
+            <span>Ancienneté calculée depuis septembre 2022 — un client dont la première facture connue tombe dans l'exercice 2023 pourrait être plus ancien.</span>
+          </div>
+          <div className="shrink-0">
+            {filtered.length} client{filtered.length > 1 ? "s" : ""} affiché{filtered.length > 1 ? "s" : ""}
+          </div>
         </div>
       )}
       </div>

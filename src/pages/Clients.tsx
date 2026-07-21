@@ -63,6 +63,41 @@ type Row = {
 const eur = (n: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 
+function EvolutionCell({ ev, kind, dernier }: { ev: number | null; kind?: ClientKind; dernier?: number | null }) {
+  if (kind === "nouveau") {
+    return (
+      <span className="inline-flex items-center gap-1 text-sm font-medium text-emerald-500" title="Première facture cet exercice">
+        <Sparkles className="h-3.5 w-3.5" /> nouveau
+      </span>
+    );
+  }
+  if (kind === "reactive") {
+    return (
+      <span
+        className="inline-flex flex-col items-end leading-tight"
+        title={dernier ? `Dernière activité : exercice ${dernier}` : undefined}
+      >
+        <span className="inline-flex items-center gap-1 text-sm font-medium text-amber-500">
+          <RotateCcw className="h-3.5 w-3.5" /> réactivé
+        </span>
+        {dernier && <span className="text-[10px] text-muted-foreground">dernière act. {dernier}</span>}
+      </span>
+    );
+  }
+  const evClass =
+    ev == null ? "text-muted-foreground"
+    : ev >= 5 ? "text-secondary"
+    : ev <= -5 ? "text-destructive"
+    : "text-muted-foreground";
+  const Icon = ev == null ? Minus : ev >= 5 ? TrendingUp : ev <= -5 ? TrendingDown : Minus;
+  return (
+    <span className={cn("inline-flex items-center gap-1 text-sm font-medium", evClass)}>
+      <Icon className="h-3.5 w-3.5" />
+      {ev == null ? "—" : `${ev >= 0 ? "+" : ""}${ev.toFixed(1)}%`}
+    </span>
+  );
+}
+
 /** Page /clients — liste des clients avec CA et évolution vs N-1. */
 export default function Clients() {
   const { canAccessDashboard, isDirection, loading } = useAuth();

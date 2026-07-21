@@ -2181,6 +2181,7 @@ export type Database = {
         Row: {
           client: string | null
           dernier_exercice_actif: number | null
+          dernier_exercice_avant_courant: number | null
           derniere_facture: string | null
           premier_exercice: number | null
           premiere_facture: string | null

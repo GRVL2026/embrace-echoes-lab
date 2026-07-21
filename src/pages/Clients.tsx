@@ -46,6 +46,7 @@ type Anciennete = {
   client: string | null;
   premier_exercice: number | null;
   dernier_exercice_actif: number | null;
+  dernier_exercice_avant_courant: number | null;
 };
 
 type ClientKind = "nouveau" | "reactive" | "normal";
@@ -75,12 +76,12 @@ function EvolutionCell({ ev, kind, dernier }: { ev: number | null; kind?: Client
     return (
       <span
         className="inline-flex flex-col items-end leading-tight"
-        title={dernier ? `Dernière activité : exercice ${dernier}` : undefined}
+        title={dernier ? `Dernier achat : exercice ${dernier}` : undefined}
       >
         <span className="inline-flex items-center gap-1 text-sm font-medium text-amber-500">
           <RotateCcw className="h-3.5 w-3.5" /> réactivé
         </span>
-        {dernier && <span className="text-[10px] text-muted-foreground">dernière act. {dernier}</span>}
+        {dernier && <span className="text-[10px] text-muted-foreground">absent depuis {dernier}</span>}
       </span>
     );
   }
@@ -176,7 +177,7 @@ export default function Clients() {
     queryFn: async () => {
       const { data: rows, error } = await (supabase as any)
         .from("v_gaia_client_anciennete")
-        .select("client, premier_exercice, dernier_exercice_actif");
+        .select("client, premier_exercice, dernier_exercice_actif, dernier_exercice_avant_courant");
       if (error) throw error;
       const map = new Map<string, Anciennete>();
       for (const r of (rows as Anciennete[]) ?? []) {
@@ -202,7 +203,7 @@ export default function Clients() {
       return {
         ...r,
         kind,
-        dernier_exercice_actif: anc?.dernier_exercice_actif ?? null,
+        dernier_exercice_actif: anc?.dernier_exercice_avant_courant ?? null,
         state: isDirection ? computeState(entMap?.get((r.code_client ?? "").trim())) : null,
       };
     });

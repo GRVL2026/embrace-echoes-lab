@@ -162,9 +162,21 @@ export default function Clients() {
     );
   }
 
+  const location = useLocation();
+  const fromState = { from: location.pathname + location.search };
+
   return (
-    <div className="p-6 space-y-4 max-w-6xl mx-auto w-full">
-      <header className="flex items-center gap-3">
+    <>
+      <DetailPageHeader
+        className="md:hidden"
+        backTo="/"
+        backLabel="Retour au hub"
+        title="Clients"
+        subtitle={`CA ${data?.current ?? "en cours"} vs ${data?.prev ?? "N-1"}`}
+        actions={<div className="flex items-center gap-1"><MobileNav /><UserMenu /></div>}
+      />
+      <div className="p-4 sm:p-6 space-y-4 max-w-6xl mx-auto w-full">
+      <header className="hidden md:flex items-center gap-3">
         <div className="p-2 rounded-lg bg-primary/10 border border-primary/30">
           <Users className="h-5 w-5 text-primary" />
         </div>
@@ -232,35 +244,99 @@ export default function Clients() {
         </div>
       )}
 
-      {!isPending && (
-        <div className="rounded-lg border border-border bg-card/40 overflow-hidden">
-          <div className="grid grid-cols-[1fr_140px_140px_140px] gap-2 px-4 py-2 border-b border-border bg-muted/30 text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
-            <div>Client</div>
-            <div className="text-right">CA {data?.current ?? ""}</div>
-            <div className="text-right">CA {data?.prev ?? ""}</div>
-            <div className="text-right">Évolution</div>
-          </div>
-          {filtered.length === 0 && (
-            <div className="p-8 text-center text-sm text-muted-foreground">
-              Aucun client ne correspond.
-            </div>
-          )}
+      {!isPending && filtered.length === 0 && (
+        <div className="rounded-lg border border-border bg-card/40 p-8 text-center text-sm text-muted-foreground">
+          Aucun client ne correspond.
+        </div>
+      )}
+
+      {/* MOBILE : liste de cartes */}
+      {!isPending && filtered.length > 0 && (
+        <div className="md:hidden space-y-2">
           {filtered.map((r) => {
             const ev = r.evolution;
             const evClass =
-              ev == null
-                ? "text-secondary"
-                : ev >= 5
-                  ? "text-secondary"
-                  : ev <= -5
-                    ? "text-destructive"
-                    : "text-muted-foreground";
+              ev == null ? "text-secondary"
+              : ev >= 5 ? "text-secondary"
+              : ev <= -5 ? "text-destructive"
+              : "text-muted-foreground";
             const Icon = ev == null ? TrendingUp : ev >= 5 ? TrendingUp : ev <= -5 ? TrendingDown : Minus;
             return (
               <Link
                 key={r.client}
                 to={`/admin/gaia/client/${encodeURIComponent(r.client)}`}
-                className="grid grid-cols-[1fr_140px_140px_140px] gap-2 px-4 py-3 border-b border-border/50 last:border-b-0 hover:bg-muted/30 transition-colors items-center"
+                state={fromState}
+                className="block rounded-lg border border-border bg-card/40 p-3 active:bg-muted/30 transition-colors"
+              >
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold text-sm leading-tight line-clamp-2 break-words">
+                      {r.client}
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-2 flex-wrap">
+                      {r.code_client && (
+                        <span className="text-[11px] text-muted-foreground">{r.code_client}</span>
+                      )}
+                      {isDirection && r.state && (
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-normal",
+                            STATE_META[r.state].badge,
+                          )}
+                        >
+                          <span className={cn("h-1.5 w-1.5 rounded-full", STATE_META[r.state].dot)} />
+                          {STATE_META[r.state].label}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-1" />
+                </div>
+                <div className="mt-2 flex items-end justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-mono text-sm">
+                      <span className="text-muted-foreground text-[11px] mr-1">CA {data?.current}:</span>
+                      {eur(r.ca_current)}
+                    </div>
+                    <div className="font-mono text-xs text-muted-foreground">
+                      <span className="mr-1">{data?.prev}:</span>
+                      {eur(r.ca_prev)}
+                    </div>
+                  </div>
+                  <div className={cn("flex items-center gap-1 text-sm font-medium", evClass)}>
+                    <Icon className="h-3.5 w-3.5" />
+                    {ev == null ? "nouveau" : `${ev >= 0 ? "+" : ""}${ev.toFixed(1)}%`}
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+
+      {/* DESKTOP : tableau */}
+      {!isPending && filtered.length > 0 && (
+        <div className="hidden md:block rounded-lg border border-border bg-card/40 overflow-x-auto">
+          <div className="grid grid-cols-[1fr_140px_140px_140px] gap-2 px-4 py-2 border-b border-border bg-muted/30 text-[11px] uppercase tracking-wider text-muted-foreground font-medium min-w-[640px]">
+            <div>Client</div>
+            <div className="text-right">CA {data?.current ?? ""}</div>
+            <div className="text-right">CA {data?.prev ?? ""}</div>
+            <div className="text-right">Évolution</div>
+          </div>
+          {filtered.map((r) => {
+            const ev = r.evolution;
+            const evClass =
+              ev == null ? "text-secondary"
+              : ev >= 5 ? "text-secondary"
+              : ev <= -5 ? "text-destructive"
+              : "text-muted-foreground";
+            const Icon = ev == null ? TrendingUp : ev >= 5 ? TrendingUp : ev <= -5 ? TrendingDown : Minus;
+            return (
+              <Link
+                key={r.client}
+                to={`/admin/gaia/client/${encodeURIComponent(r.client)}`}
+                state={fromState}
+                className="grid grid-cols-[1fr_140px_140px_140px] gap-2 px-4 py-3 border-b border-border/50 last:border-b-0 hover:bg-muted/30 transition-colors items-center min-w-[640px]"
               >
                 <div className="min-w-0">
                   <div className="font-medium truncate flex items-center gap-2">
@@ -301,6 +377,7 @@ export default function Clients() {
           {filtered.length} client{filtered.length > 1 ? "s" : ""} affiché{filtered.length > 1 ? "s" : ""}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

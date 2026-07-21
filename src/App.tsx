@@ -20,6 +20,7 @@ import AdminSync from "./pages/AdminSync";
 import AdminVeille from "./pages/AdminVeille";
 import GaiaClientFiche from "./pages/GaiaClientFiche";
 import Clients from "./pages/Clients";
+import MatriceClients from "./pages/MatriceClients";
 import Salle from "./pages/Salle";
 
 import GaiaCarnet from "./pages/GaiaCarnet";

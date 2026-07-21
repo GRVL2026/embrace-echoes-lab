@@ -135,13 +135,43 @@ export default function Clients() {
     },
   });
 
+  const { data: ancMap } = useQuery({
+    queryKey: ["clients-anciennete"],
+    enabled: canAccessDashboard,
+    queryFn: async () => {
+      const { data: rows, error } = await (supabase as any)
+        .from("v_gaia_client_anciennete")
+        .select("client, premier_exercice, dernier_exercice_actif");
+      if (error) throw error;
+      const map = new Map<string, Anciennete>();
+      for (const r of (rows as Anciennete[]) ?? []) {
+        if (r.client) map.set(r.client.trim(), r);
+      }
+      return map;
+    },
+  });
+
   const rowsWithState = useMemo(() => {
     const list = data?.rows ?? [];
-    return list.map((r) => ({
-      ...r,
-      state: isDirection ? computeState(entMap?.get((r.code_client ?? "").trim())) : null,
-    }));
-  }, [data, entMap, isDirection]);
+    const current = data?.current;
+    return list.map((r) => {
+      const anc = ancMap?.get(r.client.trim());
+      let kind: ClientKind = "normal";
+      if (anc && current != null && anc.premier_exercice != null) {
+        if (anc.premier_exercice === current && r.ca_current > 0) kind = "nouveau";
+        else if (anc.premier_exercice < current && r.ca_prev === 0 && r.ca_current > 0) kind = "reactive";
+      } else if (r.ca_prev === 0 && r.ca_current > 0) {
+        // fallback si pas d'ancienneté connue
+        kind = "nouveau";
+      }
+      return {
+        ...r,
+        kind,
+        dernier_exercice_actif: anc?.dernier_exercice_actif ?? null,
+        state: isDirection ? computeState(entMap?.get((r.code_client ?? "").trim())) : null,
+      };
+    });
+  }, [data, entMap, ancMap, isDirection]);
 
   const stateCounts = useMemo(() => {
     const counts = { all: rowsWithState.length, ok: 0, a_valider: 0, introuvable: 0, cessee: 0 };
@@ -150,11 +180,20 @@ export default function Clients() {
     return counts;
   }, [rowsWithState, isDirection]);
 
+  const kindCounts = useMemo(() => {
+    const counts = { all: rowsWithState.length, nouveau: 0, reactive: 0, normal: 0 };
+    for (const r of rowsWithState) counts[r.kind ?? "normal"]++;
+    return counts;
+  }, [rowsWithState]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = rowsWithState;
     if (isDirection && stateFilter !== "all") {
       list = list.filter((r) => r.state === stateFilter);
+    }
+    if (kindFilter !== "all") {
+      list = list.filter((r) => r.kind === kindFilter);
     }
     if (!q) return list;
     return list.filter(
@@ -162,7 +201,7 @@ export default function Clients() {
         r.client.toLowerCase().includes(q) ||
         (r.code_client ?? "").toLowerCase().includes(q),
     );
-  }, [rowsWithState, search, stateFilter, isDirection]);
+  }, [rowsWithState, search, stateFilter, kindFilter, isDirection]);
 
   if (loading) return null;
   if (!canAccessDashboard) {

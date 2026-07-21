@@ -685,7 +685,7 @@ Deno.serve(async (req) => {
 
     const action = body?.action;
 
-    if (action !== 'discover' && action !== 'sync' && action !== 'sync-all') {
+    if (action !== 'discover' && action !== 'sync' && action !== 'sync-all' && action !== 'sync-stale') {
       return jsonResponse({
         ok: false,
         error: `Unknown action: ${action}`,

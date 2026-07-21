@@ -133,6 +133,33 @@ export default function AdminEntreprises() {
     }
   };
 
+  const runRematch = async () => {
+    setRematchRunning(true);
+    setRematchStop(false);
+    setRematchProgress({ processed: 0, passes: 0, promu: 0, done: false });
+    try {
+      let processedTotal = 0, promuTotal = 0, passes = 0;
+      while (passes < 500) {
+        if (rematchStop) break;
+        const { data, error } = await supabase.functions.invoke("gaia-entreprises", { body: { action: "rematch" } });
+        if (error) throw new Error(error.message);
+        const r = (data ?? {}) as any;
+        passes++;
+        processedTotal += Number(r.processed ?? 0);
+        promuTotal += Number(r.stats?.promu_auto ?? 0);
+        setRematchProgress({ processed: processedTotal, passes, promu: promuTotal, done: !!r.done });
+        qc.invalidateQueries({ queryKey: ["entreprises-stats"] });
+        qc.invalidateQueries({ queryKey: ["entreprises-a-valider"] });
+        if (r.done) break;
+      }
+      toast({ title: "Rematch terminé", description: `${processedTotal} clients repassés · ${promuTotal} promus en auto (NAF secteur).` });
+    } catch (e: any) {
+      toast({ title: "Erreur", description: e.message, variant: "destructive" });
+    } finally {
+      setRematchRunning(false);
+    }
+  };
+
   const validate = async (code: string, siren: string | null) => {
     try {
       const { data, error } = await supabase.functions.invoke("gaia-entreprises", {

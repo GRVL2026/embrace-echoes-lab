@@ -551,8 +551,10 @@ Deno.serve(async (req) => {
     let result: any;
     if (action === "enrich-batch") result = await enrichBatch();
     else if (action === "refresh") result = await refresh();
+    else if (action === "bilans") result = await bilansBatch();
     else if (action === "validate") result = await validateCandidate(String(body.code_client || ""), body.siren ? String(body.siren) : null);
     else if (action === "reset-cursor") { await saveCursor(null); result = { ok: true }; }
+    else if (action === "reset-bilans-cursor") { await saveBilansCursor(null); result = { ok: true }; }
     else result = { ok: false, error: `Unknown action: ${action}` };
 
     return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });

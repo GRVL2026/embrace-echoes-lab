@@ -50,6 +50,11 @@ export default function AdminEntreprises() {
     done: false,
   });
   const [refreshBusy, setRefreshBusy] = useState(false);
+  const [rematchRunning, setRematchRunning] = useState(false);
+  const [rematchStop, setRematchStop] = useState(false);
+  const [rematchProgress, setRematchProgress] = useState<{ processed: number; passes: number; promu: number; done: boolean }>({
+    processed: 0, passes: 0, promu: 0, done: false,
+  });
   const [search, setSearch] = useState("");
 
   const { data: stats } = useQuery({

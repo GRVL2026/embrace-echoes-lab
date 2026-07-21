@@ -427,13 +427,6 @@ export default function Clients() {
             <div className="text-right">Évolution</div>
           </div>
           {filtered.map((r) => {
-            const ev = r.evolution;
-            const evClass =
-              ev == null ? "text-secondary"
-              : ev >= 5 ? "text-secondary"
-              : ev <= -5 ? "text-destructive"
-              : "text-muted-foreground";
-            const Icon = ev == null ? TrendingUp : ev >= 5 ? TrendingUp : ev <= -5 ? TrendingDown : Minus;
             return (
               <Link
                 key={r.client}
@@ -465,9 +458,8 @@ export default function Clients() {
                 <div className="text-right font-mono text-sm text-muted-foreground">
                   {eur(r.ca_prev)}
                 </div>
-                <div className={cn("text-right flex items-center justify-end gap-1 text-sm font-medium", evClass)}>
-                  <Icon className="h-3.5 w-3.5" />
-                  {ev == null ? "nouveau" : `${ev >= 0 ? "+" : ""}${ev.toFixed(1)}%`}
+                <div className="text-right flex items-center justify-end">
+                  <EvolutionCell ev={r.evolution} kind={r.kind} dernier={r.dernier_exercice_actif} />
                 </div>
               </Link>
             );

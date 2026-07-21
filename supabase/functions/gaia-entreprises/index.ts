@@ -105,16 +105,21 @@ function extractDirigeants(r: ApiResult): any[] {
   }));
 }
 
-async function apiSearch(q: string): Promise<ApiResult[]> {
+// Retourne null en cas d'erreur transitoire (HTTP !ok / exception réseau).
+// Retourne [] uniquement quand l'API répond correctement avec zéro résultat.
+async function apiSearch(q: string): Promise<ApiResult[] | null> {
   const url = `${API_BASE}?q=${encodeURIComponent(q)}&per_page=5`;
   try {
     const res = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" } });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      console.warn("apiSearch HTTP error", res.status, q);
+      return null;
+    }
     const json = await res.json();
     return Array.isArray(json?.results) ? json.results as ApiResult[] : [];
   } catch (e) {
     console.warn("apiSearch failed", (e as Error).message);
-    return [];
+    return null;
   }
 }
 

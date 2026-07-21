@@ -46,6 +46,7 @@ type Anciennete = {
   client: string | null;
   premier_exercice: number | null;
   dernier_exercice_actif: number | null;
+  dernier_exercice_avant_courant: number | null;
 };
 
 type ClientKind = "nouveau" | "reactive" | "normal";

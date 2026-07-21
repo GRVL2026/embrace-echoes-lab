@@ -19,6 +19,7 @@ import {
   RefreshCw,
   Cog,
   Bell,
+  Building2,
   Gamepad2,
   type LucideIcon,
 } from "lucide-react";
@@ -247,6 +248,13 @@ export const SPACES: Space[] = [
         icon: Cog,
         show: (c) => c.isAdmin,
         match: startsWith("/admin/catalog-erp"),
+      },
+      {
+        label: "Entreprises (INSEE)",
+        to: "/admin/entreprises",
+        icon: Building2,
+        show: (c) => c.isAdmin || c.isDirection,
+        match: startsWith("/admin/entreprises"),
       },
     ],
   },

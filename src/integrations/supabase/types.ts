@@ -943,8 +943,11 @@ export type Database = {
       gaia_entreprises: {
         Row: {
           adresse_siege: string | null
+          bilans: Json | null
+          bilans_maj: string | null
           candidats: Json | null
           code_client: string
+          comptes_publies: boolean | null
           date_creation: string | null
           denomination: string | null
           dirigeants: Json | null
@@ -958,8 +961,11 @@ export type Database = {
         }
         Insert: {
           adresse_siege?: string | null
+          bilans?: Json | null
+          bilans_maj?: string | null
           candidats?: Json | null
           code_client: string
+          comptes_publies?: boolean | null
           date_creation?: string | null
           denomination?: string | null
           dirigeants?: Json | null
@@ -973,8 +979,11 @@ export type Database = {
         }
         Update: {
           adresse_siege?: string | null
+          bilans?: Json | null
+          bilans_maj?: string | null
           candidats?: Json | null
           code_client?: string
+          comptes_publies?: boolean | null
           date_creation?: string | null
           denomination?: string | null
           dirigeants?: Json | null

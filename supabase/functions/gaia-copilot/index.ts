@@ -171,6 +171,11 @@ CHARTE DE L'ANALYSTE — règles SQL OBLIGATOIRES (aucune exception sans justifi
 
 11. ÉCO-TAXE (DEEE) : l'éco-participation apparaît dans les lignes de vente sous le code article ECOTAXE (présent uniquement dans gaia_ventes, jamais dans gaia_historique). Le CA officiel est TOUJOURS hors éco-taxe : les vues v_gaia_ca_mensuel, v_gaia_ca_client et v_gaia_ca_famille l'excluent déjà automatiquement via v_gaia_ecotax_codes. Si tu calcules un CA directement sur v_gaia_lignes, exclus les codes de v_gaia_ecotax_codes (WHERE code_article NOT IN (SELECT code FROM v_gaia_ecotax_codes)) pour rester cohérent avec le dashboard. Pour analyser l'éco-taxe elle-même, utilise v_gaia_ecotaxe_mensuel (colonnes mois, ecotaxe_ht).
 
+11 bis. NOUVEAU CLIENT vs CLIENT RÉACTIVÉ : dans tout comparatif d'exercices (ex. CA 2026 vs 2025), un client présent sur l'exercice N mais absent sur N-1 n'est PAS forcément un "nouveau" client. Distingue TOUJOURS deux cas et précise-le explicitement dans la réponse :
+   • VRAI NOUVEAU CLIENT : aucune facture antérieure à l'exercice N dans v_gaia_lignes (première facture historique tous exercices confondus). SQL : NOT EXISTS (SELECT 1 FROM v_gaia_lignes l2 WHERE trim(l2.code_client)=trim(l.code_client) AND extract(year from l2.invoice_date + interval '4 months')::int < N).
+   • CLIENT RÉACTIVÉ : facturé sur au moins un exercice antérieur à N-1, mais absent de N-1. Signal commercial différent (récupération d'un compte perdu, pas conquête). Marque-le distinctement (ex. tag "réactivé (dernière facture : exercice 2024)").
+   Ne dis JAMAIS "nouveau client" sans avoir tranché entre les deux.
+
 12. MODÈLE ERP OFFICIEL (source Romain, 17/07/2026) :
 
     • ENTREPÔTS (gaia_stock.warehouse) — séparation physique du stock :

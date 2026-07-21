@@ -370,6 +370,154 @@ async function validateCandidate(code_client: string, siren: string | null) {
   return { ok: true };
 }
 
+// ── Bilans (Pappers) ─────────────────────────────────────────────────────────
+
+async function loadBilansCursor(): Promise<string | null> {
+  const { data } = await admin.from("gaia_config").select("value").eq("key", BILANS_CURSOR_KEY).maybeSingle();
+  const v = (data as any)?.value;
+  if (v === null || v === undefined) return null;
+  if (typeof v === "string") {
+    const s = v.trim();
+    return s || null;
+  }
+  return null;
+}
+
+async function saveBilansCursor(code: string | null) {
+  await admin.from("gaia_config").upsert(
+    { key: BILANS_CURSOR_KEY, value: code ?? null },
+    { onConflict: "key" },
+  );
+}
+
+// Cible = mêmes clients que l'enrichissement (CA 24 mois OU pièce ouverte),
+// filtrés à ceux dont le SIREN est rattaché (auto/valide) et par curseur.
+async function fetchBilansTargets(limit: number, afterCode: string | null): Promise<Array<{ code_client: string; siren: string }>> {
+  const sql = `
+    with cible as (
+      select distinct trim(v.code_client) as code
+      from v_gaia_lignes v
+      where v.invoice_date >= (now() - interval '24 months')::date
+        and coalesce(trim(v.code_client),'') <> ''
+      union
+      select distinct trim(d.code_client) as code
+      from v_gaia_carnet_documents d
+      where coalesce(trim(d.code_client),'') <> ''
+    )
+    select e.code_client as code, e.siren
+    from gaia_entreprises e
+    join cible c on c.code = e.code_client
+    where e.siren is not null
+      and e.match_statut in ('auto','valide')
+      ${afterCode ? `and e.code_client > ${escapeLit(afterCode)}` : ""}
+    order by e.code_client
+  `;
+  const { data, error } = await admin.rpc("gaia_query", { sql_query: sql });
+  if (error) throw new Error(`gaia_query RPC failed: ${error.message}`);
+  if (data && !Array.isArray(data) && typeof data === "object" && (data as any).error) {
+    throw new Error(`gaia_query error: ${(data as any).error}`);
+  }
+  if (!Array.isArray(data)) throw new Error(`gaia_query returned unexpected payload: ${JSON.stringify(data)}`);
+  const rows = (data as any[]).map((r) => ({ code_client: String(r.code), siren: String(r.siren) }));
+  return rows.slice(0, Math.max(1, limit));
+}
+
+type PappersFetchResult =
+  | { ok: true; comptes_publies: boolean; bilans: any[] }
+  | { ok: false; transient: boolean };
+
+function pickNumber(...vals: any[]): number | null {
+  for (const v of vals) {
+    if (v === null || v === undefined) continue;
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+function extractBilansFromPappers(json: any): { comptes_publies: boolean; bilans: any[] } {
+  const finances: any[] = Array.isArray(json?.finances) ? json.finances : [];
+  const comptes: any[] = Array.isArray(json?.comptes) ? json.comptes : [];
+  const source = finances.length > 0 ? finances : comptes;
+  if (source.length === 0) return { comptes_publies: false, bilans: [] };
+  const normalized = source
+    .map((b: any) => {
+      const annee = b.annee ?? b.date_cloture_exercice?.slice?.(0, 4) ?? b.date_de_cloture_exercice?.slice?.(0, 4) ?? null;
+      return {
+        annee_cloture: annee ? Number(annee) : null,
+        ca: pickNumber(b.chiffre_affaires, b.ca, b.chiffre_d_affaires),
+        resultat_net: pickNumber(b.resultat, b.resultat_net),
+        capitaux_propres: pickNumber(b.capitaux_propres, b.capitaux_propres_net),
+        effectif: pickNumber(b.effectif),
+      };
+    })
+    .filter((b) => b.annee_cloture !== null);
+  normalized.sort((a, b) => (b.annee_cloture ?? 0) - (a.annee_cloture ?? 0));
+  const top3 = normalized.slice(0, 3);
+  return { comptes_publies: top3.length > 0, bilans: top3 };
+}
+
+async function fetchPappers(siren: string): Promise<PappersFetchResult> {
+  if (!PAPPERS_API_KEY) return { ok: false, transient: true };
+  const url = `${PAPPERS_URL}?api_token=${encodeURIComponent(PAPPERS_API_KEY)}&siren=${encodeURIComponent(siren)}`;
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" } });
+    if (res.status === 404) {
+      // SIREN valide mais aucune donnée publiée
+      return { ok: true, comptes_publies: false, bilans: [] };
+    }
+    if (res.status === 429 || res.status >= 500) {
+      console.warn("Pappers transient", res.status, siren);
+      return { ok: false, transient: true };
+    }
+    if (!res.ok) {
+      console.warn("Pappers HTTP error", res.status, siren);
+      return { ok: false, transient: false };
+    }
+    const json = await res.json();
+    const { comptes_publies, bilans } = extractBilansFromPappers(json);
+    return { ok: true, comptes_publies, bilans };
+  } catch (e) {
+    console.warn("Pappers fetch failed", (e as Error).message);
+    return { ok: false, transient: true };
+  }
+}
+
+async function bilansBatch() {
+  if (!PAPPERS_API_KEY) {
+    return { ok: false, error: "PAPPERS_API_KEY manquante" };
+  }
+  const cursor = await loadBilansCursor();
+  const targets = await fetchBilansTargets(BILANS_BATCH_SIZE, cursor);
+  if (targets.length === 0) {
+    await saveBilansCursor(null);
+    return { ok: true, done: true, processed: 0, cursor: null };
+  }
+  const stats = { updated: 0, sans_comptes: 0, skipped: 0, echec: 0 };
+  for (const t of targets) {
+    const r = await fetchPappers(t.siren);
+    if (!r.ok) {
+      if (r.transient) stats.skipped++;
+      else stats.echec++;
+      // Erreur transitoire : on ne touche pas la ligne, on ne bloque pas.
+      await sleep(1050);
+      continue;
+    }
+    await admin.from("gaia_entreprises").update({
+      bilans: r.bilans.length > 0 ? r.bilans : null,
+      comptes_publies: r.comptes_publies,
+      bilans_maj: new Date().toISOString(),
+    }).eq("code_client", t.code_client);
+    if (r.comptes_publies) stats.updated++;
+    else stats.sans_comptes++;
+    await sleep(1050); // 1 req/s max
+  }
+  const lastCode = targets[targets.length - 1].code_client;
+  await saveBilansCursor(lastCode);
+  return { ok: true, done: false, processed: targets.length, next_cursor: lastCode, stats };
+}
+
+
 // ── Auth ─────────────────────────────────────────────────────────────────────
 
 async function isAllowed(req: Request): Promise<boolean> {

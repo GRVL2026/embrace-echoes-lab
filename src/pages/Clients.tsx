@@ -42,12 +42,22 @@ type CaClient = {
   ca_ht: number | null;
 };
 
+type Anciennete = {
+  client: string | null;
+  premier_exercice: number | null;
+  dernier_exercice_actif: number | null;
+};
+
+type ClientKind = "nouveau" | "reactive" | "normal";
+
 type Row = {
   client: string;
   code_client: string | null;
   ca_current: number;
   ca_prev: number;
   evolution: number | null; // %
+  kind?: ClientKind;
+  dernier_exercice_actif?: number | null;
 };
 
 const eur = (n: number) =>

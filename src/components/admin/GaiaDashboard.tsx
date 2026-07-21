@@ -93,8 +93,8 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
         client.from("v_gaia_ecotaxe_mensuel").select("*"),
         client.from("v_gaia_ca_periode_egale").select("*"),
         client.from("v_gaia_retrocession_sfa").select("*"),
-        client.from("v_gaia_marge_famille").select("*"),
-        client.from("v_gaia_marge_client").select("*"),
+        client.rpc("get_marge_famille"),
+        client.rpc("get_marge_client"),
         client.from("gaia_sync_log").select("finished_at").order("finished_at", { ascending: false }).limit(1).maybeSingle(),
         client.from("v_gaia_pipeline").select("*"),
       ]);

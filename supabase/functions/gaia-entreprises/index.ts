@@ -573,6 +573,7 @@ async function fetchBilansTargets(limit: number, afterCode: string | null): Prom
     join cible c on c.code = e.code_client
     where e.siren is not null
       and e.match_statut in ('auto','valide')
+      and (e.bilans_maj is null or e.bilans_maj < now() - interval '20 days')
       ${afterCode ? `and e.code_client > ${escapeLit(afterCode)}` : ""}
     order by e.code_client
   `;

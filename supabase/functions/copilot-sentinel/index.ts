@@ -214,6 +214,135 @@ async function collectSignals(): Promise<Signal[]> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// MOUVEMENTS COMMERCE — snapshot & diff quotidien
+// ─────────────────────────────────────────────────────────────────────────────
+
+type CarnetRow = {
+  n_cde: string;
+  order_type: string | null;
+  categorie: string | null;
+  statut: string | null;
+  code_client: string | null;
+  client: string | null;
+  total_ht: number | null;
+  sfa: boolean | null;
+};
+
+type MouvementsCommerce = {
+  first_run: boolean;
+  nouveaux_devis: any[];
+  nouvelles_commandes: any[];
+  changements_statut: any[];
+  totaux: {
+    nb_nouveaux_devis: number; montant_nouveaux_devis: number;
+    nb_nouvelles_commandes: number; montant_nouvelles_commandes: number;
+    nb_changements: number;
+  };
+};
+
+async function computeMouvementsCommerce(today: string): Promise<MouvementsCommerce> {
+  const empty: MouvementsCommerce = {
+    first_run: false,
+    nouveaux_devis: [], nouvelles_commandes: [], changements_statut: [],
+    totaux: { nb_nouveaux_devis: 0, montant_nouveaux_devis: 0, nb_nouvelles_commandes: 0, montant_nouvelles_commandes: 0, nb_changements: 0 },
+  };
+
+  // 1. Photo du jour depuis v_gaia_carnet_documents (devis et commandes ouverts/récents)
+  const { data: currentData, error: curErr } = await admin
+    .from("v_gaia_carnet_documents")
+    .select("n_cde, order_type, categorie, statut, code_client, client, total_ht, sfa, date_document")
+    .in("categorie", ["devis", "commande"]);
+  if (curErr) { console.warn("carnet snapshot fetch error", curErr.message); return empty; }
+  const current: CarnetRow[] = (currentData ?? []).map((r: any) => ({
+    n_cde: String(r.n_cde ?? "").trim(),
+    order_type: r.order_type, categorie: r.categorie, statut: r.statut,
+    code_client: r.code_client, client: r.client,
+    total_ht: r.total_ht == null ? null : Number(r.total_ht),
+    sfa: !!r.sfa,
+  })).filter((r) => r.n_cde);
+
+  // 2. Insérer la photo du jour (upsert au cas où on relance dans la même journée)
+  if (current.length > 0) {
+    const rows = current.map((r) => ({ snapshot_date: today, ...r }));
+    // Insert par lots de 1000
+    for (let i = 0; i < rows.length; i += 1000) {
+      const chunk = rows.slice(i, i + 1000);
+      const { error } = await admin.from("gaia_carnet_snapshot").upsert(chunk, { onConflict: "snapshot_date,n_cde" });
+      if (error) console.warn("snapshot upsert error", error.message);
+    }
+  }
+
+  // 3. Purge > 35 jours
+  try {
+    const cutoff = new Date(Date.now() - 35 * 86_400_000).toISOString().slice(0, 10);
+    await admin.from("gaia_carnet_snapshot").delete().lt("snapshot_date", cutoff);
+  } catch (e) { console.warn("snapshot purge failed", (e as Error).message); }
+
+  // 4. Charger la photo précédente la plus récente (< today)
+  const { data: prevDateData } = await admin
+    .from("gaia_carnet_snapshot")
+    .select("snapshot_date")
+    .lt("snapshot_date", today)
+    .order("snapshot_date", { ascending: false })
+    .limit(1);
+  const prevDate = (prevDateData ?? [])[0]?.snapshot_date;
+  if (!prevDate) return { ...empty, first_run: true };
+
+  const { data: prevData } = await admin
+    .from("gaia_carnet_snapshot")
+    .select("n_cde, order_type, categorie, statut, code_client, client, total_ht, sfa")
+    .eq("snapshot_date", prevDate);
+  const prevMap = new Map<string, CarnetRow>();
+  for (const r of (prevData ?? []) as any[]) prevMap.set(String(r.n_cde).trim(), r);
+
+  const nouveaux_devis: any[] = [];
+  const nouvelles_commandes: any[] = [];
+  const changements_statut: any[] = [];
+
+  for (const r of current) {
+    const prev = prevMap.get(r.n_cde);
+    if (!prev) {
+      // Nouveau document
+      const base = {
+        n_cde: r.n_cde, client: r.client, code_client: r.code_client,
+        total_ht: r.total_ht ?? 0, statut: r.statut, sfa: r.sfa,
+      };
+      if (r.categorie === "devis") nouveaux_devis.push(base);
+      else if (r.categorie === "commande") {
+        // Détection conversion devis→commande : ancien devis (autre n_cde) même client + même montant approx ?
+        // Trop fragile — on se contente d'un flag "peut-être conversion" si un devis prev même client & montant existe.
+        let converti: string | null = null;
+        for (const [pn, p] of prevMap) {
+          if (p.categorie === "devis" && p.code_client === r.code_client &&
+              Math.abs(Number(p.total_ht ?? 0) - Number(r.total_ht ?? 0)) < 1 &&
+              !current.find((c) => c.n_cde === pn)) {
+            converti = pn; break;
+          }
+        }
+        nouvelles_commandes.push({ ...base, converti_depuis: converti });
+      }
+    } else if ((prev.statut ?? "") !== (r.statut ?? "")) {
+      changements_statut.push({
+        n_cde: r.n_cde, client: r.client, categorie: r.categorie,
+        total_ht: r.total_ht ?? 0, statut_avant: prev.statut, statut_apres: r.statut, sfa: r.sfa,
+      });
+    }
+  }
+
+  const sum = (arr: any[]) => arr.reduce((s, x) => s + Number(x.total_ht || 0), 0);
+  return {
+    first_run: false,
+    nouveaux_devis, nouvelles_commandes, changements_statut,
+    totaux: {
+      nb_nouveaux_devis: nouveaux_devis.length, montant_nouveaux_devis: sum(nouveaux_devis),
+      nb_nouvelles_commandes: nouvelles_commandes.length, montant_nouvelles_commandes: sum(nouvelles_commandes),
+      nb_changements: changements_statut.length,
+    },
+  };
+
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SCHEMA anthropic tool
 // ─────────────────────────────────────────────────────────────────────────────
 

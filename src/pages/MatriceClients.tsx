@@ -133,29 +133,38 @@ export default function MatriceClients() {
   const { isDirection, isLoading } = useAuth();
   const navigate = useNavigate();
 
-  const { data, isLoading: loadingRows } = useQuery({
-    queryKey: ["matrice-marge-client"],
+  // Liste des exercices via RPC dédiée (pas de troncature)
+  const { data: yearsData } = useQuery({
+    queryKey: ["matrice-exercices"],
     enabled: isDirection,
     queryFn: async () => {
-      const { data: rows, error } = await (supabase as any).rpc("get_marge_client");
+      const { data: rows, error } = await (supabase as any).rpc("get_gaia_exercices");
+      if (error) throw error;
+      return ((rows as { annee: number }[]) ?? [])
+        .map((r) => Number(r.annee))
+        .filter((n) => Number.isFinite(n))
+        .sort((a, b) => b - a);
+    },
+  });
+  const years = yearsData ?? [];
+
+  const [year, setYear] = useState<number | null>(null);
+  const effectiveYear = year ?? years[0] ?? null;
+
+  const { data, isLoading: loadingRows } = useQuery({
+    queryKey: ["matrice-marge-client", effectiveYear],
+    enabled: isDirection && effectiveYear != null,
+    queryFn: async () => {
+      // Filtre par exercice côté SQL — évite la troncature 1000 lignes.
+      const { data: rows, error } = await (supabase as any).rpc("get_marge_client", {
+        _annee: effectiveYear,
+      });
       if (error) throw error;
       return (rows as MargeRow[]) ?? [];
     },
   });
 
-  const years = useMemo(() => {
-    const set = new Set<number>();
-    for (const r of data ?? []) if (typeof r.annee === "number") set.add(r.annee);
-    return Array.from(set).sort((a, b) => b - a);
-  }, [data]);
-
-  const [year, setYear] = useState<number | null>(null);
-  const effectiveYear = year ?? years[0] ?? null;
-
-  const yearRows = useMemo(() => {
-    if (effectiveYear == null) return [];
-    return (data ?? []).filter((r) => r.annee === effectiveYear && r.client);
-  }, [data, effectiveYear]);
+  const yearRows = useMemo(() => (data ?? []).filter((r) => r.client), [data]);
 
   // Taux moyen pondéré du portefeuille (marge totale / ca_avec_cout total)
   const portfolioAvgTaux = useMemo(() => {

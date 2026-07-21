@@ -136,51 +136,52 @@ export default function Clients() {
   const [sortKey, setSortKey] = useState<SortKey>("ca_current");
 
   const { data, isPending } = useQuery({
-    queryKey: ["clients-ca"],
+    queryKey: ["clients-ca-agg"],
     enabled: canAccessDashboard,
     queryFn: async () => {
-      const { data: rows, error } = await (supabase as any)
-        .from("v_gaia_ca_client")
-        .select("*");
-      if (error) throw error;
-      const list = (rows as CaClient[]) ?? [];
-
-      // Exercice courant = année max présente
-      const years = Array.from(
-        new Set(list.map((r) => r.annee).filter((n): n is number => typeof n === "number")),
-      ).sort((a, b) => b - a);
+      const c: any = supabase;
+      // 1. Exercices disponibles via RPC (pas de risque de troncature)
+      const { data: exYears, error: exErr } = await c.rpc("get_gaia_exercices");
+      if (exErr) throw exErr;
+      const years = ((exYears as { annee: number }[]) ?? [])
+        .map((r) => Number(r.annee))
+        .filter((n) => Number.isFinite(n))
+        .sort((a, b) => b - a);
       const current = years[0];
       const prev = years[1];
-
-      // Regroupe par client (name canonique)
-      const map = new Map<string, Row>();
-      for (const r of list) {
-        const name = (r.client ?? "").trim();
-        if (!name) continue;
-        const entry: Row = map.get(name) ?? {
-          client: name,
-          code_client: r.code_client ?? null,
-          ca_current: 0,
-          ca_prev: 0,
-          evolution: null,
-        };
-        const amount = Number(r.ca_ht) || 0;
-        if (r.annee === current) entry.ca_current += amount;
-        else if (r.annee === prev) entry.ca_prev += amount;
-        if (!entry.code_client && r.code_client) entry.code_client = r.code_client;
-        map.set(name, entry);
+      if (current == null || prev == null) {
+        return { rows: [] as Row[], current, prev };
       }
-      const out = Array.from(map.values()).map((r) => ({
-        ...r,
-        evolution:
-          r.ca_prev > 0
-            ? ((r.ca_current - r.ca_prev) / r.ca_prev) * 100
-            : r.ca_current > 0
-              ? null // nouveau client
-              : 0,
-      }));
-      out.sort((a, b) => b.ca_current - a.ca_current);
-      return { rows: out, current, prev };
+
+      // 2. CA par client (agrégé côté serveur : une ligne par client, courant + précédent)
+      const { data: rows, error } = await c.rpc("get_ca_client", {
+        _annee: current,
+        _annee_prev: prev,
+      });
+      if (error) throw error;
+      const list = ((rows as {
+        code_client: string | null;
+        client: string | null;
+        ca_current: number | null;
+        ca_prev: number | null;
+      }[]) ?? []).map((r) => {
+        const caCur = Number(r.ca_current) || 0;
+        const caPrev = Number(r.ca_prev) || 0;
+        return {
+          client: (r.client ?? "").trim(),
+          code_client: r.code_client ?? null,
+          ca_current: caCur,
+          ca_prev: caPrev,
+          evolution:
+            caPrev > 0
+              ? ((caCur - caPrev) / caPrev) * 100
+              : caCur > 0
+                ? null
+                : 0,
+        } as Row;
+      }).filter((r) => r.client);
+      list.sort((a, b) => b.ca_current - a.ca_current);
+      return { rows: list, current, prev };
     },
   });
 
@@ -188,11 +189,14 @@ export default function Clients() {
     queryKey: ["clients-marge", data?.current],
     enabled: canAccessDashboard && isDirection && data?.current != null,
     queryFn: async () => {
-      const { data: rows, error } = await (supabase as any).rpc("get_marge_client");
+      // Filtrage par exercice côté SQL — évite la troncature à 1000 lignes.
+      const { data: rows, error } = await (supabase as any).rpc("get_marge_client", {
+        _annee: data?.current,
+      });
       if (error) throw error;
       const map = new Map<string, MargeClient>();
       for (const r of (rows as MargeClient[]) ?? []) {
-        if (r.client && r.annee === data?.current) map.set(r.client.trim(), r);
+        if (r.client) map.set(r.client.trim(), r);
       }
       return map;
     },

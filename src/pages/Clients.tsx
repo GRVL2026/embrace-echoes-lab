@@ -4,8 +4,33 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
-import { Search, TrendingUp, TrendingDown, Minus, Users, Loader2 } from "lucide-react";
+import { Search, TrendingUp, TrendingDown, Minus, Users, Loader2, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+type EntrepriseState = "ok" | "a_valider" | "introuvable" | "cessee";
+
+const STATE_META: Record<EntrepriseState, { label: string; dot: string; badge: string; icon: string }> = {
+  ok: { label: "OK", dot: "bg-emerald-500", badge: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30", icon: "🟢" },
+  a_valider: { label: "À valider", dot: "bg-amber-500", badge: "bg-amber-500/10 text-amber-500 border-amber-500/30", icon: "🟡" },
+  introuvable: { label: "Introuvable", dot: "bg-muted-foreground/60", badge: "bg-muted-foreground/10 text-muted-foreground border-muted-foreground/30", icon: "⚪" },
+  cessee: { label: "Cessée / procédure", dot: "bg-red-500", badge: "bg-red-500/10 text-red-500 border-red-500/30", icon: "🔴" },
+};
+
+type EntrepriseRow = {
+  code_client: string | null;
+  etat_administratif: string | null;
+  procedure_collective: boolean | null;
+  match_statut: string | null;
+};
+
+function computeState(e: EntrepriseRow | undefined): EntrepriseState {
+  if (!e) return "introuvable";
+  if (e.etat_administratif === "C" || e.procedure_collective === true) return "cessee";
+  if (e.match_statut === "a_valider") return "a_valider";
+  if (e.match_statut === "introuvable") return "introuvable";
+  if ((e.match_statut === "auto" || e.match_statut === "valide") && e.etat_administratif === "A") return "ok";
+  return "introuvable";
+}
 
 type CaClient = {
   code_client: string | null;

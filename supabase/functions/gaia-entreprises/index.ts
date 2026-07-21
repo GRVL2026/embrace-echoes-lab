@@ -161,14 +161,26 @@ function escapeLit(s: string): string {
 async function loadCursor(): Promise<string | null> {
   const { data } = await admin.from("gaia_config").select("value").eq("key", CURSOR_KEY).maybeSingle();
   const v = (data as any)?.value;
-  if (!v) return null;
-  if (typeof v === "string") return v || null;
-  if (typeof v === "object" && v.code) return String(v.code);
+  if (v === null || v === undefined) return null;
+  if (typeof v === "string") {
+    const s = v.trim();
+    if (!s) return null;
+    // Compat : ancien format JSON stringifié {"code":"..."}
+    if (s.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(s);
+        if (parsed && typeof parsed.code === "string") return parsed.code || null;
+      } catch { /* ignore, fallback ci-dessous */ }
+      return null;
+    }
+    return s;
+  }
+  if (typeof v === "object" && (v as any).code) return String((v as any).code);
   return null;
 }
 
 async function saveCursor(code: string | null) {
-  await admin.from("gaia_config").upsert({ key: CURSOR_KEY, value: code ? { code } : null }, { onConflict: "key" });
+  await admin.from("gaia_config").upsert({ key: CURSOR_KEY, value: code ?? null }, { onConflict: "key" });
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────────

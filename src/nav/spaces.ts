@@ -129,6 +129,7 @@ export const SPACES: Space[] = [
         icon: Grid2x2,
         show: (c) => c.isDirection,
         match: startsWith("/admin/matrice-clients"),
+      },
       {
         label: "Dashboard Magasin",
         to: "/admin/gaia#magasin",

@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
-import { Search, TrendingUp, TrendingDown, Minus, Users, Loader2, ArrowRight, ChevronRight, Sparkles, RotateCcw, Info } from "lucide-react";
+import { Search, TrendingUp, TrendingDown, Minus, Users, Loader2, ArrowRight, ChevronRight, Sparkles, RotateCcw, Info, ArrowUp, ArrowDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DetailPageHeader } from "@/components/DetailPageHeader";
 import { UserMenu } from "@/components/UserMenu";
@@ -18,6 +18,21 @@ const STATE_META: Record<EntrepriseState, { label: string; dot: string; badge: s
   introuvable: { label: "Introuvable", dot: "bg-muted-foreground/60", badge: "bg-muted-foreground/10 text-muted-foreground border-muted-foreground/30", icon: "⚪" },
   cessee: { label: "Cessée / procédure", dot: "bg-red-500", badge: "bg-red-500/10 text-red-500 border-red-500/30", icon: "🔴" },
 };
+
+// Seuils de rentabilité par rapport à la moyenne portefeuille (22,4 % sur 2026).
+// Ajustables ici — commentés pour rester lisibles.
+const MARGIN_AVG = 22.4;           // référence portefeuille (%)
+const MARGIN_GREEN = 27;           // >= : nettement au-dessus (vert)
+const MARGIN_NEUTRAL_LOW = 18;     // >= : proche moyenne (neutre)
+const MARGIN_ORANGE_LOW = 10;      // >= : nettement en-dessous (orange), < : rouge
+
+function marginTone(rate: number | null): { color: string; label: string } {
+  if (rate == null) return { color: "bg-muted-foreground/40", label: "Marge inconnue" };
+  if (rate >= MARGIN_GREEN) return { color: "bg-emerald-500", label: `Rentabilité élevée (${rate.toFixed(1)} %)` };
+  if (rate >= MARGIN_NEUTRAL_LOW) return { color: "bg-sky-500/70", label: `Proche de la moyenne (${rate.toFixed(1)} %)` };
+  if (rate >= MARGIN_ORANGE_LOW) return { color: "bg-orange-500", label: `Sous la moyenne (${rate.toFixed(1)} %)` };
+  return { color: "bg-red-500", label: `Rentabilité faible (${rate.toFixed(1)} %)` };
+}
 
 type EntrepriseRow = {
   code_client: string | null;
@@ -42,6 +57,15 @@ type CaClient = {
   ca_ht: number | null;
 };
 
+type MargeClient = {
+  annee: number | null;
+  client: string | null;
+  ca_ht: number | null;
+  ca_avec_cout: number | null;
+  marge_estimee: number | null;
+  part_reelle: number | null;
+};
+
 type Anciennete = {
   client: string | null;
   premier_exercice: number | null;
@@ -50,6 +74,7 @@ type Anciennete = {
 };
 
 type ClientKind = "nouveau" | "reactive" | "normal";
+type SortKey = "ca_current" | "marge" | "taux";
 
 type Row = {
   client: string;
@@ -59,6 +84,9 @@ type Row = {
   evolution: number | null; // %
   kind?: ClientKind;
   dernier_exercice_actif?: number | null;
+  marge?: number | null;         // €
+  ca_avec_cout?: number | null;  // €
+  taux?: number | null;          // %
 };
 
 const eur = (n: number) =>
@@ -105,6 +133,7 @@ export default function Clients() {
   const [search, setSearch] = useState("");
   const [stateFilter, setStateFilter] = useState<EntrepriseState | "all">("all");
   const [kindFilter, setKindFilter] = useState<ClientKind | "all">("all");
+  const [sortKey, setSortKey] = useState<SortKey>("ca_current");
 
   const { data, isPending } = useQuery({
     queryKey: ["clients-ca"],
@@ -155,6 +184,20 @@ export default function Clients() {
     },
   });
 
+  const { data: margeMap } = useQuery({
+    queryKey: ["clients-marge", data?.current],
+    enabled: canAccessDashboard && isDirection && data?.current != null,
+    queryFn: async () => {
+      const { data: rows, error } = await (supabase as any).rpc("get_marge_client");
+      if (error) throw error;
+      const map = new Map<string, MargeClient>();
+      for (const r of (rows as MargeClient[]) ?? []) {
+        if (r.client && r.annee === data?.current) map.set(r.client.trim(), r);
+      }
+      return map;
+    },
+  });
+
   const { data: entMap } = useQuery({
     queryKey: ["clients-entreprises-state"],
     enabled: canAccessDashboard && isDirection,
@@ -200,14 +243,21 @@ export default function Clients() {
         // fallback si pas d'ancienneté connue
         kind = "nouveau";
       }
+      const m = isDirection ? margeMap?.get(r.client.trim()) : undefined;
+      const marge = m?.marge_estimee != null ? Number(m.marge_estimee) : null;
+      const caCout = m?.ca_avec_cout != null ? Number(m.ca_avec_cout) : null;
+      const taux = marge != null && caCout && caCout > 0 ? (marge / caCout) * 100 : null;
       return {
         ...r,
         kind,
         dernier_exercice_actif: anc?.dernier_exercice_avant_courant ?? null,
         state: isDirection ? computeState(entMap?.get((r.code_client ?? "").trim())) : null,
+        marge,
+        ca_avec_cout: caCout,
+        taux,
       };
     });
-  }, [data, entMap, ancMap, isDirection]);
+  }, [data, entMap, ancMap, isDirection, margeMap]);
 
   const stateCounts = useMemo(() => {
     const counts = { all: rowsWithState.length, ok: 0, a_valider: 0, introuvable: 0, cessee: 0 };
@@ -231,13 +281,44 @@ export default function Clients() {
     if (kindFilter !== "all") {
       list = list.filter((r) => r.kind === kindFilter);
     }
-    if (!q) return list;
-    return list.filter(
-      (r) =>
-        r.client.toLowerCase().includes(q) ||
-        (r.code_client ?? "").toLowerCase().includes(q),
-    );
-  }, [rowsWithState, search, stateFilter, kindFilter, isDirection]);
+    if (q) {
+      list = list.filter(
+        (r) =>
+          r.client.toLowerCase().includes(q) ||
+          (r.code_client ?? "").toLowerCase().includes(q),
+      );
+    }
+    const sorted = [...list];
+    sorted.sort((a, b) => {
+      const va =
+        sortKey === "ca_current" ? a.ca_current
+        : sortKey === "marge" ? (a.marge ?? -Infinity)
+        : (a.taux ?? -Infinity);
+      const vb =
+        sortKey === "ca_current" ? b.ca_current
+        : sortKey === "marge" ? (b.marge ?? -Infinity)
+        : (b.taux ?? -Infinity);
+      return vb - va;
+    });
+    return sorted;
+  }, [rowsWithState, search, stateFilter, kindFilter, isDirection, sortKey]);
+
+  // Totaux dynamiques selon filtres actifs
+  const totals = useMemo(() => {
+    let caCur = 0, caPrev = 0, marge = 0, caCout = 0;
+    for (const r of filtered) {
+      caCur += r.ca_current;
+      caPrev += r.ca_prev;
+      if (isDirection) {
+        if (typeof r.marge === "number") marge += r.marge;
+        if (typeof r.ca_avec_cout === "number") caCout += r.ca_avec_cout;
+      }
+    }
+    const evolution = caPrev > 0 ? ((caCur - caPrev) / caPrev) * 100 : null;
+    const taux = caCout > 0 ? (marge / caCout) * 100 : null;
+    const couverture = caCur > 0 ? (caCout / caCur) * 100 : null;
+    return { count: filtered.length, caCur, caPrev, evolution, marge, taux, couverture };
+  }, [filtered, isDirection]);
 
   if (loading) return null;
   if (!canAccessDashboard) {
@@ -250,6 +331,19 @@ export default function Clients() {
 
   const location = useLocation();
   const fromState = { from: location.pathname + location.search };
+
+  const SortBtn = ({ k, label }: { k: SortKey; label: string }) => (
+    <button
+      onClick={() => setSortKey(k)}
+      className={cn(
+        "inline-flex items-center gap-1 hover:text-foreground transition-colors",
+        sortKey === k && "text-primary",
+      )}
+    >
+      {label}
+      {sortKey === k && <ArrowDown className="h-3 w-3" />}
+    </button>
+  );
 
   return (
     <>
@@ -352,6 +446,48 @@ export default function Clients() {
         })}
       </div>
 
+      {/* Bandeau de totaux — reflète exactement la sélection en cours */}
+      <div className="rounded-lg border border-border bg-card/40 p-3 sm:p-4">
+        <div className={cn("grid gap-3", isDirection ? "grid-cols-2 sm:grid-cols-5" : "grid-cols-2 sm:grid-cols-3")}>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Clients</div>
+            <div className="font-mono text-lg font-semibold">{totals.count}</div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">CA {data?.current ?? ""}</div>
+            <div className="font-mono text-lg font-semibold">{eur(totals.caCur)}</div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              CA {data?.prev ?? ""}
+              {totals.evolution != null && (
+                <span className={cn(
+                  "ml-1 font-medium",
+                  totals.evolution >= 5 ? "text-secondary" : totals.evolution <= -5 ? "text-destructive" : "text-muted-foreground",
+                )}>
+                  ({totals.evolution >= 0 ? "+" : ""}{totals.evolution.toFixed(1)}%)
+                </span>
+              )}
+            </div>
+            <div className="font-mono text-lg text-muted-foreground">{eur(totals.caPrev)}</div>
+          </div>
+          {isDirection && (
+            <>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Marge €</div>
+                <div className="font-mono text-lg font-semibold">{eur(totals.marge)}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Taux moyen</div>
+                <div className="font-mono text-lg font-semibold">
+                  {totals.taux != null ? `${totals.taux.toFixed(1)} %` : "—"}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
       {isPending && (
         <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
           <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Chargement…
@@ -364,10 +500,21 @@ export default function Clients() {
         </div>
       )}
 
+      {/* Tri (visible sur desktop dans l'entête ; mobile a des boutons compacts) */}
+      {isDirection && !isPending && filtered.length > 0 && (
+        <div className="md:hidden flex items-center gap-2 text-[11px] text-muted-foreground">
+          <span>Trier :</span>
+          <button onClick={() => setSortKey("ca_current")} className={cn("px-2 py-0.5 rounded border", sortKey === "ca_current" ? "border-primary/40 text-primary" : "border-border")}>CA</button>
+          <button onClick={() => setSortKey("marge")} className={cn("px-2 py-0.5 rounded border", sortKey === "marge" ? "border-primary/40 text-primary" : "border-border")}>Marge €</button>
+          <button onClick={() => setSortKey("taux")} className={cn("px-2 py-0.5 rounded border", sortKey === "taux" ? "border-primary/40 text-primary" : "border-border")}>Taux %</button>
+        </div>
+      )}
+
       {/* MOBILE : liste de cartes */}
       {!isPending && filtered.length > 0 && (
         <div className="md:hidden space-y-2">
           {filtered.map((r) => {
+            const tone = isDirection ? marginTone(r.taux ?? null) : null;
             return (
               <Link
                 key={r.client}
@@ -376,6 +523,9 @@ export default function Clients() {
                 className="block rounded-lg border border-border bg-card/40 p-3 active:bg-muted/30 transition-colors"
               >
                 <div className="flex items-start gap-2">
+                  {tone && (
+                    <span className={cn("mt-1 h-2 w-2 rounded-full flex-shrink-0", tone.color)} title={tone.label} />
+                  )}
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold text-sm leading-tight line-clamp-2 break-words">
                       {r.client}
@@ -409,6 +559,12 @@ export default function Clients() {
                       <span className="mr-1">{data?.prev}:</span>
                       {eur(r.ca_prev)}
                     </div>
+                    {isDirection && (r.marge != null || r.taux != null) && (
+                      <div className="font-mono text-[11px] text-muted-foreground mt-0.5">
+                        Marge : {r.marge != null ? eur(r.marge) : "—"}
+                        {r.taux != null && <span className="ml-1">· {r.taux.toFixed(1)} %</span>}
+                      </div>
+                    )}
                   </div>
                   <EvolutionCell ev={r.evolution} kind={r.kind} dernier={r.dernier_exercice_actif} />
                 </div>
@@ -421,44 +577,80 @@ export default function Clients() {
       {/* DESKTOP : tableau */}
       {!isPending && filtered.length > 0 && (
         <div className="hidden md:block rounded-lg border border-border bg-card/40 overflow-x-auto">
-          <div className="grid grid-cols-[1fr_140px_140px_140px] gap-2 px-4 py-2 border-b border-border bg-muted/30 text-[11px] uppercase tracking-wider text-muted-foreground font-medium min-w-[640px]">
+          <div
+            className={cn(
+              "grid gap-2 px-4 py-2 border-b border-border bg-muted/30 text-[11px] uppercase tracking-wider text-muted-foreground font-medium",
+              isDirection
+                ? "grid-cols-[1fr_130px_130px_120px_90px_130px] min-w-[820px]"
+                : "grid-cols-[1fr_140px_140px_140px] min-w-[640px]",
+            )}
+          >
             <div>Client</div>
-            <div className="text-right">CA {data?.current ?? ""}</div>
+            <div className="text-right">
+              <SortBtn k="ca_current" label={`CA ${data?.current ?? ""}`} />
+            </div>
             <div className="text-right">CA {data?.prev ?? ""}</div>
+            {isDirection && (
+              <>
+                <div className="text-right"><SortBtn k="marge" label="Marge €" /></div>
+                <div className="text-right"><SortBtn k="taux" label="Taux %" /></div>
+              </>
+            )}
             <div className="text-right">Évolution</div>
           </div>
           {filtered.map((r) => {
+            const tone = isDirection ? marginTone(r.taux ?? null) : null;
             return (
               <Link
                 key={r.client}
                 to={`/admin/gaia/client/${encodeURIComponent(r.client)}`}
                 state={fromState}
-                className="grid grid-cols-[1fr_140px_140px_140px] gap-2 px-4 py-3 border-b border-border/50 last:border-b-0 hover:bg-muted/30 transition-colors items-center min-w-[640px]"
+                className={cn(
+                  "grid gap-2 px-4 py-3 border-b border-border/50 last:border-b-0 hover:bg-muted/30 transition-colors items-center",
+                  isDirection
+                    ? "grid-cols-[1fr_130px_130px_120px_90px_130px] min-w-[820px]"
+                    : "grid-cols-[1fr_140px_140px_140px] min-w-[640px]",
+                )}
               >
-                <div className="min-w-0">
-                  <div className="font-medium truncate flex items-center gap-2">
-                    <span className="truncate">{r.client}</span>
-                    {isDirection && r.state && (
-                      <span
-                        title={STATE_META[r.state].label}
-                        className={cn(
-                          "shrink-0 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-normal",
-                          STATE_META[r.state].badge,
-                        )}
-                      >
-                        <span className={cn("h-1.5 w-1.5 rounded-full", STATE_META[r.state].dot)} />
-                        {STATE_META[r.state].label}
-                      </span>
+                <div className="min-w-0 flex items-center gap-2">
+                  {tone && (
+                    <span className={cn("h-2 w-2 rounded-full flex-shrink-0", tone.color)} title={tone.label} />
+                  )}
+                  <div className="min-w-0">
+                    <div className="font-medium truncate flex items-center gap-2">
+                      <span className="truncate">{r.client}</span>
+                      {isDirection && r.state && (
+                        <span
+                          title={STATE_META[r.state].label}
+                          className={cn(
+                            "shrink-0 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-normal",
+                            STATE_META[r.state].badge,
+                          )}
+                        >
+                          <span className={cn("h-1.5 w-1.5 rounded-full", STATE_META[r.state].dot)} />
+                          {STATE_META[r.state].label}
+                        </span>
+                      )}
+                    </div>
+                    {r.code_client && (
+                      <div className="text-xs text-muted-foreground truncate">{r.code_client}</div>
                     )}
                   </div>
-                  {r.code_client && (
-                    <div className="text-xs text-muted-foreground truncate">{r.code_client}</div>
-                  )}
                 </div>
                 <div className="text-right font-mono text-sm">{eur(r.ca_current)}</div>
                 <div className="text-right font-mono text-sm text-muted-foreground">
                   {eur(r.ca_prev)}
                 </div>
+                {isDirection && (
+                  <>
+                    <div className="text-right font-mono text-sm">
+                      {r.marge != null ? eur(r.marge) : <span className="text-muted-foreground">—</span>}
+                    </div>
+                    <div className="text-right font-mono text-sm">
+                      {r.taux != null ? `${r.taux.toFixed(1)} %` : <span className="text-muted-foreground">—</span>}
+                    </div>
+                  </>
+                )}
                 <div className="text-right flex items-center justify-end">
                   <EvolutionCell ev={r.evolution} kind={r.kind} dernier={r.dernier_exercice_actif} />
                 </div>
@@ -469,13 +661,18 @@ export default function Clients() {
       )}
 
       {!isPending && (
-        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5">
-            <Info className="h-3 w-3" />
+            <Info className="h-3 w-3 flex-shrink-0" />
             <span>Ancienneté calculée depuis septembre 2022 — un client dont la première facture connue tombe dans l'exercice 2023 pourrait être plus ancien.</span>
           </div>
-          <div className="shrink-0">
-            {filtered.length} client{filtered.length > 1 ? "s" : ""} affiché{filtered.length > 1 ? "s" : ""}
+          <div className="shrink-0 flex flex-col sm:items-end gap-0.5">
+            <span>{filtered.length} client{filtered.length > 1 ? "s" : ""} affiché{filtered.length > 1 ? "s" : ""}</span>
+            {isDirection && totals.couverture != null && (
+              <span className="text-[10px] italic">
+                Marge estimée sur {totals.couverture.toFixed(1)} % du CA au coût connu
+              </span>
+            )}
           </div>
         </div>
       )}

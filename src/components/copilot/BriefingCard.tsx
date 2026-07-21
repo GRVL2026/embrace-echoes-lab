@@ -103,6 +103,19 @@ export function BriefingCard({ defaultExpanded = true }: { defaultExpanded?: boo
             </Section>
           )}
 
+          {b.mouvements_commerce && (
+            <Section title="📋 Mouvements commerce d'hier">
+              <p className="text-sm text-foreground/90 mb-1.5">{b.mouvements_commerce.resume}</p>
+              {b.mouvements_commerce.lignes?.length > 0 && (
+                <ul className="space-y-1 text-xs text-muted-foreground">
+                  {b.mouvements_commerce.lignes.map((l, i) => (
+                    <li key={i} className="flex gap-2"><span className="text-primary">•</span>{l}</li>
+                  ))}
+                </ul>
+              )}
+            </Section>
+          )}
+
           {b.alertes_nouvelles?.length > 0 && (
             <Section title="Alertes du jour">
               <ul className="space-y-1 text-sm text-muted-foreground">
@@ -112,6 +125,7 @@ export function BriefingCard({ defaultExpanded = true }: { defaultExpanded?: boo
               </ul>
             </Section>
           )}
+
 
           {b.opportunites?.length > 0 && (
             <Section title="Opportunités">

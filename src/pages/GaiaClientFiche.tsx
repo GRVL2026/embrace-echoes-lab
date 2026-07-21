@@ -106,13 +106,14 @@ export default function GaiaClientFiche() {
 
       const [ca_r, mg_r, parc_r] = await Promise.all([
         client.from("v_gaia_ca_client").select("*").eq("client", clientName),
-        client.from("v_gaia_marge_client").select("*").eq("client", clientName),
+        client.rpc("get_marge_client"),
         client.from("v_gaia_parc_client").select("*").eq("client", clientName),
       ]);
 
       const caRows: CaClient[] = (ca_r.data as CaClient[]) ?? [];
       const parcRows: ParcRow[] = (parc_r.data as ParcRow[]) ?? [];
-      const margeRows: MargeClient[] = (mg_r.data as MargeClient[]) ?? [];
+      const margeRows: MargeClient[] = (((mg_r.data as MargeClient[]) ?? []) as MargeClient[])
+        .filter((r) => (r as any).client === clientName);
 
       const codes = Array.from(
         new Set(

@@ -21,10 +21,34 @@ const REFRESH_BATCH_SIZE = 40;
 const RATE_LIMIT_MS = 550; // ~2 req/s max
 
 const CURSOR_KEY = "entreprises_cursor";
+const REMATCH_CURSOR_KEY = "rematch_cursor";
+const REMATCH_BATCH_SIZE = 30;
 const BILANS_CURSOR_KEY = "bilans_cursor";
 const BILANS_BATCH_SIZE = 25;
 const PAPPERS_API_KEY = Deno.env.get("PAPPERS_API_KEY") ?? "";
 const PAPPERS_URL = "https://api.pappers.fr/v2/entreprise";
+
+// ── NAF secteur (validé par Léopaul) ─────────────────────────────────────────
+// Clientèle : exploitants de jeux, forains, BEAUCOUP de bowlings, CHR, revendeurs, vending.
+// Comparaison avec OU sans point : on normalise les deux côtés.
+const NAF_SECTEUR_RAW = [
+  "93.29Z","93.21Z","93.11Z","92.00Z",
+  "56.30Z","56.10A",
+  "55.10Z","55.20Z","55.30Z",
+  "59.14Z",
+  "46.49Z","46.90Z",
+  "47.65Z","47.78C","47.91A","47.91B","47.99B",
+  "77.39Z","77.29Z",
+  "33.19Z","95.29Z","94.99Z","84.11Z",
+];
+function normalizeNaf(s: string | null | undefined): string {
+  return String(s ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+const NAF_SECTEUR = new Set(NAF_SECTEUR_RAW.map(normalizeNaf));
+function isSectorNaf(code: string | null | undefined): boolean {
+  const n = normalizeNaf(code);
+  return n.length > 0 && NAF_SECTEUR.has(n);
+}
 
 // ── Utilitaires ──────────────────────────────────────────────────────────────
 
@@ -54,12 +78,24 @@ function similarity(a: string, b: string): number {
   return common / Math.max(wa.size, wb.size);
 }
 
+// Normalisation TOLERANTE pour rematch : retire formes juridiques, ponctuation, accents.
+// Renvoie aussi une variante « 2-3 premiers mots significatifs » pour élargir la recherche
+// quand le nom Cegid est verbeux (ex. « BOWLING DE ST LO SAS EXPLOITATION LOISIRS »).
+function looseName(s: string): string {
+  return normalize(s);
+}
+function keywordsQuery(s: string): string {
+  const words = normalize(s).split(" ").filter((w) => w.length >= 3);
+  return words.slice(0, 3).join(" ");
+}
+
 type ApiResult = {
   siren: string;
   nom_complet?: string;
   nom_raison_sociale?: string;
   nature_juridique?: string;
   activite_principale?: string;
+  libelle_activite_principale?: string;
   date_creation?: string;
   tranche_effectif_salarie?: string;
   etat_administratif?: string;
@@ -74,12 +110,8 @@ type ApiResult = {
   matching_etablissements?: any[];
   complements?: {
     est_entrepreneur_individuel?: boolean;
-    // recherche-entreprises n'expose pas toujours la procédure collective directement.
-    // On garde le champ pour compatibilité future.
   };
-  // Champ éventuel selon la version d'API
   procedure_collective_en_cours?: boolean;
-  // Certains résultats exposent `bilans` / `finances`… on n'exploite pas ici.
 } & Record<string, any>;
 
 function extractProcedure(r: ApiResult): boolean {
@@ -200,52 +232,105 @@ type MatchOutcome = {
   adresse_siege: string | null;
   etat_administratif: string | null;
   procedure_collective: boolean;
+  code_naf: string | null;
+  libelle_naf: string | null;
   candidats: any[];
 };
 
-function chooseMatch(clientName: string, results: ApiResult[]): MatchOutcome {
-  if (!results.length) {
-    return { match_statut: "introuvable", siren: null, denomination: null, forme_juridique: null, date_creation: null, effectif_tranche: null, dirigeants: [], adresse_siege: null, etat_administratif: null, procedure_collective: false, candidats: [] };
-  }
+function makeCandidat(r: ApiResult, score: number) {
+  const naf = r.activite_principale || null;
+  return {
+    siren: r.siren,
+    nom: r.nom_complet || r.nom_raison_sociale,
+    forme: r.nature_juridique,
+    ville: r.siege?.libelle_commune || r.siege?.ville,
+    date_creation: r.date_creation,
+    etat_administratif: r.etat_administratif,
+    procedure_collective: extractProcedure(r),
+    code_naf: naf,
+    libelle_naf: r.libelle_activite_principale || null,
+    is_secteur: isSectorNaf(naf),
+    score: Math.round(score * 100) / 100,
+  };
+}
+
+function autoOutcome(r: ApiResult): MatchOutcome {
+  return {
+    match_statut: "auto",
+    siren: r.siren,
+    denomination: r.nom_complet || r.nom_raison_sociale || null,
+    forme_juridique: r.nature_juridique || null,
+    date_creation: r.date_creation || null,
+    effectif_tranche: r.tranche_effectif_salarie || null,
+    dirigeants: extractDirigeants(r),
+    adresse_siege: extractSiege(r) || null,
+    etat_administratif: r.etat_administratif || null,
+    procedure_collective: extractProcedure(r),
+    code_naf: r.activite_principale || null,
+    libelle_naf: r.libelle_activite_principale || null,
+    candidats: [],
+  };
+}
+
+function emptyOutcome(statut: "introuvable" | "a_valider", candidats: any[]): MatchOutcome {
+  return {
+    match_statut: statut,
+    siren: null, denomination: null, forme_juridique: null, date_creation: null,
+    effectif_tranche: null, dirigeants: [], adresse_siege: null,
+    etat_administratif: null, procedure_collective: false,
+    code_naf: null, libelle_naf: null,
+    candidats,
+  };
+}
+
+// SCORING (validé par Léopaul) : NAF = DÉPARTAGEUR, jamais couperet.
+// (a) nom quasi-exact + NAF secteur → auto, même si plusieurs candidats mais UN SEUL en secteur.
+// (b) nom quasi-exact + NAF hors secteur → auto SI c'est le seul candidat plausible
+//     (la boulangerie qui achète un flipper existe).
+// (c) plusieurs candidats plausibles dont plusieurs en NAF secteur → 'a_valider',
+//     candidats secteur triés en premier.
+// `sectorOnlyAuto` : mode rematch/tolérant → n'accepter auto que si NAF secteur.
+function chooseMatch(clientName: string, results: ApiResult[], sectorOnlyAuto = false): MatchOutcome {
+  if (!results.length) return emptyOutcome("introuvable", []);
+
   const scored = results.map((r) => ({
     r,
     score: similarity(clientName, r.nom_complet || r.nom_raison_sociale || ""),
+    sector: isSectorNaf(r.activite_principale),
   }));
-  scored.sort((a, b) => b.score - a.score);
-  const top = scored[0];
-  const second = scored[1];
-  const auto = top.score >= 0.82 && (!second || (top.score - second.score) >= 0.15);
-  if (auto) {
-    const r = top.r;
-    return {
-      match_statut: "auto",
-      siren: r.siren,
-      denomination: r.nom_complet || r.nom_raison_sociale || null,
-      forme_juridique: r.nature_juridique || null,
-      date_creation: r.date_creation || null,
-      effectif_tranche: r.tranche_effectif_salarie || null,
-      dirigeants: extractDirigeants(r),
-      adresse_siege: extractSiege(r) || null,
-      etat_administratif: r.etat_administratif || null,
-      procedure_collective: extractProcedure(r),
-      candidats: [],
-    };
+
+  // Tri : score DESC puis secteur d'abord à score égal
+  scored.sort((a, b) => (b.score - a.score) || (Number(b.sector) - Number(a.sector)));
+
+  const NAME_QUASI_EXACT = 0.82;
+  const PLAUSIBLE = 0.4;
+  const plausibles = scored.filter((s) => s.score >= PLAUSIBLE);
+
+  // Candidats plausibles avec NAF secteur
+  const sectorPlausibles = plausibles.filter((s) => s.sector);
+  // Candidats plausibles avec nom quasi-exact
+  const nearNamePlausibles = plausibles.filter((s) => s.score >= NAME_QUASI_EXACT);
+
+  // (a) nom quasi-exact + UN SEUL candidat en NAF secteur → auto (même si d'autres candidats existent)
+  const sectorNearName = nearNamePlausibles.filter((s) => s.sector);
+  if (sectorNearName.length === 1) {
+    return autoOutcome(sectorNearName[0].r);
   }
-  // Sinon on liste les candidats plausibles (score >= 0.4)
-  const cands = scored.filter((s) => s.score >= 0.4).slice(0, 5).map((s) => ({
-    siren: s.r.siren,
-    nom: s.r.nom_complet || s.r.nom_raison_sociale,
-    forme: s.r.nature_juridique,
-    ville: s.r.siege?.libelle_commune || s.r.siege?.ville,
-    date_creation: s.r.date_creation,
-    etat_administratif: s.r.etat_administratif,
-    procedure_collective: extractProcedure(s.r),
-    score: Math.round(s.score * 100) / 100,
-  }));
-  if (cands.length === 0) {
-    return { match_statut: "introuvable", siren: null, denomination: null, forme_juridique: null, date_creation: null, effectif_tranche: null, dirigeants: [], adresse_siege: null, etat_administratif: null, procedure_collective: false, candidats: [] };
+
+  // (b) nom quasi-exact + hors secteur → auto SI c'est le seul candidat plausible
+  //     (mode rematch tolérant : on refuse ce cas, on renvoie 'a_valider').
+  if (!sectorOnlyAuto && nearNamePlausibles.length === 1 && plausibles.length === 1) {
+    return autoOutcome(nearNamePlausibles[0].r);
   }
-  return { match_statut: "a_valider", siren: null, denomination: null, forme_juridique: null, date_creation: null, effectif_tranche: null, dirigeants: [], adresse_siege: null, etat_administratif: null, procedure_collective: false, candidats: cands };
+
+  // (c) plusieurs candidats plausibles : 'a_valider' avec secteur en tête
+  if (plausibles.length === 0) return emptyOutcome("introuvable", []);
+  const ordered = [
+    ...sectorPlausibles.slice(0, 5),
+    ...plausibles.filter((s) => !s.sector).slice(0, Math.max(0, 5 - sectorPlausibles.length)),
+  ];
+  const cands = ordered.slice(0, 5).map((s) => makeCandidat(s.r, s.score));
+  return emptyOutcome("a_valider", cands);
 }
 
 async function upsertResult(code: string, name: string, m: MatchOutcome) {
@@ -260,11 +345,14 @@ async function upsertResult(code: string, name: string, m: MatchOutcome) {
     adresse_siege: m.adresse_siege,
     etat_administratif: m.etat_administratif,
     procedure_collective: m.procedure_collective,
+    code_naf: m.code_naf,
+    libelle_naf: m.libelle_naf,
     match_statut: m.match_statut,
     candidats: m.candidats,
     maj: new Date().toISOString(),
   }, { onConflict: "code_client" });
 }
+
 
 async function enrichBatch() {
   const cursor = await loadCursor();
@@ -325,6 +413,8 @@ async function refresh() {
         effectif_tranche: hit.tranche_effectif_salarie || undefined,
         dirigeants: extractDirigeants(hit),
         adresse_siege: extractSiege(hit) || undefined,
+        code_naf: hit.activite_principale || undefined,
+        libelle_naf: hit.libelle_activite_principale || undefined,
         maj: new Date().toISOString(),
       }).eq("code_client", r.code_client);
       updated++;
@@ -363,11 +453,85 @@ async function validateCandidate(code_client: string, siren: string | null) {
     adresse_siege: extractSiege(hit) || null,
     etat_administratif: hit.etat_administratif || null,
     procedure_collective: extractProcedure(hit),
+    code_naf: hit.activite_principale || null,
+    libelle_naf: hit.libelle_activite_principale || null,
     match_statut: "valide",
     candidats: [],
     maj: new Date().toISOString(),
   }).eq("code_client", code_client);
   return { ok: true };
+}
+
+// ── Rematch : re-scoring NAF sur les 'a_valider' et 'introuvable' ────────────
+// N'AFFECTE PAS les lignes 'auto' ou 'valide' existantes.
+
+async function loadRematchCursor(): Promise<string | null> {
+  const { data } = await admin.from("gaia_config").select("value").eq("key", REMATCH_CURSOR_KEY).maybeSingle();
+  const v = (data as any)?.value;
+  if (v === null || v === undefined) return null;
+  if (typeof v === "string") { const s = v.trim(); return s || null; }
+  return null;
+}
+async function saveRematchCursor(code: string | null) {
+  await admin.from("gaia_config").upsert({ key: REMATCH_CURSOR_KEY, value: code ?? null }, { onConflict: "key" });
+}
+
+async function rematchBatch() {
+  const cursor = await loadRematchCursor();
+  const query = admin
+    .from("gaia_entreprises")
+    .select("code_client, denomination, match_statut")
+    .in("match_statut", ["a_valider", "introuvable"])
+    .order("code_client")
+    .limit(REMATCH_BATCH_SIZE);
+  const { data: rows, error } = cursor ? await query.gt("code_client", cursor) : await query;
+  if (error) throw new Error(error.message);
+  const list = (rows ?? []) as Array<{ code_client: string; denomination: string | null; match_statut: string }>;
+  if (list.length === 0) {
+    await saveRematchCursor(null);
+    return { ok: true, done: true, processed: 0, cursor: null };
+  }
+  const stats = { promu_auto: 0, a_valider: 0, introuvable: 0, skipped: 0 };
+  for (const r of list) {
+    const name = (r.denomination ?? r.code_client).trim();
+    try {
+      const previousStatut = r.match_statut;
+      // 1er essai : nom tel quel (normalisation standard côté similarity)
+      let results = await apiSearch(name);
+      // 2e essai (introuvables) : mots-clés courts
+      if (previousStatut === "introuvable" && (results?.length ?? 0) === 0) {
+        const kw = keywordsQuery(name);
+        if (kw && kw !== looseName(name)) {
+          await sleep(RATE_LIMIT_MS);
+          results = await apiSearch(kw);
+        }
+      }
+      if (results === null) { stats.skipped++; await sleep(RATE_LIMIT_MS); continue; }
+
+      // Pour 'introuvable' → n'accepter auto QUE si NAF secteur (sectorOnlyAuto = true).
+      // Pour 'a_valider' → règles (a)/(b) normales appliquées.
+      const sectorOnlyAuto = previousStatut === "introuvable";
+      const outcome = chooseMatch(name, results, sectorOnlyAuto);
+
+      // Ne JAMAIS régresser un 'a_valider' vers 'introuvable' juste parce que le rescoring
+      // ne trouve plus de candidat plausible (l'humain doit rester maître).
+      if (previousStatut === "a_valider" && outcome.match_statut === "introuvable") {
+        stats.skipped++;
+      } else {
+        await upsertResult(r.code_client, name, outcome);
+        if (outcome.match_statut === "auto") stats.promu_auto++;
+        else if (outcome.match_statut === "a_valider") stats.a_valider++;
+        else stats.introuvable++;
+      }
+    } catch (e) {
+      console.warn("rematch failed for", r.code_client, (e as Error).message);
+      stats.skipped++;
+    }
+    await sleep(RATE_LIMIT_MS);
+  }
+  const lastCode = list[list.length - 1].code_client;
+  await saveRematchCursor(lastCode);
+  return { ok: true, done: false, processed: list.length, next_cursor: lastCode, stats };
 }
 
 // ── Bilans (Pappers) ─────────────────────────────────────────────────────────
@@ -551,9 +715,11 @@ Deno.serve(async (req) => {
     let result: any;
     if (action === "enrich-batch") result = await enrichBatch();
     else if (action === "refresh") result = await refresh();
+    else if (action === "rematch") result = await rematchBatch();
     else if (action === "bilans") result = await bilansBatch();
     else if (action === "validate") result = await validateCandidate(String(body.code_client || ""), body.siren ? String(body.siren) : null);
     else if (action === "reset-cursor") { await saveCursor(null); result = { ok: true }; }
+    else if (action === "reset-rematch-cursor") { await saveRematchCursor(null); result = { ok: true }; }
     else if (action === "reset-bilans-cursor") { await saveBilansCursor(null); result = { ok: true }; }
     else result = { ok: false, error: `Unknown action: ${action}` };
 

@@ -524,6 +524,21 @@ export default function GaiaClientFiche() {
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Effectif</div>
                   <div className="mt-1 font-medium">{entreprise.effectif_tranche ?? "—"}</div>
                 </div>
+                {(entreprise.code_naf || entreprise.libelle_naf) && (
+                  <div className="col-span-2 md:col-span-4">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Activité (NAF)</div>
+                    <div className="mt-1 flex items-center gap-2 flex-wrap">
+                      {entreprise.code_naf && (
+                        <span className="text-xs font-mono px-1.5 py-0.5 rounded border border-border/60 bg-background/60">
+                          {entreprise.code_naf}
+                        </span>
+                      )}
+                      {entreprise.libelle_naf && (
+                        <span className="text-xs">{entreprise.libelle_naf}</span>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {entreprise.adresse_siege && (
                   <div className="col-span-2 md:col-span-2">
                     <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Siège</div>

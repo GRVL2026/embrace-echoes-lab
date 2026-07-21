@@ -50,6 +50,11 @@ export default function AdminEntreprises() {
     done: false,
   });
   const [refreshBusy, setRefreshBusy] = useState(false);
+  const [rematchRunning, setRematchRunning] = useState(false);
+  const [rematchStop, setRematchStop] = useState(false);
+  const [rematchProgress, setRematchProgress] = useState<{ processed: number; passes: number; promu: number; done: boolean }>({
+    processed: 0, passes: 0, promu: 0, done: false,
+  });
   const [search, setSearch] = useState("");
 
   const { data: stats } = useQuery({
@@ -125,6 +130,33 @@ export default function AdminEntreprises() {
       toast({ title: "Erreur", description: e.message, variant: "destructive" });
     } finally {
       setRefreshBusy(false);
+    }
+  };
+
+  const runRematch = async () => {
+    setRematchRunning(true);
+    setRematchStop(false);
+    setRematchProgress({ processed: 0, passes: 0, promu: 0, done: false });
+    try {
+      let processedTotal = 0, promuTotal = 0, passes = 0;
+      while (passes < 500) {
+        if (rematchStop) break;
+        const { data, error } = await supabase.functions.invoke("gaia-entreprises", { body: { action: "rematch" } });
+        if (error) throw new Error(error.message);
+        const r = (data ?? {}) as any;
+        passes++;
+        processedTotal += Number(r.processed ?? 0);
+        promuTotal += Number(r.stats?.promu_auto ?? 0);
+        setRematchProgress({ processed: processedTotal, passes, promu: promuTotal, done: !!r.done });
+        qc.invalidateQueries({ queryKey: ["entreprises-stats"] });
+        qc.invalidateQueries({ queryKey: ["entreprises-a-valider"] });
+        if (r.done) break;
+      }
+      toast({ title: "Rematch terminé", description: `${processedTotal} clients repassés · ${promuTotal} promus en auto (NAF secteur).` });
+    } catch (e: any) {
+      toast({ title: "Erreur", description: e.message, variant: "destructive" });
+    } finally {
+      setRematchRunning(false);
     }
   };
 
@@ -214,6 +246,15 @@ export default function AdminEntreprises() {
               {refreshBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               Rafraîchir les états (SIREN déjà rattachés)
             </Button>
+            {!rematchRunning ? (
+              <Button variant="outline" onClick={runRematch} className="gap-2">
+                <RefreshCw className="h-4 w-4" /> Rematch NAF (« à valider » + « introuvables »)
+              </Button>
+            ) : (
+              <Button variant="secondary" onClick={() => setRematchStop(true)} className="gap-2">
+                <Pause className="h-4 w-4" /> Stopper le rematch
+              </Button>
+            )}
           </div>
           {(running || progress.processed > 0) && (
             <div className="text-xs text-muted-foreground">
@@ -223,10 +264,18 @@ export default function AdminEntreprises() {
               {stopRequested && running && <span className="ml-2 text-amber-500">arrêt en cours…</span>}
             </div>
           )}
+          {(rematchRunning || rematchProgress.processed > 0) && (
+            <div className="text-xs text-muted-foreground">
+              {rematchRunning && <Loader2 className="inline h-3 w-3 animate-spin mr-1" />}
+              Rematch NAF : {rematchProgress.processed} repassés · {rematchProgress.passes} passes · <span className="text-secondary">{rematchProgress.promu} promus en auto</span>
+              {rematchProgress.done && <span className="ml-2 text-secondary inline-flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> terminé</span>}
+              {rematchStop && rematchRunning && <span className="ml-2 text-amber-500">arrêt en cours…</span>}
+            </div>
+          )}
           <div className="text-[11px] text-muted-foreground">
             Un rafraîchissement automatique est planifié chaque lundi 02:00 UTC (état administratif + procédure collective).
             <br/>
-            Étage 2 (bilans via API Pappers) : non connecté pour le moment — sera disponible dans une prochaine version.
+            « Rematch NAF » repasse uniquement les lignes « à valider » et « introuvables » avec la liste des codes NAF secteur (jeux, bowlings, CHR, revendeurs, vending). Les rapprochements « auto » et « validés » manuellement ne sont pas touchés.
           </div>
         </Card>
 
@@ -296,6 +345,21 @@ function ValidationCard({ row, onValidate }: { row: EntrepriseRow; onValidate: (
                   SIREN {c.siren} · {c.forme || "—"} · {c.ville || "—"}
                   {c.date_creation && <> · créée {String(c.date_creation).slice(0, 4)}</>}
                 </div>
+                {(c.code_naf || c.libelle_naf) && (
+                  <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-border/60 bg-background/60">
+                      NAF {c.code_naf || "—"}
+                    </span>
+                    {c.is_secteur && (
+                      <Badge className="text-[10px] bg-secondary/20 text-secondary border-secondary/40 hover:bg-secondary/30">
+                        secteur
+                      </Badge>
+                    )}
+                    {c.libelle_naf && (
+                      <span className="text-[10px] text-muted-foreground truncate max-w-[280px]">{c.libelle_naf}</span>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 {c.procedure_collective && <Badge variant="destructive" className="text-[10px]">Procédure coll.</Badge>}

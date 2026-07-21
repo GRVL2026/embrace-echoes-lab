@@ -947,6 +947,7 @@ export type Database = {
           bilans_maj: string | null
           candidats: Json | null
           code_client: string
+          code_naf: string | null
           comptes_publies: boolean | null
           date_creation: string | null
           denomination: string | null
@@ -954,6 +955,7 @@ export type Database = {
           effectif_tranche: string | null
           etat_administratif: string | null
           forme_juridique: string | null
+          libelle_naf: string | null
           maj: string
           match_statut: string
           procedure_collective: boolean
@@ -965,6 +967,7 @@ export type Database = {
           bilans_maj?: string | null
           candidats?: Json | null
           code_client: string
+          code_naf?: string | null
           comptes_publies?: boolean | null
           date_creation?: string | null
           denomination?: string | null
@@ -972,6 +975,7 @@ export type Database = {
           effectif_tranche?: string | null
           etat_administratif?: string | null
           forme_juridique?: string | null
+          libelle_naf?: string | null
           maj?: string
           match_statut?: string
           procedure_collective?: boolean
@@ -983,6 +987,7 @@ export type Database = {
           bilans_maj?: string | null
           candidats?: Json | null
           code_client?: string
+          code_naf?: string | null
           comptes_publies?: boolean | null
           date_creation?: string | null
           denomination?: string | null
@@ -990,6 +995,7 @@ export type Database = {
           effectif_tranche?: string | null
           etat_administratif?: string | null
           forme_juridique?: string | null
+          libelle_naf?: string | null
           maj?: string
           match_statut?: string
           procedure_collective?: boolean

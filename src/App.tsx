@@ -13,6 +13,7 @@ import Catalogue from "./pages/Catalogue";
 import DossiersList from "./pages/DossiersList";
 import DossierEdit from "./pages/DossierEdit";
 import AdminDossiers from "./pages/AdminDossiers";
+import AdminEntreprises from "./pages/AdminEntreprises";
 import AdminCatalogErp from "./pages/AdminCatalogErp";
 import AdminGaia from "./pages/AdminGaia";
 import AdminSync from "./pages/AdminSync";

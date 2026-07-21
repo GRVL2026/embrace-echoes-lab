@@ -16,7 +16,7 @@ type Briefing = {
     changements: { titre: string; detail: string }[];
     alertes_nouvelles: string[];
     opportunites: { titre: string; detail: string; lien?: string }[];
-    mouvements_commerce?: { resume: string; lignes: string[] };
+    mouvements_commerce?: { resume: string; lignes: string[]; first_run?: boolean };
   };
 };
 
@@ -105,13 +105,27 @@ export function BriefingCard({ defaultExpanded = true }: { defaultExpanded?: boo
 
           {b.mouvements_commerce && (
             <Section title="📋 Mouvements commerce d'hier">
-              <p className="text-sm text-foreground/90 mb-1.5">{b.mouvements_commerce.resume}</p>
-              {b.mouvements_commerce.lignes?.length > 0 && (
-                <ul className="space-y-1 text-xs text-muted-foreground">
-                  {b.mouvements_commerce.lignes.map((l, i) => (
-                    <li key={i} className="flex gap-2"><span className="text-primary">•</span>{l}</li>
-                  ))}
-                </ul>
+              {b.mouvements_commerce.first_run ? (
+                <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+                  <div className="text-[10px] uppercase tracking-wider font-semibold text-primary/80 mb-1">
+                    Première photo · démarrage
+                  </div>
+                  <p className="text-foreground/90">{b.mouvements_commerce.resume}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Aucune photo de la veille n'était disponible : la sentinelle vient de prendre la première. Le récap comparatif apparaîtra dès le prochain briefing.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-foreground/90 mb-1.5">{b.mouvements_commerce.resume}</p>
+                  {b.mouvements_commerce.lignes?.length > 0 && (
+                    <ul className="space-y-1 text-xs text-muted-foreground">
+                      {b.mouvements_commerce.lignes.map((l, i) => (
+                        <li key={i} className="flex gap-2"><span className="text-primary">•</span>{l}</li>
+                      ))}
+                    </ul>
+                  )}
+                </>
               )}
             </Section>
           )}

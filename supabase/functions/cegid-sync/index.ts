@@ -873,6 +873,50 @@ Deno.serve(async (req) => {
       currentFeed = requestedFeed;
     }
 
+    // Client admin partagé — nécessaire pour l'état persisté et le verrou.
+    const admin = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    );
+
+    // ---------- STEP (déclenché par cron toutes les 2 min OU en accélérateur) ----------
+    if (action === 'step') {
+      const locked = await tryLock(admin, 100);
+      if (!locked) {
+        console.log('[cegid-sync][step] verrou déjà pris — no-op');
+        return jsonResponse({ ok: true, noop: true, note: 'busy (locked)' }, 200);
+      }
+      // Rien à faire ? On libère et on sort sans consommer de ticket OAuth.
+      const hasQueue = Array.isArray(locked.queue) && locked.queue.length > 0;
+      if (!locked.feed && !hasQueue) {
+        await releaseLock(admin);
+        return jsonResponse({ ok: true, noop: true, note: 'queue vide' }, 200);
+      }
+      // Il y a du travail : on prend le ticket, on avance, on libère.
+      let tokenStep: TokenStep;
+      try { tokenStep = await fetchToken(); }
+      catch (e: any) { tokenStep = { ok: false, duration_ms: 0, error: `${e?.message ?? String(e)}\n${e?.stack ?? ''}` }; }
+      if (!tokenStep.ok || !tokenStep.token) {
+        await releaseLock(admin);
+        const { token: _t, ...safe } = tokenStep;
+        return jsonResponse({ ok: false, token_step: safe, summary: [] }, 200);
+      }
+      try {
+        const { summary, hasWork } = await runStep(admin, tokenStep.token!, locked, globalStart);
+        await releaseLock(admin);
+        if (hasWork) {
+          // Accélérateur best-effort : si le fetch meurt, le cron reprend dans 2 min.
+          selfInvoke({ action: 'step' });
+        }
+        const { token: _t, ...safeToken } = tokenStep;
+        return jsonResponse({ ok: true, token_step: safeToken, summary, continued: hasWork }, 200);
+      } catch (e: any) {
+        await releaseLock(admin).catch(() => {});
+        throw e;
+      }
+    }
+
+
     // Étape 1 : ticket
     let token_step: TokenStep;
     try {

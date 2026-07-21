@@ -246,6 +246,15 @@ export default function AdminEntreprises() {
               {refreshBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               Rafraîchir les états (SIREN déjà rattachés)
             </Button>
+            {!rematchRunning ? (
+              <Button variant="outline" onClick={runRematch} className="gap-2">
+                <RefreshCw className="h-4 w-4" /> Rematch NAF (« à valider » + « introuvables »)
+              </Button>
+            ) : (
+              <Button variant="secondary" onClick={() => setRematchStop(true)} className="gap-2">
+                <Pause className="h-4 w-4" /> Stopper le rematch
+              </Button>
+            )}
           </div>
           {(running || progress.processed > 0) && (
             <div className="text-xs text-muted-foreground">
@@ -255,10 +264,18 @@ export default function AdminEntreprises() {
               {stopRequested && running && <span className="ml-2 text-amber-500">arrêt en cours…</span>}
             </div>
           )}
+          {(rematchRunning || rematchProgress.processed > 0) && (
+            <div className="text-xs text-muted-foreground">
+              {rematchRunning && <Loader2 className="inline h-3 w-3 animate-spin mr-1" />}
+              Rematch NAF : {rematchProgress.processed} repassés · {rematchProgress.passes} passes · <span className="text-secondary">{rematchProgress.promu} promus en auto</span>
+              {rematchProgress.done && <span className="ml-2 text-secondary inline-flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> terminé</span>}
+              {rematchStop && rematchRunning && <span className="ml-2 text-amber-500">arrêt en cours…</span>}
+            </div>
+          )}
           <div className="text-[11px] text-muted-foreground">
             Un rafraîchissement automatique est planifié chaque lundi 02:00 UTC (état administratif + procédure collective).
             <br/>
-            Étage 2 (bilans via API Pappers) : non connecté pour le moment — sera disponible dans une prochaine version.
+            « Rematch NAF » repasse uniquement les lignes « à valider » et « introuvables » avec la liste des codes NAF secteur (jeux, bowlings, CHR, revendeurs, vending). Les rapprochements « auto » et « validés » manuellement ne sont pas touchés.
           </div>
         </Card>
 

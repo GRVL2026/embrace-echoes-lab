@@ -451,11 +451,85 @@ async function validateCandidate(code_client: string, siren: string | null) {
     adresse_siege: extractSiege(hit) || null,
     etat_administratif: hit.etat_administratif || null,
     procedure_collective: extractProcedure(hit),
+    code_naf: hit.activite_principale || null,
+    libelle_naf: hit.libelle_activite_principale || null,
     match_statut: "valide",
     candidats: [],
     maj: new Date().toISOString(),
   }).eq("code_client", code_client);
   return { ok: true };
+}
+
+// ── Rematch : re-scoring NAF sur les 'a_valider' et 'introuvable' ────────────
+// N'AFFECTE PAS les lignes 'auto' ou 'valide' existantes.
+
+async function loadRematchCursor(): Promise<string | null> {
+  const { data } = await admin.from("gaia_config").select("value").eq("key", REMATCH_CURSOR_KEY).maybeSingle();
+  const v = (data as any)?.value;
+  if (v === null || v === undefined) return null;
+  if (typeof v === "string") { const s = v.trim(); return s || null; }
+  return null;
+}
+async function saveRematchCursor(code: string | null) {
+  await admin.from("gaia_config").upsert({ key: REMATCH_CURSOR_KEY, value: code ?? null }, { onConflict: "key" });
+}
+
+async function rematchBatch() {
+  const cursor = await loadRematchCursor();
+  const query = admin
+    .from("gaia_entreprises")
+    .select("code_client, denomination, match_statut")
+    .in("match_statut", ["a_valider", "introuvable"])
+    .order("code_client")
+    .limit(REMATCH_BATCH_SIZE);
+  const { data: rows, error } = cursor ? await query.gt("code_client", cursor) : await query;
+  if (error) throw new Error(error.message);
+  const list = (rows ?? []) as Array<{ code_client: string; denomination: string | null; match_statut: string }>;
+  if (list.length === 0) {
+    await saveRematchCursor(null);
+    return { ok: true, done: true, processed: 0, cursor: null };
+  }
+  const stats = { promu_auto: 0, a_valider: 0, introuvable: 0, skipped: 0 };
+  for (const r of list) {
+    const name = (r.denomination ?? r.code_client).trim();
+    try {
+      const previousStatut = r.match_statut;
+      // 1er essai : nom tel quel (normalisation standard côté similarity)
+      let results = await apiSearch(name);
+      // 2e essai (introuvables) : mots-clés courts
+      if (previousStatut === "introuvable" && (results?.length ?? 0) === 0) {
+        const kw = keywordsQuery(name);
+        if (kw && kw !== looseName(name)) {
+          await sleep(RATE_LIMIT_MS);
+          results = await apiSearch(kw);
+        }
+      }
+      if (results === null) { stats.skipped++; await sleep(RATE_LIMIT_MS); continue; }
+
+      // Pour 'introuvable' → n'accepter auto QUE si NAF secteur (sectorOnlyAuto = true).
+      // Pour 'a_valider' → règles (a)/(b) normales appliquées.
+      const sectorOnlyAuto = previousStatut === "introuvable";
+      const outcome = chooseMatch(name, results, sectorOnlyAuto);
+
+      // Ne JAMAIS régresser un 'a_valider' vers 'introuvable' juste parce que le rescoring
+      // ne trouve plus de candidat plausible (l'humain doit rester maître).
+      if (previousStatut === "a_valider" && outcome.match_statut === "introuvable") {
+        stats.skipped++;
+      } else {
+        await upsertResult(r.code_client, name, outcome);
+        if (outcome.match_statut === "auto") stats.promu_auto++;
+        else if (outcome.match_statut === "a_valider") stats.a_valider++;
+        else stats.introuvable++;
+      }
+    } catch (e) {
+      console.warn("rematch failed for", r.code_client, (e as Error).message);
+      stats.skipped++;
+    }
+    await sleep(RATE_LIMIT_MS);
+  }
+  const lastCode = list[list.length - 1].code_client;
+  await saveRematchCursor(lastCode);
+  return { ok: true, done: false, processed: list.length, next_cursor: lastCode, stats };
 }
 
 // ── Bilans (Pappers) ─────────────────────────────────────────────────────────

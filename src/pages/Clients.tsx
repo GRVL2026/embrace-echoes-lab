@@ -183,6 +183,46 @@ export default function Clients() {
         />
       </div>
 
+      {isDirection && (
+        <div className="flex flex-wrap items-center gap-2">
+          {([
+            ["all", "Tous"],
+            ["ok", `${STATE_META.ok.icon} OK`],
+            ["a_valider", `${STATE_META.a_valider.icon} À valider`],
+            ["introuvable", `${STATE_META.introuvable.icon} Introuvable`],
+            ["cessee", `${STATE_META.cessee.icon} Cessée / procédure`],
+          ] as const).map(([key, label]) => {
+            const active = stateFilter === key;
+            const count = stateCounts[key as keyof typeof stateCounts];
+            return (
+              <button
+                key={key}
+                onClick={() => setStateFilter(key as EntrepriseState | "all")}
+                className={cn(
+                  "text-xs px-3 py-1.5 rounded-full border transition-colors flex items-center gap-1.5",
+                  active
+                    ? "bg-primary/15 border-primary/40 text-primary"
+                    : "bg-card/40 border-border hover:border-primary/30 text-muted-foreground",
+                )}
+              >
+                <span>{label}</span>
+                <span className={cn("text-[10px] font-mono", active ? "text-primary" : "text-muted-foreground/70")}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+          {stateFilter === "a_valider" && (
+            <Link
+              to="/admin/entreprises"
+              className="text-[11px] text-amber-500 underline underline-offset-2 ml-1 flex items-center gap-1"
+            >
+              Valider les correspondances <ArrowRight className="h-3 w-3" />
+            </Link>
+          )}
+        </div>
+      )}
+
       {isPending && (
         <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
           <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Chargement…

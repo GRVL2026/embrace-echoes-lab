@@ -52,8 +52,9 @@ const eur = (n: number) =>
 
 /** Page /clients — liste des clients avec CA et évolution vs N-1. */
 export default function Clients() {
-  const { canAccessDashboard, loading } = useAuth();
+  const { canAccessDashboard, isDirection, loading } = useAuth();
   const [search, setSearch] = useState("");
+  const [stateFilter, setStateFilter] = useState<EntrepriseState | "all">("all");
 
   const { data, isPending } = useQuery({
     queryKey: ["clients-ca"],

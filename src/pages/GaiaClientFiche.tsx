@@ -91,6 +91,15 @@ export default function GaiaClientFiche() {
   const { isAdmin, canAccessGaia, isDirection, loading: authLoading } = useAuth();
   const { nom } = useParams<{ nom: string }>();
   const clientName = useMemo(() => (nom ? decodeURIComponent(nom).trim() : ""), [nom]);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const fromState = (location.state as { from?: string } | null)?.from;
+  const backTo = fromState ?? "/admin/gaia";
+  const backLabel = fromState?.startsWith("/clients") ? "Retour aux clients" : "Retour au dashboard";
+  const handleBack = () => {
+    if (fromState) navigate(fromState);
+    else navigate("/admin/gaia");
+  };
 
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [copilotQuestion, setCopilotQuestion] = useState("");

@@ -304,7 +304,7 @@ VIRAGE STRATÉGIQUE STERN : la nouvelle politique de Stern pousse AA vers le B2C
 PIÈGES ERP À NE JAMAIS OUBLIER :
   • Factures d'acompte Cegid : n_fact préfixé 'ACP' = acompte, l'article y apparaît avec sa qty PUIS refigure sur la facture de solde. Pour COMPTER DES QUANTITÉS vendues / du parc installé, EXCLURE les factures ACP (WHERE n_fact NOT ILIKE 'ACP%'). La vue v_gaia_parc_client le fait déjà. Pour le CA en revanche, LES INCLURE (le montant d'acompte est bien du CA réel).
   • tran_type = 'CRM' → AVOIR (montants et quantités à compter en NÉGATIF).
-  • tran_type = 'RP' → RÉPARATION atelier (order_type RP également) — signal SAV/commercial à croiser avec zendesk_ticket_summaries.
+  • tran_type = 'RP' → RÉPARATION atelier (order_type RP également) — signal SAV/commercial visible côté ventes ; les résumés Zendesk (zendesk_ticket_summaries) ne sont PAS rattachables à un client, pour un vrai suivi ticket par client renvoie l'utilisateur vers /sav.
 
 ────────────────────────────────────────────────────────────────
 CARTE DE L'APPLICATION (à utiliser pour guider l'utilisateur)

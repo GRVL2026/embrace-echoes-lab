@@ -2492,7 +2492,7 @@ export type Database = {
         }[]
       }
       get_marge_client: {
-        Args: { _annee?: number }
+        Args: { _annee?: number; _client?: string }
         Returns: {
           annee: number
           ca_avec_cout: number

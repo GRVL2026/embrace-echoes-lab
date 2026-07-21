@@ -268,6 +268,39 @@ export type Database = {
         }
         Relationships: []
       }
+      cegid_sync_state: {
+        Row: {
+          feed: string | null
+          id: number
+          locked_until: string | null
+          queue: string[] | null
+          skip: number
+          started_at: string | null
+          total_rows: number
+          updated_at: string
+        }
+        Insert: {
+          feed?: string | null
+          id?: number
+          locked_until?: string | null
+          queue?: string[] | null
+          skip?: number
+          started_at?: string | null
+          total_rows?: number
+          updated_at?: string
+        }
+        Update: {
+          feed?: string | null
+          id?: number
+          locked_until?: string | null
+          queue?: string[] | null
+          skip?: number
+          started_at?: string | null
+          total_rows?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       copilot_alertes: {
         Row: {
           action_suggeree: string | null
@@ -2284,6 +2317,25 @@ export type Database = {
     Functions: {
       can_access_dashboard: { Args: { _uid?: string }; Returns: boolean }
       can_access_salle: { Args: { _uid?: string }; Returns: boolean }
+      cegid_sync_try_lock: {
+        Args: { _ttl_seconds?: number }
+        Returns: {
+          feed: string | null
+          id: number
+          locked_until: string | null
+          queue: string[] | null
+          skip: number
+          started_at: string | null
+          total_rows: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "cegid_sync_state"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       dispatch_notification: {
         Args: {
           _corps?: string

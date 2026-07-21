@@ -89,7 +89,7 @@ export function GaiaMagasin() {
         c.from("v_gaia_magasin_carnet").select("*"),
         c.from("v_gaia_magasin_stock_valeur").select("*"),
         c.from("v_gaia_magasin_ruptures").select("*"),
-        c.from("v_gaia_magasin_marge").select("*"),
+        c.rpc("get_magasin_marge"),
         c.from("v_gaia_magasin_sous_familles").select("*"),
       ]);
       return {

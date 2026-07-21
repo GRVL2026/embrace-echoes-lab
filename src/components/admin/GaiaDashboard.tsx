@@ -84,9 +84,11 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
     queryKey: ["gaia-dashboard"],
     queryFn: async () => {
       const client: any = supabase;
+      const { fetchAllRows } = await import("@/lib/supaFetch");
       const [m, c, f, e, s, ec, pe, sfa, mf, mc, sl, pip] = await Promise.all([
         client.from("v_gaia_ca_mensuel").select("*"),
-        client.from("v_gaia_ca_client").select("*"),
+        // Pagination explicite — v_gaia_ca_client dépasse 1000 lignes.
+        fetchAllRows(() => client.from("v_gaia_ca_client").select("*"), "v_gaia_ca_client"),
         client.from("v_gaia_ca_famille").select("*"),
         client.from("v_gaia_commandes_etat").select("*"),
         client.from("v_gaia_stock_valeur").select("*"),
@@ -94,13 +96,14 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
         client.from("v_gaia_ca_periode_egale").select("*"),
         client.from("v_gaia_retrocession_sfa").select("*"),
         client.rpc("get_marge_famille"),
-        client.rpc("get_marge_client"),
+        // Pagination explicite — get_marge_client renvoie ~1800 lignes tous exercices confondus.
+        fetchAllRows(() => client.rpc("get_marge_client"), "get_marge_client"),
         client.from("gaia_sync_log").select("finished_at").order("finished_at", { ascending: false }).limit(1).maybeSingle(),
         client.from("v_gaia_pipeline").select("*"),
       ]);
       return {
         caMensuel: (m.data as CaMensuel[]) ?? [],
-        caClient: (c.data as CaClient[]) ?? [],
+        caClient: (c as CaClient[]) ?? [],
         caFamille: (f.data as CaFamille[]) ?? [],
         cmdEtat: (e.data as CommandesEtat[]) ?? [],
         stock: (s.data as StockValeur[]) ?? [],
@@ -108,7 +111,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
         caPeriodeEgale: (pe.data as CaPeriodeEgale[]) ?? [],
         retroSfa: (sfa.data as RetrocessionSfa[]) ?? [],
         margeFamille: (mf.data as MargeFamille[]) ?? [],
-        margeClient: (mc.data as MargeClient[]) ?? [],
+        margeClient: (mc as MargeClient[]) ?? [],
         pipeline: (pip.data as PipelineRow[]) ?? [],
         lastSync: (sl.data?.finished_at as string | null) ?? null,
       };

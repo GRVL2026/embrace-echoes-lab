@@ -795,11 +795,6 @@ Deno.serve(async (req) => {
 
       const target = FEEDS.find((f) => f.name === feedName)!;
       currentFeed = feedName;
-      const reset = skip === 0;
-      console.log(`[cegid-sync][${action}] ${feedName} skip=${skip} reset=${reset}`);
-      const s = await syncFeedChunk(admin, target.name, target.url, token_step.token!, {
-        skip, reset, totalRows, startedAt,
-      });
 
       // Détermine le flux suivant selon le mode.
       const nextFeedAfter = (current: string): string | null => {
@@ -811,56 +806,70 @@ Deno.serve(async (req) => {
         return idx >= 0 && idx < feedNames.length - 1 ? feedNames[idx + 1] : null;
       };
 
-      // Continue-on-error : un flux cassé (s.ok=false) ne bloque plus la chaîne.
-      if (!s.ok) {
-        const nxt = nextFeedAfter(feedName);
-        if (nxt) {
+      const summary: SyncSummary[] = [];
+      // Boucle intra-flux : on chunk le MÊME flux jusqu'à `s.done`, `s.ok=false`,
+      // ou dépassement du budget 90s (isolate frais nécessaire pour la suite).
+      // On NE passe JAMAIS à un autre flux dans la même invocation.
+      while (true) {
+        const reset = skip === 0;
+        console.log(`[cegid-sync][${action}] ${feedName} skip=${skip} reset=${reset}`);
+        const s = await syncFeedChunk(admin, target.name, target.url, token_step.token!, {
+          skip, reset, totalRows, startedAt,
+        });
+        summary.push(s);
+
+        // Continue-on-error : un flux cassé ne bloque plus les suivants.
+        if (!s.ok) {
+          const nxt = nextFeedAfter(feedName!);
+          if (nxt) {
+            await selfInvoke({
+              action, feed: nxt, skip: 0, total_rows: 0,
+              ...(isStaleMode && staleQueue ? { stale_queue: staleQueue } : {}),
+            });
+            return jsonResponse({ ok: false, token_step: safeToken, summary, continued: true, skipped_after_error: feedName, next: { feed: nxt, skip: 0 } }, 200);
+          }
+          return jsonResponse({ ok: false, token_step: safeToken, summary, done: true }, 200);
+        }
+
+        if (s.done) {
+          if (feedName === 'BD-Stock') {
+            try {
+              const { data: refreshed, error: rerr } = await admin.rpc('refresh_erp_prices');
+              if (rerr) console.error('[cegid-sync] refresh_erp_prices error:', rerr.message);
+              else console.log(`[cegid-sync] refresh_erp_prices → ${refreshed} produits mis à jour`);
+            } catch (e: any) {
+              console.error('[cegid-sync] refresh_erp_prices crash:', e?.message ?? String(e));
+            }
+          }
+          const nxt = nextFeedAfter(feedName!);
+          if (!nxt) {
+            return jsonResponse({ ok: true, token_step: safeToken, summary, done: true }, 200);
+          }
+          // Isolate frais obligatoire pour le flux suivant.
           await selfInvoke({
             action, feed: nxt, skip: 0, total_rows: 0,
             ...(isStaleMode && staleQueue ? { stale_queue: staleQueue } : {}),
           });
-          return jsonResponse({ ok: false, token_step: safeToken, summary: [s], continued: true, skipped_after_error: feedName, next: { feed: nxt, skip: 0 } }, 200);
+          return jsonResponse({ ok: true, token_step: safeToken, summary, continued: true, next: { feed: nxt, skip: 0 } }, 200);
         }
-        return jsonResponse({ ok: false, token_step: safeToken, summary: [s], done: true }, 200);
-      }
 
-      if (s.done) {
-        // Après BD-Stock terminé : rafraîchit les prix ERP du catalogue.
-        if (feedName === 'BD-Stock') {
-          try {
-            const { data: refreshed, error: rerr } = await admin.rpc('refresh_erp_prices');
-            if (rerr) console.error('[cegid-sync] refresh_erp_prices error:', rerr.message);
-            else console.log(`[cegid-sync] refresh_erp_prices → ${refreshed} produits mis à jour`);
-          } catch (e: any) {
-            console.error('[cegid-sync] refresh_erp_prices crash:', e?.message ?? String(e));
-          }
-        }
-        const nxt = nextFeedAfter(feedName);
-        if (!nxt) {
-          return jsonResponse({ ok: true, token_step: safeToken, summary: [s], done: true }, 200);
-        }
-        // Isolate frais pour le flux suivant.
-        await selfInvoke({
-          action, feed: nxt, skip: 0, total_rows: 0,
-          ...(isStaleMode && staleQueue ? { stale_queue: staleQueue } : {}),
-        });
-        return jsonResponse({ ok: true, token_step: safeToken, summary: [s], continued: true, next: { feed: nxt, skip: 0 } }, 200);
-      }
+        // Flux pas terminé : on avance le curseur.
+        skip = s.next_skip ?? skip;
+        totalRows = s.total_rows ?? totalRows;
+        startedAt = s.started_at ?? startedAt;
 
-      // Flux pas terminé — on continue à paginer, même flux, même invocation
-      // suivante (budget CPU du chunk courant déjà écoulé mais isolate frais).
-      await selfInvoke({
-        action,
-        feed: feedName,
-        skip: s.next_skip ?? skip,
-        total_rows: s.total_rows ?? totalRows,
-        started_at: s.started_at ?? startedAt,
-        ...(isStaleMode && staleQueue ? { stale_queue: staleQueue } : {}),
-      });
-      return jsonResponse({
-        ok: true, token_step: safeToken, summary: [s], continued: true,
-        next: { feed: feedName, skip: s.next_skip ?? skip, total_rows: s.total_rows ?? totalRows },
-      }, 200);
+        // Budget 90s intra-flux : au-delà, self-invoke sur le MÊME flux.
+        if (Date.now() - globalStart >= SELF_INVOKE_BUDGET_MS) {
+          await selfInvoke({
+            action, feed: feedName, skip, total_rows: totalRows, started_at: startedAt,
+            ...(isStaleMode && staleQueue ? { stale_queue: staleQueue } : {}),
+          });
+          return jsonResponse({
+            ok: true, token_step: safeToken, summary, continued: true,
+            next: { feed: feedName, skip, total_rows: totalRows },
+          }, 200);
+        }
+      }
     }
 
     // action === 'sync' — un seul flux par appel

@@ -408,14 +408,15 @@ const BUILD_TOOL = {
             type: "object",
             description: "Récap des mouvements commerce de la veille (nouveaux devis, commandes, changements de statut). PAS de marge. Basé UNIQUEMENT sur le bloc mouvements_commerce fourni.",
             properties: {
-              resume: { type: "string", description: "Ex '3 nouveaux devis (12 400 € HT), 1 nouvelle commande (8 200 € HT), 2 changements de statut.' ou 'Aucun mouvement commerce hier.' ou 'Récap disponible dès demain.'" },
+              resume: { type: "string", description: "Ex '3 nouveaux devis (12 400 € HT), 1 nouvelle commande (8 200 € HT), 2 changements de statut.' ou 'Aucun mouvement commerce hier.' ou 'Récap disponible dès demain — première photo prise aujourd'hui, la comparaison démarrera au prochain briefing.'" },
               lignes: {
                 type: "array",
                 description: "Lignes compactes 'client — pièce — montant — quoi'. Vide si aucun mouvement ou premier run.",
                 items: { type: "string" },
               },
+              first_run: { type: "boolean", description: "true UNIQUEMENT si aucune photo de la veille n'existe encore (premier passage de la sentinelle). Recopie strictement la valeur first_run du bloc mouvements_commerce fourni." },
             },
-            required: ["resume", "lignes"],
+            required: ["resume", "lignes", "first_run"],
           },
         },
         required: ["resume", "fraicheur", "changements", "alertes_nouvelles", "opportunites", "mouvements_commerce"],

@@ -171,6 +171,11 @@ CHARTE DE L'ANALYSTE — règles SQL OBLIGATOIRES (aucune exception sans justifi
 
 11. ÉCO-TAXE (DEEE) : l'éco-participation apparaît dans les lignes de vente sous le code article ECOTAXE (présent uniquement dans gaia_ventes, jamais dans gaia_historique). Le CA officiel est TOUJOURS hors éco-taxe : les vues v_gaia_ca_mensuel, v_gaia_ca_client et v_gaia_ca_famille l'excluent déjà automatiquement via v_gaia_ecotax_codes. Si tu calcules un CA directement sur v_gaia_lignes, exclus les codes de v_gaia_ecotax_codes (WHERE code_article NOT IN (SELECT code FROM v_gaia_ecotax_codes)) pour rester cohérent avec le dashboard. Pour analyser l'éco-taxe elle-même, utilise v_gaia_ecotaxe_mensuel (colonnes mois, ecotaxe_ht).
 
+11 bis. NOUVEAU CLIENT vs CLIENT RÉACTIVÉ : dans tout comparatif d'exercices (ex. CA 2026 vs 2025), un client présent sur l'exercice N mais absent sur N-1 n'est PAS forcément un "nouveau" client. Distingue TOUJOURS deux cas et précise-le explicitement dans la réponse :
+   • VRAI NOUVEAU CLIENT : aucune facture antérieure à l'exercice N dans v_gaia_lignes (première facture historique tous exercices confondus). SQL : NOT EXISTS (SELECT 1 FROM v_gaia_lignes l2 WHERE trim(l2.code_client)=trim(l.code_client) AND extract(year from l2.invoice_date + interval '4 months')::int < N).
+   • CLIENT RÉACTIVÉ : facturé sur au moins un exercice antérieur à N-1, mais absent de N-1. Signal commercial différent (récupération d'un compte perdu, pas conquête). Marque-le distinctement (ex. tag "réactivé (dernière facture : exercice 2024)").
+   Ne dis JAMAIS "nouveau client" sans avoir tranché entre les deux.
+
 12. MODÈLE ERP OFFICIEL (source Romain, 17/07/2026) :
 
     • ENTREPÔTS (gaia_stock.warehouse) — séparation physique du stock :
@@ -201,7 +206,7 @@ CHARTE DE L'ANALYSTE — règles SQL OBLIGATOIRES (aucune exception sans justifi
 
     • E-COMMERCE (site Shopify Arcade OS / avranchesautomatic-boutique) : table shopify_stats_cache (cached_at, kpis jsonb {ca_30j, ca_90j, ca_1an, commandes_30j, panier_moyen, top_produits[], evolutions}). Utilise-la pour toute question sur le canal en ligne. Le CA Shopify est DISTINCT du CA ERP (SI commerce comptabilisé côté site) — ne les additionne pas sans le préciser.
 
-    • SAV : table zendesk_stats_cache (cached_at, kpis jsonb {tickets_ouverts, tickets_30j, delai_resolution_moyen, top_raisons[]}) pour les KPIs globaux ; table zendesk_ticket_summaries (ticket_id, resume, categorie, client, created_at, updated_at) pour lister/croiser les tickets d'un client. CROISEMENT UTILE : avant de proposer une relance commerciale sur un client, vérifie via zendesk_ticket_summaries s'il n'a pas de ticket SAV ouvert ou récent — sujet à ne pas rater dans un appel de relance.
+    • SAV : table zendesk_stats_cache (id uuid, period_key text, payload jsonb, fetched_at, cache_version int) pour les KPIs globaux mis en cache par période ; table zendesk_ticket_summaries (ticket_id bigint, ticket_updated_at, resume jsonb {diagnostic, machine_concernee, pieces_detachees, probleme_rencontre, resolution}, model text, created_at, updated_at) qui ne stocke QUE quelques tickets résumés par IA (aucune colonne client/categorie, aucun rattachement client possible). ⚠️ N'invente JAMAIS de croisement client ↔ SAV depuis ces tables : les colonnes 'client'/'categorie' n'existent pas et le jsonb resume ne contient aucune référence client. Pour "les tickets SAV d'un client X", réponds que le rattachement n'est pas disponible dans le copilote et oriente vers l'espace SAV (/sav) qui interroge Zendesk directement.
 
     • VEILLE MARCHÉ : table veille_rapports (id, type ('jour'|'semaine'), date_ref, contenu_json {barometre_stern, watchlist_france, marche_arcade, tcg_ecommerce, synthese, actions}, created_at) — dernier rapport = source pour "actualités concurrence / Stern / distributeurs". Table veille_watchlist (nom, url_principale, categorie, priorite, notes) = liste des comptes suivis (fabricants, concurrents, reseau_revendeurs, communaute_flipper, scene_flipper, ecommerce_tcg…).
 
@@ -304,7 +309,7 @@ VIRAGE STRATÉGIQUE STERN : la nouvelle politique de Stern pousse AA vers le B2C
 PIÈGES ERP À NE JAMAIS OUBLIER :
   • Factures d'acompte Cegid : n_fact préfixé 'ACP' = acompte, l'article y apparaît avec sa qty PUIS refigure sur la facture de solde. Pour COMPTER DES QUANTITÉS vendues / du parc installé, EXCLURE les factures ACP (WHERE n_fact NOT ILIKE 'ACP%'). La vue v_gaia_parc_client le fait déjà. Pour le CA en revanche, LES INCLURE (le montant d'acompte est bien du CA réel).
   • tran_type = 'CRM' → AVOIR (montants et quantités à compter en NÉGATIF).
-  • tran_type = 'RP' → RÉPARATION atelier (order_type RP également) — signal SAV/commercial à croiser avec zendesk_ticket_summaries.
+  • tran_type = 'RP' → RÉPARATION atelier (order_type RP également) — signal SAV/commercial visible côté ventes ; les résumés Zendesk (zendesk_ticket_summaries) ne sont PAS rattachables à un client, pour un vrai suivi ticket par client renvoie l'utilisateur vers /sav.
 
 ────────────────────────────────────────────────────────────────
 CARTE DE L'APPLICATION (à utiliser pour guider l'utilisateur)
@@ -1497,26 +1502,56 @@ Deno.serve(async (req) => {
             let markdown = extractText(lastContent);
             let forcedDebug: any = null;
 
-            if (!markdown || rounds >= MAX_TOOL_ROUNDS) {
+            // Considère la réponse vide si elle ne contient QUE des sections Sources/SQL/code sans analyse rédigée.
+            const hasSubstantiveAnalysis = (md: string): boolean => {
+              if (!md) return false;
+              const stripped = md
+                // Retire les blocs de code fenced (```...```)
+                .replace(/```[\s\S]*?```/g, '')
+                // Retire les sections Sources / Source SQL jusqu'à la prochaine section ou fin
+                .replace(/(^|\n)#{1,6}\s*(sources?|source\s+sql|requêtes?\s+sql|sql)\b[\s\S]*?(?=\n#{1,6}\s|\n?$)/gi, '')
+                // Retire les lignes "Source : SELECT ..."
+                .replace(/(^|\n)\s*source\s*:.*$/gim, '')
+                // Retire indentations/espaces
+                .replace(/\s+/g, ' ')
+                .trim();
+              return stripped.length >= 80;
+            };
+
+            if (!markdown || !hasSubstantiveAnalysis(markdown) || rounds >= MAX_TOOL_ROUNDS) {
               try {
                 const forced = await forceFinalText(CHAT_MODEL, chatSystem, finalMessages, memorySuffix);
-                if (forced.text) markdown = forced.text;
+                if (forced.text && hasSubstantiveAnalysis(forced.text)) markdown = forced.text;
+                else if (forced.text && !markdown) markdown = forced.text;
                 forcedDebug = { stop_reason: forced.stop_reason, block_types: forced.block_types };
+                if (forced.stop_reason === 'max_tokens') {
+                  console.log(`[gaia-copilot] ⚠️ forceFinalText stop_reason=max_tokens — envisager d'augmenter max_tokens`);
+                }
               } catch (e: any) {
                 console.log(`[gaia-copilot] forceFinalText error: ${e?.message ?? e}`);
                 forcedDebug = { error: e?.message ?? String(e) };
               }
             }
 
-            if (!markdown) {
+            if (!markdown || !hasSubstantiveAnalysis(markdown)) {
               try {
                 const retry = await forceFinalText(CHAT_MODEL, chatSystem, finalMessages, memorySuffix, true);
-                if (retry.text) markdown = retry.text;
+                if (retry.text && hasSubstantiveAnalysis(retry.text)) markdown = retry.text;
+                else if (retry.text && !markdown) markdown = retry.text;
                 forcedDebug = { ...(forcedDebug ?? {}), retry: { stop_reason: retry.stop_reason, block_types: retry.block_types } };
+                if (retry.stop_reason === 'max_tokens') {
+                  console.log(`[gaia-copilot] ⚠️ forceFinalText:retry stop_reason=max_tokens`);
+                }
               } catch (e: any) {
                 console.log(`[gaia-copilot] forceFinalText retry error: ${e?.message ?? e}`);
                 forcedDebug = { ...(forcedDebug ?? {}), retry: { error: e?.message ?? String(e) } };
               }
+            }
+
+            // Filet de sécurité : bulle purement "Sources" sans texte → message d'erreur explicite.
+            if (markdown && !hasSubstantiveAnalysis(markdown)) {
+              console.log(`[gaia-copilot] réponse sans analyse substantielle (${markdown.length} chars) — bascule sur message d'erreur.`);
+              markdown = '';
             }
 
             const sqlUsed = journal.flatMap((j) => j.sql_queries);

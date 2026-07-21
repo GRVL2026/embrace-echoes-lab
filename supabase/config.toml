@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.zendesk-stats]
 verify_jwt = false
+
+[functions.gaia-entreprises]
+verify_jwt = false

@@ -210,6 +210,37 @@ async function collectSignals(): Promise<Signal[]> {
     `),
   });
 
+  // 9. Clients actifs en procédure collective ou cessés (INSEE) — DIRECTION UNIQUEMENT
+  signals.push({
+    id: "entreprises_risque_legal",
+    titre: "Clients actifs en procédure collective ou cessés",
+    visibilite: "direction",
+    note: "Croisement gaia_entreprises × pipeline ouvert / CA 12 mois. Un client dans cette liste = créance à sécuriser, dossiers à revoir.",
+    rows: await safeRpc(`
+      with actifs as (
+        select trim(code_client) as code
+        from v_gaia_lignes
+        where invoice_date >= (now() - interval '12 months')::date
+          and coalesce(trim(code_client),'') <> ''
+        group by trim(code_client)
+        having sum(montant_ht) > 0
+        union
+        select trim(code_client) as code
+        from v_gaia_carnet_documents
+        where categorie in ('devis','commande')
+          and coalesce(sfa,false) = false
+          and coalesce(trim(code_client),'') <> ''
+      )
+      select e.code_client, e.denomination, e.siren, e.etat_administratif,
+             e.procedure_collective, e.forme_juridique, e.adresse_siege
+      from public.gaia_entreprises e
+      join actifs a on a.code = e.code_client
+      where e.procedure_collective = true or e.etat_administratif = 'C'
+      order by e.procedure_collective desc, e.denomination
+      limit 30
+    `),
+  });
+
   return signals;
 }
 

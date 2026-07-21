@@ -940,6 +940,54 @@ export type Database = {
         }
         Relationships: []
       }
+      gaia_entreprises: {
+        Row: {
+          adresse_siege: string | null
+          candidats: Json | null
+          code_client: string
+          date_creation: string | null
+          denomination: string | null
+          dirigeants: Json | null
+          effectif_tranche: string | null
+          etat_administratif: string | null
+          forme_juridique: string | null
+          maj: string
+          match_statut: string
+          procedure_collective: boolean
+          siren: string | null
+        }
+        Insert: {
+          adresse_siege?: string | null
+          candidats?: Json | null
+          code_client: string
+          date_creation?: string | null
+          denomination?: string | null
+          dirigeants?: Json | null
+          effectif_tranche?: string | null
+          etat_administratif?: string | null
+          forme_juridique?: string | null
+          maj?: string
+          match_statut?: string
+          procedure_collective?: boolean
+          siren?: string | null
+        }
+        Update: {
+          adresse_siege?: string | null
+          candidats?: Json | null
+          code_client?: string
+          date_creation?: string | null
+          denomination?: string | null
+          dirigeants?: Json | null
+          effectif_tranche?: string | null
+          etat_administratif?: string | null
+          forme_juridique?: string | null
+          maj?: string
+          match_statut?: string
+          procedure_collective?: boolean
+          siren?: string | null
+        }
+        Relationships: []
+      }
       gaia_historique: {
         Row: {
           branch: string | null

@@ -264,6 +264,11 @@ CATALOGUE :
 - catalog_products(id, shopify_id, name, category, vendor, price, stock, width/depth/height, model3d, tags, images, active, updated_at, …) — catalogue produits (source Shopify + enrichissements 3D).
 - catalogue_erp(code, description, famille, prix_ht, stock, maj) — mirroir ERP compact des articles actifs (rafraîchi par refresh_erp_prices()).
 
+ENTREPRISES — enrichissement légal INSEE (RÉSERVÉ direction/admin, même règle que la marge) :
+- gaia_entreprises(code_client PK, siren, denomination, forme_juridique, date_creation, effectif_tranche, dirigeants jsonb, adresse_siege, etat_administratif ∈ ('A' actif | 'C' cessé), procedure_collective bool, match_statut ∈ ('auto'|'a_valider'|'valide'|'introuvable'), candidats jsonb, maj)
+  Source : recherche-entreprises.api.gouv.fr (API publique, aucune clé). Rafraîchi chaque lundi 02:00 UTC.
+  Signaux forts : etat_administratif='C' OU procedure_collective=true sur un client avec pipeline ouvert ou CA 12 mois > 0 = alerte à faire remonter (perte de créance potentielle, dossiers à sécuriser). Pour un utilisateur commercial, NE PAS révéler ces champs — les traiter comme la marge.
+
 COPILOTE — SES PROPRES SORTIES (utile pour "quelles sont mes alertes ?", "résume mon dernier briefing") :
 - notifications(id, user_id, type_cle, gravite, titre, corps, lien, lu, lu_at, created_at, dedupe_key, meta) — notifications PAR UTILISATEUR (jointure user_id = auth.uid()). Filtrer TOUJOURS par user_id de l'appelant.
 - copilot_alertes(id, user_id, type_alerte, titre, corps, gravite, cible jsonb, lu, resolue, created_at, snoozed_until, meta) — alertes de la sentinelle proactive (chaîne 7h Paris). Filtrer par user_id.

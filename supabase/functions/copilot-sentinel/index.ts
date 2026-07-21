@@ -530,11 +530,22 @@ async function runSentinel() {
 
 
 
+  // Mouvements commerce d'hier (snapshot + diff) — AVANT collectSignals pour être sûr d'avoir la photo du jour
+  const today = new Date().toISOString().slice(0, 10);
+  let mouvements: MouvementsCommerce;
+  try {
+    mouvements = await computeMouvementsCommerce(today);
+  } catch (e) {
+    console.warn("mouvements_commerce failed:", (e as Error).message);
+    mouvements = { first_run: false, nouveaux_devis: [], nouvelles_commandes: [], changements_statut: [],
+      totaux: { nb_nouveaux_devis: 0, montant_nouveaux_devis: 0, nb_nouvelles_commandes: 0, montant_nouvelles_commandes: 0, nb_changements: 0 } };
+  }
+
   const signals = await collectSignals();
 
   let ai: { alertes: any[]; briefing: any };
   try {
-    ai = await callAnthropic(signals, fraicheur);
+    ai = await callAnthropic(signals, fraicheur, mouvements);
   } catch (e) {
     if (isAnthropicOverload(e)) throw e;
     // Fallback : briefing minimal, aucune alerte inventée.
@@ -546,10 +557,14 @@ async function runSentinel() {
         changements: [],
         alertes_nouvelles: [],
         opportunites: [],
+        mouvements_commerce: mouvements.first_run
+          ? { resume: "Récap disponible dès demain.", lignes: [] }
+          : { resume: "Récap indisponible (IA injoignable).", lignes: [] },
       },
     };
     console.error("sentinelle IA fallback:", (e as Error).message);
   }
+
 
   // Upsert alertes (préserve statut existant)
   let created = 0;

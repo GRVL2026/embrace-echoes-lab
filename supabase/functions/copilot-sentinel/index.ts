@@ -440,9 +440,10 @@ Règles strictes :
 - Briefing : mentionne toujours la fraîcheur des données (dernière synchro Cegid).
 - Réponse : UN SEUL appel à build_sentinelle, sans texte libre.`;
 
-async function callAnthropic(signals: Signal[], fraicheur: string) {
+async function callAnthropic(signals: Signal[], fraicheur: string, mouvements: MouvementsCommerce) {
   const userPayload = {
     fraicheur_donnees: fraicheur,
+    mouvements_commerce: mouvements,
     signaux: signals.map((s) => ({
       id: s.id, titre: s.titre, visibilite: s.visibilite,
       note: s.note, nb: s.rows.length, echantillon: s.rows.slice(0, 15),
@@ -452,6 +453,7 @@ async function callAnthropic(signals: Signal[], fraicheur: string) {
   const res = await anthropicJson(ANTHROPIC_KEY, {
     model: MODEL,
     max_tokens: 4000,
+
     system: SYSTEM,
     tools: [BUILD_TOOL as any],
     tool_choice: { type: "tool", name: "build_sentinelle" },

@@ -21,6 +21,10 @@ const REFRESH_BATCH_SIZE = 40;
 const RATE_LIMIT_MS = 550; // ~2 req/s max
 
 const CURSOR_KEY = "entreprises_cursor";
+const BILANS_CURSOR_KEY = "bilans_cursor";
+const BILANS_BATCH_SIZE = 25;
+const PAPPERS_API_KEY = Deno.env.get("PAPPERS_API_KEY") ?? "";
+const PAPPERS_URL = "https://api.pappers.fr/v2/entreprise";
 
 // ── Utilitaires ──────────────────────────────────────────────────────────────
 

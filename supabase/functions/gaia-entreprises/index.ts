@@ -232,52 +232,105 @@ type MatchOutcome = {
   adresse_siege: string | null;
   etat_administratif: string | null;
   procedure_collective: boolean;
+  code_naf: string | null;
+  libelle_naf: string | null;
   candidats: any[];
 };
 
-function chooseMatch(clientName: string, results: ApiResult[]): MatchOutcome {
-  if (!results.length) {
-    return { match_statut: "introuvable", siren: null, denomination: null, forme_juridique: null, date_creation: null, effectif_tranche: null, dirigeants: [], adresse_siege: null, etat_administratif: null, procedure_collective: false, candidats: [] };
-  }
+function makeCandidat(r: ApiResult, score: number) {
+  const naf = r.activite_principale || null;
+  return {
+    siren: r.siren,
+    nom: r.nom_complet || r.nom_raison_sociale,
+    forme: r.nature_juridique,
+    ville: r.siege?.libelle_commune || r.siege?.ville,
+    date_creation: r.date_creation,
+    etat_administratif: r.etat_administratif,
+    procedure_collective: extractProcedure(r),
+    code_naf: naf,
+    libelle_naf: r.libelle_activite_principale || null,
+    is_secteur: isSectorNaf(naf),
+    score: Math.round(score * 100) / 100,
+  };
+}
+
+function autoOutcome(r: ApiResult): MatchOutcome {
+  return {
+    match_statut: "auto",
+    siren: r.siren,
+    denomination: r.nom_complet || r.nom_raison_sociale || null,
+    forme_juridique: r.nature_juridique || null,
+    date_creation: r.date_creation || null,
+    effectif_tranche: r.tranche_effectif_salarie || null,
+    dirigeants: extractDirigeants(r),
+    adresse_siege: extractSiege(r) || null,
+    etat_administratif: r.etat_administratif || null,
+    procedure_collective: extractProcedure(r),
+    code_naf: r.activite_principale || null,
+    libelle_naf: r.libelle_activite_principale || null,
+    candidats: [],
+  };
+}
+
+function emptyOutcome(statut: "introuvable" | "a_valider", candidats: any[]): MatchOutcome {
+  return {
+    match_statut: statut,
+    siren: null, denomination: null, forme_juridique: null, date_creation: null,
+    effectif_tranche: null, dirigeants: [], adresse_siege: null,
+    etat_administratif: null, procedure_collective: false,
+    code_naf: null, libelle_naf: null,
+    candidats,
+  };
+}
+
+// SCORING (validé par Léopaul) : NAF = DÉPARTAGEUR, jamais couperet.
+// (a) nom quasi-exact + NAF secteur → auto, même si plusieurs candidats mais UN SEUL en secteur.
+// (b) nom quasi-exact + NAF hors secteur → auto SI c'est le seul candidat plausible
+//     (la boulangerie qui achète un flipper existe).
+// (c) plusieurs candidats plausibles dont plusieurs en NAF secteur → 'a_valider',
+//     candidats secteur triés en premier.
+// `sectorOnlyAuto` : mode rematch/tolérant → n'accepter auto que si NAF secteur.
+function chooseMatch(clientName: string, results: ApiResult[], sectorOnlyAuto = false): MatchOutcome {
+  if (!results.length) return emptyOutcome("introuvable", []);
+
   const scored = results.map((r) => ({
     r,
     score: similarity(clientName, r.nom_complet || r.nom_raison_sociale || ""),
+    sector: isSectorNaf(r.activite_principale),
   }));
-  scored.sort((a, b) => b.score - a.score);
-  const top = scored[0];
-  const second = scored[1];
-  const auto = top.score >= 0.82 && (!second || (top.score - second.score) >= 0.15);
-  if (auto) {
-    const r = top.r;
-    return {
-      match_statut: "auto",
-      siren: r.siren,
-      denomination: r.nom_complet || r.nom_raison_sociale || null,
-      forme_juridique: r.nature_juridique || null,
-      date_creation: r.date_creation || null,
-      effectif_tranche: r.tranche_effectif_salarie || null,
-      dirigeants: extractDirigeants(r),
-      adresse_siege: extractSiege(r) || null,
-      etat_administratif: r.etat_administratif || null,
-      procedure_collective: extractProcedure(r),
-      candidats: [],
-    };
+
+  // Tri : score DESC puis secteur d'abord à score égal
+  scored.sort((a, b) => (b.score - a.score) || (Number(b.sector) - Number(a.sector)));
+
+  const NAME_QUASI_EXACT = 0.82;
+  const PLAUSIBLE = 0.4;
+  const plausibles = scored.filter((s) => s.score >= PLAUSIBLE);
+
+  // Candidats plausibles avec NAF secteur
+  const sectorPlausibles = plausibles.filter((s) => s.sector);
+  // Candidats plausibles avec nom quasi-exact
+  const nearNamePlausibles = plausibles.filter((s) => s.score >= NAME_QUASI_EXACT);
+
+  // (a) nom quasi-exact + UN SEUL candidat en NAF secteur → auto (même si d'autres candidats existent)
+  const sectorNearName = nearNamePlausibles.filter((s) => s.sector);
+  if (sectorNearName.length === 1) {
+    return autoOutcome(sectorNearName[0].r);
   }
-  // Sinon on liste les candidats plausibles (score >= 0.4)
-  const cands = scored.filter((s) => s.score >= 0.4).slice(0, 5).map((s) => ({
-    siren: s.r.siren,
-    nom: s.r.nom_complet || s.r.nom_raison_sociale,
-    forme: s.r.nature_juridique,
-    ville: s.r.siege?.libelle_commune || s.r.siege?.ville,
-    date_creation: s.r.date_creation,
-    etat_administratif: s.r.etat_administratif,
-    procedure_collective: extractProcedure(s.r),
-    score: Math.round(s.score * 100) / 100,
-  }));
-  if (cands.length === 0) {
-    return { match_statut: "introuvable", siren: null, denomination: null, forme_juridique: null, date_creation: null, effectif_tranche: null, dirigeants: [], adresse_siege: null, etat_administratif: null, procedure_collective: false, candidats: [] };
+
+  // (b) nom quasi-exact + hors secteur → auto SI c'est le seul candidat plausible
+  //     (mode rematch tolérant : on refuse ce cas, on renvoie 'a_valider').
+  if (!sectorOnlyAuto && nearNamePlausibles.length === 1 && plausibles.length === 1) {
+    return autoOutcome(nearNamePlausibles[0].r);
   }
-  return { match_statut: "a_valider", siren: null, denomination: null, forme_juridique: null, date_creation: null, effectif_tranche: null, dirigeants: [], adresse_siege: null, etat_administratif: null, procedure_collective: false, candidats: cands };
+
+  // (c) plusieurs candidats plausibles : 'a_valider' avec secteur en tête
+  if (plausibles.length === 0) return emptyOutcome("introuvable", []);
+  const ordered = [
+    ...sectorPlausibles.slice(0, 5),
+    ...plausibles.filter((s) => !s.sector).slice(0, Math.max(0, 5 - sectorPlausibles.length)),
+  ];
+  const cands = ordered.slice(0, 5).map((s) => makeCandidat(s.r, s.score));
+  return emptyOutcome("a_valider", cands);
 }
 
 async function upsertResult(code: string, name: string, m: MatchOutcome) {
@@ -292,11 +345,14 @@ async function upsertResult(code: string, name: string, m: MatchOutcome) {
     adresse_siege: m.adresse_siege,
     etat_administratif: m.etat_administratif,
     procedure_collective: m.procedure_collective,
+    code_naf: m.code_naf,
+    libelle_naf: m.libelle_naf,
     match_statut: m.match_statut,
     candidats: m.candidats,
     maj: new Date().toISOString(),
   }, { onConflict: "code_client" });
 }
+
 
 async function enrichBatch() {
   const cursor = await loadCursor();

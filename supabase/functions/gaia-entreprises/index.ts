@@ -105,16 +105,21 @@ function extractDirigeants(r: ApiResult): any[] {
   }));
 }
 
-async function apiSearch(q: string): Promise<ApiResult[]> {
+// Retourne null en cas d'erreur transitoire (HTTP !ok / exception réseau).
+// Retourne [] uniquement quand l'API répond correctement avec zéro résultat.
+async function apiSearch(q: string): Promise<ApiResult[] | null> {
   const url = `${API_BASE}?q=${encodeURIComponent(q)}&per_page=5`;
   try {
     const res = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" } });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      console.warn("apiSearch HTTP error", res.status, q);
+      return null;
+    }
     const json = await res.json();
     return Array.isArray(json?.results) ? json.results as ApiResult[] : [];
   } catch (e) {
     console.warn("apiSearch failed", (e as Error).message);
-    return [];
+    return null;
   }
 }
 
@@ -156,14 +161,26 @@ function escapeLit(s: string): string {
 async function loadCursor(): Promise<string | null> {
   const { data } = await admin.from("gaia_config").select("value").eq("key", CURSOR_KEY).maybeSingle();
   const v = (data as any)?.value;
-  if (!v) return null;
-  if (typeof v === "string") return v || null;
-  if (typeof v === "object" && v.code) return String(v.code);
+  if (v === null || v === undefined) return null;
+  if (typeof v === "string") {
+    const s = v.trim();
+    if (!s) return null;
+    // Compat : ancien format JSON stringifié {"code":"..."}
+    if (s.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(s);
+        if (parsed && typeof parsed.code === "string") return parsed.code || null;
+      } catch { /* ignore, fallback ci-dessous */ }
+      return null;
+    }
+    return s;
+  }
+  if (typeof v === "object" && (v as any).code) return String((v as any).code);
   return null;
 }
 
 async function saveCursor(code: string | null) {
-  await admin.from("gaia_config").upsert({ key: CURSOR_KEY, value: code ? { code } : null }, { onConflict: "key" });
+  await admin.from("gaia_config").upsert({ key: CURSOR_KEY, value: code ?? null }, { onConflict: "key" });
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────────
@@ -253,15 +270,22 @@ async function enrichBatch() {
     await saveCursor(null);
     return { ok: true, done: true, processed: 0, cursor: null };
   }
-  const stats = { auto: 0, a_valider: 0, introuvable: 0 };
+  const stats = { auto: 0, a_valider: 0, introuvable: 0, skipped: 0 };
   for (const t of targets) {
     try {
       const results = await apiSearch(t.name);
-      const outcome = chooseMatch(t.name, results);
-      await upsertResult(t.code_client, t.name, outcome);
-      stats[outcome.match_statut]++;
+      if (results === null) {
+        // Erreur transitoire (HTTP !ok / réseau) : on ne crée AUCUNE ligne,
+        // le client sera retenté au prochain lot.
+        stats.skipped++;
+      } else {
+        const outcome = chooseMatch(t.name, results);
+        await upsertResult(t.code_client, t.name, outcome);
+        stats[outcome.match_statut]++;
+      }
     } catch (e) {
       console.warn("enrich failed for", t.code_client, (e as Error).message);
+      stats.skipped++;
     }
     await sleep(RATE_LIMIT_MS);
   }
@@ -285,6 +309,7 @@ async function refresh() {
   for (const r of list) {
     try {
       const results = await apiSearch(r.siren);
+      if (results === null) { await sleep(RATE_LIMIT_MS); continue; }
       const hit = results.find((x) => x.siren === r.siren) ?? results[0];
       if (!hit) { await sleep(RATE_LIMIT_MS); continue; }
       const proc = extractProcedure(hit);
@@ -321,6 +346,7 @@ async function validateCandidate(code_client: string, siren: string | null) {
     return { ok: true };
   }
   const results = await apiSearch(siren);
+  if (results === null) return { ok: false, error: "API recherche-entreprises indisponible, réessayez" };
   const hit = results.find((r) => r.siren === siren) ?? results[0];
   if (!hit) return { ok: false, error: "SIREN introuvable dans l'API" };
   await admin.from("gaia_entreprises").update({

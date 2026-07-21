@@ -21,6 +21,7 @@ import {
   Bell,
   Building2,
   Gamepad2,
+  Grid2x2,
   type LucideIcon,
 } from "lucide-react";
 

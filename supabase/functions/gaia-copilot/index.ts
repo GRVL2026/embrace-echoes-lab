@@ -1502,26 +1502,56 @@ Deno.serve(async (req) => {
             let markdown = extractText(lastContent);
             let forcedDebug: any = null;
 
-            if (!markdown || rounds >= MAX_TOOL_ROUNDS) {
+            // Considère la réponse vide si elle ne contient QUE des sections Sources/SQL/code sans analyse rédigée.
+            const hasSubstantiveAnalysis = (md: string): boolean => {
+              if (!md) return false;
+              const stripped = md
+                // Retire les blocs de code fenced (```...```)
+                .replace(/```[\s\S]*?```/g, '')
+                // Retire les sections Sources / Source SQL jusqu'à la prochaine section ou fin
+                .replace(/(^|\n)#{1,6}\s*(sources?|source\s+sql|requêtes?\s+sql|sql)\b[\s\S]*?(?=\n#{1,6}\s|\n?$)/gi, '')
+                // Retire les lignes "Source : SELECT ..."
+                .replace(/(^|\n)\s*source\s*:.*$/gim, '')
+                // Retire indentations/espaces
+                .replace(/\s+/g, ' ')
+                .trim();
+              return stripped.length >= 80;
+            };
+
+            if (!markdown || !hasSubstantiveAnalysis(markdown) || rounds >= MAX_TOOL_ROUNDS) {
               try {
                 const forced = await forceFinalText(CHAT_MODEL, chatSystem, finalMessages, memorySuffix);
-                if (forced.text) markdown = forced.text;
+                if (forced.text && hasSubstantiveAnalysis(forced.text)) markdown = forced.text;
+                else if (forced.text && !markdown) markdown = forced.text;
                 forcedDebug = { stop_reason: forced.stop_reason, block_types: forced.block_types };
+                if (forced.stop_reason === 'max_tokens') {
+                  console.log(`[gaia-copilot] ⚠️ forceFinalText stop_reason=max_tokens — envisager d'augmenter max_tokens`);
+                }
               } catch (e: any) {
                 console.log(`[gaia-copilot] forceFinalText error: ${e?.message ?? e}`);
                 forcedDebug = { error: e?.message ?? String(e) };
               }
             }
 
-            if (!markdown) {
+            if (!markdown || !hasSubstantiveAnalysis(markdown)) {
               try {
                 const retry = await forceFinalText(CHAT_MODEL, chatSystem, finalMessages, memorySuffix, true);
-                if (retry.text) markdown = retry.text;
+                if (retry.text && hasSubstantiveAnalysis(retry.text)) markdown = retry.text;
+                else if (retry.text && !markdown) markdown = retry.text;
                 forcedDebug = { ...(forcedDebug ?? {}), retry: { stop_reason: retry.stop_reason, block_types: retry.block_types } };
+                if (retry.stop_reason === 'max_tokens') {
+                  console.log(`[gaia-copilot] ⚠️ forceFinalText:retry stop_reason=max_tokens`);
+                }
               } catch (e: any) {
                 console.log(`[gaia-copilot] forceFinalText retry error: ${e?.message ?? e}`);
                 forcedDebug = { ...(forcedDebug ?? {}), retry: { error: e?.message ?? String(e) } };
               }
+            }
+
+            // Filet de sécurité : bulle purement "Sources" sans texte → message d'erreur explicite.
+            if (markdown && !hasSubstantiveAnalysis(markdown)) {
+              console.log(`[gaia-copilot] réponse sans analyse substantielle (${markdown.length} chars) — bascule sur message d'erreur.`);
+              markdown = '';
             }
 
             const sqlUsed = journal.flatMap((j) => j.sql_queries);

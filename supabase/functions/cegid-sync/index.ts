@@ -661,6 +661,165 @@ async function selfInvoke(payload: Record<string, unknown>) {
 }
 
 
+// ---------- STATE PERSISTANT (cegid_sync_state) ----------
+
+type SyncState = {
+  id: number;
+  queue: string[] | null;
+  feed: string | null;
+  skip: number;
+  total_rows: number;
+  started_at: string | null;
+  locked_until: string | null;
+  updated_at: string;
+};
+
+async function tryLock(admin: any, ttlSeconds = 100): Promise<SyncState | null> {
+  const { data, error } = await admin.rpc('cegid_sync_try_lock', { _ttl_seconds: ttlSeconds });
+  if (error) throw new Error(`lock: ${error.message}`);
+  return (data as SyncState | null) ?? null;
+}
+
+async function persistState(admin: any, patch: Partial<SyncState>) {
+  const { error } = await admin.from('cegid_sync_state')
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq('id', 1);
+  if (error) console.error('[cegid-sync] persistState error:', error.message);
+}
+
+async function releaseLock(admin: any) {
+  await persistState(admin, { locked_until: null });
+}
+
+async function initState(admin: any, queue: string[]) {
+  const { error } = await admin.from('cegid_sync_state').update({
+    queue: queue.length ? queue : null,
+    feed: null,
+    skip: 0,
+    total_rows: 0,
+    started_at: null,
+    updated_at: new Date().toISOString(),
+    // Note: on ne touche PAS à locked_until ici — la prise de verrou est faite juste après par tryLock.
+  }).eq('id', 1);
+  if (error) throw new Error(`initState: ${error.message}`);
+}
+
+async function computeStaleQueue(admin: any, thresholdH = 12): Promise<string[]> {
+  const feedNames = FEEDS.map((f) => f.name);
+  const stale: string[] = [];
+  for (const name of feedNames) {
+    const { data } = await admin.from('gaia_sync_log')
+      .select('finished_at')
+      .eq('feed', name).eq('ok', true)
+      .order('finished_at', { ascending: false }).limit(1).maybeSingle();
+    const last = data?.finished_at ? new Date(data.finished_at as string) : null;
+    const ageH = last ? (Date.now() - last.getTime()) / 3_600_000 : Infinity;
+    if (ageH > thresholdH) stale.push(name);
+  }
+  return stale;
+}
+
+// Traite l'état courant pendant au plus STEP_BUDGET_MS. Le curseur est persisté
+// après CHAQUE chunk. Une mort silencieuse ne perd que le chunk en cours ;
+// le cron `cegid-sync-stepper` reprend au prochain passage.
+async function runStep(
+  admin: any,
+  token: string,
+  state: SyncState,
+  globalStart: number,
+): Promise<{ summary: SyncSummary[]; hasWork: boolean }> {
+  const STEP_BUDGET_MS = 80_000;
+  const summary: SyncSummary[] = [];
+  let cur = state;
+
+  while (Date.now() - globalStart < STEP_BUDGET_MS) {
+    // 1) Si aucun flux actif, pop le prochain de la queue.
+    if (!cur.feed) {
+      const q = cur.queue ?? [];
+      if (q.length === 0) {
+        // Plus rien à faire — on nettoie et on s'arrête.
+        await persistState(admin, {
+          queue: null, feed: null, skip: 0, total_rows: 0, started_at: null,
+        });
+        cur = { ...cur, queue: null, feed: null, skip: 0, total_rows: 0, started_at: null };
+        return { summary, hasWork: false };
+      }
+      const nextFeed = q[0];
+      await persistState(admin, {
+        feed: nextFeed, skip: 0, total_rows: 0, started_at: null,
+      });
+      cur = { ...cur, feed: nextFeed, skip: 0, total_rows: 0, started_at: null };
+    }
+
+    const target = FEEDS.find((f) => f.name === cur.feed);
+    if (!target) {
+      // Flux inconnu dans la queue → on l'écarte et on continue.
+      const q = (cur.queue ?? []).filter((n) => n !== cur.feed);
+      await persistState(admin, { queue: q.length ? q : null, feed: null });
+      cur = { ...cur, queue: q, feed: null };
+      continue;
+    }
+
+    const reset = cur.skip === 0;
+    console.log(`[cegid-sync][step] ${cur.feed} skip=${cur.skip} reset=${reset}`);
+    const s = await syncFeedChunk(admin, target.name, target.url, token, {
+      skip: cur.skip,
+      reset,
+      totalRows: cur.total_rows,
+      startedAt: cur.started_at ?? undefined,
+    });
+    summary.push(s);
+
+    // Prolonge le verrou : on a peut-être encore du travail.
+    await persistState(admin, {
+      locked_until: new Date(Date.now() + 100_000).toISOString(),
+    });
+
+    if (!s.ok) {
+      // Continue-on-error : on écarte ce flux et on passe au suivant.
+      const q = (cur.queue ?? []).filter((n) => n !== cur.feed);
+      await persistState(admin, {
+        queue: q.length ? q : null, feed: null, skip: 0, total_rows: 0, started_at: null,
+      });
+      cur = { ...cur, queue: q, feed: null, skip: 0, total_rows: 0, started_at: null };
+      continue;
+    }
+
+    if (s.done) {
+      if (cur.feed === 'BD-Stock') {
+        try {
+          const { data: refreshed, error: rerr } = await admin.rpc('refresh_erp_prices');
+          if (rerr) console.error('[cegid-sync] refresh_erp_prices error:', rerr.message);
+          else console.log(`[cegid-sync] refresh_erp_prices → ${refreshed} produits mis à jour`);
+        } catch (e: any) {
+          console.error('[cegid-sync] refresh_erp_prices crash:', e?.message ?? String(e));
+        }
+      }
+      const q = (cur.queue ?? []).filter((n) => n !== cur.feed);
+      await persistState(admin, {
+        queue: q.length ? q : null, feed: null, skip: 0, total_rows: 0, started_at: null,
+      });
+      cur = { ...cur, queue: q, feed: null, skip: 0, total_rows: 0, started_at: null };
+      continue;
+    }
+
+    // Flux non terminé : on avance le curseur, on persiste.
+    cur = {
+      ...cur,
+      skip: s.next_skip ?? cur.skip,
+      total_rows: s.total_rows ?? cur.total_rows,
+      started_at: s.started_at ?? cur.started_at,
+    };
+    await persistState(admin, {
+      skip: cur.skip, total_rows: cur.total_rows, started_at: cur.started_at,
+    });
+  }
+
+  const hasWork = !!cur.feed || !!(cur.queue && cur.queue.length > 0);
+  return { summary, hasWork };
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -685,7 +844,7 @@ Deno.serve(async (req) => {
 
     const action = body?.action;
 
-    if (action !== 'discover' && action !== 'sync' && action !== 'sync-all' && action !== 'sync-stale') {
+    if (action !== 'discover' && action !== 'sync' && action !== 'sync-all' && action !== 'sync-stale' && action !== 'step') {
       return jsonResponse({
         ok: false,
         error: `Unknown action: ${action}`,
@@ -713,6 +872,50 @@ Deno.serve(async (req) => {
       }
       currentFeed = requestedFeed;
     }
+
+    // Client admin partagé — nécessaire pour l'état persisté et le verrou.
+    const admin = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    );
+
+    // ---------- STEP (déclenché par cron toutes les 2 min OU en accélérateur) ----------
+    if (action === 'step') {
+      const locked = await tryLock(admin, 100);
+      if (!locked) {
+        console.log('[cegid-sync][step] verrou déjà pris — no-op');
+        return jsonResponse({ ok: true, noop: true, note: 'busy (locked)' }, 200);
+      }
+      // Rien à faire ? On libère et on sort sans consommer de ticket OAuth.
+      const hasQueue = Array.isArray(locked.queue) && locked.queue.length > 0;
+      if (!locked.feed && !hasQueue) {
+        await releaseLock(admin);
+        return jsonResponse({ ok: true, noop: true, note: 'queue vide' }, 200);
+      }
+      // Il y a du travail : on prend le ticket, on avance, on libère.
+      let tokenStep: TokenStep;
+      try { tokenStep = await fetchToken(); }
+      catch (e: any) { tokenStep = { ok: false, duration_ms: 0, error: `${e?.message ?? String(e)}\n${e?.stack ?? ''}` }; }
+      if (!tokenStep.ok || !tokenStep.token) {
+        await releaseLock(admin);
+        const { token: _t, ...safe } = tokenStep;
+        return jsonResponse({ ok: false, token_step: safe, summary: [] }, 200);
+      }
+      try {
+        const { summary, hasWork } = await runStep(admin, tokenStep.token!, locked, globalStart);
+        await releaseLock(admin);
+        if (hasWork) {
+          // Accélérateur best-effort : si le fetch meurt, le cron reprend dans 2 min.
+          selfInvoke({ action: 'step' });
+        }
+        const { token: _t, ...safeToken } = tokenStep;
+        return jsonResponse({ ok: true, token_step: safeToken, summary, continued: hasWork }, 200);
+      } catch (e: any) {
+        await releaseLock(admin).catch(() => {});
+        throw e;
+      }
+    }
+
 
     // Étape 1 : ticket
     let token_step: TokenStep;
@@ -742,135 +945,55 @@ Deno.serve(async (req) => {
     }
 
     const { token: _t, ...safeToken } = token_step;
-    const admin = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    );
 
     if (action === 'sync-all' || action === 'sync-stale') {
-      // RÈGLE : une invocation = un seul flux max. Dès qu'un flux se termine
-      // (succès OU échec), on self-invoke pour le flux suivant dans un isolate
-      // frais (budget CPU/mémoire remis à zéro) et on retourne immédiatement.
+      // Nouvelle architecture : le moteur devient pg_cron. Ces actions
+      // INITIALISENT simplement l'état persisté (queue), prennent le verrou,
+      // et exécutent immédiatement un premier `step`. Le cron
+      // `cegid-sync-stepper` (toutes les 2 min) reprend le relais si cette
+      // invocation meurt en cours de route.
       const feedNames = FEEDS.map((f) => f.name);
-
-      // Pour sync-stale : ne traiter que les flux dont le dernier succès date de >12h.
-      // Le flux ciblé est calculé au démarrage de la chaîne (skip=0, feed non fourni).
-      let feedName: string | undefined = typeof body?.feed === 'string' && feedNames.includes(body.feed)
-        ? body.feed : undefined;
-      let skip = Number.isFinite(Number(body?.skip)) && Number(body.skip) >= 0
-        ? Math.trunc(Number(body.skip)) : 0;
-      let totalRows = Number.isFinite(Number(body?.total_rows)) && Number(body.total_rows) >= 0
-        ? Math.trunc(Number(body.total_rows)) : 0;
-      let startedAt: string | undefined = typeof body?.started_at === 'string' ? body.started_at : undefined;
-
-      // Calcule la liste des flux périmés pour sync-stale (au premier appel de la chaîne).
-      const staleThresholdH = 12;
-      const isStaleMode = action === 'sync-stale';
-      let staleQueue: string[] | undefined = Array.isArray(body?.stale_queue)
-        ? (body.stale_queue as string[]).filter((n) => feedNames.includes(n))
-        : undefined;
-
-      if (isStaleMode && !feedName && !staleQueue) {
-        // Recense pour chaque flux le dernier succès.
-        const stale: string[] = [];
-        for (const name of feedNames) {
-          const { data } = await admin.from('gaia_sync_log')
-            .select('finished_at')
-            .eq('feed', name).eq('ok', true)
-            .order('finished_at', { ascending: false }).limit(1).maybeSingle();
-          const last = data?.finished_at ? new Date(data.finished_at as string) : null;
-          const ageH = last ? (Date.now() - last.getTime()) / 3_600_000 : Infinity;
-          if (ageH > staleThresholdH) stale.push(name);
-        }
-        staleQueue = stale;
-        if (staleQueue.length === 0) {
-          return jsonResponse({ ok: true, token_step: safeToken, summary: [], stale: [], done: true, note: 'Tous les flux sont frais (<12h).' }, 200);
-        }
-        feedName = staleQueue[0];
-      }
-
-      if (!feedName) {
-        feedName = feedNames[0];
-      }
-
-      const target = FEEDS.find((f) => f.name === feedName)!;
-      currentFeed = feedName;
-
-      // Détermine le flux suivant selon le mode.
-      const nextFeedAfter = (current: string): string | null => {
-        if (isStaleMode && staleQueue) {
-          const idx = staleQueue.indexOf(current);
-          return idx >= 0 && idx < staleQueue.length - 1 ? staleQueue[idx + 1] : null;
-        }
-        const idx = feedNames.indexOf(current);
-        return idx >= 0 && idx < feedNames.length - 1 ? feedNames[idx + 1] : null;
-      };
-
-      const summary: SyncSummary[] = [];
-      // Boucle intra-flux : on chunk le MÊME flux jusqu'à `s.done`, `s.ok=false`,
-      // ou dépassement du budget 90s (isolate frais nécessaire pour la suite).
-      // On NE passe JAMAIS à un autre flux dans la même invocation.
-      while (true) {
-        const reset = skip === 0;
-        console.log(`[cegid-sync][${action}] ${feedName} skip=${skip} reset=${reset}`);
-        const s = await syncFeedChunk(admin, target.name, target.url, token_step.token!, {
-          skip, reset, totalRows, startedAt,
-        });
-        summary.push(s);
-
-        // Continue-on-error : un flux cassé ne bloque plus les suivants.
-        if (!s.ok) {
-          const nxt = nextFeedAfter(feedName!);
-          if (nxt) {
-            await selfInvoke({
-              action, feed: nxt, skip: 0, total_rows: 0,
-              ...(isStaleMode && staleQueue ? { stale_queue: staleQueue } : {}),
-            });
-            return jsonResponse({ ok: false, token_step: safeToken, summary, continued: true, skipped_after_error: feedName, next: { feed: nxt, skip: 0 } }, 200);
-          }
-          return jsonResponse({ ok: false, token_step: safeToken, summary, done: true }, 200);
-        }
-
-        if (s.done) {
-          if (feedName === 'BD-Stock') {
-            try {
-              const { data: refreshed, error: rerr } = await admin.rpc('refresh_erp_prices');
-              if (rerr) console.error('[cegid-sync] refresh_erp_prices error:', rerr.message);
-              else console.log(`[cegid-sync] refresh_erp_prices → ${refreshed} produits mis à jour`);
-            } catch (e: any) {
-              console.error('[cegid-sync] refresh_erp_prices crash:', e?.message ?? String(e));
-            }
-          }
-          const nxt = nextFeedAfter(feedName!);
-          if (!nxt) {
-            return jsonResponse({ ok: true, token_step: safeToken, summary, done: true }, 200);
-          }
-          // Isolate frais obligatoire pour le flux suivant.
-          await selfInvoke({
-            action, feed: nxt, skip: 0, total_rows: 0,
-            ...(isStaleMode && staleQueue ? { stale_queue: staleQueue } : {}),
-          });
-          return jsonResponse({ ok: true, token_step: safeToken, summary, continued: true, next: { feed: nxt, skip: 0 } }, 200);
-        }
-
-        // Flux pas terminé : on avance le curseur.
-        skip = s.next_skip ?? skip;
-        totalRows = s.total_rows ?? totalRows;
-        startedAt = s.started_at ?? startedAt;
-
-        // Budget 90s intra-flux : au-delà, self-invoke sur le MÊME flux.
-        if (Date.now() - globalStart >= SELF_INVOKE_BUDGET_MS) {
-          await selfInvoke({
-            action, feed: feedName, skip, total_rows: totalRows, started_at: startedAt,
-            ...(isStaleMode && staleQueue ? { stale_queue: staleQueue } : {}),
-          });
+      let queue: string[];
+      if (action === 'sync-stale') {
+        queue = await computeStaleQueue(admin, 12);
+        if (queue.length === 0) {
           return jsonResponse({
-            ok: true, token_step: safeToken, summary, continued: true,
-            next: { feed: feedName, skip, total_rows: totalRows },
+            ok: true, token_step: safeToken, summary: [], done: true,
+            note: 'Tous les flux sont frais (<12h).',
           }, 200);
         }
+      } else {
+        queue = feedNames;
+      }
+
+      // Prend le verrou d'abord (empêche 2 opérateurs de réinitialiser en même temps).
+      const locked = await tryLock(admin, 100);
+      if (!locked) {
+        return jsonResponse({
+          ok: true, token_step: safeToken, summary: [], busy: true,
+          note: 'Une synchronisation est déjà en cours. Elle progressera automatiquement.',
+        }, 200);
+      }
+      // Réécrit la file (curseurs remis à zéro).
+      await initState(admin, queue);
+      const seeded: SyncState = {
+        ...locked, queue, feed: null, skip: 0, total_rows: 0, started_at: null,
+      };
+
+      try {
+        const { summary, hasWork } = await runStep(admin, token_step.token!, seeded, globalStart);
+        await releaseLock(admin);
+        if (hasWork) selfInvoke({ action: 'step' });
+        return jsonResponse({
+          ok: true, token_step: safeToken, summary,
+          seeded_queue: queue, continued: hasWork,
+        }, 200);
+      } catch (e: any) {
+        await releaseLock(admin).catch(() => {});
+        throw e;
       }
     }
+
 
     // action === 'sync' — un seul flux par appel
     const requestedFeed: string | undefined = body?.feed;

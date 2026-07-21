@@ -177,7 +177,7 @@ export default function Clients() {
     queryFn: async () => {
       const { data: rows, error } = await (supabase as any)
         .from("v_gaia_client_anciennete")
-        .select("client, premier_exercice, dernier_exercice_actif");
+        .select("client, premier_exercice, dernier_exercice_actif, dernier_exercice_avant_courant");
       if (error) throw error;
       const map = new Map<string, Anciennete>();
       for (const r of (rows as Anciennete[]) ?? []) {

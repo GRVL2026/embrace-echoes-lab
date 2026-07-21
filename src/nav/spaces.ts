@@ -124,6 +124,12 @@ export const SPACES: Space[] = [
         match: (p, h) => p === "/admin/gaia" && h === "#aa",
       },
       {
+        label: "Matrice CA × marge",
+        to: "/admin/matrice-clients",
+        icon: Grid2x2,
+        show: (c) => c.isDirection,
+        match: startsWith("/admin/matrice-clients"),
+      {
         label: "Dashboard Magasin",
         to: "/admin/gaia#magasin",
         icon: Package,

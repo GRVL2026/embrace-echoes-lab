@@ -328,49 +328,59 @@ async function callAnthropic(signals: Signal[], fraicheur: string) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function runSentinel() {
-  // Fraîcheur des données — on cible le dernier log de synchro RÉUSSI.
-  const sync = await safeTable(() =>
-    admin.from("gaia_sync_log")
-      .select("finished_at, ok, feed")
-      .eq("ok", true)
-      .order("finished_at", { ascending: false })
-      .limit(1) as any
-  );
-  const last = sync[0]?.finished_at ? new Date(sync[0].finished_at) : null;
-  const ageH = last ? (Date.now() - last.getTime()) / 3_600_000 : null;
-  const fraicheur = last
-    ? `Dernière synchro Cegid réussie : ${last.toLocaleString("fr-FR", { timeZone: "Europe/Paris" })}`
+  // Fraîcheur PAR FLUX — chaque source Cegid a son propre dernier succès.
+  const FEEDS = ['BD-Clients', 'BD-Ventes', 'BD-Historique', 'BD-Commandes', 'BD-Stock'] as const;
+  const perFeed: { feed: string; last: Date | null; ageH: number }[] = [];
+  for (const feed of FEEDS) {
+    const rows = await safeTable(() =>
+      admin.from('gaia_sync_log')
+        .select('finished_at, ok, feed')
+        .eq('ok', true).eq('feed', feed)
+        .order('finished_at', { ascending: false })
+        .limit(1) as any
+    );
+    const last = rows[0]?.finished_at ? new Date(rows[0].finished_at) : null;
+    const ageH = last ? (Date.now() - last.getTime()) / 3_600_000 : Infinity;
+    perFeed.push({ feed, last, ageH });
+  }
+  const globalLast = perFeed
+    .map((f) => f.last)
+    .filter((d): d is Date => !!d)
+    .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+  const fraicheur = globalLast
+    ? `Dernière synchro Cegid réussie : ${globalLast.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' })}\n` +
+      perFeed.map((f) => `  · ${f.feed} : ${f.last ? f.last.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }) : 'jamais'}`).join('\n')
     : "Fraîcheur des données inconnue (aucun log de synchro trouvé).";
 
-  // Garde-fou : si la synchro nocturne échoue silencieusement (>36h sans succès),
-  // on crée systématiquement une alerte 'attention' — indépendamment de l'IA.
-  if (ageH === null || ageH > 36) {
+  // Garde-fou : alerte si UN QUELCONQUE flux dépasse 36h — nomme les flux en retard.
+  const stale = perFeed.filter((f) => f.ageH > 36);
+  if (stale.length > 0) {
     try {
-      const constat = last
-        ? `Dernière synchro Cegid réussie il y a ${Math.round(ageH!)}h (${last.toLocaleString("fr-FR", { timeZone: "Europe/Paris" })}). La synchro nocturne semble en échec.`
-        : "Aucun log de synchro Cegid réussie trouvé — la synchro nocturne n'a jamais tourné ou a été purgée.";
-      const dedupe = "sync_fresh:stale";
-      const { data: exist } = await admin.from("copilot_alertes").select("id, statut").eq("dedupe_key", dedupe).maybeSingle();
+      const noms = stale.map((f) => `${f.feed} (${Number.isFinite(f.ageH) ? Math.round(f.ageH) + 'h' : 'jamais'})`).join(', ');
+      const constat = `Flux Cegid en retard (>36h) : ${noms}. La synchro nocturne n'a pas passé ces sources.`;
+      const dedupe = 'sync_fresh:stale';
+      const { data: exist } = await admin.from('copilot_alertes').select('id, statut').eq('dedupe_key', dedupe).maybeSingle();
       if (exist) {
-        await admin.from("copilot_alertes").update({
-          titre: "Synchro Cegid nocturne en échec", constat,
-          action_suggeree: "Ouvrir Réglages → Synchronisation, relancer manuellement et vérifier les logs.",
-          lien: "/admin/synchronisation", gravite: "attention",
+        await admin.from('copilot_alertes').update({
+          titre: `Synchro Cegid — ${stale.length} flux en retard`, constat,
+          action_suggeree: 'Ouvrir Réglages → Synchronisation, relancer les flux en retard et vérifier les logs.',
+          lien: '/admin/synchronisation', gravite: 'attention',
           updated_at: new Date().toISOString(),
-        }).eq("id", exist.id);
+        }).eq('id', exist.id);
       } else {
-        await admin.from("copilot_alertes").insert({
-          type: "sync_fresh", gravite: "attention",
-          titre: "Synchro Cegid nocturne en échec",
-          constat, action_suggeree: "Ouvrir Réglages → Synchronisation, relancer manuellement et vérifier les logs.",
-          lien: "/admin/synchronisation", visibilite: "direction",
-          dedupe_key: dedupe, statut: "nouveau",
+        await admin.from('copilot_alertes').insert({
+          type: 'sync_fresh', gravite: 'attention',
+          titre: `Synchro Cegid — ${stale.length} flux en retard`,
+          constat, action_suggeree: 'Ouvrir Réglages → Synchronisation, relancer les flux en retard et vérifier les logs.',
+          lien: '/admin/synchronisation', visibilite: 'direction',
+          dedupe_key: dedupe, statut: 'nouveau',
         });
       }
     } catch (e) {
-      console.warn("sync_fresh alert failed:", (e as Error).message);
+      console.warn('sync_fresh alert failed:', (e as Error).message);
     }
   }
+
 
 
   const signals = await collectSignals();

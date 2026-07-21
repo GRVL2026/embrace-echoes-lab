@@ -573,6 +573,7 @@ async function fetchBilansTargets(limit: number, afterCode: string | null): Prom
     join cible c on c.code = e.code_client
     where e.siren is not null
       and e.match_statut in ('auto','valide')
+      and (e.bilans_maj is null or e.bilans_maj < now() - interval '20 days')
       ${afterCode ? `and e.code_client > ${escapeLit(afterCode)}` : ""}
     order by e.code_client
   `;
@@ -655,7 +656,7 @@ async function bilansBatch() {
   const targets = await fetchBilansTargets(BILANS_BATCH_SIZE, cursor);
   if (targets.length === 0) {
     await saveBilansCursor(null);
-    return { ok: true, done: true, processed: 0, cursor: null };
+    return { ok: true, done: true, processed: 0, cursor: null, note: "tous les bilans sont à jour (aucune cible non traitée ou plus vieille que 20 jours)" };
   }
   const stats = { updated: 0, sans_comptes: 0, skipped: 0, echec: 0 };
   for (const t of targets) {

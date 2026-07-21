@@ -120,7 +120,8 @@ async function apiSearch(q: string): Promise<ApiResult[]> {
 
 // ── Cible d'enrichissement : clients avec CA récent OU pièce ouverte ─────────
 async function fetchTargetClients(limit: number, afterCode: string | null): Promise<Array<{ code_client: string; name: string }>> {
-  // Utilise gaia_query pour tenir dans les vues existantes et filtrer efficacement.
+  // NB: gaia_query enveloppe la requête dans `SELECT ... FROM (%s LIMIT 200) t`.
+  // Ne pas ajouter de LIMIT ici (sinon double LIMIT → erreur SQL). On tronque côté TS.
   const sql = `
     with cible as (
       select distinct trim(v.code_client) as code
@@ -137,11 +138,15 @@ async function fetchTargetClients(limit: number, afterCode: string | null): Prom
     left join gaia_clients g on trim(g.customer_id) = c.code
     ${afterCode ? `where c.code > ${escapeLit(afterCode)}` : ""}
     order by c.code
-    limit ${Math.max(1, Math.min(200, limit))}
   `;
-  const { data } = await admin.rpc("gaia_query", { sql_query: sql });
-  if (!Array.isArray(data)) return [];
-  return (data as any[]).map((r) => ({ code_client: String(r.code), name: String(r.name ?? r.code) }));
+  const { data, error } = await admin.rpc("gaia_query", { sql_query: sql });
+  if (error) throw new Error(`gaia_query RPC failed: ${error.message}`);
+  if (data && !Array.isArray(data) && typeof data === "object" && (data as any).error) {
+    throw new Error(`gaia_query error: ${(data as any).error}`);
+  }
+  if (!Array.isArray(data)) throw new Error(`gaia_query returned unexpected payload: ${JSON.stringify(data)}`);
+  const rows = (data as any[]).map((r) => ({ code_client: String(r.code), name: String(r.name ?? r.code) }));
+  return rows.slice(0, Math.max(1, limit));
 }
 
 function escapeLit(s: string): string {

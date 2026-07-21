@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, Navigate, useParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { CopiloteMarkdown } from "@/components/admin/CopiloteMarkdown";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -91,6 +91,15 @@ export default function GaiaClientFiche() {
   const { isAdmin, canAccessGaia, isDirection, loading: authLoading } = useAuth();
   const { nom } = useParams<{ nom: string }>();
   const clientName = useMemo(() => (nom ? decodeURIComponent(nom).trim() : ""), [nom]);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const fromState = (location.state as { from?: string } | null)?.from;
+  const backTo = fromState ?? "/admin/gaia";
+  const backLabel = fromState?.startsWith("/clients") ? "Retour aux clients" : "Retour au dashboard";
+  const handleBack = () => {
+    if (fromState) navigate(fromState);
+    else navigate("/admin/gaia");
+  };
 
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [copilotQuestion, setCopilotQuestion] = useState("");
@@ -388,8 +397,8 @@ export default function GaiaClientFiche() {
     <div className="min-h-screen w-full bg-background text-foreground">
       <DetailPageHeader
         className="md:hidden"
-        backTo="/admin/gaia"
-        backLabel="Retour au dashboard"
+        onBack={handleBack}
+        backLabel={backLabel}
         title={clientName}
         subtitle="Fiche client"
         actions={<div className="flex items-center gap-1"><MobileNav /><UserMenu /></div>}
@@ -412,11 +421,10 @@ export default function GaiaClientFiche() {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 sm:px-6 py-4 sm:py-8">
-        <Button asChild variant="ghost" size="sm" className="mb-4 hidden md:inline-flex">
-          <Link to="/admin/gaia">
-            <ArrowLeft className="mr-2 h-4 w-4" /> Retour au dashboard
-          </Link>
+        <Button variant="ghost" size="sm" className="mb-4 hidden md:inline-flex" onClick={handleBack}>
+          <ArrowLeft className="mr-2 h-4 w-4" /> {backLabel}
         </Button>
+
 
 
         {/* 1) EN-TÊTE COMPACT */}

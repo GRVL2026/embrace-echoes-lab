@@ -397,14 +397,6 @@ export default function GaiaClientFiche() {
     <div className="min-h-screen w-full bg-background text-foreground">
       <DetailPageHeader
         className="md:hidden"
-        backTo="/admin/gaia"
-        backLabel="Retour au dashboard"
-        title={clientName}
-        subtitle="Fiche client"
-        actions={<div className="flex items-center gap-1"><MobileNav /><UserMenu /></div>}
-      />
-      <DetailPageHeader
-        className="md:hidden"
         onBack={handleBack}
         backLabel={backLabel}
         title={clientName}

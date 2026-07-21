@@ -265,9 +265,11 @@ CATALOGUE :
 - catalogue_erp(code, description, famille, prix_ht, stock, maj) — mirroir ERP compact des articles actifs (rafraîchi par refresh_erp_prices()).
 
 ENTREPRISES — enrichissement légal INSEE (RÉSERVÉ direction/admin, même règle que la marge) :
-- gaia_entreprises(code_client PK, siren, denomination, forme_juridique, date_creation, effectif_tranche, dirigeants jsonb, adresse_siege, etat_administratif ∈ ('A' actif | 'C' cessé), procedure_collective bool, match_statut ∈ ('auto'|'a_valider'|'valide'|'introuvable'), candidats jsonb, maj)
-  Source : recherche-entreprises.api.gouv.fr (API publique, aucune clé). Rafraîchi chaque lundi 02:00 UTC.
-  Signaux forts : etat_administratif='C' OU procedure_collective=true sur un client avec pipeline ouvert ou CA 12 mois > 0 = alerte à faire remonter (perte de créance potentielle, dossiers à sécuriser). Pour un utilisateur commercial, NE PAS révéler ces champs — les traiter comme la marge.
+- gaia_entreprises(code_client PK, siren, denomination, forme_juridique, date_creation, effectif_tranche, dirigeants jsonb, adresse_siege, etat_administratif ∈ ('A' actif | 'C' cessé), procedure_collective bool, match_statut ∈ ('auto'|'a_valider'|'valide'|'introuvable'), candidats jsonb, maj, bilans jsonb [tableau des 3 derniers exercices : {annee_cloture, ca, resultat_net, capitaux_propres, effectif}], comptes_publies bool, bilans_maj)
+  Sources : recherche-entreprises.api.gouv.fr (INSEE, refresh hebdo lundi 02:00 UTC) + api.pappers.fr (bilans financiers, refresh mensuel 1er du mois 03:30 UTC — les comptes annuels ne changent qu'une fois par an).
+  Signaux forts (RÉSERVÉ direction/admin, mêmes règles que la marge — NE PAS révéler à un commercial) :
+    • etat_administratif='C' OU procedure_collective=true sur un client actif = alerte créance/dossier à sécuriser.
+    • bilans[0].capitaux_propres < 0 sur un client actif = fragilité financière avérée.
 
 COPILOTE — SES PROPRES SORTIES (utile pour "quelles sont mes alertes ?", "résume mon dernier briefing") :
 - notifications(id, user_id, type_cle, gravite, titre, corps, lien, lu, lu_at, created_at, dedupe_key, meta) — notifications PAR UTILISATEUR (jointure user_id = auth.uid()). Filtrer TOUJOURS par user_id de l'appelant.

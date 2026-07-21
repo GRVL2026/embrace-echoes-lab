@@ -203,7 +203,7 @@ export default function Clients() {
       return {
         ...r,
         kind,
-        dernier_exercice_actif: anc?.dernier_exercice_actif ?? null,
+        dernier_exercice_actif: anc?.dernier_exercice_avant_courant ?? null,
         state: isDirection ? computeState(entMap?.get((r.code_client ?? "").trim())) : null,
       };
     });

@@ -438,7 +438,9 @@ Règles strictes :
 - Gravité : 'urgent' pour perte imminente / rupture bloquante ; 'attention' pour signaux nets ; 'info' pour observation utile.
 - Liens : routes internes uniquement (ex /admin/gaia#magasin, /admin/gaia/carnet/devis, /admin/gaia/client/<slug>, /admin/veille).
 - Briefing : mentionne toujours la fraîcheur des données (dernière synchro Cegid).
+- Section briefing.mouvements_commerce : construis-la EXCLUSIVEMENT à partir du bloc mouvements_commerce fourni (jamais des signaux). Si first_run=true → resume="Récap disponible dès demain." et lignes=[]. Sinon si tous les totaux sont à 0 → resume="Aucun mouvement commerce hier." et lignes=[]. Sinon : resume = phrase de synthèse chiffrée des totaux ; lignes = liste compacte groupée par type (devis puis commandes puis changements), format "Client — N°pièce — X € HT — quoi" (ex "ACME — D12345 — 12 400 € HT — nouveau devis", "BETA — CC000200 — 8 200 € HT — nouvelle commande (issue du devis D12300)", "GAMMA — D12200 — 5 000 € HT — Brouillon → Ouvert"). Suffixe " · SFA" si sfa=true. Max 20 lignes. AUCUNE marge, AUCUN coût.
 - Réponse : UN SEUL appel à build_sentinelle, sans texte libre.`;
+
 
 async function callAnthropic(signals: Signal[], fraicheur: string, mouvements: MouvementsCommerce) {
   const userPayload = {

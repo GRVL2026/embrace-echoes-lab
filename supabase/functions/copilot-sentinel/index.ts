@@ -241,6 +241,46 @@ async function collectSignals(): Promise<Signal[]> {
     `),
   });
 
+  // 10. Clients actifs avec capitaux propres négatifs au dernier exercice — DIRECTION UNIQUEMENT
+  signals.push({
+    id: "entreprises_capitaux_propres_negatifs",
+    titre: "Clients actifs avec capitaux propres négatifs (dernier exercice)",
+    visibilite: "direction",
+    note: "Bilans Pappers (dernier exercice publié) × pipeline ouvert OU CA 12 mois > 0. Fragilité financière avérée : sécuriser encours et paiements.",
+    rows: await safeRpc(`
+      with actifs as (
+        select trim(code_client) as code
+        from v_gaia_lignes
+        where invoice_date >= (now() - interval '12 months')::date
+          and coalesce(trim(code_client),'') <> ''
+        group by trim(code_client)
+        having sum(montant_ht) > 0
+        union
+        select trim(code_client) as code
+        from v_gaia_carnet_documents
+        where categorie in ('devis','commande')
+          and coalesce(sfa,false) = false
+          and coalesce(trim(code_client),'') <> ''
+      ),
+      last_bilan as (
+        select e.code_client, e.denomination, e.siren,
+               (e.bilans->0->>'annee_cloture')::int as annee_cloture,
+               (e.bilans->0->>'capitaux_propres')::numeric as capitaux_propres,
+               (e.bilans->0->>'resultat_net')::numeric as resultat_net
+        from public.gaia_entreprises e
+        where e.bilans is not null
+          and jsonb_array_length(e.bilans) > 0
+      )
+      select b.code_client, b.denomination, b.siren, b.annee_cloture,
+             b.capitaux_propres, b.resultat_net
+      from last_bilan b
+      join actifs a on a.code = b.code_client
+      where b.capitaux_propres < 0
+      order by b.capitaux_propres asc
+      limit 30
+    `),
+  });
+
   return signals;
 }
 

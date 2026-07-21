@@ -546,8 +546,72 @@ export default function GaiaClientFiche() {
               </div>
             )}
 
+            {/* Santé financière (Pappers) — direction/admin */}
+            {(entreprise.match_statut === "auto" || entreprise.match_statut === "valide") && (
+              <div className="mt-4 rounded-md border border-border/60 bg-background/40 p-3">
+                <div className="mb-2 flex items-center justify-between gap-2 flex-wrap">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                    Santé financière
+                  </div>
+                  {Array.isArray(entreprise.bilans) && entreprise.bilans[0]
+                    && Number(entreprise.bilans[0].capitaux_propres) < 0 && (
+                    <Badge variant="destructive" className="text-[10px]">Capitaux propres négatifs</Badge>
+                  )}
+                </div>
+                {Array.isArray(entreprise.bilans) && entreprise.bilans.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                          <th className="text-left font-medium py-1 pr-2">Exercice</th>
+                          <th className="text-right font-medium py-1 px-2">CA</th>
+                          <th className="text-right font-medium py-1 px-2">Résultat net</th>
+                          <th className="text-right font-medium py-1 pl-2">Capitaux propres</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {entreprise.bilans.slice(0, 3).map((b: any, i: number, arr: any[]) => {
+                          const prev = arr[i + 1];
+                          const arrow = (cur: number | null, p: number | null) => {
+                            if (cur == null || p == null || p === 0) return null;
+                            const delta = ((cur - p) / Math.abs(p)) * 100;
+                            if (Math.abs(delta) < 2) return <span className="text-muted-foreground/60">→</span>;
+                            return delta > 0
+                              ? <span className="text-secondary">↗</span>
+                              : <span className="text-destructive">↘</span>;
+                          };
+                          return (
+                            <tr key={b.annee_cloture ?? i} className="border-t border-border/40">
+                              <td className="py-1 pr-2 font-medium">{b.annee_cloture ?? "—"}</td>
+                              <td className="py-1 px-2 text-right font-mono">
+                                {b.ca != null ? eur(Number(b.ca)) : "—"} {arrow(b.ca, prev?.ca)}
+                              </td>
+                              <td className={`py-1 px-2 text-right font-mono ${Number(b.resultat_net) < 0 ? "text-destructive" : ""}`}>
+                                {b.resultat_net != null ? eur(Number(b.resultat_net)) : "—"} {arrow(b.resultat_net, prev?.resultat_net)}
+                              </td>
+                              <td className={`py-1 pl-2 text-right font-mono ${Number(b.capitaux_propres) < 0 ? "text-destructive font-semibold" : ""}`}>
+                                {b.capitaux_propres != null ? eur(Number(b.capitaux_propres)) : "—"} {arrow(b.capitaux_propres, prev?.capitaux_propres)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : entreprise.comptes_publies === false ? (
+                  <div className="text-[11px] text-muted-foreground">Comptes non publiés.</div>
+                ) : (
+                  <div className="text-[11px] text-muted-foreground">Bilans non encore récupérés.</div>
+                )}
+              </div>
+            )}
+
             <div className="mt-3 flex items-center justify-between gap-2 flex-wrap text-[11px] text-muted-foreground">
-              <div>Comptes annuels : non connectés (étage 2 – API Pappers, à venir).</div>
+              <div>
+                {entreprise.bilans_maj
+                  ? <>Bilans à jour au {dateShort(entreprise.bilans_maj)}</>
+                  : <>Bilans non encore récupérés (API Pappers).</>}
+              </div>
               {entreprise.siren && (
                 <a
                   href={`https://www.pappers.fr/entreprise/${entreprise.siren}`}

@@ -596,7 +596,7 @@ async function runSentinel() {
   }
 
   // Upsert briefing du jour
-  const today = new Date().toISOString().slice(0, 10);
+
   await admin.from("copilot_briefings").upsert({
     date: today,
     contenu: ai.briefing,

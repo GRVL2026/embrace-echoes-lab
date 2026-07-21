@@ -16,7 +16,7 @@ type Briefing = {
     changements: { titre: string; detail: string }[];
     alertes_nouvelles: string[];
     opportunites: { titre: string; detail: string; lien?: string }[];
-    mouvements_commerce?: { resume: string; lignes: string[] };
+    mouvements_commerce?: { resume: string; lignes: string[]; first_run?: boolean };
   };
 };
 

@@ -88,6 +88,7 @@ const App = () => (
             <Route path="/admin/gaia/revue/:id" element={<P><GaiaRevueView /></P>} />
             <Route path="/admin/notifications" element={<P><NotificationsSettings /></P>} />
             <Route path="/admin/entreprises" element={<P><AdminEntreprises /></P>} />
+            <Route path="/admin/matrice-clients" element={<P><MatriceClients /></P>} />
 
 
             <Route path="*" element={<NotFound />} />

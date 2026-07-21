@@ -105,16 +105,50 @@ export default function Clients() {
     },
   });
 
+  const { data: entMap } = useQuery({
+    queryKey: ["clients-entreprises-state"],
+    enabled: canAccessDashboard && isDirection,
+    queryFn: async () => {
+      const { data: rows, error } = await (supabase as any)
+        .from("gaia_entreprises")
+        .select("code_client, etat_administratif, procedure_collective, match_statut");
+      if (error) throw error;
+      const map = new Map<string, EntrepriseRow>();
+      for (const r of (rows as EntrepriseRow[]) ?? []) {
+        if (r.code_client) map.set(r.code_client.trim(), r);
+      }
+      return map;
+    },
+  });
+
+  const rowsWithState = useMemo(() => {
+    const list = data?.rows ?? [];
+    return list.map((r) => ({
+      ...r,
+      state: isDirection ? computeState(entMap?.get((r.code_client ?? "").trim())) : null,
+    }));
+  }, [data, entMap, isDirection]);
+
+  const stateCounts = useMemo(() => {
+    const counts = { all: rowsWithState.length, ok: 0, a_valider: 0, introuvable: 0, cessee: 0 };
+    if (!isDirection) return counts;
+    for (const r of rowsWithState) if (r.state) counts[r.state]++;
+    return counts;
+  }, [rowsWithState, isDirection]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const list = data?.rows ?? [];
+    let list = rowsWithState;
+    if (isDirection && stateFilter !== "all") {
+      list = list.filter((r) => r.state === stateFilter);
+    }
     if (!q) return list;
     return list.filter(
       (r) =>
         r.client.toLowerCase().includes(q) ||
         (r.code_client ?? "").toLowerCase().includes(q),
     );
-  }, [data, search]);
+  }, [rowsWithState, search, stateFilter, isDirection]);
 
   if (loading) return null;
   if (!canAccessDashboard) {

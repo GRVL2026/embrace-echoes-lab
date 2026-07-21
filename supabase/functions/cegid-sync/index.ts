@@ -747,77 +747,120 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    if (action === 'sync-all') {
-      // Enchaîne les flux jusqu'à épuisement du budget, puis s'auto-rappelle.
+    if (action === 'sync-all' || action === 'sync-stale') {
+      // RÈGLE : une invocation = un seul flux max. Dès qu'un flux se termine
+      // (succès OU échec), on self-invoke pour le flux suivant dans un isolate
+      // frais (budget CPU/mémoire remis à zéro) et on retourne immédiatement.
       const feedNames = FEEDS.map((f) => f.name);
-      let feedName: string = typeof body?.feed === 'string' && feedNames.includes(body.feed)
-        ? body.feed : feedNames[0];
+
+      // Pour sync-stale : ne traiter que les flux dont le dernier succès date de >12h.
+      // Le flux ciblé est calculé au démarrage de la chaîne (skip=0, feed non fourni).
+      let feedName: string | undefined = typeof body?.feed === 'string' && feedNames.includes(body.feed)
+        ? body.feed : undefined;
       let skip = Number.isFinite(Number(body?.skip)) && Number(body.skip) >= 0
         ? Math.trunc(Number(body.skip)) : 0;
       let totalRows = Number.isFinite(Number(body?.total_rows)) && Number(body.total_rows) >= 0
         ? Math.trunc(Number(body.total_rows)) : 0;
       let startedAt: string | undefined = typeof body?.started_at === 'string' ? body.started_at : undefined;
-      const summary: SyncSummary[] = [];
 
-      while (true) {
-        const target = FEEDS.find((f) => f.name === feedName)!;
-        currentFeed = feedName;
-        const reset = skip === 0;
-        console.log(`[cegid-sync][sync-all] ${feedName} skip=${skip} reset=${reset}`);
-        const s = await syncFeedChunk(admin, target.name, target.url, token_step.token!, {
-          skip, reset, totalRows, startedAt,
-        });
-        summary.push(s);
+      // Calcule la liste des flux périmés pour sync-stale (au premier appel de la chaîne).
+      const staleThresholdH = 12;
+      const isStaleMode = action === 'sync-stale';
+      let staleQueue: string[] | undefined = Array.isArray(body?.stale_queue)
+        ? (body.stale_queue as string[]).filter((n) => feedNames.includes(n))
+        : undefined;
 
-        if (!s.ok) {
-          // Stop la chaîne en cas d'erreur — logs déjà écrits dans gaia_sync_log.
-          return jsonResponse({ ok: false, token_step: safeToken, summary }, 200);
+      if (isStaleMode && !feedName && !staleQueue) {
+        // Recense pour chaque flux le dernier succès.
+        const stale: string[] = [];
+        for (const name of feedNames) {
+          const { data } = await admin.from('gaia_sync_log')
+            .select('finished_at')
+            .eq('feed', name).eq('ok', true)
+            .order('finished_at', { ascending: false }).limit(1).maybeSingle();
+          const last = data?.finished_at ? new Date(data.finished_at as string) : null;
+          const ageH = last ? (Date.now() - last.getTime()) / 3_600_000 : Infinity;
+          if (ageH > staleThresholdH) stale.push(name);
         }
-
-        if (s.done) {
-          // Après BD-Stock, rafraîchit les prix ERP du catalogue
-          if (feedName === 'BD-Stock') {
-            try {
-              const { data: refreshed, error: rerr } = await admin.rpc('refresh_erp_prices');
-              if (rerr) console.error('[cegid-sync] refresh_erp_prices error:', rerr.message);
-              else console.log(`[cegid-sync] refresh_erp_prices → ${refreshed} produits mis à jour`);
-            } catch (e: any) {
-              console.error('[cegid-sync] refresh_erp_prices crash:', e?.message ?? String(e));
-            }
-          }
-          // Passe au flux suivant
-          const idx = feedNames.indexOf(feedName);
-          if (idx === feedNames.length - 1) {
-            return jsonResponse({ ok: true, token_step: safeToken, summary, done: true }, 200);
-          }
-          feedName = feedNames[idx + 1];
-          skip = 0;
-          totalRows = 0;
-          startedAt = undefined;
-        } else {
-          skip = s.next_skip ?? skip;
-          totalRows = s.total_rows ?? totalRows;
-          startedAt = s.started_at ?? startedAt;
+        staleQueue = stale;
+        if (staleQueue.length === 0) {
+          return jsonResponse({ ok: true, token_step: safeToken, summary: [], stale: [], done: true, note: 'Tous les flux sont frais (<12h).' }, 200);
         }
-
-        // Budget temps — au-delà, on relance via un self-invoke garanti (waitUntil).
-        if (Date.now() - globalStart >= SELF_INVOKE_BUDGET_MS) {
-          await selfInvoke({
-            action: 'sync-all',
-            feed: feedName,
-            skip,
-            total_rows: totalRows,
-            started_at: startedAt,
-          });
-          return jsonResponse({
-            ok: true,
-            token_step: safeToken,
-            summary,
-            continued: true,
-            next: { feed: feedName, skip, total_rows: totalRows },
-          }, 200);
-        }
+        feedName = staleQueue[0];
       }
+
+      if (!feedName) {
+        feedName = feedNames[0];
+      }
+
+      const target = FEEDS.find((f) => f.name === feedName)!;
+      currentFeed = feedName;
+      const reset = skip === 0;
+      console.log(`[cegid-sync][${action}] ${feedName} skip=${skip} reset=${reset}`);
+      const s = await syncFeedChunk(admin, target.name, target.url, token_step.token!, {
+        skip, reset, totalRows, startedAt,
+      });
+
+      // Détermine le flux suivant selon le mode.
+      const nextFeedAfter = (current: string): string | null => {
+        if (isStaleMode && staleQueue) {
+          const idx = staleQueue.indexOf(current);
+          return idx >= 0 && idx < staleQueue.length - 1 ? staleQueue[idx + 1] : null;
+        }
+        const idx = feedNames.indexOf(current);
+        return idx >= 0 && idx < feedNames.length - 1 ? feedNames[idx + 1] : null;
+      };
+
+      // Continue-on-error : un flux cassé (s.ok=false) ne bloque plus la chaîne.
+      if (!s.ok) {
+        const nxt = nextFeedAfter(feedName);
+        if (nxt) {
+          await selfInvoke({
+            action, feed: nxt, skip: 0, total_rows: 0,
+            ...(isStaleMode && staleQueue ? { stale_queue: staleQueue } : {}),
+          });
+          return jsonResponse({ ok: false, token_step: safeToken, summary: [s], continued: true, skipped_after_error: feedName, next: { feed: nxt, skip: 0 } }, 200);
+        }
+        return jsonResponse({ ok: false, token_step: safeToken, summary: [s], done: true }, 200);
+      }
+
+      if (s.done) {
+        // Après BD-Stock terminé : rafraîchit les prix ERP du catalogue.
+        if (feedName === 'BD-Stock') {
+          try {
+            const { data: refreshed, error: rerr } = await admin.rpc('refresh_erp_prices');
+            if (rerr) console.error('[cegid-sync] refresh_erp_prices error:', rerr.message);
+            else console.log(`[cegid-sync] refresh_erp_prices → ${refreshed} produits mis à jour`);
+          } catch (e: any) {
+            console.error('[cegid-sync] refresh_erp_prices crash:', e?.message ?? String(e));
+          }
+        }
+        const nxt = nextFeedAfter(feedName);
+        if (!nxt) {
+          return jsonResponse({ ok: true, token_step: safeToken, summary: [s], done: true }, 200);
+        }
+        // Isolate frais pour le flux suivant.
+        await selfInvoke({
+          action, feed: nxt, skip: 0, total_rows: 0,
+          ...(isStaleMode && staleQueue ? { stale_queue: staleQueue } : {}),
+        });
+        return jsonResponse({ ok: true, token_step: safeToken, summary: [s], continued: true, next: { feed: nxt, skip: 0 } }, 200);
+      }
+
+      // Flux pas terminé — on continue à paginer, même flux, même invocation
+      // suivante (budget CPU du chunk courant déjà écoulé mais isolate frais).
+      await selfInvoke({
+        action,
+        feed: feedName,
+        skip: s.next_skip ?? skip,
+        total_rows: s.total_rows ?? totalRows,
+        started_at: s.started_at ?? startedAt,
+        ...(isStaleMode && staleQueue ? { stale_queue: staleQueue } : {}),
+      });
+      return jsonResponse({
+        ok: true, token_step: safeToken, summary: [s], continued: true,
+        next: { feed: feedName, skip: s.next_skip ?? skip, total_rows: s.total_rows ?? totalRows },
+      }, 200);
     }
 
     // action === 'sync' — un seul flux par appel

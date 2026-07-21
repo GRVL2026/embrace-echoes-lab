@@ -260,7 +260,21 @@ export default function Clients() {
                 className="grid grid-cols-[1fr_140px_140px_140px] gap-2 px-4 py-3 border-b border-border/50 last:border-b-0 hover:bg-muted/30 transition-colors items-center"
               >
                 <div className="min-w-0">
-                  <div className="font-medium truncate">{r.client}</div>
+                  <div className="font-medium truncate flex items-center gap-2">
+                    <span className="truncate">{r.client}</span>
+                    {isDirection && r.state && (
+                      <span
+                        title={STATE_META[r.state].label}
+                        className={cn(
+                          "shrink-0 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-normal",
+                          STATE_META[r.state].badge,
+                        )}
+                      >
+                        <span className={cn("h-1.5 w-1.5 rounded-full", STATE_META[r.state].dot)} />
+                        {STATE_META[r.state].label}
+                      </span>
+                    )}
+                  </div>
                   {r.code_client && (
                     <div className="text-xs text-muted-foreground truncate">{r.code_client}</div>
                   )}

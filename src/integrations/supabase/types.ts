@@ -500,6 +500,7 @@ export type Database = {
           created_at: string
           id: string
           role: string
+          status: string
           steps: Json | null
         }
         Insert: {
@@ -508,6 +509,7 @@ export type Database = {
           created_at?: string
           id?: string
           role: string
+          status?: string
           steps?: Json | null
         }
         Update: {
@@ -516,6 +518,7 @@ export type Database = {
           created_at?: string
           id?: string
           role?: string
+          status?: string
           steps?: Json | null
         }
         Relationships: [

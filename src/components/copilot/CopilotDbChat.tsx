@@ -4,7 +4,6 @@ import {
   MessageSquarePlus,
   Search,
   Send,
-  Sparkles,
   ChevronLeft,
   ChevronRight,
   Trash2,
@@ -35,15 +34,17 @@ type Msg =
       content: string;
       id?: string;
       steps: Step[];
-      streaming?: boolean;
+      status?: "generating" | "done" | "error";
       overloaded?: boolean;
       question?: string;
     };
 
 /**
  * Chat DB-backed : liste des conversations à gauche/en tête, chat à droite.
- * Les conversations sont stockées dans copilot_conversations/copilot_messages
- * (RLS par user), rechargeables intégralement pour reprendre le fil.
+ * La génération est côté serveur (edge function gaia-copilot) et persiste le
+ * message assistant en base via EdgeRuntime.waitUntil. Le client s'abonne en
+ * temps réel à copilot_messages pour afficher la réponse même si l'utilisateur
+ * a quitté la conversation pendant la réflexion.
  */
 export function CopilotDbChat() {
   const { pageContext } = useCopilot();
@@ -85,31 +86,33 @@ export function CopilotDbChat() {
     if (userId) loadConversations();
   }, [userId, loadConversations]);
 
+  const rowToMsg = useCallback((r: any): Msg => {
+    if (r.role === "user") {
+      return { role: "user", content: r.contenu, id: r.id };
+    }
+    return {
+      role: "assistant",
+      content: r.contenu,
+      steps: Array.isArray(r.steps) ? r.steps : [],
+      id: r.id,
+      status: (r.status as any) ?? "done",
+    };
+  }, []);
+
   const openConversation = useCallback(async (id: string) => {
     setActiveId(id);
     setView("chat");
     setMsgsLoading(true);
     const { data } = await (supabase as any)
       .from("copilot_messages")
-      .select("id,role,contenu,steps,created_at")
+      .select("id,role,contenu,steps,status,created_at")
       .eq("conversation_id", id)
       .order("created_at", { ascending: true });
     const rows = (data ?? []) as any[];
-    setMessages(
-      rows.map((r) =>
-        r.role === "user"
-          ? { role: "user", content: r.contenu, id: r.id }
-          : {
-              role: "assistant",
-              content: r.contenu,
-              steps: Array.isArray(r.steps) ? r.steps : [],
-              id: r.id,
-            },
-      ),
-    );
+    setMessages(rows.map(rowToMsg));
     setMsgsLoading(false);
     setTimeout(() => endRef.current?.scrollIntoView({ behavior: "auto", block: "end" }), 50);
-  }, []);
+  }, [rowToMsg]);
 
   const newConversation = useCallback(() => {
     setActiveId(null);
@@ -143,6 +146,50 @@ export function CopilotDbChat() {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, sending]);
 
+  // ————————————— Realtime : abonnement aux messages de la conversation active
+  // Ainsi, si l'utilisateur quitte pendant la réflexion, la réponse persistée
+  // côté serveur remonte automatiquement à son retour (et en direct s'il regarde).
+  useEffect(() => {
+    if (!activeId) return;
+    const channel = supabase
+      .channel(`copilot_messages:${activeId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "copilot_messages",
+          filter: `conversation_id=eq.${activeId}`,
+        },
+        (payload: any) => {
+          const row = (payload.new ?? payload.old) as any;
+          if (!row) return;
+          setMessages((cur) => {
+            const idx = cur.findIndex((m) => m.id === row.id);
+            if (payload.eventType === "DELETE") {
+              if (idx === -1) return cur;
+              const next = cur.slice();
+              next.splice(idx, 1);
+              return next;
+            }
+            const msg = rowToMsg(row);
+            if (idx === -1) {
+              // Nouveau message venant du serveur (user posté à la volée, ou
+              // assistant placeholder). Ajoute-le si pas déjà présent.
+              return [...cur, msg];
+            }
+            const next = cur.slice();
+            next[idx] = msg;
+            return next;
+          });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeId, rowToMsg]);
+
   const sendMessage = useCallback(
     async (question: string) => {
       const q = question.trim();
@@ -165,25 +212,22 @@ export function CopilotDbChat() {
         setActiveId(convId);
       }
 
-      // Push user + placeholder assistant
+      // Optimiste : ajoute la bulle user + un placeholder assistant "réflexion".
+      // Les IDs réels seront réconciliés par le realtime dès que le serveur
+      // aura inséré ses lignes en base.
       const prevMessages = messages;
-      let assistantIdx = -1;
+      let placeholderIdx = -1;
       setMessages((c) => {
         const next: Msg[] = [
           ...c,
           { role: "user", content: q },
-          { role: "assistant", content: "", steps: [], streaming: true, question: q },
+          { role: "assistant", content: "", steps: [], status: "generating", question: q },
         ];
-        assistantIdx = next.length - 1;
+        placeholderIdx = next.length - 1;
         return next;
       });
       setInput("");
       setSending(true);
-
-      // Persiste le message user
-      await (supabase as any)
-        .from("copilot_messages")
-        .insert({ conversation_id: convId, role: "user", contenu: q });
 
       try {
         const { data: sessionData } = await supabase.auth.getSession();
@@ -205,6 +249,7 @@ export function CopilotDbChat() {
           body: JSON.stringify({
             action: "chat",
             question: q,
+            conversation_id: convId,
             history,
             context: {
               route: pageContext.route,
@@ -220,8 +265,6 @@ export function CopilotDbChat() {
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
-        let finalMarkdown = "";
-        const collectedSteps: Step[] = [];
         let errStream: string | null = null;
         let errCode: string | null = null;
 
@@ -237,21 +280,24 @@ export function CopilotDbChat() {
           try { data = JSON.parse(dataText); } catch { return; }
           if (name === "gaia_sql") {
             const step: Step = { summary: String(data.summary ?? "Requête"), query: String(data.query ?? "") };
-            collectedSteps.push(step);
+            // Applique visuellement l'étape SQL sur le placeholder si encore présent
             setMessages((c) => {
               const next = c.slice();
-              const m = next[assistantIdx];
-              if (m && m.role === "assistant") {
-                next[assistantIdx] = { ...m, steps: [...m.steps, step] };
+              // On repère le dernier assistant en cours de génération
+              for (let i = next.length - 1; i >= 0; i--) {
+                const m = next[i];
+                if (m.role === "assistant" && (m.status === "generating" || m.status === undefined) && !m.content) {
+                  next[i] = { ...m, steps: [...m.steps, step] };
+                  break;
+                }
               }
               return next;
             });
-          } else if (name === "gaia_final") {
-            finalMarkdown = data.markdown ?? "";
           } else if (name === "gaia_error") {
             errStream = data.error ?? "Erreur";
             errCode = typeof data.code === "string" ? data.code : null;
           }
+          // gaia_final : la persistance serveur + le realtime feront l'update.
         };
 
         while (true) {
@@ -266,65 +312,33 @@ export function CopilotDbChat() {
 
         if (errStream) {
           const isOverload = errCode === "overload" || /overloaded|529|saturés/i.test(errStream);
-          setMessages((c) => {
-            const next = c.slice();
-            const m = next[assistantIdx];
-            if (m && m.role === "assistant") {
-              next[assistantIdx] = {
-                ...m,
-                streaming: false,
-                overloaded: isOverload,
-                content: isOverload
-                  ? "Les serveurs d'IA sont momentanément saturés. Réessaie dans quelques instants."
-                  : `⚠️ ${errStream}`,
-              };
-            }
-            return next;
-          });
           if (!isOverload) toast({ title: "Erreur", description: errStream.slice(0, 200), variant: "destructive" });
-        } else if (!finalMarkdown) {
-          throw new Error("Réponse vide");
-        } else {
-          setMessages((c) => {
-            const next = c.slice();
-            const m = next[assistantIdx];
-            if (m && m.role === "assistant") {
-              next[assistantIdx] = { ...m, streaming: false, content: finalMarkdown, steps: collectedSteps };
-            }
-            return next;
-          });
-          // Persiste la réponse
-          await (supabase as any)
-            .from("copilot_messages")
-            .insert({
-              conversation_id: convId,
-              role: "assistant",
-              contenu: finalMarkdown,
-              steps: collectedSteps,
-            });
-          // Bump updated_at
-          await (supabase as any)
-            .from("copilot_conversations")
-            .update({ updated_at: new Date().toISOString() })
-            .eq("id", convId);
         }
         loadConversations();
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        toast({ title: "Erreur", description: msg.slice(0, 200), variant: "destructive" });
-        setMessages((c) => {
-          const next = c.slice();
-          const m = next[assistantIdx];
-          if (m && m.role === "assistant") {
-            next[assistantIdx] = { ...m, streaming: false, content: `⚠️ ${msg}` };
-          }
-          return next;
-        });
+        // Erreur RÉSEAU côté client. Le serveur peut avoir persisté quand même
+        // (waitUntil) : le realtime remontera la vraie réponse. En attendant,
+        // ne casse pas la bulle placeholder si un contenu réel est déjà arrivé.
+        toast({ title: "Connexion interrompue", description: msg.slice(0, 200), variant: "destructive" });
       } finally {
         setSending(false);
+        // Rafraîchit l'état depuis la base : réconcilie les IDs et statuts,
+        // au cas où le realtime aurait manqué un événement.
+        if (convId) {
+          try {
+            const { data } = await (supabase as any)
+              .from("copilot_messages")
+              .select("id,role,contenu,steps,status,created_at")
+              .eq("conversation_id", convId)
+              .order("created_at", { ascending: true });
+            const rows = (data ?? []) as any[];
+            setMessages(rows.map(rowToMsg));
+          } catch { /* silencieux */ }
+        }
       }
     },
-    [sending, userId, activeId, messages, pageContext, loadConversations],
+    [sending, userId, activeId, messages, pageContext, loadConversations, rowToMsg],
   );
 
   // ————————————————————————————— vue liste
@@ -419,37 +433,45 @@ export function CopilotDbChat() {
             Posez votre question au copilote.
           </div>
         )}
-        {messages.map((m, i) =>
-          m.role === "user" ? (
-            <div key={i} className="flex justify-end">
-              <div className="max-w-[85%] rounded-lg bg-primary/15 border border-primary/30 px-3 py-2 text-sm whitespace-pre-wrap">
-                {m.content}
+        {messages.map((m, i) => {
+          if (m.role === "user") {
+            return (
+              <div key={m.id ?? `u-${i}`} className="flex justify-end">
+                <div className="max-w-[85%] rounded-lg bg-primary/15 border border-primary/30 px-3 py-2 text-sm whitespace-pre-wrap">
+                  {m.content}
+                </div>
               </div>
-            </div>
-          ) : (
-            <div key={i} className="flex justify-start">
+            );
+          }
+          const isGenerating = m.status === "generating";
+          const isError = m.status === "error";
+          const isOverloaded = m.overloaded || (isError && /saturés|overloaded/i.test(m.content));
+          return (
+            <div key={m.id ?? `a-${i}`} className="flex justify-start">
               <div
                 className={cn(
                   "w-full max-w-[95%] rounded-lg border px-4 py-3 text-sm",
-                  m.overloaded
+                  isOverloaded
                     ? "border-amber-500/40 bg-amber-500/10 text-amber-100"
-                    : "border-border/60 bg-muted/40",
+                    : isError
+                      ? "border-destructive/40 bg-destructive/10"
+                      : "border-border/60 bg-muted/40",
                 )}
               >
-                {m.overloaded && (
+                {isOverloaded && (
                   <div className="flex items-start gap-2 mb-2">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
                     <div className="font-medium">Serveurs d'IA saturés</div>
                   </div>
                 )}
-                {m.steps.length > 0 && <StepsCollapse steps={m.steps} streaming={!!m.streaming} />}
+                {m.steps.length > 0 && <StepsCollapse steps={m.steps} streaming={isGenerating} />}
                 {m.content && <CopiloteMarkdown markdown={m.content} />}
-                {m.streaming && !m.content && (
+                {isGenerating && !m.content && (
                   <div className="text-muted-foreground text-xs">
-                    <Loader2 className="mr-2 inline h-3 w-3 animate-spin" /> Réflexion…
+                    <Loader2 className="mr-2 inline h-3 w-3 animate-spin" /> Réflexion en cours…
                   </div>
                 )}
-                {m.overloaded && m.question && (
+                {isOverloaded && m.question && (
                   <div className="mt-2">
                     <Button
                       size="sm"
@@ -463,8 +485,8 @@ export function CopilotDbChat() {
                 )}
               </div>
             </div>
-          ),
-        )}
+          );
+        })}
         <div ref={endRef} />
       </div>
 

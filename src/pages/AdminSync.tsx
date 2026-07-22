@@ -390,6 +390,17 @@ export default function AdminSync() {
                 <><RefreshCw className="mr-2 h-4 w-4" /> Synchroniser les données</>
               )}
             </Button>
+            <Button
+              variant="outline"
+              onClick={async () => {
+                const { error } = await (supabase as any).rpc("refresh_gaia_resumes");
+                if (error) toast({ title: "Erreur", description: error.message, variant: "destructive" });
+                else toast({ title: "Résumés copilote rafraîchis", description: "mv_gaia_resume_client_exercice + mv_gaia_resume_mensuel" });
+              }}
+              disabled={running || syncing}
+            >
+              <RefreshCw className="mr-2 h-4 w-4" /> Rafraîchir les résumés copilote
+            </Button>
           </div>
         </div>
 

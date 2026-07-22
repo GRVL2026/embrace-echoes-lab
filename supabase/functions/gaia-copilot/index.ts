@@ -78,7 +78,16 @@ function jsonResponse(body: unknown, status = 200) {
 const SCHEMA_DOC = `
 
 OUTIL executer_sql — accès direct à la base commerciale
-Tu disposes de l'outil executer_sql(sql_query) qui exécute une requête SQL SELECT en lecture seule (max 200 lignes, timeout 8 s) sur la base commerciale et renvoie les lignes au format JSON. Utilise-le CHAQUE FOIS qu'une question demande un détail absent des données agrégées fournies. Vérifie systématiquement tes résultats en croisant plusieurs requêtes si nécessaire, cite les chiffres exacts, et mentionne en une seule ligne la requête utilisée (ex : "Source : SELECT ... FROM v_gaia_ca_client WHERE annee=2026 …").
+Tu disposes de l'outil executer_sql(sql_query) qui exécute une requête SQL SELECT en lecture seule (max 500 lignes, timeout 8 s) sur la base commerciale et renvoie les lignes au format JSON. Si le résultat contient "truncated": true, ta requête a dépassé 500 lignes → REFAIS-la en agrégeant côté SQL (SUM/COUNT/GROUP BY) ou en interrogeant d'abord les résumés pré-calculés mv_gaia_resume_client_exercice / mv_gaia_resume_mensuel ; ne raisonne JAMAIS sur un résultat tronqué. Utilise l'outil CHAQUE FOIS qu'une question demande un détail absent des données agrégées fournies. Vérifie systématiquement tes résultats en croisant plusieurs requêtes si nécessaire, cite les chiffres exacts, et mentionne en une seule ligne la requête utilisée.
+
+RÉSUMÉS PRÉ-CALCULÉS (à interroger EN PRIORITÉ pour toute question agrégée) :
+- mv_gaia_resume_client_exercice(annee, client, ca_ht, ca_avec_cout, marge_estimee, part_reelle, nb_lignes, premiere_facture, derniere_facture, famille_dominante)
+  UNE ligne par (client, exercice fiscal). Rafraîchi à la fin de chaque synchro Cegid nocturne. À utiliser pour : top clients par CA/marge, comparatifs N vs N-1, portefeuille par famille dominante, ancienneté (premiere_facture / derniere_facture).
+- mv_gaia_resume_mensuel(mois, annee, ca_ht, lignes, marge_estimee, cout_estime)
+  UNE ligne par mois. À utiliser pour : tendances, saisonnalité, évolution mensuelle CA et marge.
+
+RÈGLE : pour toute question agrégée par client / famille / exercice / mois, interroge D'ABORD ces mv_gaia_resume_*. Ne descends dans les tables de lignes (v_gaia_lignes, gaia_ventes, gaia_commandes) QUE pour un détail précis (une facture, un article, une pièce). La marge reste confidentielle (direction/admin) : ces résumés en contiennent, ne les cite que si l'utilisateur y a accès.
+
 
 Schéma disponible (Postgres, schema public) :
 
@@ -123,7 +132,7 @@ Vue « Matrice CA × marge » (route /admin/matrice-clients, direction/admin uni
 
 Règles :
   • Uniquement des SELECT (WITH autorisé). Interdits : INSERT/UPDATE/DELETE/DROP/ALTER/CREATE/GRANT/TRUNCATE.
-  • Limite tes requêtes (LIMIT 50 par défaut, LIMIT 200 maximum).
+  • Limite tes requêtes (LIMIT 50 par défaut, LIMIT 500 maximum — au-delà l'outil tronque et signale). Pour tout total ou classement, agrège TOUJOURS en SQL, jamais en récupérant des lignes brutes.
   • Ne fais JAMAIS apparaître SFA (code_client = '9SFA00000') dans les palmarès/dormants/actions.
   • Raisonne toujours en exercice fiscal, jamais en année civile.
   • AUTO-CONTRÔLE OBLIGATOIRE : avant d'affirmer un chiffre, vérifie sa vraisemblance (ordre de grandeur vs le CA total connu). En cas de doute sur une jointure (surtout avec gaia_stock ou toute table potentiellement non-unique), re-vérifie avec une requête de contrôle sans jointure (ex : SUM(montant_ht) directement sur v_gaia_lignes) et compare. Si les deux chiffres divergent, la jointure est fautive : corrige-la (utilise v_gaia_articles) avant de répondre.
@@ -157,7 +166,7 @@ CHARTE DE L'ANALYSTE — règles SQL OBLIGATOIRES (aucune exception sans justifi
    • CARNET OFFICIEL : v_gaia_commandes_etat et v_gaia_pipeline ne comptent QUE QT/SO/LO/PT (+ catégorie 'reparation' = RP dans v_gaia_pipeline). GT, ZP, RT, retours (R2/RC), FH et TR en sont exclus.
 
 
-4. AGRÉGER DANS LE SQL : gaia_query renvoie 200 lignes MAX. Ne calcule JAMAIS un total en récupérant des lignes brutes puis en sommant côté modèle. Utilise SUM/COUNT/AVG/GROUP BY dans la requête, et ORDER BY + LIMIT pour tout classement (Top N).
+4. AGRÉGER DANS LE SQL : gaia_query renvoie 500 lignes MAX (au-delà, réponse marquée "truncated": true — c'est un signal d'erreur d'approche, pas une réponse valide). Ne calcule JAMAIS un total en récupérant des lignes brutes puis en sommant côté modèle. Utilise SUM/COUNT/AVG/GROUP BY dans la requête, et ORDER BY + LIMIT pour tout classement (Top N). Rappelle-toi que mv_gaia_resume_client_exercice / mv_gaia_resume_mensuel sont déjà agrégés — préfère-les.
 
 5. RECHERCHES TEXTE : les libellés Cegid sont en MAJUSCULES SANS ACCENTS. Utilise ILIKE avec des fragments sans accent (ex. description ILIKE '%METALLICA%'). Si zéro résultat, essaie d'autres variantes (synonymes, orthographes, mots partiels) AVANT de conclure "introuvable".
 

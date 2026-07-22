@@ -9,7 +9,7 @@ import { CopilotPanel } from "@/components/copilot/CopilotPanel";
 import { useCopilotActions } from "@/hooks/useCopilotActions";
 import type { RoomContext } from "@/lib/copilotApi";
 import { SAFETY_ZONE_CM } from "@/types/editor";
-import { PanelRightClose, PanelRightOpen, Box, LayoutGrid, Sparkles, Check, Loader2, CircleDot, FolderKanban } from "lucide-react";
+import { PanelRightClose, PanelRightOpen, Box, LayoutGrid, Sparkles, Check, Loader2, CircleDot, FolderKanban, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fitToView } from "@/lib/fitToView";
@@ -245,7 +245,16 @@ function SpacePlannerInner() {
         {/* Planner-specific slim toolbar */}
         <div className="flex h-11 items-center justify-between border-b border-border bg-card/40 backdrop-blur-sm px-3 gap-3 flex-shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            {/* 2D / 3D toggle */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs gap-1"
+              onClick={() => navigate(dossierId ? `/dossiers/${dossierId}` : "/dossiers")}
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Retour
+            </Button>
+
             <div className="flex items-center rounded-md border border-border bg-muted/50 p-0.5">
               <Button
                 variant={viewMode === "2d" ? "default" : "ghost"}

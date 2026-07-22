@@ -2108,6 +2108,32 @@ export type Database = {
       }
     }
     Views: {
+      mv_gaia_resume_client_exercice: {
+        Row: {
+          annee: number | null
+          ca_avec_cout: number | null
+          ca_ht: number | null
+          client: string | null
+          derniere_facture: string | null
+          famille_dominante: string | null
+          marge_estimee: number | null
+          nb_lignes: number | null
+          part_reelle: number | null
+          premiere_facture: string | null
+        }
+        Relationships: []
+      }
+      mv_gaia_resume_mensuel: {
+        Row: {
+          annee: number | null
+          ca_ht: number | null
+          cout_estime: number | null
+          lignes: number | null
+          marge_estimee: number | null
+          mois: string | null
+        }
+        Relationships: []
+      }
       v_gaia_article_famille: {
         Row: {
           code: string | null
@@ -2541,6 +2567,7 @@ export type Database = {
         Returns: string
       }
       refresh_erp_prices: { Args: never; Returns: number }
+      refresh_gaia_resumes: { Args: never; Returns: undefined }
       unaccent: { Args: { "": string }; Returns: string }
     }
     Enums: {

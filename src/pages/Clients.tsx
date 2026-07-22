@@ -528,7 +528,7 @@ export default function Clients() {
       {!isPending && filtered.length > 0 && (
         <div className="md:hidden space-y-2">
           {filtered.map((r) => {
-            const tone = isDirection ? marginTone(r.taux ?? null) : null;
+            const tone = canMargeClient ? marginTone(r.taux ?? null) : null;
             return (
               <Link
                 key={r.client}

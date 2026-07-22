@@ -515,7 +515,7 @@ export default function Clients() {
       )}
 
       {/* Tri (visible sur desktop dans l'entête ; mobile a des boutons compacts) */}
-      {isDirection && !isPending && filtered.length > 0 && (
+      {canMargeClient && !isPending && filtered.length > 0 && (
         <div className="md:hidden flex items-center gap-2 text-[11px] text-muted-foreground">
           <span>Trier :</span>
           <button onClick={() => setSortKey("ca_current")} className={cn("px-2 py-0.5 rounded border", sortKey === "ca_current" ? "border-primary/40 text-primary" : "border-border")}>CA</button>

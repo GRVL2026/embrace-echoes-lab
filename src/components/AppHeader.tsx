@@ -39,9 +39,11 @@ export function AppHeader({ right, standalone = false }: { right?: ReactNode; st
             </h1>
           </Link>
         )}
-        <div className="hidden md:flex ml-4 min-w-0">
-          <Breadcrumbs />
-        </div>
+        {!standalone && (
+          <div className="hidden md:flex ml-4 min-w-0">
+            <Breadcrumbs />
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
         {right}

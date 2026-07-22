@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
-export type AppRole = "admin" | "direction" | "commercial";
+export type AppRole = "admin" | "direction" | "chef_ventes" | "commercial";
 
 type AuthContextValue = {
   user: User | null;
@@ -14,6 +14,12 @@ type AuthContextValue = {
   roles: AppRole[];
   isAdmin: boolean;
   isDirection: boolean;
+  isChefVentes: boolean;
+  isCommercial: boolean;
+  /** Voir la marge PAR CLIENT (commercial et +). */
+  canMargeClient: boolean;
+  /** Voir les agrégats de marge (chef_ventes et +). */
+  canMargeGlobale: boolean;
   canAccessGaia: boolean;
   canAccessDashboard: boolean;
   copilotEnabled: boolean;
@@ -134,10 +140,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isAdmin = roles.includes("admin");
   const isDirection = roles.includes("admin") || roles.includes("direction");
+  const isChefVentes = roles.includes("chef_ventes");
+  const isCommercial = roles.includes("commercial");
+  const hasSalesRole = isAdmin || isDirection || isChefVentes || isCommercial;
+  const canMargeClient = hasSalesRole;
+  const canMargeGlobale = isAdmin || isDirection || isChefVentes;
   const canAccessGaia = isAdmin || isDirection;
-  const canAccessDashboard = canAccessGaia || dashboardEnabled;
+  const salleEnabledOnly = !!user && !hasSalesRole && !dashboardEnabled && salleEnabled;
+  const canAccessDashboard = !salleEnabledOnly && (hasSalesRole || dashboardEnabled);
   const canAccessSalle = canAccessGaia || salleEnabled;
-  const salleOnly = !!user && !isAdmin && !isDirection && !dashboardEnabled && salleEnabled;
+  const salleOnly = salleEnabledOnly;
 
   const signIn: AuthContextValue["signIn"] = async (email, password) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -172,6 +184,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         roles,
         isAdmin,
         isDirection,
+        isChefVentes,
+        isCommercial,
+        canMargeClient,
+        canMargeGlobale,
         canAccessGaia,
         canAccessDashboard,
         copilotEnabled,

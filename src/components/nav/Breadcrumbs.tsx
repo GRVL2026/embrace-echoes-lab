@@ -12,7 +12,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
  */
 export function Breadcrumbs({ detail }: { detail?: string }) {
   const { pathname, hash } = useLocation();
-  const { isAdmin, isDirection, canAccessGaia, canAccessDashboard, copilotEnabled, canAccessSalle, salleOnly } =
+  const { isAdmin, isDirection, canAccessGaia, canAccessDashboard, canMargeGlobale, copilotEnabled, canAccessSalle, salleOnly } =
     useAuth();
 
   const ctx: NavCtx = {
@@ -20,6 +20,7 @@ export function Breadcrumbs({ detail }: { detail?: string }) {
     isDirection,
     canAccessGaia,
     canAccessDashboard,
+    canMargeGlobale,
     copilotEnabled,
     canAccessSalle,
     salleOnly,

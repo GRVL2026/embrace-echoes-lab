@@ -39,6 +39,7 @@ export type NavCtx = {
   isDirection: boolean;
   canAccessGaia: boolean;
   canAccessDashboard: boolean;
+  canMargeGlobale: boolean;
   copilotEnabled: boolean;
   canAccessSalle: boolean;
   salleOnly: boolean;
@@ -115,7 +116,7 @@ export const SPACES: Space[] = [
     label: "Pilotage",
     icon: Compass,
     colorToken: "--space-pilotage",
-    show: (c) => c.isDirection,
+    show: (c) => c.canMargeGlobale,
     entries: [
       {
         label: "Dashboard AA",

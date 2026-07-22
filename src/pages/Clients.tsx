@@ -682,7 +682,7 @@ export default function Clients() {
           </div>
           <div className="shrink-0 flex flex-col sm:items-end gap-0.5">
             <span>{filtered.length} client{filtered.length > 1 ? "s" : ""} affiché{filtered.length > 1 ? "s" : ""}</span>
-            {isDirection && totals.couverture != null && (
+            {canMargeGlobale && totals.couverture != null && (
               <span className="text-[10px] italic">
                 Marge estimée sur {totals.couverture.toFixed(1)} % du CA au coût connu
               </span>

@@ -994,6 +994,15 @@ Deno.serve(async (req) => {
         const { summary, hasWork } = await runStep(admin, token_step.token!, seeded, globalStart);
         await releaseLock(admin);
         if (hasWork) selfInvoke({ action: 'step' });
+        else if (summary.length > 0) {
+          try {
+            const { error: rerr } = await admin.rpc('refresh_gaia_resumes');
+            if (rerr) console.error('[cegid-sync] refresh_gaia_resumes error:', rerr.message);
+            else console.log('[cegid-sync] refresh_gaia_resumes → OK');
+          } catch (e: any) {
+            console.error('[cegid-sync] refresh_gaia_resumes crash:', e?.message ?? String(e));
+          }
+        }
         return jsonResponse({
           ok: true, token_step: safeToken, summary,
           seeded_queue: queue, continued: hasWork,

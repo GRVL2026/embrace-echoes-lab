@@ -659,7 +659,7 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
       </div>
 
       {/* ===== Marge (estimée) — admin/direction uniquement ===== */}
-      {isDirection && (
+      {canMargeGlobale && (
       <Panel
         title={margeIsReelle ? "Marge (réelle)" : "Marge (estimée)"}
         action={

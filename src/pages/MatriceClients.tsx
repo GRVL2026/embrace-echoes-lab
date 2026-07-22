@@ -378,19 +378,40 @@ export default function MatriceClients() {
 
                     <Tooltip
                       cursor={{ strokeDasharray: "3 3" }}
-                      content={
-                        <ChartTooltipContent
-                          hideLabel
-                          formatter={(_v: any, _n: any, item: any) => {
-                            const p = item?.payload as Point | undefined;
-                            if (!p) return _v;
-                            return [
-                              `${fmtEuro(p.ca)} · marge ${fmtEuro(p.marge)} (${fmtPct(p.taux)}) · ${Q_META[p.quadrant].label}`,
-                              p.client,
-                            ] as any;
-                          }}
-                        />
-                      }
+                      content={(props: any) => {
+                        const { active, payload } = props;
+                        if (!active || !payload?.length) return null;
+                        const seen = new Set<string>();
+                        const unique: Point[] = [];
+                        for (const item of payload) {
+                          const p = item?.payload as Point | undefined;
+                          if (!p || seen.has(p.client)) continue;
+                          seen.add(p.client);
+                          unique.push(p);
+                        }
+                        if (!unique.length) return null;
+                        return (
+                          <div className="min-w-[140px] rounded-md border border-border/80 bg-popover/95 px-2.5 py-1.5 text-xs shadow-xl backdrop-blur">
+                            <ul className="space-y-0.5">
+                              {unique.map((p, i) => (
+                                <li key={i} className="flex items-baseline gap-2">
+                                  <span
+                                    className="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-sm"
+                                    style={{ background: Q_META[p.quadrant].fill }}
+                                  />
+                                  <span className="text-muted-foreground">{p.client} :</span>
+                                  <span
+                                    className="font-semibold tabular-nums"
+                                    style={{ color: Q_META[p.quadrant].fill }}
+                                  >
+                                    {fmtEuro(p.ca)} · marge {fmtEuro(p.marge)} ({fmtPct(p.taux)}) · {Q_META[p.quadrant].label}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        );
+                      }}
                     />
 
                     <Scatter

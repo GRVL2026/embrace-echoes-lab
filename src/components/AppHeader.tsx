@@ -13,7 +13,7 @@ import type { ReactNode } from "react";
  * barre latérale persistante (AppSidebar) — cette en-tête n'affiche plus
  * que le logo, le fil d'Ariane et le UserMenu.
  */
-export function AppHeader({ right }: { right?: ReactNode }) {
+export function AppHeader({ right, standalone = false }: { right?: ReactNode; standalone?: boolean }) {
   const { isAdmin, isLoading } = useAuth();
 
   return (
@@ -39,9 +39,11 @@ export function AppHeader({ right }: { right?: ReactNode }) {
             </h1>
           </Link>
         )}
-        <div className="hidden md:flex ml-4 min-w-0">
-          <Breadcrumbs />
-        </div>
+        {!standalone && (
+          <div className="hidden md:flex ml-4 min-w-0">
+            <Breadcrumbs />
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
         {right}

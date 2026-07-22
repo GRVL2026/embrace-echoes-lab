@@ -80,8 +80,8 @@ const Q_META: Record<QKey, { label: string; sub: string; color: string; bg: stri
     fill: "hsl(25 95% 53%)",
   },
   marginaux: {
-    label: "Marginaux",
-    sub: "à arbitrer",
+    label: "Petits comptes",
+    sub: "faible volume",
     color: "text-muted-foreground",
     bg: "bg-muted/20",
     border: "border-border",
@@ -89,7 +89,8 @@ const Q_META: Record<QKey, { label: string; sub: string; color: string; bg: stri
   },
 };
 
-const DEFAULT_CA_SEUIL = 200_000;
+const DEFAULT_CA_SEUIL = 50_000;
+const DEFAULT_CA_MIN = 10_000;
 
 function fmtEuro(v: number): string {
   const abs = Math.abs(v);

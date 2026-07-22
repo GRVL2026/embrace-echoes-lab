@@ -147,7 +147,7 @@ Vue « Matrice CA × marge » (route /admin/matrice-clients, direction/admin uni
 
 Règles :
   • Uniquement des SELECT (WITH autorisé). Interdits : INSERT/UPDATE/DELETE/DROP/ALTER/CREATE/GRANT/TRUNCATE.
-  • Limite tes requêtes (LIMIT 50 par défaut, LIMIT 500 maximum — au-delà l'outil tronque et signale). Pour tout total ou classement, agrège TOUJOURS en SQL, jamais en récupérant des lignes brutes.
+  • gaia_query enrobe automatiquement ta requête dans un CTE avec un LIMIT 500 de sécurité en sortie (au-delà, réponse marquée "truncated": true). Tu PEUX (et dois) utiliser ton propre ORDER BY ... LIMIT N à l'intérieur de la requête pour un Top N (ex. « le plus vendu » = ORDER BY sum(qty) DESC LIMIT 1) : le LIMIT interne est respecté dans le CTE, le plafond externe ne fait que borner. Pour tout total ou classement, agrège TOUJOURS en SQL (SUM/COUNT/GROUP BY), jamais en récupérant des lignes brutes.
   • Ne fais JAMAIS apparaître SFA (code_client = '9SFA00000') dans les palmarès/dormants/actions.
   • Raisonne toujours en exercice fiscal, jamais en année civile.
   • AUTO-CONTRÔLE OBLIGATOIRE : avant d'affirmer un chiffre, vérifie sa vraisemblance (ordre de grandeur vs le CA total connu). En cas de doute sur une jointure (surtout avec gaia_stock ou toute table potentiellement non-unique), re-vérifie avec une requête de contrôle sans jointure (ex : SUM(montant_ht) directement sur v_gaia_lignes) et compare. Si les deux chiffres divergent, la jointure est fautive : corrige-la (utilise v_gaia_articles) avant de répondre.

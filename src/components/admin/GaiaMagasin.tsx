@@ -64,7 +64,7 @@ function aggregate(rows: CarnetRow[], cat: "devis" | "commande", statuts?: strin
 
 export function GaiaMagasin() {
   const currentYear = currentFiscalYear();
-  const { isDirection } = useAuth();
+  const { canMargeGlobale } = useAuth();
   const [yearArticles, setYearArticles] = useState<number>(currentYear);
   const [yearSousFam, setYearSousFam] = useState<number>(currentYear);
   const [chartMode, setChartMode] = useState<"bar" | "pie">("bar");

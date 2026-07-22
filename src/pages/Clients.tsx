@@ -392,7 +392,7 @@ export default function Clients() {
         />
       </div>
 
-      {isDirection && (
+      {false && isDirection && (
         <div className="flex flex-wrap items-center gap-2">
           {([
             ["all", "Tous"],

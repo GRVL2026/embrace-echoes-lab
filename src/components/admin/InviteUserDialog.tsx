@@ -14,9 +14,10 @@ type Access = {
   copilote_enabled: boolean;
 };
 
-type Niveau = "commercial" | "chef_ventes" | "direction" | "admin";
+type Niveau = "aucun" | "commercial" | "chef_ventes" | "direction" | "admin";
 
 const NIVEAUX: { value: Niveau; label: string; sub: string }[] = [
+  { value: "aucun", label: "Aucun (accès Salle uniquement)", sub: "Ne reçoit ni Commerce, ni Dashboard, ni marge. À combiner avec l'accès Salle ci-dessous." },
   { value: "commercial", label: "Commercial", sub: "Commerce, copilote, dashboard, marge par client" },
   { value: "chef_ventes", label: "Chef des ventes", sub: "Comme commercial + marges globales (totaux, matrice)" },
   { value: "direction", label: "Direction", sub: "Tout, sauf réglages techniques" },
@@ -26,18 +27,18 @@ const NIVEAUX: { value: Niveau; label: string; sub: string }[] = [
 export function InviteUserDialog({ onInvited }: { onInvited?: () => void }) {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
-  const [niveau, setNiveau] = useState<Niveau>("commercial");
+  const [niveau, setNiveau] = useState<Niveau>("aucun");
   const [access, setAccess] = useState<Access>({
-    salle_enabled: false,
+    salle_enabled: true,
     dashboard_enabled: false,
-    copilote_enabled: true,
+    copilote_enabled: false,
   });
   const [sending, setSending] = useState(false);
 
   const reset = () => {
     setEmail("");
-    setNiveau("commercial");
-    setAccess({ salle_enabled: false, dashboard_enabled: false, copilote_enabled: true });
+    setNiveau("aucun");
+    setAccess({ salle_enabled: true, dashboard_enabled: false, copilote_enabled: false });
   };
 
   const submit = async () => {
@@ -46,11 +47,15 @@ export function InviteUserDialog({ onInvited }: { onInvited?: () => void }) {
       toast({ title: "Email invalide", variant: "destructive" });
       return;
     }
+    if (niveau === "aucun" && !access.salle_enabled && !access.dashboard_enabled) {
+      toast({ title: "Aucun accès sélectionné", description: "Choisis un niveau ou coche au moins un accès.", variant: "destructive" });
+      return;
+    }
     setSending(true);
     const { data, error } = await supabase.functions.invoke("admin-invite-user", {
       body: {
         email: clean,
-        role: niveau,
+        role: niveau === "aucun" ? null : niveau,
         salle_enabled: access.salle_enabled,
         dashboard_enabled: access.dashboard_enabled,
         copilote_enabled: access.copilote_enabled,
@@ -63,7 +68,7 @@ export function InviteUserDialog({ onInvited }: { onInvited?: () => void }) {
       toast({ title: "Erreur", description: msg, variant: "destructive" });
       return;
     }
-    toast({ title: "Invitation envoyée", description: `${clean} · ${niveau}` });
+    toast({ title: "Invitation envoyée", description: `${clean} · ${niveau === "aucun" ? "salle uniquement" : niveau}` });
     reset();
     setOpen(false);
     onInvited?.();

@@ -2458,6 +2458,8 @@ export type Database = {
     Functions: {
       can_access_dashboard: { Args: { _uid?: string }; Returns: boolean }
       can_access_salle: { Args: { _uid?: string }; Returns: boolean }
+      can_marge_client: { Args: { _uid?: string }; Returns: boolean }
+      can_marge_globale: { Args: { _uid?: string }; Returns: boolean }
       cegid_sync_try_lock: {
         Args: { _ttl_seconds?: number }
         Returns: {

@@ -14,9 +14,19 @@ type Access = {
   copilote_enabled: boolean;
 };
 
+type Niveau = "commercial" | "chef_ventes" | "direction" | "admin";
+
+const NIVEAUX: { value: Niveau; label: string; sub: string }[] = [
+  { value: "commercial", label: "Commercial", sub: "Commerce, copilote, dashboard, marge par client" },
+  { value: "chef_ventes", label: "Chef des ventes", sub: "Comme commercial + marges globales (totaux, matrice)" },
+  { value: "direction", label: "Direction", sub: "Tout, sauf réglages techniques" },
+  { value: "admin", label: "Admin", sub: "Tout, y compris réglages et utilisateurs" },
+];
+
 export function InviteUserDialog({ onInvited }: { onInvited?: () => void }) {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
+  const [niveau, setNiveau] = useState<Niveau>("commercial");
   const [access, setAccess] = useState<Access>({
     salle_enabled: false,
     dashboard_enabled: false,
@@ -26,6 +36,7 @@ export function InviteUserDialog({ onInvited }: { onInvited?: () => void }) {
 
   const reset = () => {
     setEmail("");
+    setNiveau("commercial");
     setAccess({ salle_enabled: false, dashboard_enabled: false, copilote_enabled: true });
   };
 
@@ -39,6 +50,7 @@ export function InviteUserDialog({ onInvited }: { onInvited?: () => void }) {
     const { data, error } = await supabase.functions.invoke("admin-invite-user", {
       body: {
         email: clean,
+        role: niveau,
         salle_enabled: access.salle_enabled,
         dashboard_enabled: access.dashboard_enabled,
         copilote_enabled: access.copilote_enabled,
@@ -51,7 +63,7 @@ export function InviteUserDialog({ onInvited }: { onInvited?: () => void }) {
       toast({ title: "Erreur", description: msg, variant: "destructive" });
       return;
     }
-    toast({ title: "Invitation envoyée", description: clean });
+    toast({ title: "Invitation envoyée", description: `${clean} · ${niveau}` });
     reset();
     setOpen(false);
     onInvited?.();
@@ -68,7 +80,7 @@ export function InviteUserDialog({ onInvited }: { onInvited?: () => void }) {
         <DialogHeader>
           <DialogTitle>Inviter un utilisateur</DialogTitle>
           <DialogDescription>
-            L'invité reçoit un email pour créer son mot de passe et arrive avec uniquement les accès cochés.
+            L'invité reçoit un email pour créer son mot de passe et arrive avec le niveau choisi et uniquement les accès cochés.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -84,6 +96,31 @@ export function InviteUserDialog({ onInvited }: { onInvited?: () => void }) {
             />
           </div>
 
+          <div className="space-y-1.5">
+            <Label>Niveau</Label>
+            <div className="rounded-md border border-border divide-y divide-border">
+              {NIVEAUX.map((n) => (
+                <label
+                  key={n.value}
+                  className="flex items-start gap-3 p-3 cursor-pointer hover:bg-muted/30"
+                >
+                  <input
+                    type="radio"
+                    name="niveau"
+                    value={n.value}
+                    checked={niveau === n.value}
+                    onChange={() => setNiveau(n.value)}
+                    className="mt-1"
+                  />
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium">{n.label}</div>
+                    <div className="text-xs text-muted-foreground">{n.sub}</div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+
           <div className="rounded-md border border-border divide-y divide-border">
             <AccessRow
               label="Accès Salle Hyper Nova"
@@ -92,8 +129,8 @@ export function InviteUserDialog({ onInvited }: { onInvited?: () => void }) {
               onChange={(v) => setAccess((a) => ({ ...a, salle_enabled: v }))}
             />
             <AccessRow
-              label="Accès Dashboard (AA + Magasin)"
-              sub="Tableaux de bord commerciaux"
+              label="Accès Dashboard supplémentaire"
+              sub="Utile uniquement pour un profil non commercial"
               checked={access.dashboard_enabled}
               onChange={(v) => setAccess((a) => ({ ...a, dashboard_enabled: v }))}
             />
@@ -106,7 +143,7 @@ export function InviteUserDialog({ onInvited }: { onInvited?: () => void }) {
           </div>
 
           <p className="text-[11px] text-muted-foreground">
-            Les autres accès (commerce, dossiers) restent gérés par le rôle de l'utilisateur.
+            Les rôles commercial / chef des ventes / direction / admin définissent l'accès au Commerce, au Dashboard et à la visibilité des marges.
           </p>
         </div>
         <DialogFooter>

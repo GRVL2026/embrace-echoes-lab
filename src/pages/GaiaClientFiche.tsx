@@ -88,7 +88,7 @@ const ageBadgeClass = (days: number) => {
 const yearOf = (d: string | null) => (d ? new Date(d).getFullYear() : null);
 
 export default function GaiaClientFiche() {
-  const { isAdmin, canAccessGaia, isDirection, loading: authLoading } = useAuth();
+  const { isAdmin, canAccessGaia, isDirection, canMargeClient, loading: authLoading } = useAuth();
   const { nom } = useParams<{ nom: string }>();
   const clientName = useMemo(() => (nom ? decodeURIComponent(nom).trim() : ""), [nom]);
   const navigate = useNavigate();
@@ -445,7 +445,7 @@ export default function GaiaClientFiche() {
               )}
             </div>
             {/* Marge estimée — admin/direction uniquement */}
-            {isDirection && (
+            {canMargeClient && (
             <div className="rounded-lg border border-border/60 bg-background/40 p-3">
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                 Marge {Number(margeCurrent?.part_reelle ?? 0) > 90 ? "réelle" : "est."} {currentYear?.[0] ?? ""}
@@ -1089,7 +1089,7 @@ export default function GaiaClientFiche() {
             {/* placeholder — Parc déplacé en haut de la colonne droite */}
             </div>
 
-            {isDirection && (
+            {canMargeClient && (
             <p className="text-[11px] text-muted-foreground md:col-span-2">
               Marge estimée sur la base du dernier coût d'achat connu.
             </p>

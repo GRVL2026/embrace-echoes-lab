@@ -130,13 +130,13 @@ function downloadCsv(name: string, csv: string) {
 }
 
 export default function MatriceClients() {
-  const { isDirection, isLoading } = useAuth();
+  const { canMargeGlobale, isLoading } = useAuth();
   const navigate = useNavigate();
 
   // Liste des exercices via RPC dédiée (pas de troncature)
   const { data: yearsData } = useQuery({
     queryKey: ["matrice-exercices"],
-    enabled: isDirection,
+    enabled: canMargeGlobale,
     queryFn: async () => {
       const { data: rows, error } = await (supabase as any).rpc("get_gaia_exercices");
       if (error) throw error;
@@ -153,7 +153,7 @@ export default function MatriceClients() {
 
   const { data, isLoading: loadingRows } = useQuery({
     queryKey: ["matrice-marge-client", effectiveYear],
-    enabled: isDirection && effectiveYear != null,
+    enabled: canMargeGlobale && effectiveYear != null,
     queryFn: async () => {
       // Filtre par exercice côté SQL — évite la troncature 1000 lignes.
       const { data: rows, error } = await (supabase as any).rpc("get_marge_client", {
@@ -222,7 +222,7 @@ export default function MatriceClients() {
       </div>
     );
   }
-  if (!isDirection) {
+  if (!canMargeGlobale) {
     return <Navigate to="/" replace />;
   }
 

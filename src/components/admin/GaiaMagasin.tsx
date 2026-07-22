@@ -64,7 +64,7 @@ function aggregate(rows: CarnetRow[], cat: "devis" | "commande", statuts?: strin
 
 export function GaiaMagasin() {
   const currentYear = currentFiscalYear();
-  const { isDirection } = useAuth();
+  const { canMargeGlobale } = useAuth();
   const [yearArticles, setYearArticles] = useState<number>(currentYear);
   const [yearSousFam, setYearSousFam] = useState<number>(currentYear);
   const [chartMode, setChartMode] = useState<"bar" | "pie">("bar");
@@ -312,7 +312,7 @@ export function GaiaMagasin() {
       {/* Stock magasin + Marge estimée (marge = admin/direction uniquement) */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Stock */}
-        <div className={`rounded-lg border border-border bg-card/40 p-4 ${isDirection ? "lg:col-span-2" : "lg:col-span-3"}`}>
+        <div className={`rounded-lg border border-border bg-card/40 p-4 ${canMargeGlobale ? "lg:col-span-2" : "lg:col-span-3"}`}>
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Package className="h-5 w-5 text-primary" />
@@ -378,7 +378,7 @@ export function GaiaMagasin() {
         </div>
 
         {/* Marge estimée — admin/direction uniquement */}
-        {isDirection && (
+        {canMargeGlobale && (
         <button
           type="button"
           onClick={() => setMargeInfoOpen(true)}

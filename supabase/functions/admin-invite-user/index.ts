@@ -42,10 +42,12 @@ Deno.serve(async (req) => {
     const salle_enabled = Boolean(body?.salle_enabled);
     const dashboard_enabled = Boolean(body?.dashboard_enabled);
     const copilote_enabled = body?.copilote_enabled === undefined ? true : Boolean(body?.copilote_enabled);
+    const roleRaw = String(body?.role ?? "commercial").trim().toLowerCase();
+    const role = (["admin", "direction", "chef_ventes", "commercial"].includes(roleRaw) ? roleRaw : "commercial");
 
     // 3) autoriser l'email et pré-configurer les accès
     const { error: allowErr } = await admin.from("allowed_emails")
-      .upsert({ email: emailRaw, role: "commercial" }, { onConflict: "email" });
+      .upsert({ email: emailRaw, role }, { onConflict: "email" });
     if (allowErr) return json({ error: `allowed_emails: ${allowErr.message}` }, 500);
 
     const { error: cfgErr } = await admin.from("invitations_config").upsert({

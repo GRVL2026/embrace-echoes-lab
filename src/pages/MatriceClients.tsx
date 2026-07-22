@@ -344,10 +344,32 @@ export default function MatriceClients() {
           </Button>
         </div>
 
-        <p className="text-xs text-muted-foreground -mt-1">
-          {points.length} client{points.length > 1 ? "s" : ""} affiché{points.length > 1 ? "s" : ""}
-          {hiddenCount > 0 ? ` · ${hiddenCount} masqué${hiddenCount > 1 ? "s" : ""} sous ${fmtEuro(caMin)}` : ""}
-        </p>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Rechercher un client…"
+              className="h-9 pl-8 pr-8"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:bg-muted"
+                aria-label="Effacer la recherche"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {points.length} client{points.length > 1 ? "s" : ""} affiché{points.length > 1 ? "s" : ""}
+            {hiddenCount > 0 ? ` · ${hiddenCount} masqué${hiddenCount > 1 ? "s" : ""} sous ${fmtEuro(caMin)}` : ""}
+          </p>
+        </div>
 
         {loadingRows ? (
           <div className="flex min-h-[300px] items-center justify-center rounded-lg border border-border/60 bg-card/40">

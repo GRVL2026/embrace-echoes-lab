@@ -1465,6 +1465,9 @@ Deno.serve(async (req) => {
       if (!question) {
         return jsonResponse({ ok: false, error: 'question manquante' }, 400);
       }
+      const conversationId = typeof body?.conversation_id === 'string' && body.conversation_id
+        ? body.conversation_id as string
+        : null;
       const history = Array.isArray(body?.history) ? body.history : [];
       const cleanHistory = history
         .filter((m: any) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
@@ -1512,17 +1515,100 @@ Deno.serve(async (req) => {
         contextBlock,
       ].filter(Boolean).join('\n\n');
 
+      // ————————————————————————————————————————————————
+      // Persistance server-side : la génération survit à la navigation client.
+      // Le message user + le placeholder assistant (status='generating') sont
+      // créés AVANT le début du stream. À la fin (succès ou erreur), la mise
+      // à jour finale est protégée par EdgeRuntime.waitUntil, pour survivre
+      // à un client déconnecté.
+      // ————————————————————————————————————————————————
+      let assistantMsgId: string | null = null;
+      if (conversationId) {
+        try {
+          const { data: conv } = await admin
+            .from('copilot_conversations')
+            .select('id,user_id')
+            .eq('id', conversationId)
+            .maybeSingle();
+          if (conv && conv.user_id === currentUserId) {
+            await admin.from('copilot_messages').insert({
+              conversation_id: conversationId,
+              role: 'user',
+              contenu: question,
+              status: 'done',
+            });
+            const { data: asst } = await admin
+              .from('copilot_messages')
+              .insert({
+                conversation_id: conversationId,
+                role: 'assistant',
+                contenu: '',
+                steps: [],
+                status: 'generating',
+              })
+              .select('id')
+              .single();
+            assistantMsgId = (asst?.id as string) ?? null;
+          } else {
+            console.log('[gaia-copilot] chat: conversation_id introuvable ou non autorisée');
+          }
+        } catch (e: any) {
+          console.log(`[gaia-copilot] chat: persistance init KO — ${e?.message ?? e}`);
+        }
+      }
+
+      // Promise "génération terminée" maintenue vivante par waitUntil,
+      // pour que la persistance finale survive à un client déconnecté.
+      let resolveDone: () => void = () => {};
+      const donePromise = new Promise<void>((r) => { resolveDone = r; });
+      try {
+        (globalThis as any).EdgeRuntime?.waitUntil?.(donePromise);
+      } catch {
+        /* pas de waitUntil disponible en local — OK */
+      }
+
+      const persistFinal = async (payload: {
+        markdown: string;
+        steps: any[];
+        status: 'done' | 'error';
+      }) => {
+        if (!assistantMsgId || !conversationId) return;
+        try {
+          await admin
+            .from('copilot_messages')
+            .update({
+              contenu: payload.markdown,
+              steps: payload.steps,
+              status: payload.status,
+            })
+            .eq('id', assistantMsgId);
+          await admin
+            .from('copilot_conversations')
+            .update({ updated_at: new Date().toISOString() })
+            .eq('id', conversationId);
+        } catch (e: any) {
+          console.log(`[gaia-copilot] chat: persistance finale KO — ${e?.message ?? e}`);
+        }
+      };
+
       const encoder = new TextEncoder();
       let heartbeat: number | undefined;
+      const collectedSteps: any[] = [];
 
       const stream = new ReadableStream<Uint8Array>({
         async start(controller) {
           const send = (event: string, data: unknown) => {
             try {
               controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
-            } catch { /* closed */ }
+            } catch { /* closed — le client est parti, la génération continue */ }
+            if (event === 'gaia_sql' && data && typeof data === 'object') {
+              collectedSteps.push({
+                summary: String((data as any).summary ?? 'Requête'),
+                query: String((data as any).query ?? ''),
+              });
+            }
           };
-          send('gaia_start', { question });
+          send('gaia_start', { question, assistant_message_id: assistantMsgId });
           heartbeat = setInterval(() => {
             try { controller.enqueue(encoder.encode(`: gaia-heartbeat ${Date.now()}\n\n`)); }
             catch { if (heartbeat !== undefined) clearInterval(heartbeat); }
@@ -1548,13 +1634,9 @@ Deno.serve(async (req) => {
             const hasSubstantiveAnalysis = (md: string): boolean => {
               if (!md) return false;
               const stripped = md
-                // Retire les blocs de code fenced (```...```)
                 .replace(/```[\s\S]*?```/g, '')
-                // Retire les sections Sources / Source SQL jusqu'à la prochaine section ou fin
                 .replace(/(^|\n)#{1,6}\s*(sources?|source\s+sql|requêtes?\s+sql|sql)\b[\s\S]*?(?=\n#{1,6}\s|\n?$)/gi, '')
-                // Retire les lignes "Source : SELECT ..."
                 .replace(/(^|\n)\s*source\s*:.*$/gim, '')
-                // Retire indentations/espaces
                 .replace(/\s+/g, ' ')
                 .trim();
               return stripped.length >= 80;
@@ -1590,7 +1672,6 @@ Deno.serve(async (req) => {
               }
             }
 
-            // Filet de sécurité : bulle purement "Sources" sans texte → message d'erreur explicite.
             if (markdown && !hasSubstantiveAnalysis(markdown)) {
               console.log(`[gaia-copilot] réponse sans analyse substantielle (${markdown.length} chars) — bascule sur message d'erreur.`);
               markdown = '';
@@ -1599,29 +1680,39 @@ Deno.serve(async (req) => {
             const sqlUsed = journal.flatMap((j) => j.sql_queries);
 
             if (!markdown) {
+              const errMd = "Je n'ai pas réussi à formuler ma réponse. Peux-tu reformuler ta question ?";
               send('gaia_final', {
-                markdown: "Je n'ai pas réussi à formuler ma réponse. Peux-tu reformuler ta question ?",
+                markdown: errMd,
                 debug: { stop_reason: last?.stop_reason ?? null, tool_rounds: rounds, journal, forced: forcedDebug, empty_response: true },
                 sql_used: sqlUsed,
               });
+              await persistFinal({ markdown: errMd, steps: collectedSteps, status: 'error' });
             } else {
               send('gaia_final', {
                 markdown,
                 debug: { stop_reason: last?.stop_reason ?? null, tool_rounds: rounds, journal, forced: forcedDebug },
                 sql_used: sqlUsed,
               });
+              await persistFinal({ markdown, steps: collectedSteps, status: 'done' });
             }
           } catch (e: any) {
             console.log(`[gaia-copilot] chat stream fatal: ${e?.message ?? e}`);
             const overload = isAnthropicOverload(e);
             send('gaia_error', { error: e?.message ?? String(e), code: overload ? 'overload' : undefined });
+            const errMd = overload
+              ? "Les serveurs d'IA sont momentanément saturés. Réessaie dans quelques instants."
+              : `⚠️ ${e?.message ?? String(e)}`;
+            await persistFinal({ markdown: errMd, steps: collectedSteps, status: 'error' });
           } finally {
             if (heartbeat !== undefined) clearInterval(heartbeat);
             try { controller.close(); } catch { /* already closed */ }
+            resolveDone();
           }
         },
         cancel() {
           if (heartbeat !== undefined) clearInterval(heartbeat);
+          // NE PAS résoudre donePromise ici : la génération continue en arrière-plan
+          // et persistFinal finalisera le message via EdgeRuntime.waitUntil.
         },
       });
 

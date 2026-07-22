@@ -166,7 +166,7 @@ CHARTE DE L'ANALYSTE — règles SQL OBLIGATOIRES (aucune exception sans justifi
    • CARNET OFFICIEL : v_gaia_commandes_etat et v_gaia_pipeline ne comptent QUE QT/SO/LO/PT (+ catégorie 'reparation' = RP dans v_gaia_pipeline). GT, ZP, RT, retours (R2/RC), FH et TR en sont exclus.
 
 
-4. AGRÉGER DANS LE SQL : gaia_query renvoie 200 lignes MAX. Ne calcule JAMAIS un total en récupérant des lignes brutes puis en sommant côté modèle. Utilise SUM/COUNT/AVG/GROUP BY dans la requête, et ORDER BY + LIMIT pour tout classement (Top N).
+4. AGRÉGER DANS LE SQL : gaia_query renvoie 500 lignes MAX (au-delà, réponse marquée "truncated": true — c'est un signal d'erreur d'approche, pas une réponse valide). Ne calcule JAMAIS un total en récupérant des lignes brutes puis en sommant côté modèle. Utilise SUM/COUNT/AVG/GROUP BY dans la requête, et ORDER BY + LIMIT pour tout classement (Top N). Rappelle-toi que mv_gaia_resume_client_exercice / mv_gaia_resume_mensuel sont déjà agrégés — préfère-les.
 
 5. RECHERCHES TEXTE : les libellés Cegid sont en MAJUSCULES SANS ACCENTS. Utilise ILIKE avec des fragments sans accent (ex. description ILIKE '%METALLICA%'). Si zéro résultat, essaie d'autres variantes (synonymes, orthographes, mots partiels) AVANT de conclure "introuvable".
 

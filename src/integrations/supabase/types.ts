@@ -17,15 +17,15 @@ export type Database = {
       allowed_emails: {
         Row: {
           email: string
-          role: string
+          role: string | null
         }
         Insert: {
           email: string
-          role?: string
+          role?: string | null
         }
         Update: {
           email?: string
-          role?: string
+          role?: string | null
         }
         Relationships: []
       }

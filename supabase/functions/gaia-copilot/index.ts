@@ -1498,8 +1498,15 @@ Deno.serve(async (req) => {
         ? `Tu es le copilote de la salle d'arcade B2C Hyper Nova (Avranches). L'utilisateur en est l'exploitant. Tu ne réponds QU'aux questions sur cette salle et ne consultes QUE les tables salle_journees et salle_objectifs. Tu ignores strictement les clients Cegid, la marge, les dossiers, le SAV, la logistique et toute donnée commerciale B2B — refuse poliment ces sujets s'ils sont abordés. Rappels sémantiques : CA total d'un jour = ca_pax_ht + ca_cartes_ht + ca_merch_ht ; les colonnes vending/photomaton sont des « dont » DÉJÀ INCLUS dans ca_pax_ht et ne doivent JAMAIS être additionnés au total. Semaines ISO (lundi→dimanche). Objectif courant : 500 €/jour, 3 500 €/semaine (à lire dans salle_objectifs). Réponds en français, en Markdown clair, avec des chiffres.`
         : '';
 
+      const margeBoundary = salleOnly
+        ? ''
+        : canMargeGlobale
+          ? `CONTEXTE UTILISATEUR : ${isAdmin ? 'admin' : isDirection ? 'direction' : 'chef des ventes'} — accès complet à la marge (par client ET agrégats globaux : totaux portefeuille, matrice CA×marge, marge par famille/magasin).`
+          : `CONTEXTE UTILISATEUR : commercial — accès à la marge PAR CLIENT (fiches individuelles) uniquement. Tu NE dois PAS livrer d'agrégats de marge (totaux portefeuille, marge par famille, marge magasin, comparaisons cross-clients, matrice CA×marge, top marges) : réservés au chef des ventes et à la direction. Si l'utilisateur demande ces agrégats, réponds poliment que cette vue est réservée aux chefs des ventes et à la direction. Tu peux commenter la marge d'UN client précis dans sa fiche.`;
+
       const chatSystem = [
         salleOnlyPreamble || SYSTEM_PROMPT,
+        margeBoundary,
         SUIVI_INSTRUCTION,
         userProfileSuffix,
         contextBlock,

@@ -187,7 +187,11 @@ export default function MatriceClients() {
   const [caSeuil, setCaSeuil] = useState<number>(DEFAULT_CA_SEUIL);
   const [caMin, setCaMin] = useState<number>(DEFAULT_CA_MIN);
   const [tauxSeuil, setTauxSeuil] = useState<number | null>(null);
+  const [search, setSearch] = useState<string>("");
   const effectiveTauxSeuil = tauxSeuil ?? portfolioAvgTaux;
+
+  const normSearch = normalize(search.trim());
+  const matchClient = (client: string) => normSearch.length > 0 && normalize(client).includes(normSearch);
 
   const allPoints = useMemo(() => {
     return yearRows
@@ -201,11 +205,15 @@ export default function MatriceClients() {
       .filter((p) => p.client && p.ca > 0);
   }, [yearRows]);
 
+  // CA global de tous les clients de l'exercice (pour "part du CA global")
+  const totalCaGlobal = useMemo(() => allPoints.reduce((n, p) => n + p.ca, 0), [allPoints]);
+
   const points: Point[] = useMemo(() => {
+    // Filtre CA min + bypass pour les clients correspondant à la recherche
     return allPoints
-      .filter((p) => p.ca >= caMin)
+      .filter((p) => p.ca >= caMin || (normSearch.length > 0 && normalize(p.client).includes(normSearch)))
       .map((p) => ({ ...p, quadrant: classify(p, caSeuil, effectiveTauxSeuil) }));
-  }, [allPoints, caMin, caSeuil, effectiveTauxSeuil]);
+  }, [allPoints, caMin, caSeuil, effectiveTauxSeuil, normSearch]);
 
   const hiddenCount = allPoints.length - points.length;
 

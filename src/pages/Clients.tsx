@@ -573,7 +573,7 @@ export default function Clients() {
                       <span className="mr-1">{data?.prev}:</span>
                       {eur(r.ca_prev)}
                     </div>
-                    {isDirection && (r.marge != null || r.taux != null) && (
+                    {canMargeClient && (r.marge != null || r.taux != null) && (
                       <div className="font-mono text-[11px] text-muted-foreground mt-0.5">
                         Marge : {r.marge != null ? eur(r.marge) : "—"}
                         {r.taux != null && <span className="ml-1">· {r.taux.toFixed(1)} %</span>}

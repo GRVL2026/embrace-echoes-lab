@@ -32,7 +32,13 @@ import {
   ChevronRight,
   Loader2,
   ArrowLeft,
+  Search,
+  X,
 } from "lucide-react";
+
+function normalize(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
 
 type MargeRow = {
   annee: number | null;
@@ -181,7 +187,11 @@ export default function MatriceClients() {
   const [caSeuil, setCaSeuil] = useState<number>(DEFAULT_CA_SEUIL);
   const [caMin, setCaMin] = useState<number>(DEFAULT_CA_MIN);
   const [tauxSeuil, setTauxSeuil] = useState<number | null>(null);
+  const [search, setSearch] = useState<string>("");
   const effectiveTauxSeuil = tauxSeuil ?? portfolioAvgTaux;
+
+  const normSearch = normalize(search.trim());
+  const matchClient = (client: string) => normSearch.length > 0 && normalize(client).includes(normSearch);
 
   const allPoints = useMemo(() => {
     return yearRows
@@ -195,11 +205,15 @@ export default function MatriceClients() {
       .filter((p) => p.client && p.ca > 0);
   }, [yearRows]);
 
+  // CA global de tous les clients de l'exercice (pour "part du CA global")
+  const totalCaGlobal = useMemo(() => allPoints.reduce((n, p) => n + p.ca, 0), [allPoints]);
+
   const points: Point[] = useMemo(() => {
+    // Filtre CA min + bypass pour les clients correspondant à la recherche
     return allPoints
-      .filter((p) => p.ca >= caMin)
+      .filter((p) => p.ca >= caMin || (normSearch.length > 0 && normalize(p.client).includes(normSearch)))
       .map((p) => ({ ...p, quadrant: classify(p, caSeuil, effectiveTauxSeuil) }));
-  }, [allPoints, caMin, caSeuil, effectiveTauxSeuil]);
+  }, [allPoints, caMin, caSeuil, effectiveTauxSeuil, normSearch]);
 
   const hiddenCount = allPoints.length - points.length;
 
@@ -330,10 +344,32 @@ export default function MatriceClients() {
           </Button>
         </div>
 
-        <p className="text-xs text-muted-foreground -mt-1">
-          {points.length} client{points.length > 1 ? "s" : ""} affiché{points.length > 1 ? "s" : ""}
-          {hiddenCount > 0 ? ` · ${hiddenCount} masqué${hiddenCount > 1 ? "s" : ""} sous ${fmtEuro(caMin)}` : ""}
-        </p>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Rechercher un client…"
+              className="h-9 pl-8 pr-8"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:bg-muted"
+                aria-label="Effacer la recherche"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {points.length} client{points.length > 1 ? "s" : ""} affiché{points.length > 1 ? "s" : ""}
+            {hiddenCount > 0 ? ` · ${hiddenCount} masqué${hiddenCount > 1 ? "s" : ""} sous ${fmtEuro(caMin)}` : ""}
+          </p>
+        </div>
 
         {loadingRows ? (
           <div className="flex min-h-[300px] items-center justify-center rounded-lg border border-border/60 bg-card/40">
@@ -421,9 +457,20 @@ export default function MatriceClients() {
                         if (p) navigate(`/admin/gaia/client/${encodeURIComponent(p.client)}`, { state: { from } });
                       }}
                     >
-                      {points.map((p, i) => (
-                        <Cell key={i} fill={Q_META[p.quadrant].fill} fillOpacity={0.75} stroke={Q_META[p.quadrant].fill} className="cursor-pointer" />
-                      ))}
+                      {points.map((p, i) => {
+                        const isMatch = matchClient(p.client);
+                        const dim = normSearch.length > 0 && !isMatch;
+                        return (
+                          <Cell
+                            key={i}
+                            fill={Q_META[p.quadrant].fill}
+                            fillOpacity={dim ? 0.12 : isMatch ? 1 : 0.75}
+                            stroke={isMatch ? "hsl(var(--foreground))" : Q_META[p.quadrant].fill}
+                            strokeWidth={isMatch ? 2.5 : 1}
+                            className="cursor-pointer"
+                          />
+                        );
+                      })}
                       <LabelList
                         dataKey="client"
                         position="top"
@@ -431,6 +478,8 @@ export default function MatriceClients() {
                         formatter={(v: any) => {
                           const p = points.find((pt) => pt.client === v);
                           if (!p) return "";
+                          if (matchClient(p.client)) return String(v).slice(0, 22);
+                          if (normSearch.length > 0) return "";
                           return p.ca >= labelThreshold ? String(v).slice(0, 22) : "";
                         }}
                       />
@@ -451,7 +500,15 @@ export default function MatriceClients() {
             {/* 4 cartes quadrants */}
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
               {(Object.keys(Q_META) as QKey[]).map((k) => (
-                <QuadrantCard key={k} qkey={k} points={grouped[k]} year={effectiveYear} from={from} />
+                <QuadrantCard
+                  key={k}
+                  qkey={k}
+                  points={grouped[k]}
+                  year={effectiveYear}
+                  from={from}
+                  totalCaGlobal={totalCaGlobal}
+                  search={normSearch}
+                />
               ))}
             </div>
 
@@ -465,7 +522,21 @@ export default function MatriceClients() {
   );
 }
 
-function QuadrantCard({ qkey, points, year, from }: { qkey: QKey; points: Point[]; year: number | null; from: string }) {
+function QuadrantCard({
+  qkey,
+  points,
+  year,
+  from,
+  totalCaGlobal,
+  search,
+}: {
+  qkey: QKey;
+  points: Point[];
+  year: number | null;
+  from: string;
+  totalCaGlobal: number;
+  search: string;
+}) {
   const meta = Q_META[qkey];
   const [open, setOpen] = useState(false);
 
@@ -474,6 +545,13 @@ function QuadrantCard({ qkey, points, year, from }: { qkey: QKey; points: Point[
     for (const p of points) { ca += p.ca; marge += p.marge; caCout += p.ca_avec_cout; }
     return { ca, marge, taux: caCout > 0 ? (marge / caCout) * 100 : 0 };
   }, [points]);
+
+  const partCa = totalCaGlobal > 0 ? (totals.ca / totalCaGlobal) * 100 : 0;
+
+  const filteredPoints = useMemo(() => {
+    if (!search) return points;
+    return points.filter((p) => normalize(p.client).includes(search));
+  }, [points, search]);
 
   return (
     <div className={cn("rounded-lg border p-3", meta.bg, meta.border)}>
@@ -497,6 +575,8 @@ function QuadrantCard({ qkey, points, year, from }: { qkey: QKey; points: Point[
           <div className="text-right font-semibold tabular-nums">{fmtEuro(totals.marge)}</div>
           <div className="text-muted-foreground">Taux moyen</div>
           <div className="text-right font-semibold tabular-nums">{fmtPct(totals.taux)}</div>
+          <div className="text-muted-foreground">Part du CA global</div>
+          <div className={cn("text-right font-semibold tabular-nums", meta.color)}>{fmtPct(partCa)}</div>
         </div>
       </button>
 
@@ -515,11 +595,13 @@ function QuadrantCard({ qkey, points, year, from }: { qkey: QKey; points: Point[
               <Download className="h-3.5 w-3.5 mr-1" /> CSV
             </Button>
           </div>
-          {points.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-2 text-center">Aucun client dans ce quadrant.</p>
+          {filteredPoints.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-2 text-center">
+              {search ? "Aucun client ne correspond à la recherche." : "Aucun client dans ce quadrant."}
+            </p>
           ) : (
             <ul className="max-h-72 overflow-y-auto divide-y divide-border/40">
-              {points.map((p) => (
+              {filteredPoints.map((p) => (
                 <li key={p.client}>
                   <Link
                     to={`/admin/gaia/client/${encodeURIComponent(p.client)}`}

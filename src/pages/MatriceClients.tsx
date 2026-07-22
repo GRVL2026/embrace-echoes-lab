@@ -80,8 +80,8 @@ const Q_META: Record<QKey, { label: string; sub: string; color: string; bg: stri
     fill: "hsl(25 95% 53%)",
   },
   marginaux: {
-    label: "Marginaux",
-    sub: "à arbitrer",
+    label: "Petits comptes",
+    sub: "faible volume",
     color: "text-muted-foreground",
     bg: "bg-muted/20",
     border: "border-border",
@@ -89,7 +89,8 @@ const Q_META: Record<QKey, { label: string; sub: string; color: string; bg: stri
   },
 };
 
-const DEFAULT_CA_SEUIL = 200_000;
+const DEFAULT_CA_SEUIL = 50_000;
+const DEFAULT_CA_MIN = 10_000;
 
 function fmtEuro(v: number): string {
   const abs = Math.abs(v);
@@ -178,10 +179,11 @@ export default function MatriceClients() {
   }, [yearRows]);
 
   const [caSeuil, setCaSeuil] = useState<number>(DEFAULT_CA_SEUIL);
+  const [caMin, setCaMin] = useState<number>(DEFAULT_CA_MIN);
   const [tauxSeuil, setTauxSeuil] = useState<number | null>(null);
   const effectiveTauxSeuil = tauxSeuil ?? portfolioAvgTaux;
 
-  const points: Point[] = useMemo(() => {
+  const allPoints = useMemo(() => {
     return yearRows
       .map((r) => {
         const ca = Number(r.ca_ht) || 0;
@@ -190,9 +192,16 @@ export default function MatriceClients() {
         const taux = caCout > 0 ? (marge / caCout) * 100 : 0;
         return { client: (r.client ?? "").trim(), ca, ca_avec_cout: caCout, marge, taux };
       })
-      .filter((p) => p.client && p.ca > 0)
+      .filter((p) => p.client && p.ca > 0);
+  }, [yearRows]);
+
+  const points: Point[] = useMemo(() => {
+    return allPoints
+      .filter((p) => p.ca >= caMin)
       .map((p) => ({ ...p, quadrant: classify(p, caSeuil, effectiveTauxSeuil) }));
-  }, [yearRows, caSeuil, effectiveTauxSeuil]);
+  }, [allPoints, caMin, caSeuil, effectiveTauxSeuil]);
+
+  const hiddenCount = allPoints.length - points.length;
 
   // Couverture (marge estimée sur X % du CA au coût connu)
   const coverage = useMemo(() => {
@@ -260,7 +269,7 @@ export default function MatriceClients() {
         </header>
 
         {/* Contrôles */}
-        <div className="rounded-lg border border-border/60 bg-card/40 p-3 md:p-4 grid gap-3 md:grid-cols-[auto_1fr_1fr_auto] md:items-end">
+        <div className="rounded-lg border border-border/60 bg-card/40 p-3 md:p-4 grid gap-3 md:grid-cols-[auto_1fr_1fr_1fr_auto] md:items-end">
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Exercice</label>
             <select
@@ -272,6 +281,19 @@ export default function MatriceClients() {
                 <option key={y} value={y}>{y}</option>
               ))}
             </select>
+          </div>
+          <div>
+            <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              CA min. affiché (€) — actuellement {fmtEuro(caMin)}
+            </label>
+            <Input
+              type="number"
+              min={0}
+              step={1_000}
+              value={caMin}
+              onChange={(e) => setCaMin(Math.max(0, Number(e.target.value) || 0))}
+              className="mt-1 h-9"
+            />
           </div>
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -301,12 +323,17 @@ export default function MatriceClients() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => { setCaSeuil(DEFAULT_CA_SEUIL); setTauxSeuil(null); }}
+            onClick={() => { setCaSeuil(DEFAULT_CA_SEUIL); setCaMin(DEFAULT_CA_MIN); setTauxSeuil(null); }}
             className="h-9"
           >
             <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Réinitialiser
           </Button>
         </div>
+
+        <p className="text-xs text-muted-foreground -mt-1">
+          {points.length} client{points.length > 1 ? "s" : ""} affiché{points.length > 1 ? "s" : ""}
+          {hiddenCount > 0 ? ` · ${hiddenCount} masqué${hiddenCount > 1 ? "s" : ""} sous ${fmtEuro(caMin)}` : ""}
+        </p>
 
         {loadingRows ? (
           <div className="flex min-h-[300px] items-center justify-center rounded-lg border border-border/60 bg-card/40">

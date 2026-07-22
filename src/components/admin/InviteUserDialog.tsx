@@ -47,11 +47,15 @@ export function InviteUserDialog({ onInvited }: { onInvited?: () => void }) {
       toast({ title: "Email invalide", variant: "destructive" });
       return;
     }
+    if (niveau === "aucun" && !access.salle_enabled && !access.dashboard_enabled) {
+      toast({ title: "Aucun accès sélectionné", description: "Choisis un niveau ou coche au moins un accès.", variant: "destructive" });
+      return;
+    }
     setSending(true);
     const { data, error } = await supabase.functions.invoke("admin-invite-user", {
       body: {
         email: clean,
-        role: niveau,
+        role: niveau === "aucun" ? null : niveau,
         salle_enabled: access.salle_enabled,
         dashboard_enabled: access.dashboard_enabled,
         copilote_enabled: access.copilote_enabled,
@@ -64,7 +68,7 @@ export function InviteUserDialog({ onInvited }: { onInvited?: () => void }) {
       toast({ title: "Erreur", description: msg, variant: "destructive" });
       return;
     }
-    toast({ title: "Invitation envoyée", description: `${clean} · ${niveau}` });
+    toast({ title: "Invitation envoyée", description: `${clean} · ${niveau === "aucun" ? "salle uniquement" : niveau}` });
     reset();
     setOpen(false);
     onInvited?.();

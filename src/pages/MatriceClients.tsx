@@ -522,7 +522,21 @@ export default function MatriceClients() {
   );
 }
 
-function QuadrantCard({ qkey, points, year, from }: { qkey: QKey; points: Point[]; year: number | null; from: string }) {
+function QuadrantCard({
+  qkey,
+  points,
+  year,
+  from,
+  totalCaGlobal,
+  search,
+}: {
+  qkey: QKey;
+  points: Point[];
+  year: number | null;
+  from: string;
+  totalCaGlobal: number;
+  search: string;
+}) {
   const meta = Q_META[qkey];
   const [open, setOpen] = useState(false);
 
@@ -531,6 +545,13 @@ function QuadrantCard({ qkey, points, year, from }: { qkey: QKey; points: Point[
     for (const p of points) { ca += p.ca; marge += p.marge; caCout += p.ca_avec_cout; }
     return { ca, marge, taux: caCout > 0 ? (marge / caCout) * 100 : 0 };
   }, [points]);
+
+  const partCa = totalCaGlobal > 0 ? (totals.ca / totalCaGlobal) * 100 : 0;
+
+  const filteredPoints = useMemo(() => {
+    if (!search) return points;
+    return points.filter((p) => normalize(p.client).includes(search));
+  }, [points, search]);
 
   return (
     <div className={cn("rounded-lg border p-3", meta.bg, meta.border)}>
@@ -554,6 +575,8 @@ function QuadrantCard({ qkey, points, year, from }: { qkey: QKey; points: Point[
           <div className="text-right font-semibold tabular-nums">{fmtEuro(totals.marge)}</div>
           <div className="text-muted-foreground">Taux moyen</div>
           <div className="text-right font-semibold tabular-nums">{fmtPct(totals.taux)}</div>
+          <div className="text-muted-foreground">Part du CA global</div>
+          <div className={cn("text-right font-semibold tabular-nums", meta.color)}>{fmtPct(partCa)}</div>
         </div>
       </button>
 
@@ -572,11 +595,13 @@ function QuadrantCard({ qkey, points, year, from }: { qkey: QKey; points: Point[
               <Download className="h-3.5 w-3.5 mr-1" /> CSV
             </Button>
           </div>
-          {points.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-2 text-center">Aucun client dans ce quadrant.</p>
+          {filteredPoints.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-2 text-center">
+              {search ? "Aucun client ne correspond à la recherche." : "Aucun client dans ce quadrant."}
+            </p>
           ) : (
             <ul className="max-h-72 overflow-y-auto divide-y divide-border/40">
-              {points.map((p) => (
+              {filteredPoints.map((p) => (
                 <li key={p.client}>
                   <Link
                     to={`/admin/gaia/client/${encodeURIComponent(p.client)}`}

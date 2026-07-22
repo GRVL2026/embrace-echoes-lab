@@ -432,7 +432,7 @@ export default function GaiaClientFiche() {
           <div className="text-xs uppercase tracking-wider text-muted-foreground">Cockpit client</div>
           <h2 className="font-display text-xl sm:text-2xl font-bold break-words">{clientName}</h2>
 
-          <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="mt-4 grid grid-cols-2 lg:grid-cols-3 gap-3">
             {/* CA exercice courant */}
             <div className="rounded-lg border border-border/60 bg-background/40 p-3">
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">CA {currentYear?.[0] ?? "—"}</div>
@@ -466,16 +466,6 @@ export default function GaiaClientFiche() {
                 <div className={`mt-1 inline-flex items-center gap-1 text-[11px] font-medium ${daysSinceLastInvoice > 180 ? "text-destructive" : "text-muted-foreground"}`}>
                   <CalendarClock className="h-3 w-3" />
                   il y a {daysSinceLastInvoice} j
-                </div>
-              )}
-            </div>
-            {/* Ancienneté */}
-            <div className="rounded-lg border border-border/60 bg-background/40 p-3">
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Client depuis</div>
-              <div className="mt-1 font-display text-base font-bold">{firstSale ? new Date(firstSale).getFullYear() : "—"}</div>
-              {firstSale && (
-                <div className="mt-1 text-[11px] text-muted-foreground">
-                  {Math.max(0, new Date().getFullYear() - new Date(firstSale).getFullYear())} an(s) de relation
                 </div>
               )}
             </div>

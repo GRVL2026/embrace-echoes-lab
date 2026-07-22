@@ -14,9 +14,10 @@ type Access = {
   copilote_enabled: boolean;
 };
 
-type Niveau = "commercial" | "chef_ventes" | "direction" | "admin";
+type Niveau = "aucun" | "commercial" | "chef_ventes" | "direction" | "admin";
 
 const NIVEAUX: { value: Niveau; label: string; sub: string }[] = [
+  { value: "aucun", label: "Aucun (accès Salle uniquement)", sub: "Ne reçoit ni Commerce, ni Dashboard, ni marge. À combiner avec l'accès Salle ci-dessous." },
   { value: "commercial", label: "Commercial", sub: "Commerce, copilote, dashboard, marge par client" },
   { value: "chef_ventes", label: "Chef des ventes", sub: "Comme commercial + marges globales (totaux, matrice)" },
   { value: "direction", label: "Direction", sub: "Tout, sauf réglages techniques" },

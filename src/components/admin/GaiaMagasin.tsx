@@ -378,7 +378,7 @@ export function GaiaMagasin() {
         </div>
 
         {/* Marge estimée — admin/direction uniquement */}
-        {isDirection && (
+        {canMargeGlobale && (
         <button
           type="button"
           onClick={() => setMargeInfoOpen(true)}

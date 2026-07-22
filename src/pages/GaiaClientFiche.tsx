@@ -445,7 +445,7 @@ export default function GaiaClientFiche() {
               )}
             </div>
             {/* Marge estimée — admin/direction uniquement */}
-            {isDirection && (
+            {canMargeClient && (
             <div className="rounded-lg border border-border/60 bg-background/40 p-3">
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                 Marge {Number(margeCurrent?.part_reelle ?? 0) > 90 ? "réelle" : "est."} {currentYear?.[0] ?? ""}

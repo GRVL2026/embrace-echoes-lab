@@ -32,7 +32,13 @@ import {
   ChevronRight,
   Loader2,
   ArrowLeft,
+  Search,
+  X,
 } from "lucide-react";
+
+function normalize(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
 
 type MargeRow = {
   annee: number | null;

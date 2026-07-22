@@ -613,7 +613,7 @@ export default function Clients() {
             <div className="text-right">Évolution</div>
           </div>
           {filtered.map((r) => {
-            const tone = isDirection ? marginTone(r.taux ?? null) : null;
+            const tone = canMargeClient ? marginTone(r.taux ?? null) : null;
             return (
               <Link
                 key={r.client}

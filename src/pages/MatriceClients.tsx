@@ -179,10 +179,11 @@ export default function MatriceClients() {
   }, [yearRows]);
 
   const [caSeuil, setCaSeuil] = useState<number>(DEFAULT_CA_SEUIL);
+  const [caMin, setCaMin] = useState<number>(DEFAULT_CA_MIN);
   const [tauxSeuil, setTauxSeuil] = useState<number | null>(null);
   const effectiveTauxSeuil = tauxSeuil ?? portfolioAvgTaux;
 
-  const points: Point[] = useMemo(() => {
+  const allPoints = useMemo(() => {
     return yearRows
       .map((r) => {
         const ca = Number(r.ca_ht) || 0;
@@ -191,9 +192,16 @@ export default function MatriceClients() {
         const taux = caCout > 0 ? (marge / caCout) * 100 : 0;
         return { client: (r.client ?? "").trim(), ca, ca_avec_cout: caCout, marge, taux };
       })
-      .filter((p) => p.client && p.ca > 0)
+      .filter((p) => p.client && p.ca > 0);
+  }, [yearRows]);
+
+  const points: Point[] = useMemo(() => {
+    return allPoints
+      .filter((p) => p.ca >= caMin)
       .map((p) => ({ ...p, quadrant: classify(p, caSeuil, effectiveTauxSeuil) }));
-  }, [yearRows, caSeuil, effectiveTauxSeuil]);
+  }, [allPoints, caMin, caSeuil, effectiveTauxSeuil]);
+
+  const hiddenCount = allPoints.length - points.length;
 
   // Couverture (marge estimée sur X % du CA au coût connu)
   const coverage = useMemo(() => {

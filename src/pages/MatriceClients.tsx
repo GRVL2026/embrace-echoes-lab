@@ -457,9 +457,20 @@ export default function MatriceClients() {
                         if (p) navigate(`/admin/gaia/client/${encodeURIComponent(p.client)}`, { state: { from } });
                       }}
                     >
-                      {points.map((p, i) => (
-                        <Cell key={i} fill={Q_META[p.quadrant].fill} fillOpacity={0.75} stroke={Q_META[p.quadrant].fill} className="cursor-pointer" />
-                      ))}
+                      {points.map((p, i) => {
+                        const isMatch = matchClient(p.client);
+                        const dim = normSearch.length > 0 && !isMatch;
+                        return (
+                          <Cell
+                            key={i}
+                            fill={Q_META[p.quadrant].fill}
+                            fillOpacity={dim ? 0.12 : isMatch ? 1 : 0.75}
+                            stroke={isMatch ? "hsl(var(--foreground))" : Q_META[p.quadrant].fill}
+                            strokeWidth={isMatch ? 2.5 : 1}
+                            className="cursor-pointer"
+                          />
+                        );
+                      })}
                       <LabelList
                         dataKey="client"
                         position="top"
@@ -467,6 +478,8 @@ export default function MatriceClients() {
                         formatter={(v: any) => {
                           const p = points.find((pt) => pt.client === v);
                           if (!p) return "";
+                          if (matchClient(p.client)) return String(v).slice(0, 22);
+                          if (normSearch.length > 0) return "";
                           return p.ca >= labelThreshold ? String(v).slice(0, 22) : "";
                         }}
                       />

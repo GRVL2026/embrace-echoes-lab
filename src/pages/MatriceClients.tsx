@@ -269,7 +269,7 @@ export default function MatriceClients() {
         </header>
 
         {/* Contrôles */}
-        <div className="rounded-lg border border-border/60 bg-card/40 p-3 md:p-4 grid gap-3 md:grid-cols-[auto_1fr_1fr_auto] md:items-end">
+        <div className="rounded-lg border border-border/60 bg-card/40 p-3 md:p-4 grid gap-3 md:grid-cols-[auto_1fr_1fr_1fr_auto] md:items-end">
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Exercice</label>
             <select
@@ -281,6 +281,19 @@ export default function MatriceClients() {
                 <option key={y} value={y}>{y}</option>
               ))}
             </select>
+          </div>
+          <div>
+            <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              CA min. affiché (€) — actuellement {fmtEuro(caMin)}
+            </label>
+            <Input
+              type="number"
+              min={0}
+              step={1_000}
+              value={caMin}
+              onChange={(e) => setCaMin(Math.max(0, Number(e.target.value) || 0))}
+              className="mt-1 h-9"
+            />
           </div>
           <div>
             <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -310,12 +323,17 @@ export default function MatriceClients() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => { setCaSeuil(DEFAULT_CA_SEUIL); setTauxSeuil(null); }}
+            onClick={() => { setCaSeuil(DEFAULT_CA_SEUIL); setCaMin(DEFAULT_CA_MIN); setTauxSeuil(null); }}
             className="h-9"
           >
             <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Réinitialiser
           </Button>
         </div>
+
+        <p className="text-xs text-muted-foreground -mt-1">
+          {points.length} client{points.length > 1 ? "s" : ""} affiché{points.length > 1 ? "s" : ""}
+          {hiddenCount > 0 ? ` · ${hiddenCount} masqué${hiddenCount > 1 ? "s" : ""} sous ${fmtEuro(caMin)}` : ""}
+        </p>
 
         {loadingRows ? (
           <div className="flex min-h-[300px] items-center justify-center rounded-lg border border-border/60 bg-card/40">

@@ -1086,7 +1086,16 @@ Deno.serve(async (req) => {
       .select('role')
       .eq('user_id', userData.user.id);
     const roles = ((roleRows ?? []) as any[]).map((r) => r.role);
-    const hasCommercialAccess = roles.includes('admin') || roles.includes('direction');
+    const isAdmin = roles.includes('admin');
+    const isDirection = isAdmin || roles.includes('direction');
+    const isChefVentes = roles.includes('chef_ventes');
+    const isCommercialRole = roles.includes('commercial');
+    // Accès copilote commerce : commercial et au-dessus (nouveau modèle 4 niveaux).
+    const hasCommercialAccess = isDirection || isChefVentes || isCommercialRole;
+    // Marge globale (agrégats) : chef_ventes et au-dessus.
+    const canMargeGlobale = isDirection || isChefVentes;
+    // Marge par client (fiche individuelle) : commercial et au-dessus.
+    const canMargeClient = hasCommercialAccess;
 
     const admin0 = createClient(supabaseUrl, serviceKey);
     const { data: profile } = await admin0
@@ -1104,7 +1113,7 @@ Deno.serve(async (req) => {
     if (profile && profile.copilote_enabled === false) {
       return jsonResponse({ ok: false, error: 'Accès au copilote non actif pour votre compte' }, 403);
     }
-    // Utilisateur "salle uniquement" : pas de rôle admin/direction, mais salle_enabled = true.
+    // Utilisateur "salle uniquement" : pas de rôle commerce, mais salle_enabled = true.
     // Il n'accède qu'aux tables salle_* via le copilote.
     const salleOnly = !hasCommercialAccess && salleEnabled;
 
@@ -1113,8 +1122,8 @@ Deno.serve(async (req) => {
     try { body = await req.json(); } catch { body = {}; }
     const action = body?.action;
 
-    if (salleOnly && action === 'revue') {
-      return jsonResponse({ ok: false, error: 'La revue commerciale est réservée à la direction.' }, 403);
+    if (action === 'revue' && !canMargeGlobale) {
+      return jsonResponse({ ok: false, error: 'La revue commerciale est réservée aux chefs des ventes et à la direction.' }, 403);
     }
 
     const admin = createClient(supabaseUrl, serviceKey);

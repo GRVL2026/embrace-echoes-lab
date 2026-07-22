@@ -9,7 +9,7 @@ import { CopilotPanel } from "@/components/copilot/CopilotPanel";
 import { useCopilotActions } from "@/hooks/useCopilotActions";
 import type { RoomContext } from "@/lib/copilotApi";
 import { SAFETY_ZONE_CM } from "@/types/editor";
-import { PanelRightClose, PanelRightOpen, Box, LayoutGrid, Sparkles, Check, Loader2, CircleDot, FolderKanban } from "lucide-react";
+import { PanelRightClose, PanelRightOpen, Box, LayoutGrid, Sparkles, Check, Loader2, CircleDot, FolderKanban, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fitToView } from "@/lib/fitToView";

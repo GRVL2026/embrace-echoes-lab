@@ -907,6 +907,16 @@ Deno.serve(async (req) => {
         if (hasWork) {
           // Accélérateur best-effort : si le fetch meurt, le cron reprend dans 2 min.
           selfInvoke({ action: 'step' });
+        } else if (summary.length > 0) {
+          // Queue vidée à la fin de CE run → rafraîchit les résumés matérialisés
+          // exploités par le copilote (mv_gaia_resume_*). Best-effort : n'échoue jamais la synchro.
+          try {
+            const { error: rerr } = await admin.rpc('refresh_gaia_resumes');
+            if (rerr) console.error('[cegid-sync] refresh_gaia_resumes error:', rerr.message);
+            else console.log('[cegid-sync] refresh_gaia_resumes → OK');
+          } catch (e: any) {
+            console.error('[cegid-sync] refresh_gaia_resumes crash:', e?.message ?? String(e));
+          }
         }
         const { token: _t, ...safeToken } = tokenStep;
         return jsonResponse({ ok: true, token_step: safeToken, summary, continued: hasWork }, 200);

@@ -621,7 +621,7 @@ export default function Clients() {
                 state={fromState}
                 className={cn(
                   "grid gap-2 px-4 py-3 border-b border-border/50 last:border-b-0 hover:bg-muted/30 transition-colors items-center",
-                  isDirection
+                  canMargeClient
                     ? "grid-cols-[1fr_130px_130px_120px_90px_130px] min-w-[820px]"
                     : "grid-cols-[1fr_140px_140px_140px] min-w-[640px]",
                 )}

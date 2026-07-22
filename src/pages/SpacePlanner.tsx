@@ -240,7 +240,7 @@ function SpacePlannerInner() {
   return (
     <PlannerBootstrapProvider value={{ initialQuantities }}>
       <div className="flex h-screen w-screen flex-col overflow-hidden bg-background">
-        <AppHeader />
+        <AppHeader standalone />
 
         {/* Planner-specific slim toolbar */}
         <div className="flex h-11 items-center justify-between border-b border-border bg-card/40 backdrop-blur-sm px-3 gap-3 flex-shrink-0">

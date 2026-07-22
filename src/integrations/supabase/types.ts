@@ -2117,7 +2117,12 @@ export type Database = {
           derniere_facture: string | null
           famille_dominante: string | null
           marge_estimee: number | null
+          montant_commandes_ouvertes: number | null
+          montant_devis_ouverts: number | null
+          nb_commandes: number | null
+          nb_devis: number | null
           nb_lignes: number | null
+          nb_reparations: number | null
           part_reelle: number | null
           premiere_facture: string | null
         }

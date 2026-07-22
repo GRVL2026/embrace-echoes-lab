@@ -594,7 +594,7 @@ export default function Clients() {
           <div
             className={cn(
               "grid gap-2 px-4 py-2 border-b border-border bg-muted/30 text-[11px] uppercase tracking-wider text-muted-foreground font-medium",
-              isDirection
+              canMargeClient
                 ? "grid-cols-[1fr_130px_130px_120px_90px_130px] min-w-[820px]"
                 : "grid-cols-[1fr_140px_140px_140px] min-w-[640px]",
             )}
@@ -604,7 +604,7 @@ export default function Clients() {
               <SortBtn k="ca_current" label={`CA ${data?.current ?? ""}`} />
             </div>
             <div className="text-right">CA {data?.prev ?? ""}</div>
-            {isDirection && (
+            {canMargeClient && (
               <>
                 <div className="text-right"><SortBtn k="marge" label="Marge €" /></div>
                 <div className="text-right"><SortBtn k="taux" label="Taux %" /></div>

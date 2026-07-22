@@ -500,7 +500,15 @@ export default function MatriceClients() {
             {/* 4 cartes quadrants */}
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
               {(Object.keys(Q_META) as QKey[]).map((k) => (
-                <QuadrantCard key={k} qkey={k} points={grouped[k]} year={effectiveYear} from={from} />
+                <QuadrantCard
+                  key={k}
+                  qkey={k}
+                  points={grouped[k]}
+                  year={effectiveYear}
+                  from={from}
+                  totalCaGlobal={totalCaGlobal}
+                  search={normSearch}
+                />
               ))}
             </div>
 

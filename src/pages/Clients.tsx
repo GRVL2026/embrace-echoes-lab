@@ -655,7 +655,7 @@ export default function Clients() {
                 <div className="text-right font-mono text-sm text-muted-foreground">
                   {eur(r.ca_prev)}
                 </div>
-                {isDirection && (
+                {canMargeClient && (
                   <>
                     <div className="text-right font-mono text-sm">
                       {r.marge != null ? eur(r.marge) : <span className="text-muted-foreground">—</span>}

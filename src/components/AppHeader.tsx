@@ -13,7 +13,7 @@ import type { ReactNode } from "react";
  * barre latérale persistante (AppSidebar) — cette en-tête n'affiche plus
  * que le logo, le fil d'Ariane et le UserMenu.
  */
-export function AppHeader({ right }: { right?: ReactNode }) {
+export function AppHeader({ right, standalone = false }: { right?: ReactNode; standalone?: boolean }) {
   const { isAdmin, isLoading } = useAuth();
 
   return (

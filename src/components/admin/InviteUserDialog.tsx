@@ -27,18 +27,18 @@ const NIVEAUX: { value: Niveau; label: string; sub: string }[] = [
 export function InviteUserDialog({ onInvited }: { onInvited?: () => void }) {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
-  const [niveau, setNiveau] = useState<Niveau>("commercial");
+  const [niveau, setNiveau] = useState<Niveau>("aucun");
   const [access, setAccess] = useState<Access>({
-    salle_enabled: false,
+    salle_enabled: true,
     dashboard_enabled: false,
-    copilote_enabled: true,
+    copilote_enabled: false,
   });
   const [sending, setSending] = useState(false);
 
   const reset = () => {
     setEmail("");
-    setNiveau("commercial");
-    setAccess({ salle_enabled: false, dashboard_enabled: false, copilote_enabled: true });
+    setNiveau("aucun");
+    setAccess({ salle_enabled: true, dashboard_enabled: false, copilote_enabled: false });
   };
 
   const submit = async () => {

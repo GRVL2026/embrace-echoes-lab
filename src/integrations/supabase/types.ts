@@ -301,6 +301,27 @@ export type Database = {
         }
         Relationships: []
       }
+      cegid_users: {
+        Row: {
+          actif: boolean
+          created_at: string
+          nom: string
+          owner_id: number
+        }
+        Insert: {
+          actif?: boolean
+          created_at?: string
+          nom: string
+          owner_id: number
+        }
+        Update: {
+          actif?: boolean
+          created_at?: string
+          nom?: string
+          owner_id?: number
+        }
+        Relationships: []
+      }
       copilot_alertes: {
         Row: {
           action_suggeree: string | null
@@ -872,6 +893,7 @@ export type Database = {
           n_cde: string | null
           order_nbr: string | null
           order_type: string | null
+          proprietaire_id: number | null
           pu_rem: number | null
           qty: number | null
           statut: string | null
@@ -896,6 +918,7 @@ export type Database = {
           n_cde?: string | null
           order_nbr?: string | null
           order_type?: string | null
+          proprietaire_id?: number | null
           pu_rem?: number | null
           qty?: number | null
           statut?: string | null
@@ -920,6 +943,7 @@ export type Database = {
           n_cde?: string | null
           order_nbr?: string | null
           order_type?: string | null
+          proprietaire_id?: number | null
           pu_rem?: number | null
           qty?: number | null
           statut?: string | null
@@ -1205,6 +1229,7 @@ export type Database = {
           marge_ligne: number | null
           montant_ht: number | null
           n_fact: string | null
+          proprietaire_id: number | null
           pu_rem: number | null
           qty: number | null
           reference_nbr: string | null
@@ -1227,6 +1252,7 @@ export type Database = {
           marge_ligne?: number | null
           montant_ht?: number | null
           n_fact?: string | null
+          proprietaire_id?: number | null
           pu_rem?: number | null
           qty?: number | null
           reference_nbr?: string | null
@@ -1249,6 +1275,7 @@ export type Database = {
           marge_ligne?: number | null
           montant_ht?: number | null
           n_fact?: string | null
+          proprietaire_id?: number | null
           pu_rem?: number | null
           qty?: number | null
           reference_nbr?: string | null

@@ -243,7 +243,7 @@ export function EditorSidebar({ catalog, setCatalog }: EditorSidebarProps) {
         </p>
       </div>
 
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0 overflow-y-auto overscroll-contain">
         {/* === Section Import === */}
         <SidebarSection title="Import" icon={FileUp} defaultOpen={state.rooms.length === 0}>
           <div className="p-3 pt-0">

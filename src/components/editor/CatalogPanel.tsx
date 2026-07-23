@@ -938,7 +938,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
 
       {/* Placed equipments */}
       {state.placedEquipments.length > 0 && (
-        <div className="border-t border-border flex-1 min-h-0 flex flex-col">
+        <div className="border-t border-border flex flex-col flex-none">
           <div className="flex items-center justify-between p-2 shrink-0">
             <div className="flex items-center gap-1.5">
               <span className="text-xs font-semibold text-foreground">
@@ -994,7 +994,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
               </Button>
             </div>
           </div>
-          <ScrollArea className="flex-1 min-h-0">
+          <ScrollArea className="max-h-64">
             <div className="px-2 pb-2 space-y-1">
               {state.placedEquipments.map((pe) => (
                 <div

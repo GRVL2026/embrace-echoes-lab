@@ -1,6 +1,6 @@
 import { Link, Navigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, ArrowRight, AlertCircle, AlertTriangle, Info, Plus, Gamepad2, Radar, Bell, FolderKanban, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Loader2, Plus, Gamepad2, Radar, Bell, FolderKanban, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserMenu } from "@/components/UserMenu";
@@ -108,8 +108,6 @@ export default function Hub() {
           </section>
         )}
 
-        <AlertsSection />
-
         <NumbersSection
           isDirection={isDir}
           canAccessSalle={canAccessSalle}
@@ -129,82 +127,7 @@ export default function Hub() {
   );
 }
 
-/* ============================== ALERTES ================================== */
 
-type Alerte = {
-  id: string;
-  gravite: "info" | "attention" | "urgent";
-  titre: string;
-  constat: string;
-  action_suggeree: string | null;
-  lien: string | null;
-  statut: "nouveau" | "lu" | "traite" | "ignore";
-};
-
-function GraviteDot({ g }: { g: Alerte["gravite"] }) {
-  if (g === "urgent") return <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0" />;
-  if (g === "attention") return <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0" />;
-  return <Info className="h-4 w-4 text-blue-400 flex-shrink-0" />;
-}
-
-function AlertsSection() {
-  const { copilotEnabled, isDirection, isAdmin } = useAuth();
-  const enabled = copilotEnabled && (isAdmin || isDirection);
-  const { data: alertes = [], isLoading } = useQuery({
-    queryKey: ["hub-alertes"],
-    enabled,
-    refetchInterval: 60_000,
-    queryFn: async (): Promise<Alerte[]> => {
-      const { data, error } = await (supabase as any)
-        .from("copilot_alertes")
-        .select("id, gravite, titre, constat, action_suggeree, lien, statut")
-        .in("statut", ["nouveau", "lu"])
-        .order("created_at", { ascending: false })
-        .limit(8);
-      if (error) throw error;
-      return (data ?? []) as Alerte[];
-    },
-  });
-
-  if (!enabled) return null;
-
-  return (
-    <section>
-      <h3 className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
-        Alertes en cours
-      </h3>
-      {isLoading ? (
-        <div className="text-xs text-muted-foreground">Chargement…</div>
-      ) : alertes.length === 0 ? (
-        <div className="text-xs text-muted-foreground italic">
-          Aucune alerte — tout est calme.
-        </div>
-      ) : (
-        <ul className="rounded-xl border border-border bg-card/40 divide-y divide-border overflow-hidden">
-          {alertes.map((a) => {
-            const content = (
-              <div className="flex items-start gap-3 px-4 py-3 hover:bg-muted/30 transition-colors">
-                <GraviteDot g={a.gravite} />
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium truncate">{a.titre}</div>
-                  <div className="text-xs text-muted-foreground line-clamp-1">{a.constat}</div>
-                </div>
-                {a.lien && (
-                  <ArrowRight className="h-4 w-4 text-muted-foreground/60 mt-0.5 flex-shrink-0" />
-                )}
-              </div>
-            );
-            return (
-              <li key={a.id}>
-                {a.lien ? <Link to={a.lien}>{content}</Link> : content}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </section>
-  );
-}
 
 /* ============================== CHIFFRES DU JOUR ========================= */
 

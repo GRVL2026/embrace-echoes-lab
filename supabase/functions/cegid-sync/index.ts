@@ -275,6 +275,7 @@ const MAPPERS: Record<string, { table: string; map: Mapper; pk?: string }> = {
         cout_total: num(pickKey(r, ['CoutTotal', 'CoûtTotal', 'Coûttotal', 'Couttotal', 'Cout total', 'Coût total'])),
         marge_ligne: num(pickKey(r, ['Margeligne', 'MargeEnLigne', 'Margeenligne', 'Marge en ligne', 'MargeLigne'])),
         taux_marque: num(pickKey(r, ['Tauxdemarqueligne', 'TauxDeMarqueLigne', 'TauxDeMarque', 'Tauxdemarque', 'Taux de marque', 'TauxMarque'])),
+        proprietaire_id: intNum(r.Owner),
       };
     },
   },

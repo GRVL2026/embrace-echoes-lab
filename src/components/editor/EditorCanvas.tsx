@@ -805,15 +805,7 @@ export function EditorCanvas() {
       return;
     }
 
-    // Check if clicking on a dimension label (any tool)
-    if (e.button === 0 && state.showDimensions && !editingDimension) {
-      const dim = findDimensionAtPoint(e.clientX, e.clientY);
-      if (dim) {
-        setEditingDimension(dim);
-        setTimeout(() => dimensionInputRef.current?.focus(), 0);
-        return;
-      }
-    }
+    // Dimension labels are now edited via double-click (see onDoubleClick handler).
 
     // Check if clicking on a pillar with select tool → pending (click=dialog, drag=move)
     if (e.button === 0 && state.tool === "select") {
@@ -1524,6 +1516,18 @@ export function EditorCanvas() {
       <canvas
         ref={canvasRef}
         onMouseDown={handleMouseDown}
+        onDoubleClick={(e) => {
+          if (!state.showDimensions || editingDimension) return;
+          const dim = findDimensionAtPoint(e.clientX, e.clientY);
+          if (dim) {
+            e.preventDefault();
+            setEditingDimension(dim);
+            setTimeout(() => {
+              dimensionInputRef.current?.focus();
+              dimensionInputRef.current?.select();
+            }, 0);
+          }
+        }}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}

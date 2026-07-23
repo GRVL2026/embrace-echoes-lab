@@ -752,7 +752,7 @@ export function CatalogPanel({ catalog, setCatalog }: CatalogPanelProps) {
   const [catalogOpen, setCatalogOpen] = useState(true);
 
   return (
-    <div className={`flex flex-col border-t border-border ${catalogOpen ? "flex-1 min-h-0" : "flex-none"}`}>
+    <div className="flex flex-col flex-none border-t border-border">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border gap-1">
         <button

@@ -535,6 +535,7 @@ async function syncFeedChunk(
 
       const mapped = rows.map(mapper.map).filter((r) => {
         if (feedName === 'BD-Clients') return !!r.customer_id;
+        if (feedName === 'BD-Equipe') return r.contact_id != null;
         return true;
       });
       pendingBuffer.push(...mapped);

@@ -17,7 +17,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { SPACES, resolveActive, type NavCtx, type Space } from "@/nav/spaces";
 import { useSpaceCollapse } from "@/nav/useSpaceCollapse";
-import { AlertsBell } from "@/components/copilot/AlertsBell";
+
 import logoImg from "@/assets/logo.png";
 import { cn } from "@/lib/utils";
 
@@ -69,7 +69,7 @@ export function AppSidebar() {
               </span>
             )}
           </Link>
-          {!collapsed && <AlertsBell compact />}
+          
         </div>
       </SidebarHeader>
 

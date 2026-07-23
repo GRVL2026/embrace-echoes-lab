@@ -301,27 +301,6 @@ export type Database = {
         }
         Relationships: []
       }
-      cegid_users: {
-        Row: {
-          actif: boolean
-          created_at: string
-          nom: string
-          owner_id: number
-        }
-        Insert: {
-          actif?: boolean
-          created_at?: string
-          nom: string
-          owner_id: number
-        }
-        Update: {
-          actif?: boolean
-          created_at?: string
-          nom?: string
-          owner_id?: number
-        }
-        Relationships: []
-      }
       copilot_alertes: {
         Row: {
           action_suggeree: string | null
@@ -1027,6 +1006,27 @@ export type Database = {
           match_statut?: string
           procedure_collective?: boolean
           siren?: string | null
+        }
+        Relationships: []
+      }
+      gaia_equipe: {
+        Row: {
+          contact_id: number
+          created_at: string
+          login: string | null
+          nom: string | null
+        }
+        Insert: {
+          contact_id: number
+          created_at?: string
+          login?: string | null
+          nom?: string | null
+        }
+        Update: {
+          contact_id?: number
+          created_at?: string
+          login?: string | null
+          nom?: string | null
         }
         Relationships: []
       }

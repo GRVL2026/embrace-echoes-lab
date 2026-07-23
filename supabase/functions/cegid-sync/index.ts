@@ -376,6 +376,28 @@ const MAPPERS: Record<string, { table: string; map: Mapper; pk?: string }> = {
     },
   },
 
+  'BD-Equipe': {
+    table: 'gaia_equipe',
+    pk: 'contact_id',
+    map: (r) => {
+      const pickKey = (obj: any, candidates: string[]): any => {
+        if (!obj || typeof obj !== 'object') return undefined;
+        for (const k of candidates) if (k in obj) return obj[k];
+        const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '').toLowerCase();
+        const target = candidates.map(norm);
+        for (const key of Object.keys(obj)) {
+          if (target.includes(norm(key))) return obj[key];
+        }
+        return undefined;
+      };
+      return {
+        contact_id: intNum(pickKey(r, ['DefContactID', 'DefContact', 'ContactID', 'Id', 'ID'])),
+        nom: trim(pickKey(r, ['DisplayName', 'NomComplet', 'Nom', 'FullName', 'Name'])),
+        login: trim(pickKey(r, ['Login', 'Username', 'UserName'])),
+      };
+    },
+  },
+
 };
 
 

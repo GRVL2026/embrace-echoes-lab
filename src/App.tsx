@@ -21,6 +21,7 @@ import AdminVeille from "./pages/AdminVeille";
 import GaiaClientFiche from "./pages/GaiaClientFiche";
 import Clients from "./pages/Clients";
 import MatriceClients from "./pages/MatriceClients";
+import MatriceFamilles from "./pages/MatriceFamilles";
 import Salle from "./pages/Salle";
 
 import GaiaCarnet from "./pages/GaiaCarnet";
@@ -89,6 +90,7 @@ const App = () => (
             <Route path="/admin/notifications" element={<P><NotificationsSettings /></P>} />
             <Route path="/admin/entreprises" element={<P><AdminEntreprises /></P>} />
             <Route path="/admin/matrice-clients" element={<P><MatriceClients /></P>} />
+            <Route path="/matrice-familles" element={<P><MatriceFamilles /></P>} />
 
 
             <Route path="*" element={<NotFound />} />

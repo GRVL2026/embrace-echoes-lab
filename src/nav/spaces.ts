@@ -130,6 +130,13 @@ export const SPACES: Space[] = [
         icon: Package,
         match: (p, h) => p === "/admin/gaia" && h === "#magasin",
       },
+      {
+        label: "Matrice familles",
+        to: "/matrice-familles",
+        icon: Grid2x2,
+        show: (c) => c.canMargeGlobale,
+        match: startsWith("/matrice-familles"),
+      },
     ],
   },
   {

@@ -339,6 +339,7 @@ const MAPPERS: Record<string, { table: string; map: Mapper; pk?: string }> = {
         branch: trim(r?.BranchID),
         inventory_id: trim(r?.InventoryID),
         devise: trim(r?.CuryID),
+        proprietaire_id: intNum(r?.Owner),
       };
     },
   },

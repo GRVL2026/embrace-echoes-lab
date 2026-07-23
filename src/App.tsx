@@ -21,6 +21,7 @@ import AdminVeille from "./pages/AdminVeille";
 import GaiaClientFiche from "./pages/GaiaClientFiche";
 import Clients from "./pages/Clients";
 import MatriceClients from "./pages/MatriceClients";
+import MatriceFamilles from "./pages/MatriceFamilles";
 import Salle from "./pages/Salle";
 
 import GaiaCarnet from "./pages/GaiaCarnet";

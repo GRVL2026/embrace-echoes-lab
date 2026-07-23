@@ -766,23 +766,43 @@ export function EditorCanvas() {
   // Find if clicking on a dimension label
   const findDimensionAtPoint = useCallback((screenX: number, screenY: number): { roomId: string; edgeIndex: number; screenX: number; screenY: number; currentValue: number } | null => {
     const world = screenToWorld(screenX, screenY);
-    const threshold = 15 / state.zoom;
+    const labelThreshold = 24 / state.zoom;
+    const segmentThreshold = 12 / state.zoom;
     for (const room of state.rooms) {
       const edgeCount = room.isClosed ? room.points.length : room.points.length - 1;
+      // Centroid for outside-flip (same as drawing)
+      let cx = 0, cy = 0;
+      for (const pt of room.points) { cx += pt.x; cy += pt.y; }
+      cx /= room.points.length || 1;
+      cy /= room.points.length || 1;
       for (let i = 0; i < edgeCount; i++) {
         const p = room.points[i];
         const next = room.points[(i + 1) % room.points.length];
         const dx = next.x - p.x, dy = next.y - p.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 1e-6) continue;
         const midX = (p.x + next.x) / 2;
         const midY = (p.y + next.y) / 2;
         const angle = Math.atan2(dy, dx);
         const offsetDist = 18 / state.zoom;
-        const labelX = midX + Math.sin(angle) * offsetDist;
-        const labelY = midY - Math.cos(angle) * offsetDist;
+        let perpX = Math.sin(angle);
+        let perpY = -Math.cos(angle);
+        // Flip toward outside using centroid (mirror of draw logic)
+        const toCenterX = cx - midX;
+        const toCenterY = cy - midY;
+        const dot = perpX * toCenterX + perpY * toCenterY;
+        if (dot > 0) { perpX = -perpX; perpY = -perpY; }
+        const labelX = midX + perpX * offsetDist;
+        const labelY = midY + perpY * offsetDist;
         const dToLabel = Math.sqrt((world.x - labelX) ** 2 + (world.y - labelY) ** 2);
-        if (dToLabel < threshold) {
-          // Convert label position to screen coords
+
+        // Distance from click to the segment itself
+        const t = Math.max(0, Math.min(1, ((world.x - p.x) * dx + (world.y - p.y) * dy) / (dist * dist)));
+        const projX = p.x + t * dx;
+        const projY = p.y + t * dy;
+        const dToSegment = Math.sqrt((world.x - projX) ** 2 + (world.y - projY) ** 2);
+
+        if (dToLabel < labelThreshold || dToSegment < segmentThreshold) {
           const canvas = canvasRef.current;
           if (!canvas) continue;
           const rect = canvas.getBoundingClientRect();

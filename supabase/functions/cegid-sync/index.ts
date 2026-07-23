@@ -477,7 +477,7 @@ async function syncFeedChunk(
     if (options.reset) {
       try {
         const del = mapper.pk
-          ? await admin.from(mapper.table).delete().neq(mapper.pk, '__never_matches__')
+          ? await admin.from(mapper.table).delete().not(mapper.pk, 'is', null)
           : await admin.from(mapper.table).delete().gte('id', 0);
         if (del.error) throw new Error(`DELETE ${mapper.table}: ${del.error.message}`);
       } catch (e: any) {

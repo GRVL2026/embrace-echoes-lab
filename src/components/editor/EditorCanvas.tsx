@@ -1516,6 +1516,18 @@ export function EditorCanvas() {
       <canvas
         ref={canvasRef}
         onMouseDown={handleMouseDown}
+        onDoubleClick={(e) => {
+          if (!state.showDimensions || editingDimension) return;
+          const dim = findDimensionAtPoint(e.clientX, e.clientY);
+          if (dim) {
+            e.preventDefault();
+            setEditingDimension(dim);
+            setTimeout(() => {
+              dimensionInputRef.current?.focus();
+              dimensionInputRef.current?.select();
+            }, 0);
+          }
+        }}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}

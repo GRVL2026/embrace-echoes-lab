@@ -340,6 +340,34 @@ export default function AdminDossiers() {
                             }}
                           />
                         </TableCell>
+                        <TableCell className="text-right">
+                          <Switch
+                            checked={prospectionRoles.has(p.id)}
+                            onCheckedChange={async (checked) => {
+                              const prev = prospectionRoles.has(p.id);
+                              setProspectionRoles((s) => {
+                                const n = new Set(s);
+                                if (checked) n.add(p.id); else n.delete(p.id);
+                                return n;
+                              });
+                              const { error } = checked
+                                ? await (supabase as any).from("user_roles").upsert({ user_id: p.id, role: "prospection" }, { onConflict: "user_id,role" })
+                                : await (supabase as any).from("user_roles").delete().eq("user_id", p.id).eq("role", "prospection");
+                              if (error) {
+                                setProspectionRoles((s) => {
+                                  const n = new Set(s);
+                                  if (prev) n.add(p.id); else n.delete(p.id);
+                                  return n;
+                                });
+                                toast({ title: "Erreur", description: error.message, variant: "destructive" });
+                              } else {
+                                toast({
+                                  title: checked ? "Prospection activée" : "Prospection désactivée",
+                                  description: p.full_name?.trim() || p.email || "",
+                                });
+                              }
+                            }}
+                          />
                       </TableRow>
                     ))
                 )}

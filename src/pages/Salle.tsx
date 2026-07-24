@@ -576,6 +576,7 @@ type WeekAgg = {
   label: string;
   monday: Date;
   ca: number;
+  merch: number;
   visiteurs: number;
   objectif: number;
   bySource: Record<string, number>;

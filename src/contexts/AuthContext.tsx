@@ -147,6 +147,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const canMargeClient = hasSalesRole;
   const canMargeGlobale = isAdmin || isDirection || isChefVentes;
   const canAccessGaia = isAdmin || isDirection;
+  const isProspection = roles.includes("prospection");
+  const canAccessProspection = isAdmin || isDirection || isProspection;
   const salleEnabledOnly = !!user && !hasSalesRole && !dashboardEnabled && salleEnabled;
   const canAccessDashboard = !salleEnabledOnly && (hasSalesRole || dashboardEnabled);
   const canAccessSalle = canAccessGaia || salleEnabled;

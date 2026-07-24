@@ -1366,14 +1366,50 @@ function MonthlySalesSection() {
     "#FFD400", "#6EE7B7", "#F472B6", "#60A5FA", "#F87171",
     "#A78BFA", "#34D399",
   ];
-  const familyColor = (fam: string, idx: number) => PIE_PALETTE[idx % PIE_PALETTE.length];
+  const OTHERS_COLOR_LOCAL = "#8A8A99";
+  const OTHERS_LABEL = "Autres";
+  const familyIndex = new Map(familles.map((f, i) => [f.famille || "—", i] as const));
+  const familyColor = (fam: string) => {
+    if (fam === OTHERS_LABEL) return OTHERS_COLOR_LOCAL;
+    const i = familyIndex.get(fam || "—") ?? 0;
+    return PIE_PALETTE[i % PIE_PALETTE.length];
+  };
 
-  const pieN = familles
-    .map((f, i) => ({ name: f.famille || "—", value: Number(f.ca_mois || 0), color: familyColor(f.famille, i) }))
-    .filter((d) => d.value > 0);
-  const pieN1 = familles
-    .map((f, i) => ({ name: f.famille || "—", value: Number(f.ca_mois_n1 || 0), color: familyColor(f.famille, i) }))
-    .filter((d) => d.value > 0);
+  // Familles principales = part_pct (au mois N) >= 3 %. Même set pour les 2 camemberts.
+  const mainSet = new Set(
+    familles
+      .filter((f) => Number(f.part_pct ?? 0) >= 3 && Number(f.ca_mois || 0) > 0)
+      .map((f) => f.famille || "—"),
+  );
+
+  const buildPie = (key: "ca_mois" | "ca_mois_n1") => {
+    const main = familles
+      .filter((f) => mainSet.has(f.famille || "—"))
+      .map((f) => ({
+        name: f.famille || "—",
+        value: Number(f[key] || 0),
+        color: familyColor(f.famille || "—"),
+      }))
+      .filter((d) => d.value > 0);
+    const othersVal = familles
+      .filter((f) => !mainSet.has(f.famille || "—"))
+      .reduce((s, f) => s + Number(f[key] || 0), 0);
+    if (othersVal > 0) {
+      main.push({ name: OTHERS_LABEL, value: othersVal, color: OTHERS_COLOR_LOCAL });
+    }
+    return main;
+  };
+  const pieN = buildPie("ca_mois");
+  const pieN1 = buildPie("ca_mois_n1");
+
+  const FAMILY_HELP: Record<string, string> = {
+    "DIVERS NS": "Frais divers non stockés : écotaxe, port, location, stockage (pas des ventes de produits)",
+    "ARCHIVES": "Anciennes références archivées : pièces, cartes mères, licences d'anciennes machines",
+    "(sans famille)": "Articles sans famille renseignée dans l'ERP (ex. abonnements)",
+    "MAGASIN": "Ventes boutique (hors jeux)",
+    "Occasion": "Jeux d'occasion",
+    [OTHERS_LABEL]: "Familles inférieures à 3 % du CA du mois (détail dans le tableau)",
+  };
 
   const pieTooltip = (total: number) => ({ active, payload }: any) => {
     if (!active || !payload?.length) return null;

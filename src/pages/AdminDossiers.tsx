@@ -257,6 +257,7 @@ export default function AdminDossiers() {
                   <TableHead className="text-right">Accès copilote</TableHead>
                   <TableHead className="text-right">Accès Dashboard (AA + Magasin)</TableHead>
                   <TableHead className="text-right">Accès Salle Hyper Nova</TableHead>
+                  <TableHead className="text-right">Accès Prospection</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

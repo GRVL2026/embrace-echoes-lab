@@ -406,6 +406,14 @@ function KanbanCard({ prospect, onOpen }: { prospect: Prospect; onOpen: () => vo
           </div>
           <div className="mt-1.5 flex items-center gap-1 flex-wrap">
             <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", seg.className)}>{seg.label}</Badge>
+            {prospect.source === "signal" && (
+              <Badge
+                variant="outline"
+                className="text-[10px] h-4 px-1.5 gap-0.5 border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+              >
+                <Zap className="h-2.5 w-2.5" /> Signal
+              </Badge>
+            )}
             {prospect.montant_estime ? (
               <span className="text-[11px] font-medium text-foreground/90">{eur(prospect.montant_estime)}</span>
             ) : null}

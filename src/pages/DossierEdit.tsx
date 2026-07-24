@@ -1363,18 +1363,18 @@ export default function DossierEdit() {
                   Aucun jeu ajouté pour l'instant.
                 </div>
               ) : (
-                <div className="overflow-hidden rounded-md border border-border">
-                  <table className="w-full text-sm">
+                <div className="w-full max-w-full overflow-x-auto rounded-md border border-border">
+                  <table className="w-full min-w-[720px] text-sm">
                     <thead className="bg-muted/60 text-xs uppercase tracking-wider text-muted-foreground">
                       <tr>
                         <th className="w-20 px-3 py-2 text-left">Visuel</th>
                         <th className="px-3 py-2 text-left">Jeu</th>
-                        <th className="w-24 px-3 py-2 text-right">Qté</th>
-                        <th className="w-36 px-3 py-2 text-right">
+                        <th className="w-20 px-3 py-2 text-right">Qté</th>
+                        <th className="w-28 px-3 py-2 text-right">
                           {isRecurring ? "PU / mois" : "PU HT"}
                         </th>
-                        <th className="w-32 px-3 py-2 text-right">Sous-total</th>
-                        <th className="w-10 px-2 py-2" />
+                        <th className="w-28 px-3 py-2 text-right">Sous-total</th>
+                        <th className="sticky right-0 z-10 w-12 bg-muted/60 px-2 py-2 shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.4)]" />
                       </tr>
                     </thead>
                     <tbody>

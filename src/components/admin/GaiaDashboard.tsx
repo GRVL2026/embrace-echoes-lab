@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, TrendingUp, TrendingDown, FileText, FileSignature, Package, Leaf, RefreshCw, ArrowRight, ArrowDown, Search, Info, Truck, PackageCheck, Receipt } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, FileText, FileSignature, Package, Leaf, RefreshCw, ArrowRight, ArrowDown, Search, Info, Truck, PackageCheck, Receipt, X, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -1495,123 +1495,289 @@ function MonthlySalesSection() {
       </div>
 
       {/* Répartition par famille — 2 camemberts côte à côte */}
-      <div className="rounded-lg border border-border bg-background/40 p-4">
-        <div className="mb-3 text-xs uppercase tracking-wider text-muted-foreground">
-          Répartition par famille — comparaison N / N-1
-        </div>
-        {famQ.isLoading ? (
-          <div className="flex items-center gap-2 text-muted-foreground text-sm">
-            <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
-          </div>
-        ) : familles.length === 0 ? (
-          <div className="text-sm text-muted-foreground">Aucune vente sur ce mois.</div>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {[
-                { title: labelMois(dNow), data: pieN, total: totalN },
-                { title: labelMois(dN1), data: pieN1, total: totalN1 },
-              ].map((chart, idx) => (
-                <div key={idx} className="flex flex-col items-center">
-                  <div className="mb-1 text-sm font-medium capitalize">{chart.title}</div>
-                  {chart.data.length === 0 ? (
-                    <div className="flex h-[240px] items-center text-sm text-muted-foreground">Aucune vente.</div>
-                  ) : (
-                    <div className="h-[240px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={chart.data}
-                            dataKey="value"
-                            nameKey="name"
-                            innerRadius={50}
-                            outerRadius={90}
-                            paddingAngle={2}
-                            stroke="none"
-                            isAnimationActive={false}
-                          >
-                            {chart.data.map((d, i) => (
-                              <Cell key={i} fill={d.color} />
-                            ))}
-                          </Pie>
-                          <Tooltip content={pieTooltip(chart.total)} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
-                  <div className="mt-1 text-xs text-muted-foreground tabular-nums">
-                    Total : <span className="font-semibold text-foreground">{eur(chart.total)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Légende / tableau commun */}
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-xs uppercase tracking-wider text-muted-foreground">
-                    <th className="py-1.5 pr-2 text-left font-medium">Famille</th>
-                    <th className="py-1.5 px-2 text-right font-medium">CA {labelMois(dNow)}</th>
-                    <th className="py-1.5 px-2 text-right font-medium">CA {labelMois(dN1)}</th>
-                    <th className="py-1.5 pl-2 text-right font-medium">Écart</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {familles.map((f, i) => {
-                    const cam = Number(f.ca_mois || 0);
-                    const camN1 = Number(f.ca_mois_n1 || 0);
-                    const ec = f.ecart_pct == null ? null : Number(f.ecart_pct);
-                    const color = familyColor(f.famille || "—");
-                    const help = FAMILY_HELP[f.famille || "—"];
-                    return (
-                      <tr key={f.famille + i} className="border-t border-border/50">
-                        <td className="py-1.5 pr-2">
-                          <div className="flex items-center gap-2">
-                            <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: color }} />
-                            <span className="truncate font-medium">{f.famille || "—"}</span>
-                            {help && (
-                              <Info
-                                className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70"
-                                aria-label={help}
-                              >
-                                <title>{help}</title>
-                              </Info>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-1.5 px-2 text-right tabular-nums font-semibold">{eur(cam)}</td>
-                        <td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground">{eur(camN1)}</td>
-                        <td className={"py-1.5 pl-2 text-right tabular-nums " + (ec == null ? "text-muted-foreground" : ec >= 0 ? "text-secondary" : "text-destructive")}>
-                          {ec == null ? "—" : `${ec >= 0 ? "+" : ""}${ec.toFixed(1)} %`}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2 text-sm">
-              <span className="tabular-nums">
-                <span className="text-muted-foreground">Total </span>
-                <span className="capitalize">{labelMois(dNow)}</span>
-                <span className="text-muted-foreground"> : </span>
-                <span className="font-semibold">{eur(totalN)}</span>
-              </span>
-              <span className="tabular-nums">
-                <span className="text-muted-foreground">Total </span>
-                <span className="capitalize">{labelMois(dN1)}</span>
-                <span className="text-muted-foreground"> : </span>
-                <span className="font-semibold">{eur(totalN1)}</span>
-              </span>
-            </div>
-          </>
-        )}
-      </div>
+      <FamillePieBlock
+        familles={familles}
+        loading={famQ.isLoading}
+        totalN={totalN}
+        totalN1={totalN1}
+        pieN={pieN}
+        pieN1={pieN1}
+        familyColor={familyColor}
+        FAMILY_HELP={FAMILY_HELP}
+        pieTooltip={pieTooltip}
+        labelN={labelMois(dNow)}
+        labelN1={labelMois(dN1)}
+        monthStr={monthStr}
+        othersLabel={OTHERS_LABEL}
+      />
     </div>
   );
 }
+
+/* ================== Camemberts N/N-1 + détail article au clic ================== */
+
+type PieDatum = { name: string; value: number; color: string };
+type ArticleDetailRow = {
+  article: string;
+  code: string;
+  ca_mois: number | string;
+  ca_mois_n1: number | string;
+  qte: number | string;
+};
+
+function FamillePieBlock(props: {
+  familles: FamilleMoisRow[];
+  loading: boolean;
+  totalN: number;
+  totalN1: number;
+  pieN: PieDatum[];
+  pieN1: PieDatum[];
+  familyColor: (fam: string) => string;
+  FAMILY_HELP: Record<string, string>;
+  pieTooltip: (total: number) => any;
+  labelN: string;
+  labelN1: string;
+  monthStr: string;
+  othersLabel: string;
+}) {
+  const { familles, loading, totalN, totalN1, pieN, pieN1, familyColor, FAMILY_HELP, pieTooltip, labelN, labelN1, monthStr, othersLabel } = props;
+  const [selectedFam, setSelectedFam] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
+
+  const onSliceClick = (fam: string) => {
+    if (!fam) return;
+    if (fam === othersLabel) {
+      setShowAll(true);
+      setSelectedFam(null);
+      return;
+    }
+    setSelectedFam((cur) => (cur === fam ? null : fam));
+  };
+
+  const detailQ = useQuery({
+    enabled: !!selectedFam,
+    queryKey: ["dash-fam-detail", monthStr, selectedFam],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("get_ventes_famille_detail", {
+        _month: monthStr,
+        _famille: selectedFam,
+      });
+      if (error) throw error;
+      return (data ?? []) as ArticleDetailRow[];
+    },
+  });
+
+  const renderPie = (title: string, data: PieDatum[], total: number) => (
+    <div className="flex flex-col items-center">
+      <div className="mb-1 text-sm font-medium capitalize">{title}</div>
+      {data.length === 0 ? (
+        <div className="flex h-[240px] items-center text-sm text-muted-foreground">Aucune vente.</div>
+      ) : (
+        <div className="h-[240px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={data}
+                dataKey="value"
+                nameKey="name"
+                innerRadius={50}
+                outerRadius={90}
+                paddingAngle={2}
+                stroke="none"
+                isAnimationActive={false}
+                onClick={(d: any) => onSliceClick(d?.name)}
+              >
+                {data.map((d, i) => {
+                  const dim = selectedFam && d.name !== selectedFam;
+                  const highlight = selectedFam && d.name === selectedFam;
+                  return (
+                    <Cell
+                      key={i}
+                      fill={d.color}
+                      opacity={dim ? 0.28 : 1}
+                      stroke={highlight ? "#fff" : "none"}
+                      strokeWidth={highlight ? 2 : 0}
+                      style={{ cursor: "pointer" }}
+                    />
+                  );
+                })}
+              </Pie>
+              <Tooltip content={pieTooltip(total)} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+      <div className="mt-1 text-xs text-muted-foreground tabular-nums">
+        Total : <span className="font-semibold text-foreground">{eur(total)}</span>
+      </div>
+    </div>
+  );
+
+  const top5 = familles.slice(0, 5);
+  const rest = familles.slice(5);
+  const rowsShown = showAll ? familles : top5;
+
+  const detailRows = detailQ.data ?? [];
+
+  return (
+    <div className="rounded-lg border border-border bg-background/40 p-4">
+      <div className="mb-3 text-xs uppercase tracking-wider text-muted-foreground">
+        Répartition par famille — comparaison N / N-1
+      </div>
+      {loading ? (
+        <div className="flex items-center gap-2 text-muted-foreground text-sm">
+          <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
+        </div>
+      ) : familles.length === 0 ? (
+        <div className="text-sm text-muted-foreground">Aucune vente sur ce mois.</div>
+      ) : (
+        <>
+          <div className={"grid gap-4 " + (selectedFam ? "grid-cols-1 lg:grid-cols-3" : "grid-cols-1 md:grid-cols-2")}>
+            <div className={"grid grid-cols-1 gap-4 md:grid-cols-2 " + (selectedFam ? "lg:col-span-2" : "md:col-span-2")}>
+              {renderPie(labelN, pieN, totalN)}
+              {renderPie(labelN1, pieN1, totalN1)}
+            </div>
+
+            {selectedFam && (
+              <div className="rounded-md border border-border bg-card/60 p-3">
+                <div className="mb-2 flex items-start justify-between gap-2">
+                  <div>
+                    <div className="text-xs uppercase tracking-wider text-muted-foreground">Détail</div>
+                    <div className="font-medium capitalize">
+                      <span className="inline-block h-2.5 w-2.5 mr-1.5 rounded-sm align-middle" style={{ background: familyColor(selectedFam) }} />
+                      {selectedFam} · <span className="capitalize">{labelN}</span>
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSelectedFam(null)} aria-label="Fermer">
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                {detailQ.isLoading ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Chargement…
+                  </div>
+                ) : detailRows.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">Aucun article vendu ce mois.</div>
+                ) : (
+                  <div className="max-h-[280px] overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead className="sticky top-0 bg-card/95 backdrop-blur">
+                        <tr className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                          <th className="py-1 pr-2 text-left font-medium">Article</th>
+                          <th className="py-1 px-1 text-right font-medium">CA</th>
+                          <th className="py-1 px-1 text-right font-medium">Qté</th>
+                          <th className="py-1 pl-1 text-right font-medium">vs N-1</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detailRows.map((a, i) => {
+                          const cam = Number(a.ca_mois || 0);
+                          const camN1 = Number(a.ca_mois_n1 || 0);
+                          const ec = camN1 > 0 ? ((cam - camN1) / camN1) * 100 : cam > 0 ? 100 : null;
+                          return (
+                            <tr key={(a.code || "") + i} className="border-t border-border/40">
+                              <td className="py-1 pr-2">
+                                <div className="truncate font-medium" title={a.article}>{a.article || "—"}</div>
+                                {a.code && <div className="text-[10px] text-muted-foreground truncate">{a.code}</div>}
+                              </td>
+                              <td className="py-1 px-1 text-right tabular-nums font-semibold">{eur(cam)}</td>
+                              <td className="py-1 px-1 text-right tabular-nums">{num(Number(a.qte || 0))}</td>
+                              <td className={"py-1 pl-1 text-right tabular-nums " + (ec == null ? "text-muted-foreground" : ec >= 0 ? "text-secondary" : "text-destructive")}>
+                                {ec == null ? "—" : `${ec >= 0 ? "+" : ""}${ec.toFixed(1)} %`}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Légende / tableau commun */}
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs uppercase tracking-wider text-muted-foreground">
+                  <th className="py-1.5 pr-2 text-left font-medium">Famille</th>
+                  <th className="py-1.5 px-2 text-right font-medium">CA {labelN}</th>
+                  <th className="py-1.5 px-2 text-right font-medium">CA {labelN1}</th>
+                  <th className="py-1.5 pl-2 text-right font-medium">Écart</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rowsShown.map((f, i) => {
+                  const cam = Number(f.ca_mois || 0);
+                  const camN1 = Number(f.ca_mois_n1 || 0);
+                  const ec = f.ecart_pct == null ? null : Number(f.ecart_pct);
+                  const famName = f.famille || "—";
+                  const color = familyColor(famName);
+                  const help = FAMILY_HELP[famName];
+                  const isSel = selectedFam === famName;
+                  return (
+                    <tr
+                      key={famName + i}
+                      className={"border-t border-border/50 cursor-pointer hover:bg-card/60 " + (isSel ? "bg-card/70" : "")}
+                      onClick={() => setSelectedFam(isSel ? null : famName)}
+                    >
+                      <td className="py-1.5 pr-2">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: color }} />
+                          <span className="truncate font-medium">{famName}</span>
+                          {help && (
+                            <Info
+                              className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70"
+                              aria-label={help}
+                            >
+                              <title>{help}</title>
+                            </Info>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-1.5 px-2 text-right tabular-nums font-semibold">{eur(cam)}</td>
+                      <td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground">{eur(camN1)}</td>
+                      <td className={"py-1.5 pl-2 text-right tabular-nums " + (ec == null ? "text-muted-foreground" : ec >= 0 ? "text-secondary" : "text-destructive")}>
+                        {ec == null ? "—" : `${ec >= 0 ? "+" : ""}${ec.toFixed(1)} %`}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {rest.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowAll((s) => !s)}
+                className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              >
+                {showAll ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                {showAll ? "Voir moins" : `Voir plus (${rest.length})`}
+              </button>
+            )}
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2 text-sm">
+            <span className="tabular-nums">
+              <span className="text-muted-foreground">Total </span>
+              <span className="capitalize">{labelN}</span>
+              <span className="text-muted-foreground"> : </span>
+              <span className="font-semibold">{eur(totalN)}</span>
+            </span>
+            <span className="tabular-nums">
+              <span className="text-muted-foreground">Total </span>
+              <span className="capitalize">{labelN1}</span>
+              <span className="text-muted-foreground"> : </span>
+              <span className="font-semibold">{eur(totalN1)}</span>
+            </span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 
 
 

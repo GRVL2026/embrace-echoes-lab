@@ -125,6 +125,27 @@ export default function Prospection() {
   const [selected, setSelected] = useState<Prospect | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [detecting, setDetecting] = useState(false);
+
+  const runDetection = useCallback(async () => {
+    setDetecting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("detecter-signaux-etablissements");
+      if (error) throw error;
+      const inserted = Number((data as any)?.inserted ?? 0);
+      const note = (data as any)?.note as string | undefined;
+      if (inserted > 0) {
+        toast.success(`${inserted} nouveaux prospects détectés`, { description: note });
+      } else {
+        toast(`Aucun nouvel établissement détecté`, { description: note });
+      }
+      await load();
+    } catch (e) {
+      toast.error("Détection impossible", { description: (e as Error).message });
+    } finally {
+      setDetecting(false);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);

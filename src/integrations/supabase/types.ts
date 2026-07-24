@@ -2551,6 +2551,7 @@ export type Database = {
           montant_ht: number
           n_cde: string
           proprietaire: string
+          type_doc: string
           univers: string
         }[]
       }

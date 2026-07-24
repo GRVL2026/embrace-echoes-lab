@@ -184,7 +184,6 @@ Deno.serve(async (req) => {
           const signal =
             `Nouvel établissement — ${naf.libelle} (${naf.code}) créé le ${dateCrea}` +
             (ville ? ` à ${ville}` : '');
-            (ville ? ` à ${ville}` : '');
 
           const row: Record<string, any> = {
             entreprise: nom,
@@ -195,8 +194,8 @@ Deno.serve(async (req) => {
             statut: 'nouveau',
             signal,
           };
-          if (dirig.nom) row.contact_nom = dirig.nom;
-          if (dirig.role) row.contact_role = dirig.role;
+          if (finalDirig.nom) row.contact_nom = finalDirig.nom;
+          if (finalDirig.role) row.contact_role = finalDirig.role;
 
           toInsert.push(row);
           knownSiren.add(siren);

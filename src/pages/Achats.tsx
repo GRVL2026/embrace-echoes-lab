@@ -9,7 +9,7 @@ import {
 } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { KpiTile } from "@/components/ui/kpi-tile";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { ChartTooltipContent } from "@/components/admin/chartTooltip";
@@ -106,6 +106,51 @@ function statutTone(s: string | null): { bg: string; fg: string; label: string }
   if (v.includes("transit"))
     return { bg: "bg-amber-500/15", fg: "text-amber-400 border-amber-500/30", label: "En transit" };
   return { bg: "bg-sky-500/15", fg: "text-sky-400 border-sky-500/30", label: s ?? "En commande" };
+}
+
+type AccentKey = "sky" | "amber" | "violet" | "emerald";
+const ACCENTS: Record<AccentKey, { border: string; bg: string; pill: string; icon: string; value: string }> = {
+  sky:     { border: "border-l-sky-500",     bg: "bg-sky-500/5",     pill: "bg-sky-500/15",     icon: "text-sky-400",     value: "text-sky-100" },
+  amber:   { border: "border-l-amber-500",   bg: "bg-amber-500/5",   pill: "bg-amber-500/15",   icon: "text-amber-400",   value: "text-amber-100" },
+  violet:  { border: "border-l-violet-500",  bg: "bg-violet-500/5",  pill: "bg-violet-500/15",  icon: "text-violet-300",  value: "text-violet-100" },
+  emerald: { border: "border-l-emerald-500", bg: "bg-emerald-500/5", pill: "bg-emerald-500/15", icon: "text-emerald-400", value: "text-emerald-100" },
+};
+
+function AccentKpiCard({
+  accent, icon, title, value, hint, onClick, ariaLabel,
+}: {
+  accent: AccentKey;
+  icon: React.ReactNode;
+  title: string;
+  value: string;
+  hint?: string;
+  onClick?: () => void;
+  ariaLabel?: string;
+}) {
+  const a = ACCENTS[accent];
+  const interactive = typeof onClick === "function";
+  const cls = cn(
+    "block w-full text-left rounded-lg border border-border border-l-4 bg-card/40 p-4 min-h-[92px]",
+    a.border, a.bg,
+    interactive && "cursor-pointer transition-colors hover:bg-card/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 active:translate-y-[1px]",
+  );
+  const inner = (
+    <>
+      <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span className="truncate">{title}</span>
+        <span className={cn("flex h-7 w-7 items-center justify-center rounded-full", a.pill, a.icon)}>
+          {icon}
+        </span>
+      </div>
+      <div className={cn("font-display text-2xl font-bold tabular-nums", a.value)}>{value}</div>
+      {hint && <div className="mt-1 text-xs text-muted-foreground">{hint}</div>}
+    </>
+  );
+  return interactive ? (
+    <button type="button" onClick={onClick} aria-label={ariaLabel} className={cls}>{inner}</button>
+  ) : (
+    <div className={cls}>{inner}</div>
+  );
 }
 
 export default function Achats() {
@@ -257,57 +302,46 @@ export default function Achats() {
 
         {!pending && (
           <>
-            {/* KPI */}
+            {/* KPI — chaque carte a un accent de couleur distinct */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-2">
-              <KpiTile
+              <AccentKpiCard
+                accent="sky"
+                icon={<FileText className="h-4 w-4" />}
                 title="En commande"
-                icon={<FileText className="h-4 w-4 text-primary" />}
                 value={eur(Number(r.en_commande_montant || 0))}
-                tone="primary"
+                hint={`${num(Number(r.en_commande_nb || 0))} cmd · pas encore expédiées`}
                 onClick={() => setOpenSheet({ kind: "encours", filter: "en_commande" })}
                 ariaLabel="Voir les commandes non encore expédiées"
-                hint={
-                  <span className="text-muted-foreground">
-                    {num(Number(r.en_commande_nb || 0))} cmd · pas encore expédiées
-                  </span>
-                }
               />
-              <KpiTile
+              <AccentKpiCard
+                accent="amber"
+                icon={<Ship className="h-4 w-4" />}
                 title="En transit"
-                icon={<Ship className="h-4 w-4 text-secondary" />}
                 value={eur(Number(r.en_transit_montant || 0))}
-                tone="secondary"
+                hint={`${num(Number(r.en_transit_nb || 0))} cmd · en mer / en route`}
                 onClick={() => setOpenSheet({ kind: "encours", filter: "en_transit" })}
                 ariaLabel="Voir les commandes en transit"
-                hint={
-                  <span className="text-muted-foreground">
-                    {num(Number(r.en_transit_nb || 0))} cmd · en mer / en route
-                  </span>
-                }
               />
-              <KpiTile
+              <AccentKpiCard
+                accent="violet"
+                icon={<Package className="h-4 w-4" />}
                 title="Reste à facturer"
-                icon={<Package className="h-4 w-4 text-primary" />}
                 value={eur(Number(r.reste_a_facturer || 0))}
-                hint={<span className="text-muted-foreground">à recevoir des fournisseurs</span>}
+                hint="à recevoir des fournisseurs"
               />
-              <KpiTile
+              <AccentKpiCard
+                accent="emerald"
+                icon={<Calendar className="h-4 w-4" />}
                 title="Achats 12 mois"
-                icon={<Calendar className="h-4 w-4 text-secondary" />}
                 value={eur(Number(r.montant_12m || 0))}
-                tone="secondary"
-                hint={
-                  <span className="text-muted-foreground">
-                    {num(Number(r.nb_fournisseurs || 0))} fournisseurs
-                  </span>
-                }
+                hint={`${num(Number(r.nb_fournisseurs || 0))} fournisseurs`}
               />
             </div>
             <p className="mb-6 text-xs text-muted-foreground">
               En commande → En transit → Reçu. Une commande passe « en transit » dès qu'un conteneur/navire lui est associé.
             </p>
 
-            {/* Arrivages */}
+            {/* Arrivages — liste verticale */}
             <div className="rounded-lg border border-border bg-card/40 p-4 mb-6">
               <div className="mb-3 flex items-center gap-2">
                 <Ship className="h-5 w-5 text-secondary" />
@@ -320,78 +354,90 @@ export default function Achats() {
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {arrivagesShown.map((a) => {
+                  <ul className="divide-y divide-border/60 rounded-md border border-border/60 overflow-hidden">
+                    {arrivagesShown.map((a, idx) => {
                       const tone = statutTone(a.statut_arrivage);
                       const pct = a.recu_pct != null ? Math.max(0, Math.min(100, Number(a.recu_pct))) : null;
                       return (
-                        <button
-                          key={a.num_dossier}
-                          onClick={() => setOpenSheet({ kind: "arrivage", dossier: a.num_dossier, bateau: a.bateau })}
-                          className="group text-left rounded-lg border border-border bg-card/60 p-3 hover:bg-card/80 hover:border-secondary/40 transition-colors"
-                        >
-                          <div className="mb-2 flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1.5 text-sm font-semibold truncate">
-                                <Ship className="h-3.5 w-3.5 text-secondary flex-shrink-0" />
-                                <span className="truncate">{a.bateau ?? "Navire non précisé"}</span>
-                              </div>
-                              {a.eta && (
-                                <div className="mt-0.5 text-[11px] text-muted-foreground">
-                                  Arrivée : {fmtDate(a.eta)}
+                        <li key={a.num_dossier} className={idx % 2 === 1 ? "bg-card/30" : "bg-card/50"}>
+                          <button
+                            onClick={() => setOpenSheet({ kind: "arrivage", dossier: a.num_dossier, bateau: a.bateau })}
+                            className="w-full text-left px-3 py-3 hover:bg-card/80 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                          >
+                            <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
+                              {/* Gauche : bateau + statut + dossier/eta */}
+                              <div className="min-w-0 md:w-1/3">
+                                <div className="flex items-center gap-2">
+                                  <Ship className="h-4 w-4 text-secondary flex-shrink-0" />
+                                  <span className="truncate text-sm font-semibold">
+                                    {a.bateau ?? "Navire non précisé"}
+                                  </span>
+                                  <Badge variant="outline" className={`${tone.bg} ${tone.fg} text-[10px] uppercase`}>
+                                    {tone.label}
+                                  </Badge>
                                 </div>
-                              )}
-                            </div>
-                            <Badge variant="outline" className={`${tone.bg} ${tone.fg} text-[10px] uppercase`}>
-                              {tone.label}
-                            </Badge>
-                          </div>
-
-                          {(a.conteneurs || a.tailles || a.transitaire) && (
-                            <div className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-                              <Container className="h-3.5 w-3.5 flex-shrink-0" />
-                              <span className="font-mono text-[11px] truncate">
-                                {a.conteneurs ?? "—"}
-                                {a.tailles ? ` · ${a.tailles}` : ""}
-                              </span>
-                              {a.transitaire && (
-                                <span className="ml-auto flex items-center gap-1 text-[10px]">
-                                  <Truck className="h-3 w-3" /> {a.transitaire}
-                                </span>
-                              )}
-                            </div>
-                          )}
-
-                          {a.fournisseurs && (
-                            <div className="mb-2 truncate text-xs text-muted-foreground" title={a.fournisseurs}>
-                              {a.fournisseurs}
-                            </div>
-                          )}
-
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground">
-                              {num(Number(a.nb_articles || 0))} art · {num(Number(a.nb_lignes || 0))} lignes
-                            </span>
-                            <span className="font-semibold tabular-nums">{eur(Number(a.montant || 0))}</span>
-                          </div>
-
-                          {pct != null && (
-                            <div className="mt-2">
-                              <div className="h-1.5 w-full overflow-hidden rounded-full bg-border/60">
-                                <div
-                                  className="h-full rounded-full bg-emerald-500 transition-all"
-                                  style={{ width: `${pct}%` }}
-                                />
+                                <div className="mt-0.5 text-[11px] text-muted-foreground truncate">
+                                  <span className="font-mono">{a.num_dossier}</span>
+                                  {a.eta && <> · Arrivée : {fmtDate(a.eta)}</>}
+                                </div>
                               </div>
-                              <div className="mt-0.5 text-right text-[10px] text-muted-foreground tabular-nums">
-                                {pct.toFixed(0)}% reçu
+
+                              {/* Milieu : conteneurs / transitaire / fournisseurs */}
+                              <div className="min-w-0 md:flex-1">
+                                {(a.conteneurs || a.tailles || a.transitaire) && (
+                                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                    <Container className="h-3.5 w-3.5 flex-shrink-0" />
+                                    <span className="font-mono text-[11px] truncate">
+                                      {a.conteneurs ?? "—"}
+                                      {a.tailles ? ` · ${a.tailles}` : ""}
+                                    </span>
+                                    {a.transitaire && (
+                                      <span className="flex items-center gap-1 text-[10px] text-muted-foreground/80">
+                                        <Truck className="h-3 w-3" /> {a.transitaire}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                                {a.fournisseurs && (
+                                  <div
+                                    className="mt-0.5 truncate text-xs text-muted-foreground/80"
+                                    title={a.fournisseurs}
+                                  >
+                                    {a.fournisseurs}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Droite : chiffres */}
+                              <div className="md:w-56 md:text-right">
+                                <div className="flex items-center justify-between gap-3 md:justify-end">
+                                  <span className="text-[11px] text-muted-foreground">
+                                    {num(Number(a.nb_articles || 0))} art · {num(Number(a.nb_lignes || 0))} lignes
+                                  </span>
+                                  <span className="text-sm font-semibold tabular-nums">
+                                    {eur(Number(a.montant || 0))}
+                                  </span>
+                                </div>
+                                {pct != null && (
+                                  <div className="mt-1.5 flex items-center gap-2 md:justify-end">
+                                    <div className="h-1.5 w-full max-w-[140px] overflow-hidden rounded-full bg-border/60">
+                                      <div
+                                        className="h-full rounded-full bg-emerald-500 transition-all"
+                                        style={{ width: `${pct}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-[10px] text-muted-foreground tabular-nums">
+                                      {pct.toFixed(0)}%
+                                    </span>
+                                  </div>
+                                )}
                               </div>
                             </div>
-                          )}
-                        </button>
+                          </button>
+                        </li>
                       );
                     })}
-                  </div>
+                  </ul>
                   {arrivagesSorted.length > 8 && (
                     <div className="mt-3 text-center">
                       <button

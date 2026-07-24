@@ -9,11 +9,9 @@ import {
   BarChart3,
   Package,
   ClipboardCheck,
-  Radar,
-  Bot,
   Globe,
   Wrench,
-  Truck,
+
   Settings,
   ShieldCheck,
   RefreshCw,

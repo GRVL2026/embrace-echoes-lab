@@ -9,7 +9,7 @@ import {
 } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { KpiTile } from "@/components/ui/kpi-tile";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { ChartTooltipContent } from "@/components/admin/chartTooltip";

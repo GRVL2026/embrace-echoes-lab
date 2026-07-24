@@ -532,6 +532,7 @@ function KanbanColumn({
 
 function KanbanCard({ prospect, onOpen }: { prospect: Prospect; onOpen: () => void }) {
   const seg = segmentMeta(prospect.segment);
+  const liSearch = buildLinkedInSearch(prospect);
   return (
     <div
       draggable

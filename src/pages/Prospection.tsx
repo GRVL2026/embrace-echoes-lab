@@ -181,15 +181,22 @@ export default function Prospection() {
     return <Navigate to="/" replace />;
   }
 
+  const filteredProspects = useMemo(() => {
+    if (lgmFilter === "all") return prospects;
+    if (lgmFilter === "none") return prospects.filter((p) => !p.lgm_lead_id);
+    const target = `arcade os – ${lgmFilter}`;
+    return prospects.filter((p) => (p.lgm_audience ?? "").toLowerCase().includes(target));
+  }, [prospects, lgmFilter]);
+
   const byStatut = useMemo(() => {
     const map = new Map<Statut, Prospect[]>();
     STATUTS.forEach((s) => map.set(s.key, []));
-    for (const p of prospects) {
+    for (const p of filteredProspects) {
       const arr = map.get(p.statut as Statut) ?? map.get("nouveau")!;
       arr.push(p);
     }
     return map;
-  }, [prospects]);
+  }, [filteredProspects]);
 
   const moveStatut = async (id: string, newStatut: Statut) => {
     const p = prospects.find((x) => x.id === id);

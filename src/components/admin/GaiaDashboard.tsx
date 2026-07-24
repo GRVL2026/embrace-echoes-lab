@@ -1375,10 +1375,11 @@ function MonthlySalesSection() {
     return PIE_PALETTE[i % PIE_PALETTE.length];
   };
 
-  // Familles principales = part_pct (au mois N) >= 3 %. Même set pour les 2 camemberts.
+  // Familles principales = part_pct (au mois N) >= 1 %. Même set pour les 2 camemberts.
   const mainSet = new Set(
     familles
-      .filter((f) => Number(f.part_pct ?? 0) >= 3 && Number(f.ca_mois || 0) > 0)
+      .filter((f) => Number(f.part_pct ?? 0) >= 1 && Number(f.ca_mois || 0) > 0)
+
       .map((f) => f.famille || "—"),
   );
 

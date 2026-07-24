@@ -539,31 +539,34 @@ export default function Achats() {
                 : "Commandes ouvertes pas encore expédiées."}
             </SheetDescription>
           </SheetHeader>
-          <div className="mt-4 overflow-auto">
+          {(() => {
+            const rows = encoursCmds ?? [];
+            const total = rows.reduce((s, r) => s + Number(r.montant || 0), 0);
+            return (
+              <div className="mt-3 mb-2 text-xs text-muted-foreground">
+                {rows.length} commande{rows.length > 1 ? "s" : ""} · <span className="font-semibold text-foreground">{eur(total)}</span>
+              </div>
+            );
+          })()}
+          <div className="mt-2 overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-xs uppercase text-muted-foreground">
                 <tr className="border-b border-border">
+                  <th className="w-6 px-1 py-2"></th>
                   <th className="px-2 py-2 text-left">N° cde</th>
                   <th className="px-2 py-2 text-left">Fournisseur</th>
                   <th className="px-2 py-2 text-left">Date</th>
                   <th className="px-2 py-2 text-left">Statut</th>
+                  <th className="px-2 py-2 text-right">Articles</th>
                   <th className="px-2 py-2 text-right">Montant</th>
-                  <th className="px-2 py-2 text-right">Reste</th>
                 </tr>
               </thead>
               <tbody>
-                {(encoursRows ?? []).map((row, i) => (
-                  <tr key={(row.n_cde ?? "") + i} className="border-b border-border/60">
-                    <td className="px-2 py-2 font-mono text-xs">{row.n_cde ?? "—"}</td>
-                    <td className="px-2 py-2">{row.nom_fourn ?? row.code_fourn ?? "—"}</td>
-                    <td className="px-2 py-2 tabular-nums">{fmtDate(row.date_cde)}</td>
-                    <td className="px-2 py-2 text-xs">{row.statut ?? "—"}</td>
-                    <td className="px-2 py-2 text-right tabular-nums">{eur(Number(row.montant_ligne || 0))}</td>
-                    <td className="px-2 py-2 text-right tabular-nums">{num(Number(row.qte_restante || 0))}</td>
-                  </tr>
+                {(encoursCmds ?? []).map((row, i) => (
+                  <CommandeRow key={(row.n_cde ?? "") + i} row={row} />
                 ))}
-                {(encoursRows ?? []).length === 0 && (
-                  <tr><td colSpan={6} className="px-2 py-6 text-center text-muted-foreground">Aucune commande.</td></tr>
+                {(encoursCmds ?? []).length === 0 && (
+                  <tr><td colSpan={7} className="px-2 py-6 text-center text-muted-foreground">Aucune commande.</td></tr>
                 )}
               </tbody>
             </table>

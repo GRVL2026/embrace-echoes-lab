@@ -1387,7 +1387,7 @@ export default function DossierEdit() {
                           : null;
                         const rowKey = (p.product_id ?? p.cegid_code ?? "line") + "-" + i;
                         return (
-                        <tr key={rowKey} className="border-t border-border/60">
+                        <tr key={rowKey} className="group border-t border-border/60">
                           <td className="px-3 py-2">
                             {href ? (
                               <a

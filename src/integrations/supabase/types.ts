@@ -2655,16 +2655,49 @@ export type Database = {
       }
       ensure_notification_prefs: { Args: { _uid: string }; Returns: undefined }
       gaia_query: { Args: { sql_query: string }; Returns: Json }
+      get_achats_arrivage_contenu: {
+        Args: { _dossier: string }
+        Returns: {
+          libelle: string
+          montant_ligne: number
+          nom_fourn: string
+          num_conteneur: string
+          qte_cdee: number
+          qte_recue: number
+          qte_restante: number
+          statut: string
+        }[]
+      }
+      get_achats_arrivages: {
+        Args: never
+        Returns: {
+          bateau: string
+          conteneurs: string
+          derniere_cde: string
+          eta: string
+          etd: string
+          fournisseurs: string
+          montant: number
+          nb_articles: number
+          nb_lignes: number
+          num_dossier: string
+          recu_pct: number
+          statut_arrivage: string
+          tailles: string
+          transitaire: string
+        }[]
+      }
       get_achats_resume: {
         Args: never
         Returns: {
-          arrivages: number
           cmd_encours: number
+          en_commande_montant: number
+          en_commande_nb: number
+          en_transit_montant: number
+          en_transit_nb: number
           montant_12m: number
-          montant_encours: number
           nb_fournisseurs: number
           reste_a_facturer: number
-          reste_a_recevoir: number
         }[]
       }
       get_achats_top_fournisseurs: {

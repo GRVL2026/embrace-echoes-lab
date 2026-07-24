@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Loader2, Plus, Upload, Target, ExternalLink, Trash2, GripVertical, Mail, Phone,
+  Sparkles, Copy, RefreshCw, Save,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -560,6 +561,8 @@ function ProspectSheet({
           </Button>
         </div>
 
+        <AccrocheIASection prospect={prospect} onSaved={loadEvents} />
+
         <div className="mt-8 space-y-3">
           <div className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Journal d'activité</div>
           <div className="flex gap-2">
@@ -595,6 +598,111 @@ function ProspectSheet({
         </AlertDialog>
       </SheetContent>
     </Sheet>
+  );
+}
+
+/* -------------------- Accroche IA -------------------- */
+
+type Canal = "invitation" | "message" | "email";
+
+function AccrocheIASection({ prospect, onSaved }: { prospect: Prospect; onSaved: () => void }) {
+  const [canal, setCanal] = useState<Canal>("message");
+  const [loading, setLoading] = useState(false);
+  const [text, setText] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const generate = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generer-accroche-prospect", {
+        body: { prospect_id: prospect.id, canal },
+      });
+      if (error) {
+        const details = (error as any)?.context?.text
+          ? await (error as any).context.text().catch(() => "")
+          : "";
+        let msg = error.message || "Erreur IA";
+        try { const j = JSON.parse(details); if (j?.error) msg = j.error; } catch { /* noop */ }
+        toast.error(msg);
+        return;
+      }
+      if ((data as any)?.error) { toast.error((data as any).error); return; }
+      setText(((data as any)?.accroche ?? "").trim());
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erreur IA");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copy = async () => {
+    if (!text.trim()) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Accroche copiée");
+    } catch {
+      toast.error("Impossible de copier");
+    }
+  };
+
+  const saveToJournal = async () => {
+    if (!text.trim()) return;
+    setSaving(true);
+    const { error } = await (supabase as any).from("prospect_events").insert({
+      prospect_id: prospect.id, type: "message", contenu: text.trim(),
+    });
+    setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Enregistré dans le journal");
+    onSaved();
+  };
+
+  return (
+    <div className="mt-6 rounded-lg border border-border/60 bg-muted/20 p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <Sparkles className="h-4 w-4 text-[hsl(var(--space-prospection,258_90%_66%))]" />
+        <div className="text-sm font-semibold">Accroche IA</div>
+      </div>
+      <div className="flex flex-wrap items-end gap-2">
+        <Field label="Canal">
+          <Select value={canal} onValueChange={(v) => setCanal(v as Canal)}>
+            <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="invitation">Invitation LinkedIn</SelectItem>
+              <SelectItem value="message">Message LinkedIn</SelectItem>
+              <SelectItem value="email">Email</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+        <Button onClick={generate} disabled={loading}>
+          {loading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1" />}
+          {loading ? "Génération…" : "Générer une accroche IA"}
+        </Button>
+      </div>
+      {(text || loading) && (
+        <>
+          <Textarea
+            rows={6}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={loading ? "Génération…" : ""}
+            disabled={loading}
+          />
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={generate} disabled={loading}>
+              <RefreshCw className="h-4 w-4 mr-1" /> Régénérer
+            </Button>
+            <Button size="sm" variant="outline" onClick={copy} disabled={!text.trim()}>
+              <Copy className="h-4 w-4 mr-1" /> Copier
+            </Button>
+            <Button size="sm" onClick={saveToJournal} disabled={!text.trim() || saving}>
+              {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+              Enregistrer dans le journal
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

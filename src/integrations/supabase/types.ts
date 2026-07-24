@@ -2543,6 +2543,18 @@ export type Database = {
           univers: string
         }[]
       }
+      get_briefing_semaine_docs: {
+        Args: { _type_doc: string }
+        Returns: {
+          code_client: string
+          jour: string
+          montant_ht: number
+          n_cde: string
+          proprietaire: string
+          type_doc: string
+          univers: string
+        }[]
+      }
       get_ca_client: {
         Args: { _annee: number; _annee_prev: number }
         Returns: {

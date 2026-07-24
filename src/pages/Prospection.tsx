@@ -645,6 +645,8 @@ function ProspectSheet({
 
         <AccrocheIASection prospect={prospect} onSaved={loadEvents} />
 
+        <LgmSection prospect={prospect} onSent={(next) => { onChange(next); setForm(next); loadEvents(); }} />
+
 
         <div className="mt-8 space-y-3">
           <div className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Journal d'activité</div>

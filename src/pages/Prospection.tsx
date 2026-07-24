@@ -53,6 +53,13 @@ type Prospect = {
   lgm_audience: string | null;
   lgm_status: string | null;
   lgm_sent_at: string | null;
+  siren: string | null;
+  siret: string | null;
+  adresse: string | null;
+  effectif: string | null;
+  ca_annuel: number | null;
+  activite: string | null;
+  site_web: string | null;
   created_at: string;
   updated_at: string;
 };

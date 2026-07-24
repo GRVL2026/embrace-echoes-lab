@@ -560,7 +560,13 @@ function ProspectSheet({
           </Button>
         </div>
 
+        <CegidClientSection
+          prospect={prospect}
+          onChanged={(next) => { onChange(next); setForm(next); loadEvents(); }}
+        />
+
         <AccrocheIASection prospect={prospect} onSaved={loadEvents} />
+
 
         <div className="mt-8 space-y-3">
           <div className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Journal d'activité</div>

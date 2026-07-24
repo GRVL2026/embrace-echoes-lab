@@ -1076,8 +1076,25 @@ function DashboardTab() {
                 })}
             </ul>
           </div>
+          {/* Ventilation informative "dont" du pax (déjà comptée dans le CA) */}
+          <div className="mt-3 pt-3 border-t border-border/50 text-[11px] text-muted-foreground grid gap-1 sm:grid-cols-2">
+            <div className="uppercase tracking-wider text-[10px] font-semibold sm:col-span-2">
+              Ventilation du pax (info — déjà incluse dans le CA)
+            </div>
+            <div>dont jeux : <span className="tabular-nums text-foreground/80">{eur(displayWeek?.bySource["jeux"] ?? 0)}</span></div>
+            <div>dont vending Pokémon : <span className="tabular-nums text-foreground/80">{eur(displayWeek?.bySource["ca_vending_pokemon_ht"] ?? 0)}</span></div>
+            <div>dont vending Blind Box : <span className="tabular-nums text-foreground/80">{eur(displayWeek?.bySource["ca_vending_blindbox_ht"] ?? 0)}</span></div>
+            <div>dont photo : <span className="tabular-nums text-foreground/80">{eur(displayWeek?.bySource["ca_photomaton_ht"] ?? 0)}</span></div>
+          </div>
+          {/* Merch — hors CA salle, affiché séparément */}
+          <div className="mt-2 text-[11px] text-muted-foreground">
+            Merch (boutique, hors CA salle) : <span className="tabular-nums text-foreground/80">{eur(displayWeek?.merch ?? 0)}</span>
+          </div>
         </Card>
       </div>
+
+
+
 
 
       {/* Progression CA hebdo */}

@@ -1570,6 +1570,14 @@ function MonthlySalesSection() {
                           <div className="flex items-center gap-2">
                             <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: color }} />
                             <span className="truncate font-medium">{f.famille || "—"}</span>
+                            {help && (
+                              <Info
+                                className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70"
+                                aria-label={help}
+                              >
+                                <title>{help}</title>
+                              </Info>
+                            )}
                           </div>
                         </td>
                         <td className="py-1.5 px-2 text-right tabular-nums font-semibold">{eur(cam)}</td>

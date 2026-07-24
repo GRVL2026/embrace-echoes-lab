@@ -24,6 +24,7 @@ import Clients from "./pages/Clients";
 import MatriceClients from "./pages/MatriceClients";
 import MatriceFamilles from "./pages/MatriceFamilles";
 import Salle from "./pages/Salle";
+import Prospection from "./pages/Prospection";
 
 import GaiaCarnet from "./pages/GaiaCarnet";
 import GaiaRevueView from "./pages/GaiaRevueView";
@@ -74,6 +75,7 @@ const App = () => (
             <Route path="/catalogue" element={<P><Catalogue /></P>} />
             <Route path="/clients" element={<P><Clients /></P>} />
             <Route path="/salle" element={<P><Salle /></P>} />
+            <Route path="/prospection" element={<P><Prospection /></P>} />
 
             <Route path="/dossiers/:id" element={<P><DossierEdit /></P>} />
             <Route path="/logistique" element={<P><Logistique /></P>} />

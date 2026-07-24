@@ -1837,6 +1837,110 @@ export type Database = {
         }
         Relationships: []
       }
+      prospect_events: {
+        Row: {
+          ancien_statut: string | null
+          auteur: string | null
+          contenu: string | null
+          created_at: string
+          id: string
+          nouveau_statut: string | null
+          prospect_id: string
+          type: string
+        }
+        Insert: {
+          ancien_statut?: string | null
+          auteur?: string | null
+          contenu?: string | null
+          created_at?: string
+          id?: string
+          nouveau_statut?: string | null
+          prospect_id: string
+          type?: string
+        }
+        Update: {
+          ancien_statut?: string | null
+          auteur?: string | null
+          contenu?: string | null
+          created_at?: string
+          id?: string
+          nouveau_statut?: string | null
+          prospect_id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prospect_events_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "prospects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prospects: {
+        Row: {
+          code_client: string | null
+          contact_nom: string | null
+          contact_role: string | null
+          created_at: string
+          email: string | null
+          entreprise: string
+          id: string
+          linkedin_url: string | null
+          montant_estime: number | null
+          notes: string | null
+          owner_id: string | null
+          segment: string
+          signal: string | null
+          source: string | null
+          statut: string
+          telephone: string | null
+          updated_at: string
+          ville: string | null
+        }
+        Insert: {
+          code_client?: string | null
+          contact_nom?: string | null
+          contact_role?: string | null
+          created_at?: string
+          email?: string | null
+          entreprise: string
+          id?: string
+          linkedin_url?: string | null
+          montant_estime?: number | null
+          notes?: string | null
+          owner_id?: string | null
+          segment?: string
+          signal?: string | null
+          source?: string | null
+          statut?: string
+          telephone?: string | null
+          updated_at?: string
+          ville?: string | null
+        }
+        Update: {
+          code_client?: string | null
+          contact_nom?: string | null
+          contact_role?: string | null
+          created_at?: string
+          email?: string | null
+          entreprise?: string
+          id?: string
+          linkedin_url?: string | null
+          montant_estime?: number | null
+          notes?: string | null
+          owner_id?: string | null
+          segment?: string
+          signal?: string | null
+          source?: string | null
+          statut?: string
+          telephone?: string | null
+          updated_at?: string
+          ville?: string | null
+        }
+        Relationships: []
+      }
       push_subscriptions: {
         Row: {
           auth: string
@@ -2841,6 +2945,20 @@ export type Database = {
           marge_estimee: number
           nb_clients: number
           taux_moyen: number
+        }[]
+      }
+      get_prospection_resume: {
+        Args: never
+        Returns: {
+          ca_attribue: number
+          client: number
+          connecte: number
+          devis: number
+          nouveau: number
+          perdu: number
+          rdv: number
+          repondu: number
+          total: number
         }[]
       }
       get_ventes_famille_detail: {

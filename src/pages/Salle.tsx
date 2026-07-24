@@ -836,9 +836,9 @@ function DashboardTab() {
   // Donut sur displayWeek
   const donutData = useMemo(() => {
     if (!displayWeek) return [];
-    return SOURCES.map((s) => ({
+    return DASH_SOURCES.map((s) => ({
       name: s.label,
-      value: Math.round(displayWeek.bySource[s.key as string] ?? 0),
+      value: Math.round(displayWeek.bySource[s.key] ?? 0),
       color: s.color,
     })).filter((d) => d.value > 0);
   }, [displayWeek]);

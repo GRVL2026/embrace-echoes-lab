@@ -399,6 +399,63 @@ const MAPPERS: Record<string, { table: string; map: Mapper; pk?: string }> = {
     },
   },
 
+  'BD-Achats': {
+    table: 'gaia_achats',
+    map: (r) => {
+      const pickKey = (obj: any, candidates: string[]): any => {
+        if (!obj || typeof obj !== 'object') return undefined;
+        for (const k of candidates) if (k in obj) return obj[k];
+        const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '').toLowerCase();
+        const target = candidates.map(norm);
+        for (const key of Object.keys(obj)) {
+          if (target.includes(norm(key))) return obj[key];
+        }
+        return undefined;
+      };
+      return {
+        type_cde: trim(pickKey(r, ['TypeCde'])),
+        n_cde: trim(pickKey(r, ['NCde'])),
+        inventory_id: trim(pickKey(r, ['InventoryID'])),
+        statut: trim(pickKey(r, ['Status'])),
+        date_cde: date(pickKey(r, ['DateCde'])),
+        date_liv: date(pickKey(r, ['DateLiv'])),
+        code_fourn: trim(pickKey(r, ['CodeFourn'])),
+        nom_fourn: trim(pickKey(r, ['NomFourn'])),
+        libelle_cde: trim(pickKey(r, ['LibelleCde'])),
+        vendor_ref: trim(pickKey(r, ['VendorRef'])),
+        devise: trim(pickKey(r, ['Devise'])),
+        societe: trim(pickKey(r, ['Societe'])),
+        qte_cdee: num(pickKey(r, ['Qtecdeeligne'])),
+        qte_recue: num(pickKey(r, ['Qterecueligne'])),
+        qte_recue_stock: num(pickKey(r, ['Qterecueetentreeenstkligne'])),
+        qte_restante: num(pickKey(r, ['Qterestantenonentreeenstkligne'])),
+        qte_facturee: num(pickKey(r, ['Qtefactureeligne'])),
+        description: trim(pickKey(r, ['Description'])),
+        item_class: trim(pickKey(r, ['ItemClass'])),
+        montant_facture: num(pickKey(r, ['Montantlignefacture'])),
+        montant_ligne: num(pickKey(r, ['Montantligne'])),
+        montant_ouvert: num(pickKey(r, ['montantouvert'])),
+        reste_a_facturer: num(pickKey(r, ['Resteafacturer'])),
+        pays_fourn: trim(pickKey(r, ['PaysFrs'])),
+        bateau: trim(pickKey(r, ['Nomdubateau'])),
+        eta: date(pickKey(r, ['ETA'])),
+        etd: date(pickKey(r, ['ETD'])),
+        num_dossier: trim(pickKey(r, ['Numerodedossierdutransitaire'])),
+        num_conteneur: trim(pickKey(r, ['Numerodecontaineur'])),
+        taille_conteneur: trim(pickKey(r, ['Tailleducontaineur20ou40'])),
+        transitaire: trim(pickKey(r, ['Transitaire'])),
+        taux_change: num(pickKey(r, ['Tauxdechangeinitiallorsdelacommande'])),
+        cout_revient: num(pickKey(r, ['CoutRevient'])),
+        date_paiement: date(pickKey(r, ['DATEDEPAIEMENT'])),
+        order_type: trim(pickKey(r, ['OrderType'])),
+        order_nbr: trim(pickKey(r, ['OrderNbr'])),
+        line_nbr: intNum(pickKey(r, ['LineNbr'])),
+        branch: trim(pickKey(r, ['BranchID'])),
+        class_id: trim(pickKey(r, ['ClassID'])),
+      };
+    },
+  },
+
 };
 
 

@@ -5,7 +5,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const LGM_API_KEY = Deno.env.get('LGM_API_KEY') ?? '';
-const LGM_BASE = 'https://apiv2.lagrowthmachine.com/flow';
+const LGM_LEADS_URL = 'https://apiv2.lagrowthmachine.com/flow/leads';
 
 type Segment = 'loisirs' | 'chr' | 'retail' | 'revendeur' | 'autre';
 
@@ -22,33 +22,12 @@ function jsonRes(status: number, body: unknown) {
   });
 }
 
-function normalizeName(s: string) {
-  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
-}
-
 function splitContactName(full: string | null | undefined): { firstname: string; lastname: string } {
   const s = (full ?? '').trim();
   if (!s) return { firstname: '', lastname: '' };
   const parts = s.split(/\s+/);
   if (parts.length === 1) return { firstname: parts[0], lastname: '' };
   return { firstname: parts[0], lastname: parts.slice(1).join(' ') };
-}
-
-async function lgmFetch(path: string, init: RequestInit = {}) {
-  const res = await fetch(`${LGM_BASE}${path}`, {
-    ...init,
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-      'X-API-KEY': LGM_API_KEY,
-      'Authorization': `Bearer ${LGM_API_KEY}`,
-      ...(init.headers ?? {}),
-    },
-  });
-  const text = await res.text();
-  let body: any = null;
-  try { body = text ? JSON.parse(text) : null; } catch { body = { raw: text }; }
-  return { ok: res.ok, status: res.status, body };
 }
 
 Deno.serve(async (req) => {
@@ -93,27 +72,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ---- 1. Résoudre audience par nom ----
-    const audRes = await lgmFetch('/audiences', { method: 'GET' });
-    if (!audRes.ok) {
-      return jsonRes(502, {
-        error: `LGM: impossible de lister les audiences (${audRes.status})`,
-        details: audRes.body,
-      });
-    }
-    const list: any[] = Array.isArray(audRes.body)
-      ? audRes.body
-      : (audRes.body?.audiences ?? audRes.body?.data ?? []);
-    const target = list.find((a: any) => normalizeName(String(a?.name ?? '')) === normalizeName(audienceName));
-    if (!target) {
-      return jsonRes(400, { error: `Crée l'audience '${audienceName}' dans LGM` });
-    }
-    const audienceId = target.id ?? target._id ?? target.audienceId;
-    if (!audienceId) {
-      return jsonRes(502, { error: 'LGM: audience trouvée mais id manquant', details: target });
-    }
-
-    // ---- 2. Dernière accroche IA ----
+    // ---- Dernière accroche IA ----
     const { data: evs } = await admin
       .from('prospect_events')
       .select('contenu, created_at')
@@ -123,42 +82,45 @@ Deno.serve(async (req) => {
       .limit(1);
     const accroche = evs?.[0]?.contenu ?? null;
 
-    // ---- 3. Construire l'identity ----
+    // ---- Construire le payload LGM ----
     const { firstname, lastname } = splitContactName(p.contact_nom);
-    const customAttributes: { name: string; value: string }[] = [];
-    if (accroche && accroche.trim()) customAttributes.push({ name: 'accroche', value: accroche.trim() });
-    if (p.ville) customAttributes.push({ name: 'ville', value: String(p.ville) });
-    if (p.signal) customAttributes.push({ name: 'signal', value: String(p.signal) });
-
-    const identity: Record<string, unknown> = {
-      audienceId,
+    const payload: Record<string, unknown> = {
+      audience: audienceName,
       firstname: firstname || (p.entreprise ?? ''),
       lastname: lastname || '',
       companyName: p.entreprise ?? '',
     };
-    if (p.linkedin_url) identity.linkedinUrl = p.linkedin_url;
-    if (p.email) { identity.proEmail = p.email; identity.email = p.email; }
-    if (p.telephone) identity.phone = p.telephone;
-    if (customAttributes.length) identity.customAttributes = customAttributes;
+    if (p.linkedin_url) payload.linkedinUrl = p.linkedin_url;
+    if (p.email) payload.proEmail = p.email;
+    if (accroche && accroche.trim()) payload.accroche = accroche.trim();
 
-    // ---- 4. Créer/MAJ lead LGM ----
-    // Endpoint standard LGM v2 : POST /flow/identities avec audienceId dans le corps.
-    const createRes = await lgmFetch('/identities', {
+    // ---- Appel LGM : POST /flow/leads?apikey=... ----
+    const url = `${LGM_LEADS_URL}?apikey=${encodeURIComponent(LGM_API_KEY)}`;
+    const lgmRes = await fetch(url, {
       method: 'POST',
-      body: JSON.stringify(identity),
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
     });
-    if (!createRes.ok) {
+    const raw = await lgmRes.text();
+    let parsed: any = null;
+    try { parsed = raw ? JSON.parse(raw) : null; } catch { parsed = { raw }; }
+
+    if (!lgmRes.ok) {
       return jsonRes(502, {
-        error: `LGM: création du lead impossible (${createRes.status})`,
-        details: createRes.body,
+        error: `LGM ${lgmRes.status}`,
+        lgm_message: parsed?.message ?? parsed?.error ?? parsed?.raw ?? parsed,
+        details: parsed,
       });
     }
-    const created: any = createRes.body ?? {};
+
     const lgm_lead_id = String(
-      created?.id ?? created?._id ?? created?.identityId ?? created?.leadId ?? '',
+      parsed?.id ?? parsed?._id ?? parsed?.leadId ?? parsed?.identityId ?? '',
     );
 
-    // ---- 5. Mise à jour prospect + journal ----
+    // ---- Mise à jour prospect + journal ----
     await admin
       .from('prospects')
       .update({

@@ -239,6 +239,9 @@ export default function Prospection() {
           </div>
         </div>
 
+        <AttributionPanel />
+
+
         {/* Kanban */}
         {loading ? (
           <div className="flex items-center justify-center py-16">

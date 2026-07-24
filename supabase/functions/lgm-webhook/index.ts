@@ -64,8 +64,8 @@ Deno.serve(async (req) => {
 
     const payload = await req.json().catch(() => ({}));
 
-    const lgmLeadId = pick(payload, ['leadId', 'lead_id', 'id', 'lead.id', 'lead.leadId', 'lead._id']);
-    const event = pick(payload, ['event', 'type', 'eventType', 'event_type', 'trigger', 'name']) ?? '';
+    const lgmLeadId = pick(payload, ['crmId', 'identityId', 'leadId', 'lead_id', 'id', 'lead.id', 'lead.leadId', 'lead._id']);
+    const event = pick(payload, ['type', 'event', 'eventType', 'event_type', 'trigger', 'name']) ?? '';
 
     // Log brut d'abord
     const { data: logRow } = await admin
@@ -77,24 +77,59 @@ Deno.serve(async (req) => {
 
     // Retrouver le prospect
     let prospect: any = null;
-    if (lgmLeadId) {
-      const { data } = await admin.from('prospects').select('*').eq('lgm_lead_id', lgmLeadId).maybeSingle();
-      if (data) prospect = data;
+
+    // 1) Matching par ID LGM : crmId > identityId > autres
+    const idCandidates = [
+      pick(payload, ['crmId']),
+      pick(payload, ['identityId']),
+      pick(payload, ['leadId', 'lead_id', 'id', 'lead.id', 'lead.leadId', 'lead._id']),
+    ].filter((v): v is string => !!v);
+    for (const cand of idCandidates) {
+      const { data } = await admin.from('prospects').select('*').eq('lgm_lead_id', cand).maybeSingle();
+      if (data) { prospect = data; break; }
     }
+
+    // 2) Matching par email
     if (!prospect) {
-      const email = pick(payload, ['proEmail', 'persoEmail', 'email', 'lead.proEmail', 'lead.persoEmail', 'lead.email']);
-      if (email) {
-        const { data } = await admin.from('prospects').select('*').ilike('email', email).limit(1).maybeSingle();
-        if (data) prospect = data;
+      const emails = [
+        pick(payload, ['email']),
+        pick(payload, ['persoEmail']),
+        pick(payload, ['proEmail']),
+        pick(payload, ['lead.email', 'lead.persoEmail', 'lead.proEmail']),
+      ].filter((v): v is string => !!v);
+      for (const em of emails) {
+        const { data } = await admin.from('prospects').select('*').ilike('email', em).limit(1).maybeSingle();
+        if (data) { prospect = data; break; }
       }
     }
+
+    // 3) Matching par URL LinkedIn
     if (!prospect) {
-      const linkedin = pick(payload, ['linkedinUrl', 'linkedin_url', 'lead.linkedinUrl', 'lead.linkedin_url']);
+      const linkedin = pick(payload, ['linkedin', 'linkedinUrl', 'linkedin_url', 'lead.linkedin', 'lead.linkedinUrl', 'lead.linkedin_url']);
       if (linkedin) {
         const { data } = await admin.from('prospects').select('*').eq('linkedin_url', linkedin).limit(1).maybeSingle();
         if (data) prospect = data;
       }
     }
+
+    // 4) Matching par firstName + lastName + companyName
+    if (!prospect) {
+      const firstName = pick(payload, ['firstName', 'firstname', 'lead.firstName', 'lead.firstname']);
+      const lastName = pick(payload, ['lastName', 'lastname', 'lead.lastName', 'lead.lastname']);
+      const company = pick(payload, ['companyName', 'company', 'lead.companyName', 'lead.company']);
+      if (firstName && lastName && company) {
+        const fullName = `${firstName} ${lastName}`.trim();
+        const { data } = await admin
+          .from('prospects')
+          .select('*')
+          .ilike('contact_nom', fullName)
+          .ilike('entreprise', company)
+          .limit(1)
+          .maybeSingle();
+        if (data) prospect = data;
+      }
+    }
+
 
     if (!prospect) {
       if (logId) await admin.from('lgm_webhook_log').update({ action: 'no_match' }).eq('id', logId);

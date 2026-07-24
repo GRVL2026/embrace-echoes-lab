@@ -43,6 +43,7 @@ export type NavCtx = {
   canMargeGlobale: boolean;
   copilotEnabled: boolean;
   canAccessSalle: boolean;
+  canAccessProspection: boolean;
   salleOnly: boolean;
 };
 

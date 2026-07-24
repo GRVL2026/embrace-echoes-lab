@@ -1357,8 +1357,42 @@ function MonthlySalesSection() {
   const dNow = new Date(monthDate);
   const dN1 = new Date(dNow.getFullYear() - 1, dNow.getMonth(), 1);
 
-  const maxFamCa = familles.reduce((m, r) => Math.max(m, Number(r.ca_mois || 0)), 0);
-  const totalFam = familles.reduce((s, r) => s + Number(r.ca_mois || 0), 0);
+  const totalN = familles.reduce((s, r) => s + Number(r.ca_mois || 0), 0);
+  const totalN1 = familles.reduce((s, r) => s + Number(r.ca_mois_n1 || 0), 0);
+
+  // Couleur stable par famille (index dans la liste triée par ca_mois desc renvoyée par la RPC)
+  const PIE_PALETTE = [
+    "#9B5CFF", "#ADFF00", "#00D4FF", "#FF8A00", "#FF4FA3",
+    "#FFD400", "#6EE7B7", "#F472B6", "#60A5FA", "#F87171",
+    "#A78BFA", "#34D399",
+  ];
+  const familyColor = (fam: string, idx: number) => PIE_PALETTE[idx % PIE_PALETTE.length];
+
+  const pieN = familles
+    .map((f, i) => ({ name: f.famille || "—", value: Number(f.ca_mois || 0), color: familyColor(f.famille, i) }))
+    .filter((d) => d.value > 0);
+  const pieN1 = familles
+    .map((f, i) => ({ name: f.famille || "—", value: Number(f.ca_mois_n1 || 0), color: familyColor(f.famille, i) }))
+    .filter((d) => d.value > 0);
+
+  const pieTooltip = (total: number) => ({ active, payload }: any) => {
+    if (!active || !payload?.length) return null;
+    const p = payload[0];
+    const v = Number(p.value || 0);
+    const pct = total > 0 ? (v / total) * 100 : 0;
+    return (
+      <div className="rounded-md border border-border/80 bg-popover/95 px-2.5 py-1.5 text-xs shadow-xl backdrop-blur">
+        <div className="flex items-center gap-2">
+          <span className="inline-block h-2 w-2 rounded-sm" style={{ background: p.payload.color }} />
+          <span className="font-medium">{p.name}</span>
+        </div>
+        <div className="mt-0.5 tabular-nums">
+          <span className="font-semibold">{eur(v)}</span>
+          <span className="ml-2 text-muted-foreground">{pct.toFixed(1)} %</span>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="rounded-lg border border-border bg-card/40 p-4 space-y-4">
@@ -1389,92 +1423,146 @@ function MonthlySalesSection() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Carte CA du mois vs N-1 */}
-        <div className="rounded-lg border border-border bg-background/40 p-4">
-          <div className="text-xs uppercase tracking-wider text-muted-foreground">
-            {labelMois(dNow)}
-          </div>
-          {caQ.isLoading ? (
-            <div className="mt-4 flex items-center gap-2 text-muted-foreground text-sm">
-              <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
-            </div>
-          ) : !ca ? (
-            <div className="mt-4 text-sm text-muted-foreground">Aucune donnée.</div>
-          ) : (
-            <>
-              <div className="mt-1 font-display text-3xl font-bold tabular-nums">{eur(caMois)}</div>
-              <div className="mt-2 text-sm">
-                <span className="text-muted-foreground">vs {labelMois(dN1)} : </span>
-                <span className="tabular-nums">{eur(caN1)}</span>
-                {ecart !== null && (
-                  <span className={"ml-2 inline-flex items-center gap-0.5 font-medium " + (ecart >= 0 ? "text-secondary" : "text-destructive")}>
-                    {ecart >= 0 ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
-                    {ecart >= 0 ? "+" : ""}{ecart.toFixed(1)} %
-                  </span>
-                )}
-              </div>
-              <div className="mt-3 text-[11px] text-muted-foreground/80">
-                {ca.mois_complet
-                  ? "Mois complet"
-                  : `À période égale — ${ca.jours_inclus} premier${ca.jours_inclus > 1 ? "s" : ""} jour${ca.jours_inclus > 1 ? "s" : ""}`}
-                {" · "}
-                {num(ca.nb_factures)} facture{ca.nb_factures > 1 ? "s" : ""}
-              </div>
-            </>
-          )}
+      {/* Carte CA du mois vs N-1 */}
+      <div className="rounded-lg border border-border bg-background/40 p-4">
+        <div className="text-xs uppercase tracking-wider text-muted-foreground">
+          {labelMois(dNow)}
         </div>
+        {caQ.isLoading ? (
+          <div className="mt-4 flex items-center gap-2 text-muted-foreground text-sm">
+            <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
+          </div>
+        ) : !ca ? (
+          <div className="mt-4 text-sm text-muted-foreground">Aucune donnée.</div>
+        ) : (
+          <>
+            <div className="mt-1 font-display text-3xl font-bold tabular-nums">{eur(caMois)}</div>
+            <div className="mt-2 text-sm">
+              <span className="text-muted-foreground">vs {labelMois(dN1)} : </span>
+              <span className="tabular-nums">{eur(caN1)}</span>
+              {ecart !== null && (
+                <span className={"ml-2 inline-flex items-center gap-0.5 font-medium " + (ecart >= 0 ? "text-secondary" : "text-destructive")}>
+                  {ecart >= 0 ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+                  {ecart >= 0 ? "+" : ""}{ecart.toFixed(1)} %
+                </span>
+              )}
+            </div>
+            <div className="mt-3 text-[11px] text-muted-foreground/80">
+              {ca.mois_complet
+                ? "Mois complet"
+                : `À période égale — ${ca.jours_inclus} premier${ca.jours_inclus > 1 ? "s" : ""} jour${ca.jours_inclus > 1 ? "s" : ""}`}
+              {" · "}
+              {num(ca.nb_factures)} facture{ca.nb_factures > 1 ? "s" : ""}
+            </div>
+          </>
+        )}
+      </div>
 
-        {/* Répartition par famille */}
-        <div className="rounded-lg border border-border bg-background/40 p-4">
-          <div className="mb-3 text-xs uppercase tracking-wider text-muted-foreground">
-            Répartition par famille — {labelMois(dNow)}
-          </div>
-          {famQ.isLoading ? (
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
-            </div>
-          ) : familles.length === 0 ? (
-            <div className="text-sm text-muted-foreground">Aucune vente sur ce mois.</div>
-          ) : (
-            <>
-              <ul className="space-y-2.5 max-h-[320px] overflow-y-auto pr-1">
-                {familles.map((f, i) => {
-                  const cam = Number(f.ca_mois || 0);
-                  const part = f.part_pct == null ? 0 : Number(f.part_pct);
-                  const ec = f.ecart_pct == null ? null : Number(f.ecart_pct);
-                  const barPct = maxFamCa > 0 ? Math.max(2, (cam / maxFamCa) * 100) : 0;
-                  const color = FAMILY_COLORS[i % FAMILY_COLORS.length];
-                  return (
-                    <li key={f.famille + i}>
-                      <div className="flex items-center justify-between gap-2 text-sm">
-                        <div className="min-w-0 flex-1 truncate font-medium">{f.famille || "—"}</div>
-                        <div className="flex items-center gap-2 tabular-nums">
-                          <span className="font-semibold">{eur(cam)}</span>
-                          <span className="text-xs text-muted-foreground w-12 text-right">{part.toFixed(1)} %</span>
-                          {ec !== null ? (
-                            <span className={"text-xs w-16 text-right " + (ec >= 0 ? "text-secondary" : "text-destructive")}>
-                              {ec >= 0 ? "+" : ""}{ec.toFixed(1)} %
-                            </span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground w-16 text-right">—</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="mt-1 h-1.5 w-full rounded-full bg-muted/40 overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${barPct}%`, backgroundColor: color }} />
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-              <div className="mt-3 flex items-center justify-between border-t border-border pt-2 text-sm">
-                <span className="text-muted-foreground">Total mois</span>
-                <span className="font-semibold tabular-nums">{eur(totalFam)}</span>
-              </div>
-            </>
-          )}
+      {/* Répartition par famille — 2 camemberts côte à côte */}
+      <div className="rounded-lg border border-border bg-background/40 p-4">
+        <div className="mb-3 text-xs uppercase tracking-wider text-muted-foreground">
+          Répartition par famille — comparaison N / N-1
         </div>
+        {famQ.isLoading ? (
+          <div className="flex items-center gap-2 text-muted-foreground text-sm">
+            <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
+          </div>
+        ) : familles.length === 0 ? (
+          <div className="text-sm text-muted-foreground">Aucune vente sur ce mois.</div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {[
+                { title: labelMois(dNow), data: pieN, total: totalN },
+                { title: labelMois(dN1), data: pieN1, total: totalN1 },
+              ].map((chart, idx) => (
+                <div key={idx} className="flex flex-col items-center">
+                  <div className="mb-1 text-sm font-medium capitalize">{chart.title}</div>
+                  {chart.data.length === 0 ? (
+                    <div className="flex h-[240px] items-center text-sm text-muted-foreground">Aucune vente.</div>
+                  ) : (
+                    <div className="h-[240px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={chart.data}
+                            dataKey="value"
+                            nameKey="name"
+                            innerRadius={50}
+                            outerRadius={90}
+                            paddingAngle={2}
+                            stroke="none"
+                            isAnimationActive={false}
+                          >
+                            {chart.data.map((d, i) => (
+                              <Cell key={i} fill={d.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip content={pieTooltip(chart.total)} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                  <div className="mt-1 text-xs text-muted-foreground tabular-nums">
+                    Total : <span className="font-semibold text-foreground">{eur(chart.total)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Légende / tableau commun */}
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs uppercase tracking-wider text-muted-foreground">
+                    <th className="py-1.5 pr-2 text-left font-medium">Famille</th>
+                    <th className="py-1.5 px-2 text-right font-medium">CA {labelMois(dNow)}</th>
+                    <th className="py-1.5 px-2 text-right font-medium">CA {labelMois(dN1)}</th>
+                    <th className="py-1.5 pl-2 text-right font-medium">Écart</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {familles.map((f, i) => {
+                    const cam = Number(f.ca_mois || 0);
+                    const camN1 = Number(f.ca_mois_n1 || 0);
+                    const ec = f.ecart_pct == null ? null : Number(f.ecart_pct);
+                    const color = familyColor(f.famille, i);
+                    return (
+                      <tr key={f.famille + i} className="border-t border-border/50">
+                        <td className="py-1.5 pr-2">
+                          <div className="flex items-center gap-2">
+                            <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: color }} />
+                            <span className="truncate font-medium">{f.famille || "—"}</span>
+                          </div>
+                        </td>
+                        <td className="py-1.5 px-2 text-right tabular-nums font-semibold">{eur(cam)}</td>
+                        <td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground">{eur(camN1)}</td>
+                        <td className={"py-1.5 pl-2 text-right tabular-nums " + (ec == null ? "text-muted-foreground" : ec >= 0 ? "text-secondary" : "text-destructive")}>
+                          {ec == null ? "—" : `${ec >= 0 ? "+" : ""}${ec.toFixed(1)} %`}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2 text-sm">
+              <span className="tabular-nums">
+                <span className="text-muted-foreground">Total </span>
+                <span className="capitalize">{labelMois(dNow)}</span>
+                <span className="text-muted-foreground"> : </span>
+                <span className="font-semibold">{eur(totalN)}</span>
+              </span>
+              <span className="tabular-nums">
+                <span className="text-muted-foreground">Total </span>
+                <span className="capitalize">{labelMois(dN1)}</span>
+                <span className="text-muted-foreground"> : </span>
+                <span className="font-semibold">{eur(totalN1)}</span>
+              </span>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

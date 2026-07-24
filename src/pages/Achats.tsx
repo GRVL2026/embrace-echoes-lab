@@ -90,7 +90,7 @@ const fmtDate = (s: string | null) => {
 
 const COLORS = ["#9B5CFF", "#ADFF00", "#5CC8FF", "#FF6B9D", "#FFB800", "#B0B0B0", "#7CE0FF", "#FFA07A", "#A78BFA", "#34D399", "#F472B6", "#FBBF24"];
 
-const ENCOURS_STATUTS = ["Ouvert", "En attente d'envoi", "En attente d'impression"];
+
 
 type SheetKind =
   | { kind: "encours"; filter: "en_commande" | "en_transit" }

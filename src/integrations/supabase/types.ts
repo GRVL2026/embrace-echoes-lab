@@ -2687,6 +2687,31 @@ export type Database = {
           transitaire: string
         }[]
       }
+      get_achats_commande_lignes: {
+        Args: { _n_cde: string }
+        Returns: {
+          libelle: string
+          montant_ligne: number
+          qte_cdee: number
+          qte_recue: number
+          qte_restante: number
+          statut: string
+        }[]
+      }
+      get_achats_commandes_encours: {
+        Args: never
+        Returns: {
+          code_fourn: string
+          date_cde: string
+          en_transit: boolean
+          montant: number
+          n_cde: string
+          nb_lignes: number
+          nom_fourn: string
+          qte_restante: number
+          statut: string
+        }[]
+      }
       get_achats_resume: {
         Args: never
         Returns: {

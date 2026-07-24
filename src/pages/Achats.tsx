@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   Loader2, ShoppingBag, Package, Ship, Users, Calendar, Container, FileText, Truck,
+  ChevronRight, ChevronDown,
 } from "lucide-react";
 import {
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend,
@@ -89,9 +90,7 @@ const fmtDate = (s: string | null) => {
 
 const COLORS = ["#9B5CFF", "#ADFF00", "#5CC8FF", "#FF6B9D", "#FFB800", "#B0B0B0", "#7CE0FF", "#FFA07A", "#A78BFA", "#34D399", "#F472B6", "#FBBF24"];
 
-const ENCOURS_STATUTS = ["Ouvert", "En attente d'envoi", "En attente d'impression"];
-const TRANSIT_STATUTS = ["En transit"];
-const CMD_STATUTS = ["En commande"];
+
 
 type SheetKind =
   | { kind: "encours"; filter: "en_commande" | "en_transit" }
@@ -190,23 +189,23 @@ export default function Achats() {
   });
 
   const encoursFilter = openSheet?.kind === "encours" ? openSheet.filter : null;
-  const { data: encoursRows } = useQuery({
-    queryKey: ["achats-encours", encoursFilter],
+  const { data: encoursCmds } = useQuery({
+    queryKey: ["achats-encours-cmds", encoursFilter],
     queryFn: async () => {
-      const statuts = encoursFilter === "en_transit" ? TRANSIT_STATUTS : CMD_STATUTS;
-      const { data, error } = await (supabase as any)
-        .from("gaia_achats")
-        .select("n_cde,code_fourn,nom_fourn,statut,date_cde,montant_ligne,qte_restante,eta,bateau,num_conteneur")
-        .in("statut", ENCOURS_STATUTS)
-        .order("date_cde", { ascending: false })
-        .limit(500);
+      const { data, error } = await (supabase as any).rpc("get_achats_commandes_encours");
       if (error) throw error;
-      const rows = (data ?? []) as AchatRow[];
-      // en_transit = a un conteneur/bateau/eta ; en_commande = rien
-      return rows.filter((r) => {
-        const inTransit = !!(r.num_conteneur || r.bateau || r.eta);
-        return encoursFilter === "en_transit" ? inTransit : !inTransit;
-      });
+      const rows = (data ?? []) as Array<{
+        n_cde: string | null;
+        nom_fourn: string | null;
+        code_fourn: string | null;
+        date_cde: string | null;
+        statut: string | null;
+        nb_lignes: number | null;
+        montant: number | string | null;
+        qte_restante: number | string | null;
+        en_transit: boolean | null;
+      }>;
+      return rows.filter((r) => (encoursFilter === "en_transit" ? !!r.en_transit : !r.en_transit));
     },
     enabled: !!encoursFilter,
   });
@@ -540,31 +539,34 @@ export default function Achats() {
                 : "Commandes ouvertes pas encore expédiées."}
             </SheetDescription>
           </SheetHeader>
-          <div className="mt-4 overflow-auto">
+          {(() => {
+            const rows = encoursCmds ?? [];
+            const total = rows.reduce((s, r) => s + Number(r.montant || 0), 0);
+            return (
+              <div className="mt-3 mb-2 text-xs text-muted-foreground">
+                {rows.length} commande{rows.length > 1 ? "s" : ""} · <span className="font-semibold text-foreground">{eur(total)}</span>
+              </div>
+            );
+          })()}
+          <div className="mt-2 overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-xs uppercase text-muted-foreground">
                 <tr className="border-b border-border">
+                  <th className="w-6 px-1 py-2"></th>
                   <th className="px-2 py-2 text-left">N° cde</th>
                   <th className="px-2 py-2 text-left">Fournisseur</th>
                   <th className="px-2 py-2 text-left">Date</th>
                   <th className="px-2 py-2 text-left">Statut</th>
+                  <th className="px-2 py-2 text-right">Articles</th>
                   <th className="px-2 py-2 text-right">Montant</th>
-                  <th className="px-2 py-2 text-right">Reste</th>
                 </tr>
               </thead>
               <tbody>
-                {(encoursRows ?? []).map((row, i) => (
-                  <tr key={(row.n_cde ?? "") + i} className="border-b border-border/60">
-                    <td className="px-2 py-2 font-mono text-xs">{row.n_cde ?? "—"}</td>
-                    <td className="px-2 py-2">{row.nom_fourn ?? row.code_fourn ?? "—"}</td>
-                    <td className="px-2 py-2 tabular-nums">{fmtDate(row.date_cde)}</td>
-                    <td className="px-2 py-2 text-xs">{row.statut ?? "—"}</td>
-                    <td className="px-2 py-2 text-right tabular-nums">{eur(Number(row.montant_ligne || 0))}</td>
-                    <td className="px-2 py-2 text-right tabular-nums">{num(Number(row.qte_restante || 0))}</td>
-                  </tr>
+                {(encoursCmds ?? []).map((row, i) => (
+                  <CommandeRow key={(row.n_cde ?? "") + i} row={row} />
                 ))}
-                {(encoursRows ?? []).length === 0 && (
-                  <tr><td colSpan={6} className="px-2 py-6 text-center text-muted-foreground">Aucune commande.</td></tr>
+                {(encoursCmds ?? []).length === 0 && (
+                  <tr><td colSpan={7} className="px-2 py-6 text-center text-muted-foreground">Aucune commande.</td></tr>
                 )}
               </tbody>
             </table>
@@ -675,5 +677,101 @@ export default function Achats() {
         </SheetContent>
       </Sheet>
     </div>
+  );
+}
+
+type CommandeEncours = {
+  n_cde: string | null;
+  nom_fourn: string | null;
+  code_fourn: string | null;
+  date_cde: string | null;
+  statut: string | null;
+  nb_lignes: number | null;
+  montant: number | string | null;
+  qte_restante: number | string | null;
+  en_transit: boolean | null;
+};
+
+type LigneCommande = {
+  libelle: string | null;
+  qte_cdee: number | string | null;
+  qte_recue: number | string | null;
+  qte_restante: number | string | null;
+  montant_ligne: number | string | null;
+  statut: string | null;
+};
+
+function CommandeRow({ row }: { row: CommandeEncours }) {
+  const [open, setOpen] = useState(false);
+  const tone = statutTone(row.statut);
+  const { data: lignes, isPending } = useQuery({
+    queryKey: ["achats-cmd-lignes", row.n_cde],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("get_achats_commande_lignes", { _n_cde: row.n_cde });
+      if (error) throw error;
+      return (data ?? []) as LigneCommande[];
+    },
+    enabled: open && !!row.n_cde,
+  });
+  return (
+    <>
+      <tr
+        className="border-b border-border/60 cursor-pointer hover:bg-muted/40"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <td className="w-6 px-1 py-2 text-muted-foreground">
+          {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        </td>
+        <td className="px-2 py-2 font-mono text-xs">{row.n_cde ?? "—"}</td>
+        <td className="px-2 py-2">{row.nom_fourn ?? row.code_fourn ?? "—"}</td>
+        <td className="px-2 py-2 tabular-nums">{fmtDate(row.date_cde)}</td>
+        <td className="px-2 py-2">
+          <Badge variant="outline" className={cn("text-[10px]", tone.bg, tone.fg)}>
+            {row.statut ?? "—"}
+          </Badge>
+        </td>
+        <td className="px-2 py-2 text-right tabular-nums">{num(Number(row.nb_lignes || 0))}</td>
+        <td className="px-2 py-2 text-right font-semibold tabular-nums">{eur(Number(row.montant || 0))}</td>
+      </tr>
+      {open && (
+        <tr className="bg-muted/20">
+          <td></td>
+          <td colSpan={6} className="px-2 py-3">
+            {isPending ? (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" /> Chargement…
+              </div>
+            ) : (lignes ?? []).length === 0 ? (
+              <div className="text-xs text-muted-foreground">Aucun article.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="text-[10px] uppercase text-muted-foreground">
+                    <tr className="border-b border-border/60">
+                      <th className="px-2 py-1 text-left">Produit</th>
+                      <th className="px-2 py-1 text-right">Cdée</th>
+                      <th className="px-2 py-1 text-right">Reçue</th>
+                      <th className="px-2 py-1 text-right">Reste</th>
+                      <th className="px-2 py-1 text-right">Montant</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(lignes ?? []).map((l, i) => (
+                      <tr key={i} className="border-b border-border/40">
+                        <td className="px-2 py-1">{l.libelle ?? "—"}</td>
+                        <td className="px-2 py-1 text-right tabular-nums">{num(Number(l.qte_cdee || 0))}</td>
+                        <td className="px-2 py-1 text-right tabular-nums">{num(Number(l.qte_recue || 0))}</td>
+                        <td className="px-2 py-1 text-right tabular-nums">{num(Number(l.qte_restante || 0))}</td>
+                        <td className="px-2 py-1 text-right tabular-nums">{eur(Number(l.montant_ligne || 0))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </td>
+        </tr>
+      )}
+    </>
   );
 }

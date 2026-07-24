@@ -26,7 +26,7 @@ type ParsedRow = {
   notes: string;
   _sheet: string;
   _section: string;
-  _layout: "A" | "B" | "C";
+  _layout: string;
 };
 
 const MONTHS_FR: Record<string, number> = {
@@ -38,7 +38,13 @@ const DAYS_FR: Record<string, number> = {
 };
 
 const norm = (s: any): string =>
-  String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  String(s ?? "")
+    .replace(/\r?\n/g, " ")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const toYmd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -48,7 +54,6 @@ const mondayOf = (d: Date) => {
 };
 const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 
-/** Parse "du 12 mai au 18 mai" ou "du 12 mai" → Date */
 function parseSectionDate(row: any[], sheetName: string): Date | null {
   const joined = row.map((c) => String(c ?? "")).join(" ");
   const m = norm(joined).match(/du\s+(\d{1,2})\s+([a-zéû]+)(?:\s+(\d{4}))?/);
@@ -56,7 +61,7 @@ function parseSectionDate(row: any[], sheetName: string): Date | null {
   const day = parseInt(m[1], 10);
   const month = MONTHS_FR[m[2]];
   if (month === undefined) return null;
-  let year = m[3] ? parseInt(m[3], 10) : inferYearFromSheet(sheetName, month);
+  const year = m[3] ? parseInt(m[3], 10) : inferYearFromSheet(sheetName, month);
   const d = new Date(year, month, day);
   if (isNaN(d.getTime())) return null;
   return d;
@@ -67,145 +72,144 @@ function inferYearFromSheet(sheetName: string, month: number): number {
   if (yearMatch) return parseInt(yearMatch[1], 10);
   const now = new Date();
   const y = now.getFullYear();
-  // heuristique : si le mois est > mois courant + 2 => année précédente
   if (month > now.getMonth() + 2) return y - 1;
   return y;
 }
 
 function toNum(v: any): number {
-  if (v == null || v === "") return 0;
+  if (v == null) return 0;
   if (typeof v === "number") return isFinite(v) ? v : 0;
-  const s = String(v).replace(/\s|€|EUR/gi, "").replace(",", ".");
+  const raw = String(v).trim();
+  if (!raw || raw === "." || raw === "-") return 0;
+  const s = raw.replace(/\s|€|EUR/gi, "").replace(",", ".");
   const n = parseFloat(s);
   return isFinite(n) ? n : 0;
 }
-const round2 = (n: number) => Math.round(n * 100) / 100;
 
-type Layout = "A" | "B" | "C";
-function detectLayout(headerRow: any[]): { layout: Layout; hasVending: boolean; section: string } {
-  const joined = norm(headerRow.map((c) => String(c ?? "")).join(" | "));
-  const hasCartes = joined.includes("pax / cartes") || joined.includes("pax/cartes") || joined.includes("cartes");
-  const hasVending = joined.includes("vending") || joined.includes("photo");
-  // A vs B : dans A, "pax" est en col5 ; dans B, "pax" est en col6.
-  const col5 = norm(headerRow[5]);
-  const col6 = norm(headerRow[6]);
-  let layout: Layout;
-  if (hasCartes && (joined.includes("pax / cartes") || joined.includes("pax/cartes"))) {
-    layout = "C";
-  } else if (col6.includes("pax")) {
-    layout = "B";
-  } else if (col5.includes("pax")) {
-    layout = "A";
-  } else {
-    // repli : présence de vending/cartes => C, sinon B (layout Juin est le plus courant)
-    layout = hasCartes ? "C" : "B";
+type ColMap = {
+  visiteurs: number;
+  parties: number;
+  cartes_vendues: number;
+  ca_pax: number;
+  ca_cartes: number;
+  merch_ht: number;
+  vending_pokemon: number;
+  vending_blindbox: number;
+  photo: number;
+  notes: number;
+};
+
+function buildHeader(grid: any[][], headerRowIdx: number): string[] {
+  const r1 = grid[headerRowIdx] ?? [];
+  const r2 = grid[headerRowIdx + 1] ?? [];
+  // Heuristique : ligne suivante utilisée comme complément d'en-tête uniquement si ce n'est pas un jour de la semaine
+  const isDayNext = DAYS_FR[norm(r2[0])] !== undefined;
+  const width = Math.max(r1.length, isDayNext ? 0 : r2.length);
+  const out: string[] = [];
+  for (let i = 0; i < width; i++) {
+    const a = r1[i];
+    const b = isDayNext ? "" : r2[i];
+    out.push(norm(`${a ?? ""} ${b ?? ""}`));
   }
-  const sectionLabel = String(headerRow[0] ?? "").trim();
-  return { layout, hasVending, section: sectionLabel };
+  return out;
 }
 
-function extractDayValues(row: any[], layout: Layout, hasVending: boolean): Omit<ParsedRow, "date" | "_sheet" | "_section" | "_layout"> {
-  const zero = {
-    visiteurs: 0, nb_parties: 0, nb_cartes_vendues: 0,
-    ca_cartes_ht: 0, ca_pax_ht: 0, ca_merch_ht: 0,
-    ca_vending_pokemon_ht: 0, ca_vending_blindbox_ht: 0, ca_photomaton_ht: 0,
-    notes: "",
-  };
-  if (layout === "A") {
-    return {
-      ...zero,
-      visiteurs: Math.max(0, Math.trunc(toNum(row[3]))),
-      nb_parties: Math.max(0, Math.trunc(toNum(row[4]))),
-      ca_pax_ht: round2(toNum(row[5])),
-      ca_merch_ht: round2(toNum(row[13]) > 0 ? toNum(row[13]) : toNum(row[12]) / 1.2),
-    };
-  }
-  if (layout === "B") {
-    return {
-      ...zero,
-      visiteurs: Math.max(0, Math.trunc(toNum(row[3]))),
-      nb_parties: Math.max(0, Math.trunc(toNum(row[5]))),
-      ca_pax_ht: round2(toNum(row[6])),
-      ca_merch_ht: round2(toNum(row[17]) > 0 ? toNum(row[17]) : toNum(row[16]) / 1.2),
-      notes: String(row[19] ?? "").trim(),
-    };
-  }
-  // C
-  const merch = round2(toNum(row[17]) > 0 ? toNum(row[17]) : toNum(row[16]) / 1.2);
-  if (hasVending) {
-    return {
-      ...zero,
-      visiteurs: Math.max(0, Math.trunc(toNum(row[3]))),
-      nb_parties: Math.max(0, Math.trunc(toNum(row[4]))),
-      nb_cartes_vendues: Math.max(0, Math.trunc(toNum(row[5]))),
-      ca_pax_ht: round2(toNum(row[6])),
-      ca_cartes_ht: round2(toNum(row[7])),
-      ca_merch_ht: merch,
-      ca_vending_pokemon_ht: round2(toNum(row[19]) / 1.2),
-      ca_vending_blindbox_ht: round2(toNum(row[20]) / 1.2),
-      ca_photomaton_ht: round2(toNum(row[21]) / 1.2),
-      notes: String(row[22] ?? "").trim(),
-    };
-  }
+function detectColumns(headers: string[]): ColMap {
+  const find = (pred: (h: string) => boolean): number => headers.findIndex(pred);
+  const visiteurs = find((h) => h.includes("visiteur"));
+  const parties = find((h) => h.includes("parties"));
+  const ca_pax = find((h) => h.includes("ca ht") && h.includes("pax"));
+  const merch_ht = find((h) => h.includes("merch") && h.includes("ht") && !h.includes("ttc") && !h.includes("objectif") && !h.includes("obj "));
+  const vending_pokemon = find((h) => h.includes("vending") && h.includes("pokemon"));
+  // "vending" seul, sans "pokemon"
+  const vending_blindbox = headers.findIndex((h, i) => h.includes("vending") && !h.includes("pokemon") && i !== vending_pokemon);
+  const photo = find((h) => h.includes("photo"));
+  const notes = find((h) => h.includes("commentaire"));
   return {
-    ...zero,
-    visiteurs: Math.max(0, Math.trunc(toNum(row[3]))),
-    nb_parties: Math.max(0, Math.trunc(toNum(row[4]))),
-    nb_cartes_vendues: Math.max(0, Math.trunc(toNum(row[5]))),
-    ca_pax_ht: round2(toNum(row[6])),
-    ca_cartes_ht: round2(toNum(row[7])),
-    ca_merch_ht: merch,
-    notes: String(row[19] ?? "").trim(),
+    visiteurs,
+    parties,
+    cartes_vendues: parties >= 0 ? parties + 1 : -1,
+    ca_pax,
+    ca_cartes: ca_pax >= 0 ? ca_pax + 1 : -1,
+    merch_ht,
+    vending_pokemon,
+    vending_blindbox,
+    photo,
+    notes,
   };
 }
+
+function cellNum(row: any[], idx: number): number {
+  if (idx < 0) return 0;
+  return toNum(row[idx]);
+}
+function cellInt(row: any[], idx: number): number {
+  return Math.max(0, Math.trunc(cellNum(row, idx)));
+}
+
+const SKIP_SHEET_RE = /(totaux|detail\s*cartes|détail\s*cartes)/i;
 
 function parseWorkbook(wb: XLSX.WorkBook): { rows: ParsedRow[]; warnings: string[] } {
   const rows: ParsedRow[] = [];
   const warnings: string[] = [];
 
   for (const sheetName of wb.SheetNames) {
+    if (SKIP_SHEET_RE.test(sheetName)) continue;
     const ws = wb.Sheets[sheetName];
     if (!ws) continue;
     const grid: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null, blankrows: false });
     if (!grid.length) continue;
 
-    // Ne traiter que les feuilles qui ressemblent à un mois (au moins une section S1..S99)
     const hasSection = grid.some((r) => /^s\d{1,2}$/i.test(String(r?.[0] ?? "").trim()));
     if (!hasSection) continue;
 
-    let currentLayout: Layout | null = null;
-    let currentHasVending = false;
     let currentMonday: Date | null = null;
     let currentSection = "";
+    let cols: ColMap | null = null;
+    let headerSig = "";
 
     for (let i = 0; i < grid.length; i++) {
       const row = grid[i] ?? [];
       const colA = String(row[0] ?? "").trim();
 
-      // ligne d'entête de section S1..S99
       if (/^s\d{1,2}$/i.test(colA)) {
         const dt = parseSectionDate(row, sheetName);
         if (!dt) {
           warnings.push(`${sheetName} · ${colA} : date de section illisible, section ignorée`);
-          currentLayout = null;
+          cols = null;
           continue;
         }
         currentMonday = mondayOf(dt);
-        const det = detectLayout(row);
-        currentLayout = det.layout;
-        currentHasVending = det.hasVending;
         currentSection = `${sheetName} · ${colA}`;
+        // La ligne d'en-tête est la suivante (parfois répartie sur 2 lignes)
+        const headers = buildHeader(grid, i + 1);
+        cols = detectColumns(headers);
+        headerSig = `V${cols.visiteurs} P${cols.parties} X${cols.ca_pax} M${cols.merch_ht}`;
+        if (cols.ca_pax < 0 || cols.parties < 0 || cols.visiteurs < 0) {
+          warnings.push(`${sheetName} · ${colA} : en-têtes non reconnus (colonnes clés manquantes)`);
+          cols = null;
+        }
         continue;
       }
 
-      if (!currentLayout || !currentMonday) continue;
+      if (!cols || !currentMonday) continue;
       const dayIdx = DAYS_FR[norm(colA)];
       if (dayIdx === undefined) continue;
 
       const dayDate = addDays(currentMonday, dayIdx);
-      const values = extractDayValues(row, currentLayout, currentHasVending);
+      const values = {
+        visiteurs: cellInt(row, cols.visiteurs),
+        nb_parties: cellInt(row, cols.parties),
+        nb_cartes_vendues: cellInt(row, cols.cartes_vendues),
+        ca_pax_ht: cellNum(row, cols.ca_pax),
+        ca_cartes_ht: cellNum(row, cols.ca_cartes),
+        ca_merch_ht: cellNum(row, cols.merch_ht),
+        ca_vending_pokemon_ht: cellNum(row, cols.vending_pokemon),
+        ca_vending_blindbox_ht: cellNum(row, cols.vending_blindbox),
+        ca_photomaton_ht: cellNum(row, cols.photo),
+        notes: cols.notes >= 0 ? String(row[cols.notes] ?? "").trim() : "",
+      };
 
-      // Ignorer les jours totalement vides
       const totalCa =
         values.ca_cartes_ht + values.ca_pax_ht + values.ca_merch_ht +
         values.ca_vending_pokemon_ht + values.ca_vending_blindbox_ht + values.ca_photomaton_ht;
@@ -218,16 +222,16 @@ function parseWorkbook(wb: XLSX.WorkBook): { rows: ParsedRow[]; warnings: string
         ...values,
         _sheet: sheetName,
         _section: currentSection,
-        _layout: currentLayout,
+        _layout: headerSig,
       });
     }
   }
 
-  // Déduplication : dernière occurrence gagne
   const byDate = new Map<string, ParsedRow>();
   for (const r of rows) byDate.set(r.date, r);
   return { rows: Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date)), warnings };
 }
+
 
 // ------------------------------------------------------------
 // UI

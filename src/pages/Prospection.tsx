@@ -1005,3 +1005,303 @@ function ImportCsvDialog({
     </Dialog>
   );
 }
+
+/* -------------------- Cegid client link (Phase 3) -------------------- */
+
+type CegidSearchRow = { customer_id: string; name: string | null; typologie: string | null; ca_12m: number | null };
+type ProspectCa = { ca_total: number | null; ca_12m: number | null; nb_factures: number | null; premiere: string | null; derniere: string | null };
+
+function CegidClientSection({
+  prospect, onChanged,
+}: {
+  prospect: Prospect;
+  onChanged: (p: Prospect) => void;
+}) {
+  const linked = !!prospect.code_client?.trim();
+  return (
+    <div className="mt-6 rounded-lg border border-border/60 bg-muted/20 p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <Link2 className="h-4 w-4 text-[hsl(var(--space-prospection,258_90%_66%))]" />
+        <div className="text-sm font-semibold">Client Cegid & CA généré</div>
+      </div>
+      {linked
+        ? <LinkedClientView prospect={prospect} onChanged={onChanged} />
+        : <SearchClientView prospect={prospect} onChanged={onChanged} />}
+    </div>
+  );
+}
+
+function SearchClientView({
+  prospect, onChanged,
+}: {
+  prospect: Prospect;
+  onChanged: (p: Prospect) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [rows, setRows] = useState<CegidSearchRow[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [linking, setLinking] = useState<string | null>(null);
+  const [alsoClient, setAlsoClient] = useState(false);
+
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 2) { setRows([]); setSearching(false); return; }
+    setSearching(true);
+    const t = setTimeout(async () => {
+      const { data, error } = await (supabase as any).rpc("search_clients_prospection", { _q: term });
+      if (!error) setRows((data as CegidSearchRow[]) ?? []);
+      setSearching(false);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  const linkTo = async (row: CegidSearchRow) => {
+    setLinking(row.customer_id);
+    const payload: Partial<Prospect> = { code_client: row.customer_id };
+    if (alsoClient) payload.statut = "client";
+    const { data, error } = await (supabase as any)
+      .from("prospects").update(payload).eq("id", prospect.id).select("*").maybeSingle();
+    if (!error && alsoClient) {
+      await (supabase as any).from("prospect_events").insert({
+        prospect_id: prospect.id, type: "statut",
+        ancien_statut: prospect.statut, nouveau_statut: "client",
+      });
+    }
+    setLinking(null);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Client Cegid lié");
+    if (data) onChanged(data as Prospect);
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="text-xs text-muted-foreground">
+        Ce prospect n'est pas encore relié à un compte client Cegid.
+      </div>
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Input
+          className="pl-8"
+          placeholder="Rechercher un client Cegid (nom ou code)…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+      </div>
+      <label className="flex items-center gap-2 text-xs text-muted-foreground select-none">
+        <input type="checkbox" checked={alsoClient} onChange={(e) => setAlsoClient(e.target.checked)} />
+        Passer le statut à « Client » lors du lien
+      </label>
+      {q.trim().length >= 2 && (
+        <div className="rounded-md border border-border bg-background max-h-64 overflow-y-auto">
+          {searching && (
+            <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Recherche…
+            </div>
+          )}
+          {!searching && rows.length === 0 && (
+            <div className="p-2 text-xs text-muted-foreground italic">Aucun résultat.</div>
+          )}
+          {!searching && rows.map((r) => (
+            <button
+              key={r.customer_id}
+              type="button"
+              onClick={() => linkTo(r)}
+              disabled={linking === r.customer_id}
+              className="w-full text-left px-2 py-1.5 hover:bg-muted/60 transition-colors border-b border-border/40 last:border-b-0 flex items-center gap-2"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium truncate">{r.name || r.customer_id}</div>
+                <div className="text-[11px] text-muted-foreground truncate">
+                  {r.customer_id}{r.typologie ? ` · ${r.typologie}` : ""}
+                </div>
+              </div>
+              <div className="text-xs font-medium tabular-nums whitespace-nowrap">
+                {eur(r.ca_12m ?? 0)} <span className="text-muted-foreground font-normal">/ 12 m</span>
+              </div>
+              {linking === r.customer_id && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LinkedClientView({
+  prospect, onChanged,
+}: {
+  prospect: Prospect;
+  onChanged: (p: Prospect) => void;
+}) {
+  const code = prospect.code_client!;
+  const [ca, setCa] = useState<ProspectCa | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [unlinking, setUnlinking] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    (async () => {
+      const { data } = await (supabase as any).rpc("get_prospect_ca", { _code_client: code });
+      const first = Array.isArray(data) ? data[0] : data;
+      if (active) { setCa((first as ProspectCa) ?? null); setLoading(false); }
+    })();
+    return () => { active = false; };
+  }, [code]);
+
+  const unlink = async () => {
+    setUnlinking(true);
+    const { data, error } = await (supabase as any)
+      .from("prospects").update({ code_client: null }).eq("id", prospect.id).select("*").maybeSingle();
+    setUnlinking(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Lien retiré");
+    if (data) onChanged(data as Prospect);
+  };
+
+  const fmtDate = (s: string | null | undefined) =>
+    s ? new Date(s).toLocaleDateString("fr-FR") : "—";
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Lié au client</div>
+          <div className="text-sm font-medium truncate">{code}</div>
+        </div>
+        <Button size="sm" variant="outline" onClick={unlink} disabled={unlinking}>
+          {unlinking ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Link2Off className="h-4 w-4 mr-1" />}
+          Délier
+        </Button>
+      </div>
+      {loading ? (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Chargement du CA…
+        </div>
+      ) : (
+        <>
+          <div
+            className="rounded-md border p-3"
+            style={{
+              borderColor: "hsl(var(--space-prospection) / 0.35)",
+              background: "hsl(var(--space-prospection) / 0.08)",
+            }}
+          >
+            <div className="text-[11px] uppercase tracking-wider" style={{ color: "hsl(var(--space-prospection))" }}>
+              CA 12 mois
+            </div>
+            <div className="mt-1 font-display text-3xl font-semibold">{eur(ca?.ca_12m ?? 0)}</div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <MiniStat label="CA total" value={eur(ca?.ca_total ?? 0)} />
+            <MiniStat label="Factures" value={String(num(ca?.nb_factures))} />
+            <MiniStat label="Dernière" value={fmtDate(ca?.derniere)} />
+          </div>
+          <div className="text-[11px] text-muted-foreground">
+            Première facture : {fmtDate(ca?.premiere)}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-border bg-background p-2">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="mt-0.5 text-sm font-semibold truncate">{value}</div>
+    </div>
+  );
+}
+
+/* -------------------- Attribution / ROI panel (Phase 3) -------------------- */
+
+type AttributionRow = { dimension: "segment" | "source" | string; valeur: string | null; nb_clients: number | null; ca_attribue: number | null };
+
+function AttributionPanel() {
+  const [rows, setRows] = useState<AttributionRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const { data, error } = await (supabase as any).rpc("get_prospection_attribution");
+      if (!active) return;
+      if (error) { setRows([]); setLoading(false); return; }
+      setRows((data as AttributionRow[]) ?? []);
+      setLoading(false);
+    })();
+    return () => { active = false; };
+  }, []);
+
+  const segments = rows.filter((r) => r.dimension === "segment")
+    .sort((a, b) => num(b.ca_attribue) - num(a.ca_attribue));
+  const sources = rows.filter((r) => r.dimension === "source")
+    .sort((a, b) => num(b.ca_attribue) - num(a.ca_attribue));
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-3">
+      <div className="flex items-center gap-2 mb-3">
+        <TrendingUp className="h-4 w-4" style={{ color: "hsl(var(--space-prospection))" }} />
+        <div className="text-sm font-semibold">Attribution / ROI</div>
+        <div className="text-xs text-muted-foreground">— CA réel généré par les prospects gagnés</div>
+      </div>
+      {loading ? (
+        <div className="flex items-center gap-2 py-4 text-xs text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Chargement…
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="py-4 text-xs text-muted-foreground italic">
+          Aucune attribution pour l'instant. Liez des prospects « Client » à leur compte Cegid pour alimenter cette vue.
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          <AttributionList title="CA attribué par segment" rows={segments} labelize={(v) => segmentMeta(v).label} />
+          <AttributionList title="CA attribué par source" rows={sources} labelize={(v) => SOURCES.find((s) => s.key === v)?.label ?? v ?? "—"} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AttributionList({
+  title, rows, labelize,
+}: {
+  title: string;
+  rows: AttributionRow[];
+  labelize: (v: string | null) => string;
+}) {
+  const max = Math.max(1, ...rows.map((r) => num(r.ca_attribue)));
+  return (
+    <div>
+      <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">{title}</div>
+      {rows.length === 0 ? (
+        <div className="text-xs text-muted-foreground italic">Aucune donnée.</div>
+      ) : (
+        <ul className="space-y-1.5">
+          {rows.map((r, i) => {
+            const ca = num(r.ca_attribue);
+            const pct = Math.round((ca / max) * 100);
+            return (
+              <li key={`${r.dimension}-${r.valeur ?? "-"}-${i}`} className="space-y-0.5">
+                <div className="flex items-baseline gap-2 text-xs">
+                  <span className="font-medium truncate">{labelize(r.valeur)}</span>
+                  <span className="text-muted-foreground">· {num(r.nb_clients)} client{num(r.nb_clients) > 1 ? "s" : ""}</span>
+                  <span className="ml-auto font-semibold tabular-nums">{eur(ca)}</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full rounded-full"
+                    style={{ width: `${pct}%`, background: "hsl(var(--space-prospection))" }}
+                  />
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+

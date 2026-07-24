@@ -156,7 +156,7 @@ type Resume = {
 };
 
 export default function Prospection() {
-  const { isAdmin, isDirection, isLoading } = useAuth();
+  const { isAdmin, isDirection, canAccessProspection, isLoading } = useAuth();
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [loading, setLoading] = useState(true);
   const [resume, setResume] = useState<Resume | null>(null);

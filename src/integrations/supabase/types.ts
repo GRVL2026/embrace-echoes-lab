@@ -2781,6 +2781,18 @@ export type Database = {
           code: string
         }[]
       }
+      get_dashboard_ca_mois: {
+        Args: { _month: string }
+        Returns: {
+          ca_mois: number
+          ca_mois_n1: number
+          ecart_pct: number
+          jours_inclus: number
+          mois: string
+          mois_complet: boolean
+          nb_factures: number
+        }[]
+      }
       get_gaia_exercices: {
         Args: never
         Returns: {
@@ -2829,6 +2841,16 @@ export type Database = {
           marge_estimee: number
           nb_clients: number
           taux_moyen: number
+        }[]
+      }
+      get_ventes_familles_mois: {
+        Args: { _month: string }
+        Returns: {
+          ca_mois: number
+          ca_mois_n1: number
+          ecart_pct: number
+          famille: string
+          part_pct: number
         }[]
       }
       is_admin: { Args: never; Returns: boolean }

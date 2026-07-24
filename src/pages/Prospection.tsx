@@ -140,6 +140,8 @@ export default function Prospection() {
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [detecting, setDetecting] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [bulkSending, setBulkSending] = useState(false);
   const [lgmFilter, setLgmFilter] = useState<"all" | "loisirs" | "chr" | "retail" | "none">("all");
 
   const runDetection = useCallback(async () => {
@@ -159,6 +161,33 @@ export default function Prospection() {
       toast.error("Détection impossible", { description: (e as Error).message });
     } finally {
       setDetecting(false);
+    }
+  }, []);
+
+  const runPreparation = useCallback(async () => {
+    setPreparing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("preparer-prospects-agent", { body: {} });
+      if (error) throw error;
+      const prepared = Number((data as any)?.prepared ?? 0);
+      const candidats = Number((data as any)?.candidats ?? 0);
+      const errs = ((data as any)?.errors ?? []) as any[];
+      if (prepared > 0) {
+        toast.success(`${prepared} prospect(s) préparé(s)`, {
+          description: errs.length ? `${errs.length} erreur(s) ignorée(s)` : `${candidats} candidat(s) analysés`,
+        });
+      } else if (candidats === 0) {
+        toast("Aucun signal à préparer");
+      } else {
+        toast.error("Aucun prospect préparé", {
+          description: errs[0]?.error ?? "Erreurs pendant la préparation",
+        });
+      }
+      await load();
+    } catch (e) {
+      toast.error("Préparation impossible", { description: (e as Error).message });
+    } finally {
+      setPreparing(false);
     }
   }, []);
 

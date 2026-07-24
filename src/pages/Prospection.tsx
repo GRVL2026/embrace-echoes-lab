@@ -569,15 +569,15 @@ function KanbanCard({ prospect, onOpen }: { prospect: Prospect; onOpen: () => vo
                 <Zap className="h-2.5 w-2.5" /> Signal
               </Badge>
             )}
-            {prospect.lgm_lead_id && prospect.lgm_audience && (
+            {prospect.lgm_lead_id && (
               <Badge
                 variant="outline"
-                className="text-[10px] h-4 px-1.5 gap-0.5 border-violet-500/50 bg-violet-500/10 text-violet-600 dark:text-violet-300"
-                title={prospect.lgm_status ? `Statut LGM : ${prospect.lgm_status}` : "Envoyé vers LGM"}
+                className="text-[10px] h-4 px-1.5 gap-0.5 border-violet-500/50 bg-violet-500/10 text-violet-600 dark:text-violet-300 no-underline"
+                style={{ textDecoration: "none" }}
+                title={prospect.lgm_status ? `Statut LGM : ${formatLgmStatus(prospect.lgm_status)}` : "Envoyé vers LGM"}
               >
                 <Send className="h-2.5 w-2.5" />
-                LGM · {prospect.lgm_audience.replace(/^Arcade OS – /, "")}
-                {prospect.lgm_status ? ` · ${prospect.lgm_status}` : ""}
+                LGM{prospect.lgm_status ? ` · ${formatLgmStatus(prospect.lgm_status)}` : ""}
               </Badge>
             )}
             {prospect.pret_a_envoyer && !prospect.lgm_lead_id && (

@@ -108,6 +108,51 @@ function statutTone(s: string | null): { bg: string; fg: string; label: string }
   return { bg: "bg-sky-500/15", fg: "text-sky-400 border-sky-500/30", label: s ?? "En commande" };
 }
 
+type AccentKey = "sky" | "amber" | "violet" | "emerald";
+const ACCENTS: Record<AccentKey, { border: string; bg: string; pill: string; icon: string; value: string }> = {
+  sky:     { border: "border-l-sky-500",     bg: "bg-sky-500/5",     pill: "bg-sky-500/15",     icon: "text-sky-400",     value: "text-sky-100" },
+  amber:   { border: "border-l-amber-500",   bg: "bg-amber-500/5",   pill: "bg-amber-500/15",   icon: "text-amber-400",   value: "text-amber-100" },
+  violet:  { border: "border-l-violet-500",  bg: "bg-violet-500/5",  pill: "bg-violet-500/15",  icon: "text-violet-300",  value: "text-violet-100" },
+  emerald: { border: "border-l-emerald-500", bg: "bg-emerald-500/5", pill: "bg-emerald-500/15", icon: "text-emerald-400", value: "text-emerald-100" },
+};
+
+function AccentKpiCard({
+  accent, icon, title, value, hint, onClick, ariaLabel,
+}: {
+  accent: AccentKey;
+  icon: React.ReactNode;
+  title: string;
+  value: string;
+  hint?: string;
+  onClick?: () => void;
+  ariaLabel?: string;
+}) {
+  const a = ACCENTS[accent];
+  const interactive = typeof onClick === "function";
+  const cls = cn(
+    "block w-full text-left rounded-lg border border-border border-l-4 bg-card/40 p-4 min-h-[92px]",
+    a.border, a.bg,
+    interactive && "cursor-pointer transition-colors hover:bg-card/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 active:translate-y-[1px]",
+  );
+  const inner = (
+    <>
+      <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span className="truncate">{title}</span>
+        <span className={cn("flex h-7 w-7 items-center justify-center rounded-full", a.pill, a.icon)}>
+          {icon}
+        </span>
+      </div>
+      <div className={cn("font-display text-2xl font-bold tabular-nums", a.value)}>{value}</div>
+      {hint && <div className="mt-1 text-xs text-muted-foreground">{hint}</div>}
+    </>
+  );
+  return interactive ? (
+    <button type="button" onClick={onClick} aria-label={ariaLabel} className={cls}>{inner}</button>
+  ) : (
+    <div className={cls}>{inner}</div>
+  );
+}
+
 export default function Achats() {
   const { isAdmin, isDirection, loading } = useAuth();
   const [openSheet, setOpenSheet] = useState<SheetKind>(null);

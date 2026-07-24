@@ -264,9 +264,10 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ matched: true, prospect: prospect.id, event, action }),
+      JSON.stringify({ matched: true, created: false, prospect: prospect.id, event, action }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
+
   } catch (e) {
     console.error('lgm-webhook error', (e as Error).message);
     // Toujours 200 pour éviter les retries LGM

@@ -60,6 +60,9 @@ type Prospect = {
   ca_annuel: number | null;
   activite: string | null;
   site_web: string | null;
+  pret_a_envoyer: boolean | null;
+  accroche_defaut: string | null;
+  prepare_at: string | null;
   created_at: string;
   updated_at: string;
 };

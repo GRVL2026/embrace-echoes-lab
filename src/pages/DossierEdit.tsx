@@ -1232,7 +1232,7 @@ export default function DossierEdit() {
 
 
             {/* SECTION B : Jeux proposés */}
-            <section className="mt-6 space-y-4 rounded-lg border border-border bg-card/40 p-6">
+            <section className="mt-6 min-w-0 space-y-4 rounded-lg border border-border bg-card/40 p-4 sm:p-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h3 className="font-display text-lg font-semibold">Jeux proposés</h3>

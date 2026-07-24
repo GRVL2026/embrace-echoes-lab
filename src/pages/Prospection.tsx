@@ -538,18 +538,14 @@ function ProspectSheet({
               )}
             </div>
           </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Montant estimé (€)">
-              <Input
-                type="number"
-                value={form.montant_estime ?? ""}
-                onChange={(e) => set("montant_estime", e.target.value === "" ? null : Number(e.target.value))}
-              />
-            </Field>
-            <Field label="Code client ERP">
-              <Input value={form.code_client ?? ""} onChange={(e) => set("code_client", e.target.value)} />
-            </Field>
-          </div>
+          <Field label="Montant estimé (€)">
+            <Input
+              type="number"
+              value={form.montant_estime ?? ""}
+              onChange={(e) => set("montant_estime", e.target.value === "" ? null : Number(e.target.value))}
+            />
+          </Field>
+
           <Field label="Notes internes">
             <Textarea rows={3} value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
           </Field>

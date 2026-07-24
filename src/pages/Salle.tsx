@@ -128,13 +128,42 @@ const eur2 = (n: number) =>
   n.toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 2 });
 const pct = (n: number) => `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
 
-// Les vending (Pokémon, blind box) et le photomaton encaissent VIA les TPA Pax :
-// leurs recettes sont déjà incluses dans ca_pax_ht. Le total ne compte donc que
-// ca_pax_ht + ca_cartes_ht + ca_merch_ht pour éviter le double comptage.
-const TOTAL_KEYS: Array<keyof SalleJournee> = ["ca_pax_ht", "ca_cartes_ht", "ca_merch_ht"];
+// RÈGLE MÉTIER (patron) — le CA de la salle est UNIQUEMENT :
+//   CA salle = ca_pax_ht + ca_cartes_ht
+// Les vending Pokémon, vending blind box et photomaton sont DÉJÀ INCLUS
+// dans ca_pax_ht (ce sont des pax sur machines). Il ne faut donc jamais les
+// rajouter. Le merch (boutique) est un CA à part et n'entre pas dans le CA salle.
+const TOTAL_KEYS: Array<keyof SalleJournee> = ["ca_pax_ht", "ca_cartes_ht"];
 
 const journeeCaTotal = (j: SalleJournee): number =>
   TOTAL_KEYS.reduce((s, k) => s + Number((j as any)[k] ?? 0), 0);
+
+// "Jeux" = pax hors vending/photo (ventilation informative "dont")
+const journeeJeux = (j: SalleJournee): number =>
+  Math.max(
+    0,
+    Number(j.ca_pax_ht ?? 0)
+      - Number(j.ca_vending_pokemon_ht ?? 0)
+      - Number(j.ca_vending_blindbox_ht ?? 0)
+      - Number(j.ca_photomaton_ht ?? 0),
+  );
+
+// Sources du CA affichées dans le dashboard (donut, meilleure source, agrégats).
+// La somme Jeux + Vending Pokémon + Vending Blind Box + Photomaton = ca_pax_ht,
+// puis + Cartes = CA salle. Pas de double comptage.
+type DashSource = {
+  key: string;
+  label: string;
+  color: string;
+  compute: (j: SalleJournee) => number;
+};
+const DASH_SOURCES: DashSource[] = [
+  { key: "jeux", label: "Jeux", color: "hsl(224 68% 59%)", compute: journeeJeux },
+  { key: "ca_cartes_ht", label: "Cartes cashless", color: "hsl(273 87% 72%)", compute: (j) => Number(j.ca_cartes_ht ?? 0) },
+  { key: "ca_vending_pokemon_ht", label: "Vending Pokémon", color: "hsl(45 100% 55%)", compute: (j) => Number(j.ca_vending_pokemon_ht ?? 0) },
+  { key: "ca_vending_blindbox_ht", label: "Vending Blind Box", color: "hsl(273 87% 85%)", compute: (j) => Number(j.ca_vending_blindbox_ht ?? 0) },
+  { key: "ca_photomaton_ht", label: "Photomaton", color: "hsl(0 0% 88%)", compute: (j) => Number(j.ca_photomaton_ht ?? 0) },
+];
 
 // ------------------------------------------------------------
 // Page

@@ -130,6 +130,7 @@ export default function Prospection() {
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [detecting, setDetecting] = useState(false);
+  const [lgmFilter, setLgmFilter] = useState<"all" | "loisirs" | "chr" | "retail" | "none">("all");
 
   const runDetection = useCallback(async () => {
     setDetecting(true);

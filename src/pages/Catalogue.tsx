@@ -1,16 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserMenu } from "@/components/UserMenu";
 import { MobileNav } from "@/components/MobileNav";
 import { AppTopNav } from "@/components/AppTopNav";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {
   Loader2,
+  RefreshCw,
   Search,
   ExternalLink,
   Zap,
@@ -28,6 +31,8 @@ import {
 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { shopifyThumb, stockErpBadge, cn } from "@/lib/utils";
+import { fetchShopifyCatalog } from "@/lib/shopifyApi";
+import { syncShopifyToDB } from "@/lib/catalogDB";
 
 type SiteProduct = {
   id: string;
@@ -101,25 +106,47 @@ export default function Catalogue() {
   const [famille, setFamille] = useState<string>("all");
   const [includeErp, setIncludeErp] = useState(true);
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      const [{ data: site }, { data: erp }] = await Promise.all([
-        (supabase as any)
-          .from("catalog_products")
-          .select("id, name, category, vendor, price, price_erp_ht, cegid_code, images, product_url, stock, stock_erp")
-          .eq("active", true)
-          .order("name"),
-        (supabase as any)
-          .from("catalogue_erp")
-          .select("code, description, famille, prix_ht, stock")
-          .order("description"),
-      ]);
-      setSiteRows((site as SiteProduct[]) ?? []);
-      setErpRows((erp as ErpProduct[]) ?? []);
-      setLoading(false);
-    })();
+  const [syncing, setSyncing] = useState(false);
+
+  const loadProducts = useCallback(async () => {
+    setLoading(true);
+    const [{ data: site }, { data: erp }] = await Promise.all([
+      (supabase as any)
+        .from("catalog_products")
+        .select("id, name, category, vendor, price, price_erp_ht, cegid_code, images, product_url, stock, stock_erp")
+        .eq("active", true)
+        .order("name"),
+      (supabase as any)
+        .from("catalogue_erp")
+        .select("code, description, famille, prix_ht, stock")
+        .order("description"),
+    ]);
+    setSiteRows((site as SiteProduct[]) ?? []);
+    setErpRows((erp as ErpProduct[]) ?? []);
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
+
+  const handleSyncShopify = async () => {
+    setSyncing(true);
+    try {
+      const products = await fetchShopifyCatalog();
+      if (products.length === 0) {
+        toast.info("Aucun produit trouvé dans Shopify");
+        return;
+      }
+      await syncShopifyToDB(products);
+      toast.success(`Catalogue synchronisé — ${products.length} produit${products.length > 1 ? "s" : ""}`);
+      await loadProducts();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erreur de synchronisation Shopify");
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   // ERP articles NOT already represented by a site product (via cegid_code)
   const erpOnly = useMemo(() => {
@@ -215,6 +242,28 @@ export default function Catalogue() {
                 ))}
               </select>
             </div>
+            {isAdmin && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleSyncShopify}
+                disabled={syncing}
+                className="h-9 gap-2"
+              >
+                {syncing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Synchronisation…
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4" />
+                    Synchroniser avec Shopify
+                  </>
+                )}
+              </Button>
+            )}
             <div className="flex items-center gap-2 rounded-md border border-border bg-card/40 px-3 py-1.5">
               <Switch id="incl-erp" checked={includeErp} onCheckedChange={setIncludeErp} />
               <Label htmlFor="incl-erp" className="text-xs cursor-pointer">

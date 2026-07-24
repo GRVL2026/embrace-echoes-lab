@@ -392,8 +392,8 @@ const MAPPERS: Record<string, { table: string; map: Mapper; pk?: string }> = {
       };
       return {
         contact_id: intNum(pickKey(r, ['DefContactID', 'DefContact', 'ContactID', 'Id', 'ID'])),
-        nom: trim(pickKey(r, ['DisplayName', 'NomComplet', 'Nom', 'FullName', 'Name'])),
-        login: trim(pickKey(r, ['Login', 'Username', 'UserName'])),
+        nom: trim(pickKey(r, ['EmployeeName', 'DisplayName', 'NomComplet', 'Nom', 'FullName', 'Name'])),
+        login: trim(pickKey(r, ['EmployeeID', 'Login', 'Username', 'UserName'])),
       };
     },
   },

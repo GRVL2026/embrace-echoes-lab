@@ -38,3 +38,6 @@ verify_jwt = false
 
 [functions.gaia-entreprises]
 verify_jwt = false
+
+[functions.detecter-signaux-etablissements]
+verify_jwt = false

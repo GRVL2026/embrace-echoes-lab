@@ -781,6 +781,138 @@ export type Database = {
         }
         Relationships: []
       }
+      gaia_achats: {
+        Row: {
+          bateau: string | null
+          branch: string | null
+          class_id: string | null
+          code_fourn: string | null
+          cout_revient: number | null
+          created_at: string
+          date_cde: string | null
+          date_liv: string | null
+          date_paiement: string | null
+          description: string | null
+          devise: string | null
+          eta: string | null
+          etd: string | null
+          id: number
+          inventory_id: string | null
+          item_class: string | null
+          libelle_cde: string | null
+          line_nbr: number | null
+          montant_facture: number | null
+          montant_ligne: number | null
+          montant_ouvert: number | null
+          n_cde: string | null
+          nom_fourn: string | null
+          num_conteneur: string | null
+          num_dossier: string | null
+          order_nbr: string | null
+          order_type: string | null
+          pays_fourn: string | null
+          qte_cdee: number | null
+          qte_facturee: number | null
+          qte_recue: number | null
+          qte_recue_stock: number | null
+          qte_restante: number | null
+          reste_a_facturer: number | null
+          societe: string | null
+          statut: string | null
+          taille_conteneur: string | null
+          taux_change: number | null
+          transitaire: string | null
+          type_cde: string | null
+          vendor_ref: string | null
+        }
+        Insert: {
+          bateau?: string | null
+          branch?: string | null
+          class_id?: string | null
+          code_fourn?: string | null
+          cout_revient?: number | null
+          created_at?: string
+          date_cde?: string | null
+          date_liv?: string | null
+          date_paiement?: string | null
+          description?: string | null
+          devise?: string | null
+          eta?: string | null
+          etd?: string | null
+          id?: number
+          inventory_id?: string | null
+          item_class?: string | null
+          libelle_cde?: string | null
+          line_nbr?: number | null
+          montant_facture?: number | null
+          montant_ligne?: number | null
+          montant_ouvert?: number | null
+          n_cde?: string | null
+          nom_fourn?: string | null
+          num_conteneur?: string | null
+          num_dossier?: string | null
+          order_nbr?: string | null
+          order_type?: string | null
+          pays_fourn?: string | null
+          qte_cdee?: number | null
+          qte_facturee?: number | null
+          qte_recue?: number | null
+          qte_recue_stock?: number | null
+          qte_restante?: number | null
+          reste_a_facturer?: number | null
+          societe?: string | null
+          statut?: string | null
+          taille_conteneur?: string | null
+          taux_change?: number | null
+          transitaire?: string | null
+          type_cde?: string | null
+          vendor_ref?: string | null
+        }
+        Update: {
+          bateau?: string | null
+          branch?: string | null
+          class_id?: string | null
+          code_fourn?: string | null
+          cout_revient?: number | null
+          created_at?: string
+          date_cde?: string | null
+          date_liv?: string | null
+          date_paiement?: string | null
+          description?: string | null
+          devise?: string | null
+          eta?: string | null
+          etd?: string | null
+          id?: number
+          inventory_id?: string | null
+          item_class?: string | null
+          libelle_cde?: string | null
+          line_nbr?: number | null
+          montant_facture?: number | null
+          montant_ligne?: number | null
+          montant_ouvert?: number | null
+          n_cde?: string | null
+          nom_fourn?: string | null
+          num_conteneur?: string | null
+          num_dossier?: string | null
+          order_nbr?: string | null
+          order_type?: string | null
+          pays_fourn?: string | null
+          qte_cdee?: number | null
+          qte_facturee?: number | null
+          qte_recue?: number | null
+          qte_recue_stock?: number | null
+          qte_restante?: number | null
+          reste_a_facturer?: number | null
+          societe?: string | null
+          statut?: string | null
+          taille_conteneur?: string | null
+          taux_change?: number | null
+          transitaire?: string | null
+          type_cde?: string | null
+          vendor_ref?: string | null
+        }
+        Relationships: []
+      }
       gaia_carnet_snapshot: {
         Row: {
           categorie: string | null

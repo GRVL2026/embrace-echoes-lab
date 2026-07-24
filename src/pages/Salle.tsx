@@ -738,8 +738,8 @@ function DashboardTab() {
   const bestSource = useMemo(() => {
     if (!displayWeek) return null;
     let best: { label: string; value: number; color: string } | null = null;
-    for (const s of SOURCES) {
-      const v = displayWeek.bySource[s.key as string] ?? 0;
+    for (const s of DASH_SOURCES) {
+      const v = displayWeek.bySource[s.key] ?? 0;
       if (!best || v > best.value) best = { label: s.label, value: v, color: s.color };
     }
     return best;

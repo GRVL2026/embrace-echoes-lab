@@ -12,6 +12,11 @@ const CMD_DARK = "#059669";
 
 type HebdoRow = { jour: string; type_doc: "devis" | "commande"; univers: "jeux" | "magasin"; n_docs: number };
 type JourDoc = { n_cde: string; type_doc: "devis" | "commande"; code_client: string | null; montant_ht: number | null; univers: "jeux" | "magasin" | null; proprietaire: string | null };
+type SemaineDoc = JourDoc & { jour: string };
+
+type DetailSelection =
+  | { kind: "jour"; day: string }
+  | { kind: "semaine"; typeDoc: "devis" | "commande" };
 
 function isoMonday(d: Date) {
   const x = new Date(d);
@@ -34,6 +39,37 @@ function addDays(d: Date, n: number) {
 const eur = (v: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(v || 0);
 
+const LEGEND_ITEMS: { key: string; label: string; color: string; dashed: boolean }[] = [
+  { key: "devis_jeux", label: "Devis · Jeux", color: DEVIS_DARK, dashed: false },
+  { key: "devis_magasin", label: "Devis · Magasin", color: DEVIS_DARK, dashed: true },
+  { key: "commandes_jeux", label: "Commandes · Jeux", color: CMD_DARK, dashed: false },
+  { key: "commandes_magasin", label: "Commandes · Magasin", color: CMD_DARK, dashed: true },
+];
+
+function CustomLegend() {
+  return (
+    <div className="flex flex-wrap gap-x-4 gap-y-1.5 justify-center px-2 pt-1">
+      {LEGEND_ITEMS.map((it) => (
+        <div key={it.key} className="flex items-center gap-1.5 text-[11px] text-foreground/85">
+          <svg width="22" height="8" aria-hidden>
+            <line
+              x1="1"
+              y1="4"
+              x2="21"
+              y2="4"
+              stroke={it.color}
+              strokeWidth={2}
+              strokeDasharray={it.dashed ? "4 3" : undefined}
+              strokeLinecap="round"
+            />
+          </svg>
+          <span>{it.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function WeekActivitySection() {
   const today = new Date();
   const monday = isoMonday(today);
@@ -44,7 +80,7 @@ export function WeekActivitySection() {
   const prevIsoDays = prevDays.map(toISODate);
   const todayIso = toISODate(today);
 
-  const [openDay, setOpenDay] = useState<string | null>(null);
+  const [selection, setSelection] = useState<DetailSelection | null>(null);
 
   const { data: hebdo } = useQuery({
     queryKey: ["briefing-activite-hebdo"],
@@ -89,6 +125,11 @@ export function WeekActivitySection() {
     return { chartData: chart, totals: curAgg, prevTotals: prevAgg, splits: curSplit };
   }, [hebdo, currentIsoDays.join(","), prevIsoDays.join(",")]);
 
+  const selectDay = (iso: string) =>
+    setSelection((s) => (s?.kind === "jour" && s.day === iso ? null : { kind: "jour", day: iso }));
+  const selectCard = (t: "devis" | "commande") =>
+    setSelection((s) => (s?.kind === "semaine" && s.typeDoc === t ? null : { kind: "semaine", typeDoc: t }));
+
   return (
     <div>
       <div className="mb-2 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Semaine en cours</div>
@@ -102,6 +143,8 @@ export function WeekActivitySection() {
           magasin={splits.devis_magasin}
           color={DEVIS_DARK}
           colorLight={DEVIS}
+          active={selection?.kind === "semaine" && selection.typeDoc === "devis"}
+          onClick={() => selectCard("devis")}
         />
         <StatCard
           label="Commandes saisies"
@@ -111,6 +154,8 @@ export function WeekActivitySection() {
           magasin={splits.commandes_magasin}
           color={CMD_DARK}
           colorLight={CMD}
+          active={selection?.kind === "semaine" && selection.typeDoc === "commande"}
+          onClick={() => selectCard("commande")}
         />
       </div>
 
@@ -122,7 +167,7 @@ export function WeekActivitySection() {
               margin={{ top: 10, right: 12, bottom: 4, left: -20 }}
               onClick={(e: any) => {
                 const iso = e?.activePayload?.[0]?.payload?.iso;
-                if (iso) setOpenDay((d) => (d === iso ? null : iso));
+                if (iso) selectDay(iso);
               }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
@@ -132,7 +177,7 @@ export function WeekActivitySection() {
                 contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }}
                 labelStyle={{ color: "hsl(var(--foreground))" }}
               />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Legend content={<CustomLegend />} verticalAlign="bottom" />
               {currentIsoDays.includes(todayIso) && (
                 <ReferenceLine
                   x={["Lun", "Mar", "Mer", "Jeu", "Ven"][currentIsoDays.indexOf(todayIso)]}
@@ -141,32 +186,35 @@ export function WeekActivitySection() {
                   label={{ value: "Auj.", fill: "hsl(var(--primary))", fontSize: 10, position: "top" }}
                 />
               )}
-              <Line type="monotone" dataKey="devis_jeux" name="Devis · Jeux" stroke={DEVIS} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5, cursor: "pointer" }} />
-              <Line type="monotone" dataKey="devis_magasin" name="Devis · Magasin" stroke={DEVIS} strokeWidth={2} strokeDasharray="4 3" dot={{ r: 3 }} activeDot={{ r: 5, cursor: "pointer" }} />
-              <Line type="monotone" dataKey="commandes_jeux" name="Commandes · Jeux" stroke={CMD} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5, cursor: "pointer" }} />
-              <Line type="monotone" dataKey="commandes_magasin" name="Commandes · Magasin" stroke={CMD} strokeWidth={2} strokeDasharray="4 3" dot={{ r: 3 }} activeDot={{ r: 5, cursor: "pointer" }} />
+              <Line type="monotone" dataKey="devis_jeux" name="Devis · Jeux" stroke={DEVIS_DARK} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5, cursor: "pointer" }} />
+              <Line type="monotone" dataKey="devis_magasin" name="Devis · Magasin" stroke={DEVIS_DARK} strokeWidth={2} strokeDasharray="4 3" dot={{ r: 3 }} activeDot={{ r: 5, cursor: "pointer" }} />
+              <Line type="monotone" dataKey="commandes_jeux" name="Commandes · Jeux" stroke={CMD_DARK} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5, cursor: "pointer" }} />
+              <Line type="monotone" dataKey="commandes_magasin" name="Commandes · Magasin" stroke={CMD_DARK} strokeWidth={2} strokeDasharray="4 3" dot={{ r: 3 }} activeDot={{ r: 5, cursor: "pointer" }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
         <div className="flex flex-wrap gap-1.5 mt-2 px-1">
-          {chartData.map((d) => (
-            <button
-              key={d.iso}
-              onClick={() => setOpenDay((v) => (v === d.iso ? null : d.iso))}
-              className={cn(
-                "text-[10px] px-2 py-0.5 rounded border transition-colors",
-                openDay === d.iso
-                  ? "border-primary bg-primary/15 text-primary"
-                  : "border-border/60 text-muted-foreground hover:text-foreground hover:border-border",
-              )}
-            >
-              {d.label} {new Date(d.iso + "T00:00:00").getDate()}
-            </button>
-          ))}
+          {chartData.map((d) => {
+            const active = selection?.kind === "jour" && selection.day === d.iso;
+            return (
+              <button
+                key={d.iso}
+                onClick={() => selectDay(d.iso)}
+                className={cn(
+                  "text-[10px] px-2 py-0.5 rounded border transition-colors",
+                  active
+                    ? "border-primary bg-primary/15 text-primary"
+                    : "border-border/60 text-muted-foreground hover:text-foreground hover:border-border",
+                )}
+              >
+                {d.label} {new Date(d.iso + "T00:00:00").getDate()}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {openDay && <DayDetail day={openDay} onClose={() => setOpenDay(null)} />}
+      {selection && <DocsDetail selection={selection} onClose={() => setSelection(null)} />}
     </div>
   );
 }
@@ -179,6 +227,8 @@ function StatCard({
   magasin,
   color,
   colorLight,
+  active,
+  onClick,
 }: {
   label: string;
   total: number;
@@ -187,6 +237,8 @@ function StatCard({
   magasin: number;
   color: string;
   colorLight: string;
+  active?: boolean;
+  onClick?: () => void;
 }) {
   const delta = total - prev;
   const DeltaIcon = delta > 0 ? TrendingUp : delta < 0 ? TrendingDown : Minus;
@@ -195,11 +247,18 @@ function StatCard({
   const pctJeux = totalSplit > 0 ? (jeux / totalSplit) * 100 : 0;
 
   return (
-    <div
-      className="rounded-lg border p-3"
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "text-left rounded-lg border p-3 cursor-pointer transition-all hover:brightness-110 hover:-translate-y-0.5",
+        active && "ring-2 ring-offset-0",
+      )}
       style={{
         borderColor: `${color}55`,
         background: `linear-gradient(135deg, ${color}18, ${color}05)`,
+        // @ts-expect-error CSS var for ring color
+        "--tw-ring-color": color,
       }}
     >
       <div className="flex items-baseline justify-between gap-2">
@@ -226,24 +285,33 @@ function StatCard({
       <div className="mt-1 text-[11px] text-muted-foreground">
         <span className="text-foreground/80">{jeux}</span> Jeux · <span className="text-foreground/80">{magasin}</span> Magasin
       </div>
-    </div>
+    </button>
   );
 }
 
-function DayDetail({ day, onClose }: { day: string; onClose: () => void }) {
+function DocsDetail({ selection, onClose }: { selection: DetailSelection; onClose: () => void }) {
+  const isJour = selection.kind === "jour";
+
   const { data, isLoading } = useQuery({
-    queryKey: ["briefing-jour-docs", day],
-    queryFn: async (): Promise<JourDoc[]> => {
-      const { data, error } = await (supabase as any).rpc("get_briefing_jour_docs", { _jour: day });
-      if (error) throw error;
-      return (data ?? []) as JourDoc[];
+    queryKey: isJour
+      ? ["briefing-jour-docs", (selection as any).day]
+      : ["briefing-semaine-docs", (selection as any).typeDoc],
+    queryFn: async (): Promise<SemaineDoc[]> => {
+      if (isJour) {
+        const { data, error } = await (supabase as any).rpc("get_briefing_jour_docs", { _jour: (selection as any).day });
+        if (error) throw error;
+        return ((data ?? []) as JourDoc[]).map((d) => ({ ...d, jour: (selection as any).day }));
+      } else {
+        const { data, error } = await (supabase as any).rpc("get_briefing_semaine_docs", { _type_doc: (selection as any).typeDoc });
+        if (error) throw error;
+        return (data ?? []) as SemaineDoc[];
+      }
     },
   });
 
-  // Resolve client names via v_gaia_carnet_documents
   const nCdes = useMemo(() => (data ?? []).map((d) => d.n_cde).filter(Boolean), [data]);
   const { data: clientMap } = useQuery({
-    queryKey: ["briefing-jour-clients", day, nCdes.join(",")],
+    queryKey: ["briefing-docs-clients", isJour ? (selection as any).day : (selection as any).typeDoc, nCdes.join(",")],
     enabled: nCdes.length > 0,
     queryFn: async (): Promise<Record<string, string>> => {
       const { data, error } = await (supabase as any)
@@ -257,16 +325,16 @@ function DayDetail({ day, onClose }: { day: string; onClose: () => void }) {
     },
   });
 
-  const dateLabel = new Date(day + "T00:00:00").toLocaleDateString("fr-FR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
+  const title = isJour
+    ? `Saisies du ${new Date((selection as any).day + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}`
+    : (selection as any).typeDoc === "devis"
+      ? "Devis de la semaine"
+      : "Commandes de la semaine";
 
   return (
     <div className="mt-3 rounded-lg border border-primary/30 bg-primary/5">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border/60">
-        <div className="text-sm font-semibold">Saisies du {dateLabel}</div>
+        <div className="text-sm font-semibold">{title}</div>
         <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
           <X className="h-4 w-4" />
         </button>
@@ -275,12 +343,15 @@ function DayDetail({ day, onClose }: { day: string; onClose: () => void }) {
         {isLoading ? (
           <div className="p-3 text-xs text-muted-foreground">Chargement…</div>
         ) : (data?.length ?? 0) === 0 ? (
-          <div className="p-3 text-xs text-muted-foreground">Aucune saisie ce jour.</div>
+          <div className="p-3 text-xs text-muted-foreground">Aucune saisie.</div>
         ) : (
           <ul className="divide-y divide-border/40">
             {data!.map((d, i) => {
               const isDevis = d.type_doc === "devis";
               const clientName = (clientMap?.[d.n_cde] || d.code_client || "—").trim();
+              const dayShort = !isJour && d.jour
+                ? new Date(String(d.jour).slice(0, 10) + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" })
+                : null;
               return (
                 <li key={i} className="flex items-center gap-2 px-3 py-2 text-xs">
                   <span
@@ -292,6 +363,7 @@ function DayDetail({ day, onClose }: { day: string; onClose: () => void }) {
                   >
                     {isDevis ? "Devis" : "Cmd"}
                   </span>
+                  {dayShort && <span className="text-[10px] text-muted-foreground w-14 flex-shrink-0">{dayShort}</span>}
                   <span className="font-mono text-[11px] text-muted-foreground">{d.n_cde}</span>
                   <span className="flex-1 truncate text-foreground/90">{clientName || d.code_client}</span>
                   <span

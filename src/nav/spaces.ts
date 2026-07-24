@@ -21,6 +21,7 @@ import {
   Gamepad2,
   Grid2x2,
   ShoppingBag,
+  Target,
   type LucideIcon,
 } from "lucide-react";
 

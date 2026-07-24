@@ -240,7 +240,7 @@ export default function Prospection() {
       </div>
     );
   }
-  if (!isAdmin && !isDirection) {
+  if (!canAccessProspection) {
     return <Navigate to="/" replace />;
   }
 

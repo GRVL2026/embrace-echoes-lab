@@ -32,7 +32,7 @@ export type SpaceKey =
   | "pilotage"
   | "ecommerce"
   | "sav"
-  | "logistique"
+  | "achats"
   | "reglages";
 
 export type NavCtx = {

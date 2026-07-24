@@ -139,13 +139,24 @@ function segmentMeta(s: string | null | undefined) {
   return SEGMENTS.find((x) => x.key === s) ?? SEGMENTS[SEGMENTS.length - 1];
 }
 
+function formatLgmStatus(raw: string | null | undefined): string {
+  if (!raw) return "";
+  const up = raw.toUpperCase();
+  if (up.includes("CONNECTION_ACCEPTED")) return "Connexion acceptée";
+  if (up.includes("REPLIED") || up.includes("REPLY") || up.includes("ANSWER")) return "A répondu";
+  if (up.includes("MESSAGE_SENT") || up.includes("SENT")) return "Message envoyé";
+  if (up.includes("OPENED")) return "Email ouvert";
+  const clean = raw.replace(/_/g, " ").toLowerCase().trim();
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
+}
+
 type Resume = {
   total: number; nouveau: number; connecte: number; repondu: number; rdv: number;
   devis: number; client: number; perdu: number; ca_attribue: number;
 };
 
 export default function Prospection() {
-  const { isAdmin, isDirection, isLoading } = useAuth();
+  const { isAdmin, isDirection, canAccessProspection, isLoading } = useAuth();
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [loading, setLoading] = useState(true);
   const [resume, setResume] = useState<Resume | null>(null);
@@ -229,7 +240,7 @@ export default function Prospection() {
       </div>
     );
   }
-  if (!isAdmin && !isDirection) {
+  if (!canAccessProspection) {
     return <Navigate to="/" replace />;
   }
 
@@ -569,15 +580,15 @@ function KanbanCard({ prospect, onOpen }: { prospect: Prospect; onOpen: () => vo
                 <Zap className="h-2.5 w-2.5" /> Signal
               </Badge>
             )}
-            {prospect.lgm_lead_id && prospect.lgm_audience && (
+            {prospect.lgm_lead_id && (
               <Badge
                 variant="outline"
-                className="text-[10px] h-4 px-1.5 gap-0.5 border-violet-500/50 bg-violet-500/10 text-violet-600 dark:text-violet-300"
-                title={prospect.lgm_status ? `Statut LGM : ${prospect.lgm_status}` : "Envoyé vers LGM"}
+                className="text-[10px] h-4 px-1.5 gap-0.5 border-violet-500/50 bg-violet-500/10 text-violet-600 dark:text-violet-300 no-underline"
+                style={{ textDecoration: "none" }}
+                title={prospect.lgm_status ? `Statut LGM : ${formatLgmStatus(prospect.lgm_status)}` : "Envoyé vers LGM"}
               >
                 <Send className="h-2.5 w-2.5" />
-                LGM · {prospect.lgm_audience.replace(/^Arcade OS – /, "")}
-                {prospect.lgm_status ? ` · ${prospect.lgm_status}` : ""}
+                LGM{prospect.lgm_status ? ` · ${formatLgmStatus(prospect.lgm_status)}` : ""}
               </Badge>
             )}
             {prospect.pret_a_envoyer && !prospect.lgm_lead_id && (

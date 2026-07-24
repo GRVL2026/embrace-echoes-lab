@@ -60,6 +60,7 @@ export default function AdminDossiers() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
+  const [prospectionRoles, setProspectionRoles] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
 
@@ -67,13 +68,14 @@ export default function AdminDossiers() {
     if (!user || !isAdmin) return;
     (async () => {
       setLoading(true);
-      const [{ data: p, error: pe }, { data: b }, { data: pr }] = await Promise.all([
+      const [{ data: p, error: pe }, { data: b }, { data: pr }, { data: rr }] = await Promise.all([
         (supabase as any)
           .from("projects")
           .select("id, brand_id, client_name, offer, status, updated_at, owner_id")
           .order("updated_at", { ascending: false }),
         (supabase as any).from("brands").select("id, name"),
         (supabase as any).from("profiles").select("id, email, full_name, copilote_enabled, dashboard_enabled, salle_enabled"),
+        (supabase as any).from("user_roles").select("user_id, role").eq("role", "prospection"),
       ]);
       if (pe) toast({ title: "Erreur", description: pe.message, variant: "destructive" });
       setProjects((p as Project[]) ?? []);
@@ -81,6 +83,7 @@ export default function AdminDossiers() {
       const map: Record<string, Profile> = {};
       ((pr as Profile[]) ?? []).forEach((x) => (map[x.id] = x));
       setProfiles(map);
+      setProspectionRoles(new Set(((rr as { user_id: string }[]) ?? []).map((r) => r.user_id)));
       setLoading(false);
     })();
   }, [user, isAdmin]);
@@ -254,12 +257,13 @@ export default function AdminDossiers() {
                   <TableHead className="text-right">Accès copilote</TableHead>
                   <TableHead className="text-right">Accès Dashboard (AA + Magasin)</TableHead>
                   <TableHead className="text-right">Accès Salle Hyper Nova</TableHead>
+                  <TableHead className="text-right">Accès Prospection</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {Object.values(profiles).length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="py-6 text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
                       Aucun utilisateur.
                     </TableCell>
                   </TableRow>
@@ -330,6 +334,35 @@ export default function AdminDossiers() {
                               } else {
                                 toast({
                                   title: checked ? "Salle activée" : "Salle désactivée",
+                                  description: p.full_name?.trim() || p.email || "",
+                                });
+                              }
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Switch
+                            checked={prospectionRoles.has(p.id)}
+                            onCheckedChange={async (checked) => {
+                              const prev = prospectionRoles.has(p.id);
+                              setProspectionRoles((s) => {
+                                const n = new Set(s);
+                                if (checked) n.add(p.id); else n.delete(p.id);
+                                return n;
+                              });
+                              const { error } = checked
+                                ? await (supabase as any).from("user_roles").upsert({ user_id: p.id, role: "prospection" }, { onConflict: "user_id,role" })
+                                : await (supabase as any).from("user_roles").delete().eq("user_id", p.id).eq("role", "prospection");
+                              if (error) {
+                                setProspectionRoles((s) => {
+                                  const n = new Set(s);
+                                  if (prev) n.add(p.id); else n.delete(p.id);
+                                  return n;
+                                });
+                                toast({ title: "Erreur", description: error.message, variant: "destructive" });
+                              } else {
+                                toast({
+                                  title: checked ? "Prospection activée" : "Prospection désactivée",
                                   description: p.full_name?.trim() || p.email || "",
                                 });
                               }

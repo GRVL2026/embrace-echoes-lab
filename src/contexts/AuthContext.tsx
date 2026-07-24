@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
-export type AppRole = "admin" | "direction" | "chef_ventes" | "commercial";
+export type AppRole = "admin" | "direction" | "chef_ventes" | "commercial" | "prospection";
 
 type AuthContextValue = {
   user: User | null;
@@ -22,6 +22,7 @@ type AuthContextValue = {
   canMargeGlobale: boolean;
   canAccessGaia: boolean;
   canAccessDashboard: boolean;
+  canAccessProspection: boolean;
   copilotEnabled: boolean;
   dashboardEnabled: boolean;
   salleEnabled: boolean;
@@ -146,6 +147,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const canMargeClient = hasSalesRole;
   const canMargeGlobale = isAdmin || isDirection || isChefVentes;
   const canAccessGaia = isAdmin || isDirection;
+  const isProspection = roles.includes("prospection");
+  const canAccessProspection = isAdmin || isDirection || isProspection;
   const salleEnabledOnly = !!user && !hasSalesRole && !dashboardEnabled && salleEnabled;
   const canAccessDashboard = !salleEnabledOnly && (hasSalesRole || dashboardEnabled);
   const canAccessSalle = canAccessGaia || salleEnabled;
@@ -190,6 +193,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         canMargeGlobale,
         canAccessGaia,
         canAccessDashboard,
+        canAccessProspection,
         copilotEnabled,
         dashboardEnabled,
         salleEnabled,

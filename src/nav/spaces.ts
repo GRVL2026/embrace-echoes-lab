@@ -43,6 +43,7 @@ export type NavCtx = {
   canMargeGlobale: boolean;
   copilotEnabled: boolean;
   canAccessSalle: boolean;
+  canAccessProspection: boolean;
   salleOnly: boolean;
 };
 
@@ -117,7 +118,7 @@ export const SPACES: Space[] = [
     label: "Prospection",
     icon: Target,
     colorToken: "--space-prospection",
-    show: (c) => c.isAdmin || c.isDirection,
+    show: (c) => c.canAccessProspection,
     entries: [
       {
         label: "Pipeline prospects",

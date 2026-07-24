@@ -1910,10 +1910,14 @@ export type Database = {
       }
       prospects: {
         Row: {
+          activite: string | null
+          adresse: string | null
+          ca_annuel: number | null
           code_client: string | null
           contact_nom: string | null
           contact_role: string | null
           created_at: string
+          effectif: string | null
           email: string | null
           entreprise: string
           id: string
@@ -1928,6 +1932,8 @@ export type Database = {
           segment: string
           signal: string | null
           siren: string | null
+          siret: string | null
+          site_web: string | null
           source: string | null
           statut: string
           telephone: string | null
@@ -1935,10 +1941,14 @@ export type Database = {
           ville: string | null
         }
         Insert: {
+          activite?: string | null
+          adresse?: string | null
+          ca_annuel?: number | null
           code_client?: string | null
           contact_nom?: string | null
           contact_role?: string | null
           created_at?: string
+          effectif?: string | null
           email?: string | null
           entreprise: string
           id?: string
@@ -1953,6 +1963,8 @@ export type Database = {
           segment?: string
           signal?: string | null
           siren?: string | null
+          siret?: string | null
+          site_web?: string | null
           source?: string | null
           statut?: string
           telephone?: string | null
@@ -1960,10 +1972,14 @@ export type Database = {
           ville?: string | null
         }
         Update: {
+          activite?: string | null
+          adresse?: string | null
+          ca_annuel?: number | null
           code_client?: string | null
           contact_nom?: string | null
           contact_role?: string | null
           created_at?: string
+          effectif?: string | null
           email?: string | null
           entreprise?: string
           id?: string
@@ -1978,6 +1994,8 @@ export type Database = {
           segment?: string
           signal?: string | null
           siren?: string | null
+          siret?: string | null
+          site_web?: string | null
           source?: string | null
           statut?: string
           telephone?: string | null

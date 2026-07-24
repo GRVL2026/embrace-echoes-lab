@@ -53,6 +53,13 @@ type Prospect = {
   lgm_audience: string | null;
   lgm_status: string | null;
   lgm_sent_at: string | null;
+  siren: string | null;
+  siret: string | null;
+  adresse: string | null;
+  effectif: string | null;
+  ca_annuel: number | null;
+  activite: string | null;
+  site_web: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -644,6 +651,8 @@ function ProspectSheet({
         />
 
         <AccrocheIASection prospect={prospect} onSaved={loadEvents} />
+
+        <PappersEnrichSection prospect={prospect} onEnriched={(next) => { onChange(next); setForm(next); loadEvents(); }} />
 
         <LgmSection prospect={prospect} onSent={(next) => { onChange(next); setForm(next); loadEvents(); }} />
 
@@ -1465,6 +1474,122 @@ function LgmSection({
             {sending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
             {sending ? "Envoi…" : "Envoyer vers LGM"}
           </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* -------------------- Enrichissement Pappers -------------------- */
+
+function fmtEuros(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(Number(n))) return "—";
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Number(n));
+}
+
+function PappersEnrichSection({
+  prospect, onEnriched,
+}: {
+  prospect: Prospect;
+  onEnriched: (p: Prospect) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const hasAny =
+    prospect.siren || prospect.siret || prospect.adresse || prospect.effectif ||
+    prospect.ca_annuel != null || prospect.activite || prospect.site_web ||
+    prospect.contact_nom || prospect.contact_role;
+
+  const run = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("enrichir-prospect-pappers", {
+        body: { prospect_id: prospect.id },
+      });
+      if (error) {
+        const details = (error as any)?.context?.text
+          ? await (error as any).context.text().catch(() => "")
+          : "";
+        let msg = error.message || "Enrichissement impossible";
+        try { const j = JSON.parse(details); if (j?.error) msg = j.error; } catch { /* noop */ }
+        toast.error(msg);
+        return;
+      }
+      if ((data as any)?.error) { toast.error((data as any).error); return; }
+      toast.success("Fiche enrichie");
+      const { data: refreshed } = await (supabase as any)
+        .from("prospects").select("*").eq("id", prospect.id).maybeSingle();
+      if (refreshed) onEnriched(refreshed as Prospect);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Enrichissement impossible");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="mt-6 rounded-lg border border-border/60 bg-muted/20 p-3 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Zap className="h-4 w-4 text-amber-500" />
+          <div className="text-sm font-semibold">Enrichissement Pappers</div>
+        </div>
+        <Button size="sm" variant={hasAny ? "outline" : "default"} onClick={run} disabled={loading}>
+          {loading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
+          {loading ? "Enrichissement…" : hasAny ? "Ré-enrichir" : "Enrichir"}
+        </Button>
+      </div>
+
+      {hasAny ? (
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+          {(prospect.contact_nom || prospect.contact_role) && (
+            <div className="col-span-2">
+              <div className="text-muted-foreground">Dirigeant</div>
+              <div className="font-medium text-foreground">
+                {prospect.contact_nom ?? "—"}
+                {prospect.contact_role && <span className="text-muted-foreground"> · {prospect.contact_role}</span>}
+              </div>
+            </div>
+          )}
+          {prospect.siren && (
+            <div><div className="text-muted-foreground">SIREN</div><div className="font-mono">{prospect.siren}</div></div>
+          )}
+          {prospect.siret && (
+            <div><div className="text-muted-foreground">SIRET siège</div><div className="font-mono">{prospect.siret}</div></div>
+          )}
+          {prospect.adresse && (
+            <div className="col-span-2"><div className="text-muted-foreground">Adresse</div><div>{prospect.adresse}</div></div>
+          )}
+          {prospect.effectif && (
+            <div><div className="text-muted-foreground">Effectif</div><div>{prospect.effectif}</div></div>
+          )}
+          {prospect.ca_annuel != null && (
+            <div><div className="text-muted-foreground">CA annuel</div><div className="font-medium">{fmtEuros(prospect.ca_annuel)}</div></div>
+          )}
+          {prospect.activite && (
+            <div className="col-span-2"><div className="text-muted-foreground">Activité</div><div>{prospect.activite}</div></div>
+          )}
+          {prospect.telephone && (
+            <div>
+              <div className="text-muted-foreground">Téléphone</div>
+              <a className="underline underline-offset-2" href={`tel:${prospect.telephone}`}>{prospect.telephone}</a>
+            </div>
+          )}
+          {prospect.site_web && (
+            <div className="col-span-2">
+              <div className="text-muted-foreground">Site web</div>
+              <a
+                className="inline-flex items-center gap-1 underline underline-offset-2 break-all"
+                href={/^https?:\/\//.test(prospect.site_web) ? prospect.site_web : `https://${prospect.site_web}`}
+                target="_blank" rel="noreferrer"
+              >
+                {prospect.site_web} <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="text-xs text-muted-foreground italic">
+          Récupère automatiquement dirigeant, SIRET, adresse, effectif, CA, activité et coordonnées depuis Pappers.
         </div>
       )}
     </div>

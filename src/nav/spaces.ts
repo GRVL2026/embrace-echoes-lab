@@ -204,14 +204,9 @@ export const SPACES: Space[] = [
         icon: BarChart3,
         match: startsWith("/achats"),
       },
-      {
-        label: "Expéditions & imports",
-        to: "/logistique",
-        icon: Truck,
-        match: startsWith("/logistique"),
-      },
     ],
   },
+
   {
     key: "reglages",
     label: "Réglages",

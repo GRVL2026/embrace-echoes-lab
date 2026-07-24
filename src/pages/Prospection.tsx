@@ -230,6 +230,17 @@ export default function Prospection() {
           <h1 className="font-display text-base sm:text-lg font-semibold truncate">Prospection</h1>
           <p className="text-xs text-muted-foreground truncate">CRM commercial — pipeline & suivi des leads</p>
         </div>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={runDetection}
+          disabled={detecting}
+          className="gap-2"
+          title="Détecter les établissements récemment créés en France (30 jours)"
+        >
+          {detecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+          <span className="hidden sm:inline">{detecting ? "Détection…" : "Détecter les signaux"}</span>
+        </Button>
         <Button size="sm" variant="outline" onClick={() => setImportOpen(true)} className="gap-2">
           <Upload className="h-4 w-4" /> <span className="hidden sm:inline">Importer CSV</span>
         </Button>

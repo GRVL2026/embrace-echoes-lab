@@ -128,13 +128,42 @@ const eur2 = (n: number) =>
   n.toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 2 });
 const pct = (n: number) => `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
 
-// Les vending (Pokémon, blind box) et le photomaton encaissent VIA les TPA Pax :
-// leurs recettes sont déjà incluses dans ca_pax_ht. Le total ne compte donc que
-// ca_pax_ht + ca_cartes_ht + ca_merch_ht pour éviter le double comptage.
-const TOTAL_KEYS: Array<keyof SalleJournee> = ["ca_pax_ht", "ca_cartes_ht", "ca_merch_ht"];
+// RÈGLE MÉTIER (patron) — le CA de la salle est UNIQUEMENT :
+//   CA salle = ca_pax_ht + ca_cartes_ht
+// Les vending Pokémon, vending blind box et photomaton sont DÉJÀ INCLUS
+// dans ca_pax_ht (ce sont des pax sur machines). Il ne faut donc jamais les
+// rajouter. Le merch (boutique) est un CA à part et n'entre pas dans le CA salle.
+const TOTAL_KEYS: Array<keyof SalleJournee> = ["ca_pax_ht", "ca_cartes_ht"];
 
 const journeeCaTotal = (j: SalleJournee): number =>
   TOTAL_KEYS.reduce((s, k) => s + Number((j as any)[k] ?? 0), 0);
+
+// "Jeux" = pax hors vending/photo (ventilation informative "dont")
+const journeeJeux = (j: SalleJournee): number =>
+  Math.max(
+    0,
+    Number(j.ca_pax_ht ?? 0)
+      - Number(j.ca_vending_pokemon_ht ?? 0)
+      - Number(j.ca_vending_blindbox_ht ?? 0)
+      - Number(j.ca_photomaton_ht ?? 0),
+  );
+
+// Sources du CA affichées dans le dashboard (donut, meilleure source, agrégats).
+// La somme Jeux + Vending Pokémon + Vending Blind Box + Photomaton = ca_pax_ht,
+// puis + Cartes = CA salle. Pas de double comptage.
+type DashSource = {
+  key: string;
+  label: string;
+  color: string;
+  compute: (j: SalleJournee) => number;
+};
+const DASH_SOURCES: DashSource[] = [
+  { key: "jeux", label: "Jeux", color: "hsl(224 68% 59%)", compute: journeeJeux },
+  { key: "ca_cartes_ht", label: "Cartes cashless", color: "hsl(273 87% 72%)", compute: (j) => Number(j.ca_cartes_ht ?? 0) },
+  { key: "ca_vending_pokemon_ht", label: "Vending Pokémon", color: "hsl(45 100% 55%)", compute: (j) => Number(j.ca_vending_pokemon_ht ?? 0) },
+  { key: "ca_vending_blindbox_ht", label: "Vending Blind Box", color: "hsl(273 87% 85%)", compute: (j) => Number(j.ca_vending_blindbox_ht ?? 0) },
+  { key: "ca_photomaton_ht", label: "Photomaton", color: "hsl(0 0% 88%)", compute: (j) => Number(j.ca_photomaton_ht ?? 0) },
+];
 
 // ------------------------------------------------------------
 // Page
@@ -547,6 +576,7 @@ type WeekAgg = {
   label: string;
   monday: Date;
   ca: number;
+  merch: number;
   visiteurs: number;
   objectif: number;
   bySource: Record<string, number>;
@@ -609,9 +639,10 @@ function DashboardTab() {
         label: `S${pad(isoWeek(mon))}`,
         monday: mon,
         ca: 0,
+        merch: 0,
         visiteurs: 0,
         objectif: Number(obj?.objectif_semaine_ht ?? 0),
-        bySource: Object.fromEntries(SOURCES.map((s) => [s.key as string, 0])),
+        bySource: Object.fromEntries(DASH_SOURCES.map((s) => [s.key, 0])),
       });
     }
     for (const r of rows) {
@@ -619,8 +650,9 @@ function DashboardTab() {
       const w = map.get(k);
       if (!w) continue;
       w.ca += journeeCaTotal(r);
+      w.merch += Number(r.ca_merch_ht ?? 0);
       w.visiteurs += Number(r.visiteurs ?? 0);
-      for (const s of SOURCES) w.bySource[s.key as string] += Number((r as any)[s.key] ?? 0);
+      for (const s of DASH_SOURCES) w.bySource[s.key] += s.compute(r);
     }
     return Array.from(map.values()).sort((a, b) => a.monday.getTime() - b.monday.getTime());
     // objectifs listed in deps
@@ -706,8 +738,8 @@ function DashboardTab() {
   const bestSource = useMemo(() => {
     if (!displayWeek) return null;
     let best: { label: string; value: number; color: string } | null = null;
-    for (const s of SOURCES) {
-      const v = displayWeek.bySource[s.key as string] ?? 0;
+    for (const s of DASH_SOURCES) {
+      const v = displayWeek.bySource[s.key] ?? 0;
       if (!best || v > best.value) best = { label: s.label, value: v, color: s.color };
     }
     return best;
@@ -804,9 +836,9 @@ function DashboardTab() {
   // Donut sur displayWeek
   const donutData = useMemo(() => {
     if (!displayWeek) return [];
-    return SOURCES.map((s) => ({
+    return DASH_SOURCES.map((s) => ({
       name: s.label,
-      value: Math.round(displayWeek.bySource[s.key as string] ?? 0),
+      value: Math.round(displayWeek.bySource[s.key] ?? 0),
       color: s.color,
     })).filter((d) => d.value > 0);
   }, [displayWeek]);
@@ -1044,8 +1076,25 @@ function DashboardTab() {
                 })}
             </ul>
           </div>
+          {/* Ventilation informative "dont" du pax (déjà comptée dans le CA) */}
+          <div className="mt-3 pt-3 border-t border-border/50 text-[11px] text-muted-foreground grid gap-1 sm:grid-cols-2">
+            <div className="uppercase tracking-wider text-[10px] font-semibold sm:col-span-2">
+              Ventilation du pax (info — déjà incluse dans le CA)
+            </div>
+            <div>dont jeux : <span className="tabular-nums text-foreground/80">{eur(displayWeek?.bySource["jeux"] ?? 0)}</span></div>
+            <div>dont vending Pokémon : <span className="tabular-nums text-foreground/80">{eur(displayWeek?.bySource["ca_vending_pokemon_ht"] ?? 0)}</span></div>
+            <div>dont vending Blind Box : <span className="tabular-nums text-foreground/80">{eur(displayWeek?.bySource["ca_vending_blindbox_ht"] ?? 0)}</span></div>
+            <div>dont photo : <span className="tabular-nums text-foreground/80">{eur(displayWeek?.bySource["ca_photomaton_ht"] ?? 0)}</span></div>
+          </div>
+          {/* Merch — hors CA salle, affiché séparément */}
+          <div className="mt-2 text-[11px] text-muted-foreground">
+            Merch (boutique, hors CA salle) : <span className="tabular-nums text-foreground/80">{eur(displayWeek?.merch ?? 0)}</span>
+          </div>
         </Card>
       </div>
+
+
+
 
 
       {/* Progression CA hebdo */}

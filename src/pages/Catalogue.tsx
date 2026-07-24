@@ -106,25 +106,47 @@ export default function Catalogue() {
   const [famille, setFamille] = useState<string>("all");
   const [includeErp, setIncludeErp] = useState(true);
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      const [{ data: site }, { data: erp }] = await Promise.all([
-        (supabase as any)
-          .from("catalog_products")
-          .select("id, name, category, vendor, price, price_erp_ht, cegid_code, images, product_url, stock, stock_erp")
-          .eq("active", true)
-          .order("name"),
-        (supabase as any)
-          .from("catalogue_erp")
-          .select("code, description, famille, prix_ht, stock")
-          .order("description"),
-      ]);
-      setSiteRows((site as SiteProduct[]) ?? []);
-      setErpRows((erp as ErpProduct[]) ?? []);
-      setLoading(false);
-    })();
+  const [syncing, setSyncing] = useState(false);
+
+  const loadProducts = useCallback(async () => {
+    setLoading(true);
+    const [{ data: site }, { data: erp }] = await Promise.all([
+      (supabase as any)
+        .from("catalog_products")
+        .select("id, name, category, vendor, price, price_erp_ht, cegid_code, images, product_url, stock, stock_erp")
+        .eq("active", true)
+        .order("name"),
+      (supabase as any)
+        .from("catalogue_erp")
+        .select("code, description, famille, prix_ht, stock")
+        .order("description"),
+    ]);
+    setSiteRows((site as SiteProduct[]) ?? []);
+    setErpRows((erp as ErpProduct[]) ?? []);
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
+
+  const handleSyncShopify = async () => {
+    setSyncing(true);
+    try {
+      const products = await fetchShopifyCatalog();
+      if (products.length === 0) {
+        toast.info("Aucun produit trouvé dans Shopify");
+        return;
+      }
+      await syncShopifyToDB(products);
+      toast.success(`Catalogue synchronisé — ${products.length} produit${products.length > 1 ? "s" : ""}`);
+      await loadProducts();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erreur de synchronisation Shopify");
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   // ERP articles NOT already represented by a site product (via cegid_code)
   const erpOnly = useMemo(() => {

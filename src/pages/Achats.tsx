@@ -679,3 +679,99 @@ export default function Achats() {
     </div>
   );
 }
+
+type CommandeEncours = {
+  n_cde: string | null;
+  nom_fourn: string | null;
+  code_fourn: string | null;
+  date_cde: string | null;
+  statut: string | null;
+  nb_lignes: number | null;
+  montant: number | string | null;
+  qte_restante: number | string | null;
+  en_transit: boolean | null;
+};
+
+type LigneCommande = {
+  libelle: string | null;
+  qte_cdee: number | string | null;
+  qte_recue: number | string | null;
+  qte_restante: number | string | null;
+  montant_ligne: number | string | null;
+  statut: string | null;
+};
+
+function CommandeRow({ row }: { row: CommandeEncours }) {
+  const [open, setOpen] = useState(false);
+  const tone = statutTone(row.statut);
+  const { data: lignes, isPending } = useQuery({
+    queryKey: ["achats-cmd-lignes", row.n_cde],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("get_achats_commande_lignes", { _n_cde: row.n_cde });
+      if (error) throw error;
+      return (data ?? []) as LigneCommande[];
+    },
+    enabled: open && !!row.n_cde,
+  });
+  return (
+    <>
+      <tr
+        className="border-b border-border/60 cursor-pointer hover:bg-muted/40"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <td className="w-6 px-1 py-2 text-muted-foreground">
+          {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        </td>
+        <td className="px-2 py-2 font-mono text-xs">{row.n_cde ?? "—"}</td>
+        <td className="px-2 py-2">{row.nom_fourn ?? row.code_fourn ?? "—"}</td>
+        <td className="px-2 py-2 tabular-nums">{fmtDate(row.date_cde)}</td>
+        <td className="px-2 py-2">
+          <Badge variant="outline" className={cn("text-[10px]", tone.bg, tone.fg)}>
+            {row.statut ?? "—"}
+          </Badge>
+        </td>
+        <td className="px-2 py-2 text-right tabular-nums">{num(Number(row.nb_lignes || 0))}</td>
+        <td className="px-2 py-2 text-right font-semibold tabular-nums">{eur(Number(row.montant || 0))}</td>
+      </tr>
+      {open && (
+        <tr className="bg-muted/20">
+          <td></td>
+          <td colSpan={6} className="px-2 py-3">
+            {isPending ? (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" /> Chargement…
+              </div>
+            ) : (lignes ?? []).length === 0 ? (
+              <div className="text-xs text-muted-foreground">Aucun article.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="text-[10px] uppercase text-muted-foreground">
+                    <tr className="border-b border-border/60">
+                      <th className="px-2 py-1 text-left">Produit</th>
+                      <th className="px-2 py-1 text-right">Cdée</th>
+                      <th className="px-2 py-1 text-right">Reçue</th>
+                      <th className="px-2 py-1 text-right">Reste</th>
+                      <th className="px-2 py-1 text-right">Montant</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(lignes ?? []).map((l, i) => (
+                      <tr key={i} className="border-b border-border/40">
+                        <td className="px-2 py-1">{l.libelle ?? "—"}</td>
+                        <td className="px-2 py-1 text-right tabular-nums">{num(Number(l.qte_cdee || 0))}</td>
+                        <td className="px-2 py-1 text-right tabular-nums">{num(Number(l.qte_recue || 0))}</td>
+                        <td className="px-2 py-1 text-right tabular-nums">{num(Number(l.qte_restante || 0))}</td>
+                        <td className="px-2 py-1 text-right tabular-nums">{eur(Number(l.montant_ligne || 0))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}

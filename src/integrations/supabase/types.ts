@@ -2947,6 +2947,25 @@ export type Database = {
           taux_moyen: number
         }[]
       }
+      get_prospect_ca: {
+        Args: { _code_client: string }
+        Returns: {
+          ca_12m: number
+          ca_total: number
+          derniere: string
+          nb_factures: number
+          premiere: string
+        }[]
+      }
+      get_prospection_attribution: {
+        Args: never
+        Returns: {
+          ca_attribue: number
+          dimension: string
+          nb_clients: number
+          valeur: string
+        }[]
+      }
       get_prospection_resume: {
         Args: never
         Returns: {
@@ -2998,6 +3017,15 @@ export type Database = {
       }
       refresh_erp_prices: { Args: never; Returns: number }
       refresh_gaia_resumes: { Args: never; Returns: undefined }
+      search_clients_prospection: {
+        Args: { _q: string }
+        Returns: {
+          ca_12m: number
+          customer_id: string
+          name: string
+          typologie: string
+        }[]
+      }
       unaccent: { Args: { "": string }; Returns: string }
     }
     Enums: {

@@ -8,6 +8,7 @@ import Hub from "./pages/Hub";
 import Logistique from "./pages/Logistique";
 import Ecommerce from "./pages/Ecommerce";
 import Sav from "./pages/Sav";
+import Achats from "./pages/Achats";
 import SavTicket from "./pages/SavTicket";
 import Catalogue from "./pages/Catalogue";
 import DossiersList from "./pages/DossiersList";

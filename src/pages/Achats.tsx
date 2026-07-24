@@ -189,23 +189,23 @@ export default function Achats() {
   });
 
   const encoursFilter = openSheet?.kind === "encours" ? openSheet.filter : null;
-  const { data: encoursRows } = useQuery({
-    queryKey: ["achats-encours", encoursFilter],
+  const { data: encoursCmds } = useQuery({
+    queryKey: ["achats-encours-cmds", encoursFilter],
     queryFn: async () => {
-      const statuts = encoursFilter === "en_transit" ? TRANSIT_STATUTS : CMD_STATUTS;
-      const { data, error } = await (supabase as any)
-        .from("gaia_achats")
-        .select("n_cde,code_fourn,nom_fourn,statut,date_cde,montant_ligne,qte_restante,eta,bateau,num_conteneur")
-        .in("statut", ENCOURS_STATUTS)
-        .order("date_cde", { ascending: false })
-        .limit(500);
+      const { data, error } = await (supabase as any).rpc("get_achats_commandes_encours");
       if (error) throw error;
-      const rows = (data ?? []) as AchatRow[];
-      // en_transit = a un conteneur/bateau/eta ; en_commande = rien
-      return rows.filter((r) => {
-        const inTransit = !!(r.num_conteneur || r.bateau || r.eta);
-        return encoursFilter === "en_transit" ? inTransit : !inTransit;
-      });
+      const rows = (data ?? []) as Array<{
+        n_cde: string | null;
+        nom_fourn: string | null;
+        code_fourn: string | null;
+        date_cde: string | null;
+        statut: string | null;
+        nb_lignes: number | null;
+        montant: number | string | null;
+        qte_restante: number | string | null;
+        en_transit: boolean | null;
+      }>;
+      return rows.filter((r) => (encoursFilter === "en_transit" ? !!r.en_transit : !r.en_transit));
     },
     enabled: !!encoursFilter,
   });

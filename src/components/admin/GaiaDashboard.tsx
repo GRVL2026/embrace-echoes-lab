@@ -1267,12 +1267,211 @@ function PipelineStep({
         {inner}
       </Link>
     );
-  }
+}
+
+/* ================== CA du mois vs N-1 + répartition familles ================== */
+
+type CaMoisRow = {
+  mois: string;
+  ca_mois: number | string;
+  ca_mois_n1: number | string;
+  ecart_pct: number | string | null;
+  nb_factures: number;
+  jours_inclus: number;
+  mois_complet: boolean;
+};
+type FamilleMoisRow = {
+  famille: string;
+  ca_mois: number | string;
+  ca_mois_n1: number | string;
+  ecart_pct: number | string | null;
+  part_pct: number | string | null;
+};
+
+const MOIS_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+
+function monthKey(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+function labelMois(d: Date) {
+  return `${MOIS_FR[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function MonthlySalesSection() {
+  const [monthDate, setMonthDate] = useState(() => {
+    const n = new Date();
+    return new Date(n.getFullYear(), n.getMonth(), 1);
+  });
+  const monthStr = monthKey(monthDate);
+
+  const shiftMonth = (delta: number) => {
+    setMonthDate((d) => new Date(d.getFullYear(), d.getMonth() + delta, 1));
+  };
+
+  const now = new Date();
+  const isFuture = monthDate.getFullYear() > now.getFullYear() || (monthDate.getFullYear() === now.getFullYear() && monthDate.getMonth() > now.getMonth());
+
+  // Options : 24 mois glissants
+  const monthOptions = useMemo(() => {
+    const arr: { key: string; label: string }[] = [];
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    for (let i = 0; i < 24; i++) {
+      const d = new Date(start.getFullYear(), start.getMonth() - i, 1);
+      arr.push({ key: monthKey(d), label: labelMois(d) });
+    }
+    return arr;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const caQ = useQuery({
+    queryKey: ["dash-ca-mois", monthStr],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("get_dashboard_ca_mois", { _month: monthStr });
+      if (error) throw error;
+      const rows = (data ?? []) as CaMoisRow[];
+      return rows[0] ?? null;
+    },
+  });
+
+  const famQ = useQuery({
+    queryKey: ["dash-fam-mois", monthStr],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("get_ventes_familles_mois", { _month: monthStr });
+      if (error) throw error;
+      return (data ?? []) as FamilleMoisRow[];
+    },
+  });
+
+  const ca = caQ.data;
+  const familles = famQ.data ?? [];
+  const caMois = Number(ca?.ca_mois ?? 0);
+  const caN1 = Number(ca?.ca_mois_n1 ?? 0);
+  const ecart = ca?.ecart_pct == null ? null : Number(ca.ecart_pct);
+  const dNow = new Date(monthDate);
+  const dN1 = new Date(dNow.getFullYear() - 1, dNow.getMonth(), 1);
+
+  const maxFamCa = familles.reduce((m, r) => Math.max(m, Number(r.ca_mois || 0)), 0);
+  const totalFam = familles.reduce((s, r) => s + Number(r.ca_mois || 0), 0);
+
   return (
-    <div className={cls} title={tooltip}>
-      {inner}
+    <div className="rounded-lg border border-border bg-card/40 p-4 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="font-display text-lg font-semibold">CA mensuel — focus & répartition</h3>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => shiftMonth(-1)} aria-label="Mois précédent">
+            ‹
+          </Button>
+          <Select value={monthStr} onValueChange={(v) => setMonthDate(new Date(v))}>
+            <SelectTrigger className="h-8 w-44"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {monthOptions.map((m) => (
+                <SelectItem key={m.key} value={m.key}>{m.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => shiftMonth(1)}
+            disabled={isFuture}
+            aria-label="Mois suivant"
+          >
+            ›
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {/* Carte CA du mois vs N-1 */}
+        <div className="rounded-lg border border-border bg-background/40 p-4">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">
+            {labelMois(dNow)}
+          </div>
+          {caQ.isLoading ? (
+            <div className="mt-4 flex items-center gap-2 text-muted-foreground text-sm">
+              <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
+            </div>
+          ) : !ca ? (
+            <div className="mt-4 text-sm text-muted-foreground">Aucune donnée.</div>
+          ) : (
+            <>
+              <div className="mt-1 font-display text-3xl font-bold tabular-nums">{eur(caMois)}</div>
+              <div className="mt-2 text-sm">
+                <span className="text-muted-foreground">vs {labelMois(dN1)} : </span>
+                <span className="tabular-nums">{eur(caN1)}</span>
+                {ecart !== null && (
+                  <span className={"ml-2 inline-flex items-center gap-0.5 font-medium " + (ecart >= 0 ? "text-secondary" : "text-destructive")}>
+                    {ecart >= 0 ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+                    {ecart >= 0 ? "+" : ""}{ecart.toFixed(1)} %
+                  </span>
+                )}
+              </div>
+              <div className="mt-3 text-[11px] text-muted-foreground/80">
+                {ca.mois_complet
+                  ? "Mois complet"
+                  : `À période égale — ${ca.jours_inclus} premier${ca.jours_inclus > 1 ? "s" : ""} jour${ca.jours_inclus > 1 ? "s" : ""}`}
+                {" · "}
+                {num(ca.nb_factures)} facture{ca.nb_factures > 1 ? "s" : ""}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Répartition par famille */}
+        <div className="rounded-lg border border-border bg-background/40 p-4">
+          <div className="mb-3 text-xs uppercase tracking-wider text-muted-foreground">
+            Répartition par famille — {labelMois(dNow)}
+          </div>
+          {famQ.isLoading ? (
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
+            </div>
+          ) : familles.length === 0 ? (
+            <div className="text-sm text-muted-foreground">Aucune vente sur ce mois.</div>
+          ) : (
+            <>
+              <ul className="space-y-2.5 max-h-[320px] overflow-y-auto pr-1">
+                {familles.map((f, i) => {
+                  const cam = Number(f.ca_mois || 0);
+                  const part = f.part_pct == null ? 0 : Number(f.part_pct);
+                  const ec = f.ecart_pct == null ? null : Number(f.ecart_pct);
+                  const barPct = maxFamCa > 0 ? Math.max(2, (cam / maxFamCa) * 100) : 0;
+                  const color = FAMILY_COLORS[i % FAMILY_COLORS.length];
+                  return (
+                    <li key={f.famille + i}>
+                      <div className="flex items-center justify-between gap-2 text-sm">
+                        <div className="min-w-0 flex-1 truncate font-medium">{f.famille || "—"}</div>
+                        <div className="flex items-center gap-2 tabular-nums">
+                          <span className="font-semibold">{eur(cam)}</span>
+                          <span className="text-xs text-muted-foreground w-12 text-right">{part.toFixed(1)} %</span>
+                          {ec !== null ? (
+                            <span className={"text-xs w-16 text-right " + (ec >= 0 ? "text-secondary" : "text-destructive")}>
+                              {ec >= 0 ? "+" : ""}{ec.toFixed(1)} %
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground w-16 text-right">—</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-1 h-1.5 w-full rounded-full bg-muted/40 overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${barPct}%`, backgroundColor: color }} />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="mt-3 flex items-center justify-between border-t border-border pt-2 text-sm">
+                <span className="text-muted-foreground">Total mois</span>
+                <span className="font-semibold tabular-nums">{eur(totalFam)}</span>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
+
 
 

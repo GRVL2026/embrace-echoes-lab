@@ -92,7 +92,7 @@ Canal : ${canalLbl}.`;
     const resp = await anthropicJson(apiKey, {
       model: MODEL,
       max_tokens: maxTokens,
-      temperature: 0.8,
+      
       system: SYSTEM,
       messages: [{ role: 'user', content: userPrompt }],
     });

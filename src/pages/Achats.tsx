@@ -277,9 +277,8 @@ export default function Achats() {
                         cursor={barTooltipCursor}
                         content={
                           <ChartTooltipContent
-                            valueFormatter={(v, name) =>
-                              name === "montant" ? eur(Number(v)) : num(Number(v))
-                            }
+                            hideLabel
+                            formatter={(v: any, _n: any, item: any) => [eur(Number(v)), item?.payload?.nom]}
                           />
                         }
                       />

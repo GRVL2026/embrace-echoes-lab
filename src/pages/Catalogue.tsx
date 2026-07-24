@@ -1,16 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserMenu } from "@/components/UserMenu";
 import { MobileNav } from "@/components/MobileNav";
 import { AppTopNav } from "@/components/AppTopNav";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {
   Loader2,
+  RefreshCw,
   Search,
   ExternalLink,
   Zap,
@@ -28,6 +31,8 @@ import {
 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { shopifyThumb, stockErpBadge, cn } from "@/lib/utils";
+import { fetchShopifyCatalog } from "@/lib/shopifyApi";
+import { syncShopifyToDB } from "@/lib/catalogDB";
 
 type SiteProduct = {
   id: string;

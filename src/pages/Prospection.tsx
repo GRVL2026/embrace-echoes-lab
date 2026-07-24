@@ -263,6 +263,45 @@ export default function Prospection() {
     });
   };
 
+  const readyToSend = useMemo(
+    () => prospects.filter((p) => p.pret_a_envoyer && !p.lgm_lead_id && LGM_SUPPORTED.includes(p.segment as Segment)),
+    [prospects],
+  );
+
+  const bulkSendToLgm = useCallback(async () => {
+    if (readyToSend.length === 0) return;
+    setBulkSending(true);
+    let ok = 0;
+    const errs: string[] = [];
+    for (const p of readyToSend) {
+      try {
+        const { data, error } = await supabase.functions.invoke("envoyer-vers-lgm", {
+          body: { prospect_id: p.id },
+        });
+        if (error) {
+          const t = (error as any)?.context?.text
+            ? await (error as any).context.text().catch(() => "")
+            : "";
+          let msg = error.message || "Envoi impossible";
+          try { const j = JSON.parse(t); if (j?.error) msg = j.error; } catch { /* noop */ }
+          errs.push(`${p.entreprise} : ${msg}`);
+          continue;
+        }
+        if ((data as any)?.error) { errs.push(`${p.entreprise} : ${(data as any).error}`); continue; }
+        ok++;
+      } catch (e) {
+        errs.push(`${p.entreprise} : ${(e as Error).message}`);
+      }
+    }
+    setBulkSending(false);
+    if (ok > 0) toast.success(`${ok} prospect(s) envoyé(s) vers LGM`, {
+      description: errs.length ? `${errs.length} erreur(s)` : undefined,
+    });
+    else toast.error("Aucun envoi réussi", { description: errs[0] });
+    await load();
+  }, [readyToSend, load]);
+
+
   const kpis = [
     { label: "Leads (total)", value: resume?.total ?? 0 },
     { label: "RDV", value: resume?.rdv ?? 0 },

@@ -1576,13 +1576,30 @@ function LgmSection({
         </div>
       ) : (
         <div className="space-y-2">
+          {prospect.pret_a_envoyer && prospect.accroche_defaut && (
+            <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-2 text-xs whitespace-pre-wrap">
+              <div className="flex items-center gap-1 mb-1 text-emerald-600 dark:text-emerald-300 font-medium">
+                <Zap className="h-3 w-3" /> Accroche préparée par l'agent
+              </div>
+              {prospect.accroche_defaut}
+            </div>
+          )}
           <div className="text-xs text-muted-foreground">
             Envoie ce prospect vers l'audience LGM « Arcade OS – {segmentMeta(prospect.segment).label} ».
             La dernière accroche IA enregistrée sera transmise en attribut personnalisé.
           </div>
-          <Button size="sm" onClick={send} disabled={sending}>
+          <Button
+            size="sm"
+            onClick={send}
+            disabled={sending}
+            className={prospect.pret_a_envoyer ? "bg-emerald-600 hover:bg-emerald-500 text-white" : undefined}
+          >
             {sending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
-            {sending ? "Envoi…" : "Envoyer vers LGM"}
+            {sending
+              ? "Envoi…"
+              : prospect.pret_a_envoyer
+              ? "Valider & envoyer vers LGM"
+              : "Envoyer vers LGM"}
           </Button>
         </div>
       )}

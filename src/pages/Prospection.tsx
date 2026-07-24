@@ -345,6 +345,31 @@ export default function Prospection() {
           {detecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
           <span className="hidden sm:inline">{detecting ? "Détection…" : "Détecter les signaux"}</span>
         </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={runPreparation}
+          disabled={preparing}
+          className="gap-2"
+          title="Enrichir et générer une accroche IA pour les signaux non préparés (agent semi-auto)"
+        >
+          {preparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+          <span className="hidden sm:inline">{preparing ? "Préparation…" : "Préparer les nouveaux"}</span>
+        </Button>
+        {readyToSend.length > 0 && (
+          <Button
+            size="sm"
+            onClick={bulkSendToLgm}
+            disabled={bulkSending}
+            className="gap-2 bg-violet-600 hover:bg-violet-500 text-white"
+            title={`${readyToSend.length} prospect(s) prêt(s) à envoyer vers LGM`}
+          >
+            {bulkSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            <span className="hidden sm:inline">
+              {bulkSending ? "Envoi…" : `Envoyer les ${readyToSend.length} prêts vers LGM`}
+            </span>
+          </Button>
+        )}
         <Button size="sm" variant="outline" onClick={() => setImportOpen(true)} className="gap-2">
           <Upload className="h-4 w-4" /> <span className="hidden sm:inline">Importer CSV</span>
         </Button>

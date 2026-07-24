@@ -22,6 +22,7 @@ type AuthContextValue = {
   canMargeGlobale: boolean;
   canAccessGaia: boolean;
   canAccessDashboard: boolean;
+  canAccessProspection: boolean;
   copilotEnabled: boolean;
   dashboardEnabled: boolean;
   salleEnabled: boolean;

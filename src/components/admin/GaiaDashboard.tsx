@@ -1562,7 +1562,8 @@ function MonthlySalesSection() {
                     const cam = Number(f.ca_mois || 0);
                     const camN1 = Number(f.ca_mois_n1 || 0);
                     const ec = f.ecart_pct == null ? null : Number(f.ecart_pct);
-                    const color = familyColor(f.famille, i);
+                    const color = familyColor(f.famille || "—");
+                    const help = FAMILY_HELP[f.famille || "—"];
                     return (
                       <tr key={f.famille + i} className="border-t border-border/50">
                         <td className="py-1.5 pr-2">

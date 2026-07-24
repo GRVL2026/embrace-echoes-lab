@@ -20,6 +20,8 @@ const FEEDS: { name: string; url: string }[] = [
   { name: 'BD-Commandes',  url: 'https://xrp-flex.cegid.cloud/avranches-automatic/ODATA/AVRANCHES/BD-Commandes' },
   { name: 'BD-Stock',      url: 'https://xrp-flex.cegid.cloud/avranches-automatic/ODATA/AVRANCHES/BD-Stock' },
   { name: 'BD-Equipe',     url: 'https://xrp-flex.cegid.cloud/avranches-automatic/ODATA/AVRANCHES/BD-Equipe' },
+  { name: 'BD-Achats',     url: 'https://xrp-flex.cegid.cloud/avranches-automatic/ODATA/AVRANCHES/BD-Achats' },
+  { name: 'BD-Achat',      url: 'https://xrp-flex.cegid.cloud/avranches-automatic/ODATA/AVRANCHES/BD-Achat' },
 ];
 
 function jsonResponse(body: unknown, status = 200) {

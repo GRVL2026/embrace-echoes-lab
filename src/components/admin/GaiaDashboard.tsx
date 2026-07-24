@@ -1267,9 +1267,16 @@ function PipelineStep({
         {inner}
       </Link>
     );
+  }
+  return (
+    <div className={cls} title={tooltip}>
+      {inner}
+    </div>
+  );
 }
 
 /* ================== CA du mois vs N-1 + répartition familles ================== */
+
 
 type CaMoisRow = {
   mois: string;

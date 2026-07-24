@@ -456,7 +456,11 @@ export function GaiaDashboard({ onGoToSync }: { onGoToSync: () => void }) {
         />
       </div>
 
+      {/* CA du mois + répartition familles */}
+      <MonthlySalesSection />
+
       {/* CA mensuel — calendrier fiscal */}
+
       <Panel title="CA mensuel — comparaison par exercice (sept. → août)" id="ca-mensuel">
 
         <div className="h-80">

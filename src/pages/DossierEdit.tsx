@@ -1512,7 +1512,7 @@ export default function DossierEdit() {
                         <td className="px-3 py-2 text-right font-semibold tabular-nums">
                           {totalAmount.toFixed(2)} € {isRecurring ? "/ mois" : ""}
                         </td>
-                        <td />
+                        <td className="sticky right-0 bg-muted/40 shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.4)]" />
                       </tr>
                     </tfoot>
                   </table>

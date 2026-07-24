@@ -132,12 +132,106 @@ Deno.serve(async (req) => {
 
 
     if (!prospect) {
+      // Tentative de création automatique d'un prospect à partir du payload LGM
+      const firstName = pick(payload, ['firstName', 'firstname', 'lead.firstName', 'lead.firstname']);
+      const lastName = pick(payload, ['lastName', 'lastname', 'lead.lastName', 'lead.lastname']);
+      const company = pick(payload, ['companyName', 'company', 'lead.companyName', 'lead.company']);
+      const location = pick(payload, ['location', 'city', 'lead.location', 'lead.city']);
+      const emailNew = pick(payload, ['email', 'persoEmail', 'proEmail', 'lead.email', 'lead.persoEmail', 'lead.proEmail']);
+      const linkedinNew = pick(payload, ['linkedin', 'linkedinUrl', 'linkedin_url', 'lead.linkedin', 'lead.linkedinUrl', 'lead.linkedin_url']);
+      const audience = pick(payload, ['audience', 'audienceName', 'lead.audience', 'lead.audienceName']);
+
+      const canCreate = !!(company || (firstName && lastName));
+
+      if (canCreate) {
+        // Dédoublonnage final avant insert (crmId + email)
+        let dup: any = null;
+        if (lgmLeadId) {
+          const { data } = await admin.from('prospects').select('id').eq('lgm_lead_id', lgmLeadId).maybeSingle();
+          if (data) dup = data;
+        }
+        if (!dup && emailNew) {
+          const { data } = await admin.from('prospects').select('id').ilike('email', emailNew).limit(1).maybeSingle();
+          if (data) dup = data;
+        }
+
+        if (dup) {
+          if (logId) await admin.from('lgm_webhook_log').update({ action: 'dup_skip', matched_prospect: dup.id }).eq('id', logId);
+          return new Response(JSON.stringify({ matched: false, created: false, prospect: dup.id, event, action: 'dup_skip' }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        // Segment déduit de l'audience
+        let segment: string | null = null;
+        const an = norm(audience);
+        if (an.includes('loisirs')) segment = 'loisirs';
+        else if (an.includes('chr')) segment = 'chr';
+        else if (an.includes('retail')) segment = 'retail';
+
+        // Statut initial selon l'événement
+        const mapped = mapEventToStatut(event);
+        const initStatut = mapped ?? 'nouveau';
+
+        const contactNom = [firstName, lastName].filter(Boolean).join(' ').trim() || null;
+        const entreprise = company || contactNom || 'Lead LinkedIn';
+
+        const insertPayload: Record<string, unknown> = {
+          entreprise,
+          contact_nom: contactNom,
+          ville: location,
+          email: emailNew,
+          linkedin_url: linkedinNew,
+          source: 'linkedin',
+          segment: segment ?? 'autre',
+          statut: initStatut,
+          lgm_lead_id: lgmLeadId,
+          lgm_audience: audience,
+          lgm_status: event || null,
+        };
+
+        const { data: created, error: insErr } = await admin
+          .from('prospects')
+          .insert(insertPayload)
+          .select('id')
+          .single();
+
+        if (insErr || !created) {
+          if (logId) await admin.from('lgm_webhook_log').update({ action: `create_error:${insErr?.message ?? 'unknown'}` }).eq('id', logId);
+          return new Response(JSON.stringify({ matched: false, created: false, event, error: insErr?.message }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        await admin.from('prospect_events').insert({
+          prospect_id: created.id,
+          type: 'lgm',
+          contenu: 'Lead LinkedIn importé depuis LGM',
+          nouveau_statut: initStatut,
+        });
+
+        if (logId) {
+          await admin
+            .from('lgm_webhook_log')
+            .update({ matched_prospect: created.id, action: `created:${initStatut}` })
+            .eq('id', logId);
+        }
+
+        return new Response(
+          JSON.stringify({ matched: false, created: true, prospect: created.id, event, action: `created:${initStatut}` }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
       if (logId) await admin.from('lgm_webhook_log').update({ action: 'no_match' }).eq('id', logId);
-      return new Response(JSON.stringify({ matched: false, event }), {
+      return new Response(JSON.stringify({ matched: false, created: false, event }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
 
     const targetStatut = mapEventToStatut(event);
     const update: Record<string, unknown> = { lgm_status: event || prospect.lgm_status };
@@ -170,9 +264,10 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ matched: true, prospect: prospect.id, event, action }),
+      JSON.stringify({ matched: true, created: false, prospect: prospect.id, event, action }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
+
   } catch (e) {
     console.error('lgm-webhook error', (e as Error).message);
     // Toujours 200 pour éviter les retries LGM

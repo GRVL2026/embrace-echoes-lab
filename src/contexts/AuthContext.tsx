@@ -193,6 +193,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         canMargeGlobale,
         canAccessGaia,
         canAccessDashboard,
+        canAccessProspection,
         copilotEnabled,
         dashboardEnabled,
         salleEnabled,

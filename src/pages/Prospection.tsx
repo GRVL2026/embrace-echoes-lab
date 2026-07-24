@@ -652,6 +652,8 @@ function ProspectSheet({
 
         <AccrocheIASection prospect={prospect} onSaved={loadEvents} />
 
+        <PappersEnrichSection prospect={prospect} onEnriched={(next) => { onChange(next); setForm(next); loadEvents(); }} />
+
         <LgmSection prospect={prospect} onSent={(next) => { onChange(next); setForm(next); loadEvents(); }} />
 
 

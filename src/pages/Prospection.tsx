@@ -3,8 +3,21 @@ import { Navigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Loader2, Plus, Upload, Target, ExternalLink, Trash2, GripVertical, Mail, Phone,
-  Sparkles, Copy, RefreshCw, Save, Link2, Link2Off, Search, TrendingUp, Zap, Send,
+  Sparkles, Copy, RefreshCw, Save, Link2, Link2Off, Search, TrendingUp, Zap, Send, Linkedin,
 } from "lucide-react";
+
+/* -------------------- LinkedIn search helpers -------------------- */
+function buildLinkedInSearch(p: { contact_nom?: string | null; entreprise?: string | null; ville?: string | null }) {
+  const nom = (p.contact_nom ?? "").replace(/,/g, " ").replace(/\s+/g, " ").trim();
+  if (!nom) return null;
+  const parts = [nom, p.entreprise ?? "", p.ville ?? ""].map((s) => (s ?? "").trim()).filter(Boolean);
+  const kw = parts.join(" ");
+  const enc = encodeURIComponent(kw);
+  return {
+    people: `https://www.linkedin.com/search/results/people/?keywords=${enc}`,
+    sales: `https://www.linkedin.com/sales/search/people?query=(spellCorrectionEnabled:true,keywords:${enc})`,
+  };
+}
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -519,6 +532,7 @@ function KanbanColumn({
 
 function KanbanCard({ prospect, onOpen }: { prospect: Prospect; onOpen: () => void }) {
   const seg = segmentMeta(prospect.segment);
+  const liSearch = buildLinkedInSearch(prospect);
   return (
     <div
       draggable
@@ -528,6 +542,18 @@ function KanbanCard({ prospect, onOpen }: { prospect: Prospect; onOpen: () => vo
     >
       <div className="flex items-start gap-1.5">
         <GripVertical className="h-3.5 w-3.5 text-muted-foreground/50 mt-0.5 flex-shrink-0" />
+        {liSearch && (
+          <a
+            href={liSearch.people}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            title={`Trouver ${prospect.contact_nom} sur LinkedIn`}
+            className="mt-0.5 flex-shrink-0 text-[#0A66C2] hover:text-[#0A66C2]/80"
+          >
+            <Linkedin className="h-3.5 w-3.5" />
+          </a>
+        )}
         <div className="min-w-0 flex-1">
           <div className="font-semibold text-sm truncate">{prospect.entreprise}</div>
           <div className="text-[11px] text-muted-foreground truncate">
@@ -733,6 +759,29 @@ function ProspectSheet({
               )}
             </div>
           </Field>
+          {(() => {
+            const s = buildLinkedInSearch(form);
+            if (!s) return null;
+            return (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  asChild
+                  className="bg-[#0A66C2] hover:bg-[#0A66C2]/90 text-white"
+                >
+                  <a href={s.people} target="_blank" rel="noreferrer">
+                    <Linkedin className="h-4 w-4 mr-1.5" /> Trouver sur LinkedIn
+                  </a>
+                </Button>
+                <Button type="button" size="sm" variant="outline" asChild className="border-[#0A66C2]/40 text-[#0A66C2] hover:text-[#0A66C2]">
+                  <a href={s.sales} target="_blank" rel="noreferrer">
+                    <Linkedin className="h-4 w-4 mr-1.5" /> Sales Navigator
+                  </a>
+                </Button>
+              </div>
+            );
+          })()}
           <Field label="Montant estimé (€)">
             <Input
               type="number"

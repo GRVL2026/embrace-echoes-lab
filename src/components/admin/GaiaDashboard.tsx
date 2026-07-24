@@ -1618,6 +1618,7 @@ function FamillePieBlock(props: {
   const rowsShown = showAll ? familles : top5;
 
   const detailRows = detailQ.data ?? [];
+  const detailTotal = detailRows.reduce((s, a) => s + Number(a.ca_mois || 0), 0);
 
   return (
     <div className="rounded-lg border border-border bg-background/40 p-4">
@@ -1632,41 +1633,38 @@ function FamillePieBlock(props: {
         <div className="text-sm text-muted-foreground">Aucune vente sur ce mois.</div>
       ) : (
         <>
-          <div className={"grid gap-4 " + (selectedFam ? "grid-cols-1 lg:grid-cols-3" : "grid-cols-1 md:grid-cols-2")}>
-            <div className={"grid grid-cols-1 gap-4 md:grid-cols-2 " + (selectedFam ? "lg:col-span-2" : "md:col-span-2")}>
-              {renderPie(labelN, pieN, totalN)}
-              {renderPie(labelN1, pieN1, totalN1)}
-            </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {renderPie(labelN, pieN, totalN)}
+            {renderPie(labelN1, pieN1, totalN1)}
+          </div>
 
-            {selectedFam && (
-              <div className="rounded-md border border-border bg-card/60 p-3">
-                <div className="mb-2 flex items-start justify-between gap-2">
-                  <div>
-                    <div className="text-xs uppercase tracking-wider text-muted-foreground">Détail</div>
-                    <div className="font-medium capitalize">
-                      <span className="inline-block h-2.5 w-2.5 mr-1.5 rounded-sm align-middle" style={{ background: familyColor(selectedFam) }} />
-                      {selectedFam} · <span className="capitalize">{labelN}</span>
-                    </div>
-                  </div>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSelectedFam(null)} aria-label="Fermer">
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
+          <Sheet open={!!selectedFam} onOpenChange={(o) => !o && setSelectedFam(null)}>
+            <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto">
+              <SheetHeader>
+                <SheetTitle className="font-display inline-flex items-center gap-2 capitalize">
+                  {selectedFam && (
+                    <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: familyColor(selectedFam) }} />
+                  )}
+                  Détail — {selectedFam} · <span className="capitalize">{labelN}</span>
+                </SheetTitle>
+                <SheetDescription>Articles vendus ce mois, triés par CA décroissant.</SheetDescription>
+              </SheetHeader>
+              <div className="mt-4">
                 {detailQ.isLoading ? (
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Chargement…
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
                   </div>
                 ) : detailRows.length === 0 ? (
-                  <div className="text-xs text-muted-foreground">Aucun article vendu ce mois.</div>
+                  <div className="text-sm text-muted-foreground">Aucun article vendu ce mois.</div>
                 ) : (
-                  <div className="max-h-[280px] overflow-y-auto">
-                    <table className="w-full text-xs">
-                      <thead className="sticky top-0 bg-card/95 backdrop-blur">
-                        <tr className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                          <th className="py-1 pr-2 text-left font-medium">Article</th>
-                          <th className="py-1 px-1 text-right font-medium">CA</th>
-                          <th className="py-1 px-1 text-right font-medium">Qté</th>
-                          <th className="py-1 pl-1 text-right font-medium">vs N-1</th>
+                  <>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-xs uppercase tracking-wider text-muted-foreground">
+                          <th className="py-2 pr-2 text-left font-medium">Article</th>
+                          <th className="py-2 px-2 text-right font-medium">CA</th>
+                          <th className="py-2 px-2 text-right font-medium">Qté</th>
+                          <th className="py-2 pl-2 text-right font-medium">vs N-1</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1676,25 +1674,33 @@ function FamillePieBlock(props: {
                           const ec = camN1 > 0 ? ((cam - camN1) / camN1) * 100 : cam > 0 ? 100 : null;
                           return (
                             <tr key={(a.code || "") + i} className="border-t border-border/40">
-                              <td className="py-1 pr-2">
-                                <div className="truncate font-medium" title={a.article}>{a.article || "—"}</div>
-                                {a.code && <div className="text-[10px] text-muted-foreground truncate">{a.code}</div>}
+                              <td className="py-2 pr-2">
+                                <div className="font-medium" title={a.article}>{a.article || "—"}</div>
+                                {a.code && <div className="text-[11px] text-muted-foreground">{a.code}</div>}
                               </td>
-                              <td className="py-1 px-1 text-right tabular-nums font-semibold">{eur(cam)}</td>
-                              <td className="py-1 px-1 text-right tabular-nums">{num(Number(a.qte || 0))}</td>
-                              <td className={"py-1 pl-1 text-right tabular-nums " + (ec == null ? "text-muted-foreground" : ec >= 0 ? "text-secondary" : "text-destructive")}>
+                              <td className="py-2 px-2 text-right tabular-nums font-semibold whitespace-nowrap">{eur(cam)}</td>
+                              <td className="py-2 px-2 text-right tabular-nums whitespace-nowrap">{num(Number(a.qte || 0))}</td>
+                              <td className={"py-2 pl-2 text-right tabular-nums whitespace-nowrap " + (ec == null ? "text-muted-foreground" : ec >= 0 ? "text-secondary" : "text-destructive")}>
                                 {ec == null ? "—" : `${ec >= 0 ? "+" : ""}${ec.toFixed(1)} %`}
                               </td>
                             </tr>
                           );
                         })}
                       </tbody>
+                      <tfoot>
+                        <tr className="border-t border-border">
+                          <td className="py-2 pr-2 text-xs uppercase tracking-wider text-muted-foreground">Total {selectedFam}</td>
+                          <td className="py-2 px-2 text-right tabular-nums font-semibold whitespace-nowrap">{eur(detailTotal)}</td>
+                          <td colSpan={2} />
+                        </tr>
+                      </tfoot>
                     </table>
-                  </div>
+                  </>
                 )}
               </div>
-            )}
-          </div>
+            </SheetContent>
+          </Sheet>
+
 
           {/* Légende / tableau commun */}
           <div className="mt-4 overflow-x-auto">

@@ -639,9 +639,10 @@ function DashboardTab() {
         label: `S${pad(isoWeek(mon))}`,
         monday: mon,
         ca: 0,
+        merch: 0,
         visiteurs: 0,
         objectif: Number(obj?.objectif_semaine_ht ?? 0),
-        bySource: Object.fromEntries(SOURCES.map((s) => [s.key as string, 0])),
+        bySource: Object.fromEntries(DASH_SOURCES.map((s) => [s.key, 0])),
       });
     }
     for (const r of rows) {
@@ -649,8 +650,9 @@ function DashboardTab() {
       const w = map.get(k);
       if (!w) continue;
       w.ca += journeeCaTotal(r);
+      w.merch += Number(r.ca_merch_ht ?? 0);
       w.visiteurs += Number(r.visiteurs ?? 0);
-      for (const s of SOURCES) w.bySource[s.key as string] += Number((r as any)[s.key] ?? 0);
+      for (const s of DASH_SOURCES) w.bySource[s.key] += s.compute(r);
     }
     return Array.from(map.values()).sort((a, b) => a.monday.getTime() - b.monday.getTime());
     // objectifs listed in deps

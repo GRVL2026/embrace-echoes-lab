@@ -175,9 +175,15 @@ Deno.serve(async (req) => {
           if (knownPair.has(pairKey)) continue;
 
           const dirig = extractDirigeant(r);
+          let finalDirig = dirig;
+          if (!dirig.nom) {
+            finalDirig = await fetchDirigeant(siren);
+            await new Promise((res) => setTimeout(res, 120));
+          }
 
           const signal =
             `Nouvel établissement — ${naf.libelle} (${naf.code}) créé le ${dateCrea}` +
+            (ville ? ` à ${ville}` : '');
             (ville ? ` à ${ville}` : '');
 
           const row: Record<string, any> = {

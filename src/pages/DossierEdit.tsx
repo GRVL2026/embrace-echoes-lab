@@ -1232,7 +1232,7 @@ export default function DossierEdit() {
 
 
             {/* SECTION B : Jeux proposés */}
-            <section className="mt-6 space-y-4 rounded-lg border border-border bg-card/40 p-6">
+            <section className="mt-6 min-w-0 space-y-4 rounded-lg border border-border bg-card/40 p-4 sm:p-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h3 className="font-display text-lg font-semibold">Jeux proposés</h3>
@@ -1363,18 +1363,18 @@ export default function DossierEdit() {
                   Aucun jeu ajouté pour l'instant.
                 </div>
               ) : (
-                <div className="overflow-hidden rounded-md border border-border">
-                  <table className="w-full text-sm">
+                <div className="w-full max-w-full overflow-x-auto rounded-md border border-border">
+                  <table className="w-full min-w-[720px] text-sm">
                     <thead className="bg-muted/60 text-xs uppercase tracking-wider text-muted-foreground">
                       <tr>
                         <th className="w-20 px-3 py-2 text-left">Visuel</th>
                         <th className="px-3 py-2 text-left">Jeu</th>
-                        <th className="w-24 px-3 py-2 text-right">Qté</th>
-                        <th className="w-36 px-3 py-2 text-right">
+                        <th className="w-20 px-3 py-2 text-right">Qté</th>
+                        <th className="w-28 px-3 py-2 text-right">
                           {isRecurring ? "PU / mois" : "PU HT"}
                         </th>
-                        <th className="w-32 px-3 py-2 text-right">Sous-total</th>
-                        <th className="w-10 px-2 py-2" />
+                        <th className="w-28 px-3 py-2 text-right">Sous-total</th>
+                        <th className="sticky right-0 z-10 w-12 bg-muted/60 px-2 py-2 shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.4)]" />
                       </tr>
                     </thead>
                     <tbody>
@@ -1387,7 +1387,7 @@ export default function DossierEdit() {
                           : null;
                         const rowKey = (p.product_id ?? p.cegid_code ?? "line") + "-" + i;
                         return (
-                        <tr key={rowKey} className="border-t border-border/60">
+                        <tr key={rowKey} className="group border-t border-border/60">
                           <td className="px-3 py-2">
                             {href ? (
                               <a
@@ -1414,7 +1414,7 @@ export default function DossierEdit() {
                               </div>
                             )}
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2 min-w-[180px] whitespace-normal break-words">
                             {href ? (
                               <a
                                 href={href}
@@ -1472,7 +1472,7 @@ export default function DossierEdit() {
                               onChange={(e) =>
                                 updateProductLine(i, { qty: Math.max(1, Number(e.target.value) || 1) })
                               }
-                              className="h-8 w-20 text-right"
+                              className="h-8 w-16 text-right"
                             />
                           </td>
                           <td className="px-3 py-2 text-right">
@@ -1484,13 +1484,13 @@ export default function DossierEdit() {
                               onChange={(e) =>
                                 updateProductLine(i, { unit_price: Number(e.target.value) || 0 })
                               }
-                              className="h-8 w-28 text-right"
+                              className="h-8 w-24 text-right"
                             />
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums">
                             {(p.qty * p.unit_price).toFixed(2)} €
                           </td>
-                          <td className="px-2 py-2 text-right">
+                          <td className="sticky right-0 z-10 bg-card px-2 py-2 text-right shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.4)] group-hover:bg-accent/40">
                             <Button
                               variant="ghost"
                               size="icon"
@@ -1512,7 +1512,7 @@ export default function DossierEdit() {
                         <td className="px-3 py-2 text-right font-semibold tabular-nums">
                           {totalAmount.toFixed(2)} € {isRecurring ? "/ mois" : ""}
                         </td>
-                        <td />
+                        <td className="sticky right-0 bg-muted/40 shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.4)]" />
                       </tr>
                     </tfoot>
                   </table>

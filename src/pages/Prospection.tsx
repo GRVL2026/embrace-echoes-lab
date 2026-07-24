@@ -461,11 +461,25 @@ function KanbanCard({ prospect, onOpen }: { prospect: Prospect; onOpen: () => vo
                 {prospect.lgm_status ? ` · ${prospect.lgm_status}` : ""}
               </Badge>
             )}
+            {prospect.pret_a_envoyer && !prospect.lgm_lead_id && (
+              <Badge
+                variant="outline"
+                className="text-[10px] h-4 px-1.5 gap-0.5 border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300"
+                title="Enrichi + accroche IA prête, à valider"
+              >
+                <Zap className="h-2.5 w-2.5" /> Prêt à envoyer
+              </Badge>
+            )}
             {prospect.montant_estime ? (
               <span className="text-[11px] font-medium text-foreground/90">{eur(prospect.montant_estime)}</span>
             ) : null}
           </div>
-          {prospect.signal && (
+          {prospect.pret_a_envoyer && !prospect.lgm_lead_id && prospect.accroche_defaut && (
+            <div className="mt-1.5 text-[11px] text-emerald-700 dark:text-emerald-300/90 line-clamp-2">
+              {prospect.accroche_defaut}
+            </div>
+          )}
+          {prospect.signal && !(prospect.pret_a_envoyer && prospect.accroche_defaut) && (
             <div className="mt-1.5 text-[11px] text-muted-foreground line-clamp-2 italic">
               « {prospect.signal} »
             </div>

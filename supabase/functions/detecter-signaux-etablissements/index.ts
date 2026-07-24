@@ -70,16 +70,40 @@ async function isAuthorized(req: Request): Promise<boolean> {
 }
 
 function extractDirigeant(entreprise: any): { nom: string | null; role: string | null } {
-  const dirs = entreprise?.representants || entreprise?.dirigeants || [];
+  // Chemins Pappers possibles selon l'endpoint : entreprise.representants[], entreprise.dirigeants[]
+  const dirs: any[] =
+    entreprise?.representants ||
+    entreprise?.dirigeants ||
+    entreprise?.entreprise?.representants ||
+    entreprise?.entreprise?.dirigeants ||
+    [];
   if (!Array.isArray(dirs) || dirs.length === 0) return { nom: null, role: null };
-  const d = dirs[0];
-  // Personne physique
-  const prenom = (d.prenom || d.prenoms || '').toString().trim();
-  const nomFam = (d.nom || d.nom_complet || '').toString().trim();
+
+  // Priorité : première personne physique
+  const isPP = (d: any) =>
+    (d?.personne_morale === false) ||
+    (typeof d?.type === 'string' && d.type.toLowerCase().includes('physique')) ||
+    (!!d?.prenom || !!d?.prenoms) ||
+    (!d?.siren && !d?.denomination);
+
+  const d = dirs.find(isPP) || dirs[0];
+  if (!d) return { nom: null, role: null };
+
+  const prenom = (d.prenom || (Array.isArray(d.prenoms) ? d.prenoms[0] : d.prenoms) || '')
+    .toString().trim();
+  const nomFam = (d.nom || d.nom_usage || '').toString().trim();
   let nom = [prenom, nomFam].filter(Boolean).join(' ').trim();
-  if (!nom) nom = (d.denomination || d.nom_complet || '').toString().trim();
+  if (!nom) nom = (d.nom_complet || d.denomination || '').toString().trim();
   const role = (d.qualite || d.fonction || d.role || '').toString().trim() || null;
   return { nom: nom || null, role };
+}
+
+async function fetchDirigeant(siren: string): Promise<{ nom: string | null; role: string | null }> {
+  // /v2/entreprise renvoie systématiquement le bloc representants (personnes physiques + morales)
+  const params = new URLSearchParams({ api_token: PAPPERS_API_KEY, siren });
+  const data = await fetchWithRetry(`https://api.pappers.fr/v2/entreprise?${params.toString()}`);
+  if (!data) return { nom: null, role: null };
+  return extractDirigeant(data);
 }
 
 Deno.serve(async (req) => {

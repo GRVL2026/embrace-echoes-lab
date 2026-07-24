@@ -207,21 +207,8 @@ export const SPACES: Space[] = [
       },
     ],
   },
-  {
-    key: "achats",
-    label: "Achats",
-    icon: ShoppingBag,
-    colorToken: "--space-logistique",
-    show: (c) => c.isAdmin || c.isDirection,
-    entries: [
-      {
-        label: "Dashboard achats",
-        to: "/achats",
-        icon: BarChart3,
-        match: startsWith("/achats"),
-      },
-    ],
-  },
+
+
 
   {
     key: "reglages",

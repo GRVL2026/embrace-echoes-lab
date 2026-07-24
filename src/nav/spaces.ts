@@ -27,6 +27,7 @@ import {
 
 export type SpaceKey =
   | "commerce"
+  | "prospection"
   | "salle"
   | "pilotage"
   | "ecommerce"
@@ -108,6 +109,21 @@ export const SPACES: Space[] = [
         to: "/catalogue",
         icon: BookOpen,
         match: startsWith("/catalogue"),
+      },
+    ],
+  },
+  {
+    key: "prospection",
+    label: "Prospection",
+    icon: Target,
+    colorToken: "--space-prospection",
+    show: (c) => c.isAdmin || c.isDirection,
+    entries: [
+      {
+        label: "Pipeline prospects",
+        to: "/prospection",
+        icon: Target,
+        match: startsWith("/prospection"),
       },
     ],
   },

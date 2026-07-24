@@ -1910,6 +1910,7 @@ export type Database = {
       }
       prospects: {
         Row: {
+          accroche_defaut: string | null
           activite: string | null
           adresse: string | null
           ca_annuel: number | null
@@ -1929,6 +1930,8 @@ export type Database = {
           montant_estime: number | null
           notes: string | null
           owner_id: string | null
+          prepare_at: string | null
+          pret_a_envoyer: boolean
           segment: string
           signal: string | null
           siren: string | null
@@ -1941,6 +1944,7 @@ export type Database = {
           ville: string | null
         }
         Insert: {
+          accroche_defaut?: string | null
           activite?: string | null
           adresse?: string | null
           ca_annuel?: number | null
@@ -1960,6 +1964,8 @@ export type Database = {
           montant_estime?: number | null
           notes?: string | null
           owner_id?: string | null
+          prepare_at?: string | null
+          pret_a_envoyer?: boolean
           segment?: string
           signal?: string | null
           siren?: string | null
@@ -1972,6 +1978,7 @@ export type Database = {
           ville?: string | null
         }
         Update: {
+          accroche_defaut?: string | null
           activite?: string | null
           adresse?: string | null
           ca_annuel?: number | null
@@ -1991,6 +1998,8 @@ export type Database = {
           montant_estime?: number | null
           notes?: string | null
           owner_id?: string | null
+          prepare_at?: string | null
+          pret_a_envoyer?: boolean
           segment?: string
           signal?: string | null
           siren?: string | null

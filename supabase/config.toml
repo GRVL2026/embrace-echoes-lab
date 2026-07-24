@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.lgm-webhook]
 verify_jwt = false
+
+[functions.preparer-prospects-agent]
+verify_jwt = false

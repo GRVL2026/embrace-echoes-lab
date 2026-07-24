@@ -60,6 +60,9 @@ type Prospect = {
   ca_annuel: number | null;
   activite: string | null;
   site_web: string | null;
+  pret_a_envoyer: boolean | null;
+  accroche_defaut: string | null;
+  prepare_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -137,6 +140,8 @@ export default function Prospection() {
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [detecting, setDetecting] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [bulkSending, setBulkSending] = useState(false);
   const [lgmFilter, setLgmFilter] = useState<"all" | "loisirs" | "chr" | "retail" | "none">("all");
 
   const runDetection = useCallback(async () => {
@@ -156,6 +161,33 @@ export default function Prospection() {
       toast.error("Détection impossible", { description: (e as Error).message });
     } finally {
       setDetecting(false);
+    }
+  }, []);
+
+  const runPreparation = useCallback(async () => {
+    setPreparing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("preparer-prospects-agent", { body: {} });
+      if (error) throw error;
+      const prepared = Number((data as any)?.prepared ?? 0);
+      const candidats = Number((data as any)?.candidats ?? 0);
+      const errs = ((data as any)?.errors ?? []) as any[];
+      if (prepared > 0) {
+        toast.success(`${prepared} prospect(s) préparé(s)`, {
+          description: errs.length ? `${errs.length} erreur(s) ignorée(s)` : `${candidats} candidat(s) analysés`,
+        });
+      } else if (candidats === 0) {
+        toast("Aucun signal à préparer");
+      } else {
+        toast.error("Aucun prospect préparé", {
+          description: errs[0]?.error ?? "Erreurs pendant la préparation",
+        });
+      }
+      await load();
+    } catch (e) {
+      toast.error("Préparation impossible", { description: (e as Error).message });
+    } finally {
+      setPreparing(false);
     }
   }, []);
 
@@ -231,6 +263,45 @@ export default function Prospection() {
     });
   };
 
+  const readyToSend = useMemo(
+    () => prospects.filter((p) => p.pret_a_envoyer && !p.lgm_lead_id && LGM_SUPPORTED.includes(p.segment as Segment)),
+    [prospects],
+  );
+
+  const bulkSendToLgm = useCallback(async () => {
+    if (readyToSend.length === 0) return;
+    setBulkSending(true);
+    let ok = 0;
+    const errs: string[] = [];
+    for (const p of readyToSend) {
+      try {
+        const { data, error } = await supabase.functions.invoke("envoyer-vers-lgm", {
+          body: { prospect_id: p.id },
+        });
+        if (error) {
+          const t = (error as any)?.context?.text
+            ? await (error as any).context.text().catch(() => "")
+            : "";
+          let msg = error.message || "Envoi impossible";
+          try { const j = JSON.parse(t); if (j?.error) msg = j.error; } catch { /* noop */ }
+          errs.push(`${p.entreprise} : ${msg}`);
+          continue;
+        }
+        if ((data as any)?.error) { errs.push(`${p.entreprise} : ${(data as any).error}`); continue; }
+        ok++;
+      } catch (e) {
+        errs.push(`${p.entreprise} : ${(e as Error).message}`);
+      }
+    }
+    setBulkSending(false);
+    if (ok > 0) toast.success(`${ok} prospect(s) envoyé(s) vers LGM`, {
+      description: errs.length ? `${errs.length} erreur(s)` : undefined,
+    });
+    else toast.error("Aucun envoi réussi", { description: errs[0] });
+    await load();
+  }, [readyToSend, load]);
+
+
   const kpis = [
     { label: "Leads (total)", value: resume?.total ?? 0 },
     { label: "RDV", value: resume?.rdv ?? 0 },
@@ -274,6 +345,31 @@ export default function Prospection() {
           {detecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
           <span className="hidden sm:inline">{detecting ? "Détection…" : "Détecter les signaux"}</span>
         </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={runPreparation}
+          disabled={preparing}
+          className="gap-2"
+          title="Enrichir et générer une accroche IA pour les signaux non préparés (agent semi-auto)"
+        >
+          {preparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+          <span className="hidden sm:inline">{preparing ? "Préparation…" : "Préparer les nouveaux"}</span>
+        </Button>
+        {readyToSend.length > 0 && (
+          <Button
+            size="sm"
+            onClick={bulkSendToLgm}
+            disabled={bulkSending}
+            className="gap-2 bg-violet-600 hover:bg-violet-500 text-white"
+            title={`${readyToSend.length} prospect(s) prêt(s) à envoyer vers LGM`}
+          >
+            {bulkSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            <span className="hidden sm:inline">
+              {bulkSending ? "Envoi…" : `Envoyer les ${readyToSend.length} prêts vers LGM`}
+            </span>
+          </Button>
+        )}
         <Button size="sm" variant="outline" onClick={() => setImportOpen(true)} className="gap-2">
           <Upload className="h-4 w-4" /> <span className="hidden sm:inline">Importer CSV</span>
         </Button>
@@ -458,11 +554,25 @@ function KanbanCard({ prospect, onOpen }: { prospect: Prospect; onOpen: () => vo
                 {prospect.lgm_status ? ` · ${prospect.lgm_status}` : ""}
               </Badge>
             )}
+            {prospect.pret_a_envoyer && !prospect.lgm_lead_id && (
+              <Badge
+                variant="outline"
+                className="text-[10px] h-4 px-1.5 gap-0.5 border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300"
+                title="Enrichi + accroche IA prête, à valider"
+              >
+                <Zap className="h-2.5 w-2.5" /> Prêt à envoyer
+              </Badge>
+            )}
             {prospect.montant_estime ? (
               <span className="text-[11px] font-medium text-foreground/90">{eur(prospect.montant_estime)}</span>
             ) : null}
           </div>
-          {prospect.signal && (
+          {prospect.pret_a_envoyer && !prospect.lgm_lead_id && prospect.accroche_defaut && (
+            <div className="mt-1.5 text-[11px] text-emerald-700 dark:text-emerald-300/90 line-clamp-2">
+              {prospect.accroche_defaut}
+            </div>
+          )}
+          {prospect.signal && !(prospect.pret_a_envoyer && prospect.accroche_defaut) && (
             <div className="mt-1.5 text-[11px] text-muted-foreground line-clamp-2 italic">
               « {prospect.signal} »
             </div>
@@ -1466,13 +1576,30 @@ function LgmSection({
         </div>
       ) : (
         <div className="space-y-2">
+          {prospect.pret_a_envoyer && prospect.accroche_defaut && (
+            <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-2 text-xs whitespace-pre-wrap">
+              <div className="flex items-center gap-1 mb-1 text-emerald-600 dark:text-emerald-300 font-medium">
+                <Zap className="h-3 w-3" /> Accroche préparée par l'agent
+              </div>
+              {prospect.accroche_defaut}
+            </div>
+          )}
           <div className="text-xs text-muted-foreground">
             Envoie ce prospect vers l'audience LGM « Arcade OS – {segmentMeta(prospect.segment).label} ».
             La dernière accroche IA enregistrée sera transmise en attribut personnalisé.
           </div>
-          <Button size="sm" onClick={send} disabled={sending}>
+          <Button
+            size="sm"
+            onClick={send}
+            disabled={sending}
+            className={prospect.pret_a_envoyer ? "bg-emerald-600 hover:bg-emerald-500 text-white" : undefined}
+          >
             {sending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
-            {sending ? "Envoi…" : "Envoyer vers LGM"}
+            {sending
+              ? "Envoi…"
+              : prospect.pret_a_envoyer
+              ? "Valider & envoyer vers LGM"
+              : "Envoyer vers LGM"}
           </Button>
         </div>
       )}

@@ -30,7 +30,7 @@ import {
 
 type Statut = "nouveau" | "connecte" | "repondu" | "rdv" | "devis" | "client" | "perdu";
 type Segment = "loisirs" | "chr" | "retail" | "revendeur" | "autre";
-type Source = "linkedin" | "salon" | "reco" | "site" | "autre";
+type Source = "linkedin" | "salon" | "reco" | "site" | "signal" | "autre";
 
 type Prospect = {
   id: string;

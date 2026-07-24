@@ -49,6 +49,10 @@ type Prospect = {
   montant_estime: number | null;
   code_client: string | null;
   notes: string | null;
+  lgm_lead_id: string | null;
+  lgm_audience: string | null;
+  lgm_status: string | null;
+  lgm_sent_at: string | null;
   created_at: string;
   updated_at: string;
 };

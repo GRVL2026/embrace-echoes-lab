@@ -1414,7 +1414,7 @@ export default function DossierEdit() {
                               </div>
                             )}
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2 min-w-[180px] whitespace-normal break-words">
                             {href ? (
                               <a
                                 href={href}

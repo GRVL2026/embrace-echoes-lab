@@ -1384,3 +1384,89 @@ function AttributionList({
   );
 }
 
+
+/* -------------------- LGM (La Growth Machine) -------------------- */
+
+const LGM_SUPPORTED: Segment[] = ["loisirs", "chr", "retail"];
+
+function LgmSection({
+  prospect, onSent,
+}: {
+  prospect: Prospect;
+  onSent: (p: Prospect) => void;
+}) {
+  const [sending, setSending] = useState(false);
+  const alreadySent = !!prospect.lgm_lead_id;
+  const segmentOk = LGM_SUPPORTED.includes(prospect.segment as Segment);
+
+  const send = async () => {
+    setSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("envoyer-vers-lgm", {
+        body: { prospect_id: prospect.id },
+      });
+      if (error) {
+        const details = (error as any)?.context?.text
+          ? await (error as any).context.text().catch(() => "")
+          : "";
+        let msg = error.message || "Envoi impossible";
+        try { const j = JSON.parse(details); if (j?.error) msg = j.error; } catch { /* noop */ }
+        toast.error(msg);
+        return;
+      }
+      if ((data as any)?.error) { toast.error((data as any).error); return; }
+      const audience = (data as any)?.audience ?? "LGM";
+      toast.success(`Envoyé vers l'audience ${audience}`);
+      // Recharger le prospect à jour
+      const { data: refreshed } = await (supabase as any)
+        .from("prospects").select("*").eq("id", prospect.id).maybeSingle();
+      if (refreshed) onSent(refreshed as Prospect);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Envoi impossible");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="mt-6 rounded-lg border border-border/60 bg-muted/20 p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <Send className="h-4 w-4 text-[hsl(var(--space-prospection,258_90%_66%))]" />
+        <div className="text-sm font-semibold">La Growth Machine</div>
+      </div>
+
+      {!segmentOk ? (
+        <div className="text-xs text-muted-foreground italic">
+          Segment « {segmentMeta(prospect.segment).label} » non supporté par LGM.
+          Passe le segment à Loisirs, CHR ou Retail pour envoyer ce prospect.
+        </div>
+      ) : alreadySent ? (
+        <div className="space-y-2">
+          <div className="text-xs text-muted-foreground">
+            Déjà dans LGM –{" "}
+            <span className="font-medium text-foreground">{prospect.lgm_audience}</span>
+            {prospect.lgm_sent_at && (
+              <> · envoyé le {new Date(prospect.lgm_sent_at).toLocaleDateString("fr-FR")}</>
+            )}
+            {prospect.lgm_status && <> · statut : {prospect.lgm_status}</>}
+          </div>
+          <Button size="sm" variant="outline" onClick={send} disabled={sending}>
+            {sending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
+            Renvoyer vers LGM
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="text-xs text-muted-foreground">
+            Envoie ce prospect vers l'audience LGM « Arcade OS – {segmentMeta(prospect.segment).label} ».
+            La dernière accroche IA enregistrée sera transmise en attribut personnalisé.
+          </div>
+          <Button size="sm" onClick={send} disabled={sending}>
+            {sending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
+            {sending ? "Envoi…" : "Envoyer vers LGM"}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}

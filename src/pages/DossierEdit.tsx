@@ -1484,7 +1484,7 @@ export default function DossierEdit() {
                               onChange={(e) =>
                                 updateProductLine(i, { unit_price: Number(e.target.value) || 0 })
                               }
-                              className="h-8 w-28 text-right"
+                              className="h-8 w-24 text-right"
                             />
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums">

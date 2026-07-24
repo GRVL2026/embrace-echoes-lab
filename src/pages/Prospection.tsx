@@ -759,6 +759,29 @@ function ProspectSheet({
               )}
             </div>
           </Field>
+          {(() => {
+            const s = buildLinkedInSearch(form);
+            if (!s) return null;
+            return (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  asChild
+                  className="bg-[#0A66C2] hover:bg-[#0A66C2]/90 text-white"
+                >
+                  <a href={s.people} target="_blank" rel="noreferrer">
+                    <Linkedin className="h-4 w-4 mr-1.5" /> Trouver sur LinkedIn
+                  </a>
+                </Button>
+                <Button type="button" size="sm" variant="outline" asChild className="border-[#0A66C2]/40 text-[#0A66C2] hover:text-[#0A66C2]">
+                  <a href={s.sales} target="_blank" rel="noreferrer">
+                    <Linkedin className="h-4 w-4 mr-1.5" /> Sales Navigator
+                  </a>
+                </Button>
+              </div>
+            );
+          })()}
           <Field label="Montant estimé (€)">
             <Input
               type="number"

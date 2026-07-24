@@ -3,8 +3,9 @@ import { Navigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Loader2, Plus, Upload, Target, ExternalLink, Trash2, GripVertical, Mail, Phone,
-  Sparkles, Copy, RefreshCw, Save,
+  Sparkles, Copy, RefreshCw, Save, Link2, Link2Off, Search, TrendingUp,
 } from "lucide-react";
+
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";

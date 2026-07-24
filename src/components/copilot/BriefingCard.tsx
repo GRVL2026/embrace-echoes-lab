@@ -89,6 +89,8 @@ export function BriefingCard({ defaultExpanded = true }: { defaultExpanded?: boo
 
       {expanded && (
         <div className="border-t border-border/60 px-5 py-4 space-y-5">
+          <WeekActivitySection />
+
           <p className="text-[11px] text-muted-foreground italic">{b.fraicheur}</p>
 
           {b.changements?.length > 0 && (

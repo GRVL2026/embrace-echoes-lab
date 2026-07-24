@@ -2523,6 +2523,26 @@ export type Database = {
       }
       ensure_notification_prefs: { Args: { _uid: string }; Returns: undefined }
       gaia_query: { Args: { sql_query: string }; Returns: Json }
+      get_briefing_activite_hebdo: {
+        Args: never
+        Returns: {
+          jour: string
+          n_docs: number
+          type_doc: string
+          univers: string
+        }[]
+      }
+      get_briefing_jour_docs: {
+        Args: { _jour: string }
+        Returns: {
+          code_client: string
+          montant_ht: number
+          n_cde: string
+          proprietaire: string
+          type_doc: string
+          univers: string
+        }[]
+      }
       get_ca_client: {
         Args: { _annee: number; _annee_prev: number }
         Returns: {

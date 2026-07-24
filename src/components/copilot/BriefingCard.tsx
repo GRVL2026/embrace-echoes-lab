@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCopilot } from "@/contexts/CopilotContext";
 import { cn } from "@/lib/utils";
+import { WeekActivitySection } from "./WeekActivitySection";
 
 type Briefing = {
   date: string;
@@ -88,6 +89,8 @@ export function BriefingCard({ defaultExpanded = true }: { defaultExpanded?: boo
 
       {expanded && (
         <div className="border-t border-border/60 px-5 py-4 space-y-5">
+          <WeekActivitySection />
+
           <p className="text-[11px] text-muted-foreground italic">{b.fraicheur}</p>
 
           {b.changements?.length > 0 && (

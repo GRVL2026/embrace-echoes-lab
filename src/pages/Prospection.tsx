@@ -3,7 +3,7 @@ import { Navigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Loader2, Plus, Upload, Target, ExternalLink, Trash2, GripVertical, Mail, Phone,
-  Sparkles, Copy, RefreshCw, Save, Link2, Link2Off, Search, TrendingUp, Zap,
+  Sparkles, Copy, RefreshCw, Save, Link2, Link2Off, Search, TrendingUp, Zap, Send,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -49,6 +49,10 @@ type Prospect = {
   montant_estime: number | null;
   code_client: string | null;
   notes: string | null;
+  lgm_lead_id: string | null;
+  lgm_audience: string | null;
+  lgm_status: string | null;
+  lgm_sent_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -126,6 +130,7 @@ export default function Prospection() {
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [detecting, setDetecting] = useState(false);
+  const [lgmFilter, setLgmFilter] = useState<"all" | "loisirs" | "chr" | "retail" | "none">("all");
 
   const runDetection = useCallback(async () => {
     setDetecting(true);
@@ -176,15 +181,22 @@ export default function Prospection() {
     return <Navigate to="/" replace />;
   }
 
+  const filteredProspects = useMemo(() => {
+    if (lgmFilter === "all") return prospects;
+    if (lgmFilter === "none") return prospects.filter((p) => !p.lgm_lead_id);
+    const target = `arcade os – ${lgmFilter}`;
+    return prospects.filter((p) => (p.lgm_audience ?? "").toLowerCase().includes(target));
+  }, [prospects, lgmFilter]);
+
   const byStatut = useMemo(() => {
     const map = new Map<Statut, Prospect[]>();
     STATUTS.forEach((s) => map.set(s.key, []));
-    for (const p of prospects) {
+    for (const p of filteredProspects) {
       const arr = map.get(p.statut as Statut) ?? map.get("nouveau")!;
       arr.push(p);
     }
     return map;
-  }, [prospects]);
+  }, [filteredProspects]);
 
   const moveStatut = async (id: string, newStatut: Statut) => {
     const p = prospects.find((x) => x.id === id);
@@ -229,6 +241,20 @@ export default function Prospection() {
         <div className="flex-1 min-w-0">
           <h1 className="font-display text-base sm:text-lg font-semibold truncate">Prospection</h1>
           <p className="text-xs text-muted-foreground truncate">CRM commercial — pipeline & suivi des leads</p>
+        </div>
+        <div className="hidden md:block">
+          <Select value={lgmFilter} onValueChange={(v) => setLgmFilter(v as typeof lgmFilter)}>
+            <SelectTrigger className="h-9 w-[180px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Audience LGM : Toutes</SelectItem>
+              <SelectItem value="loisirs">Audience : Loisirs</SelectItem>
+              <SelectItem value="chr">Audience : CHR</SelectItem>
+              <SelectItem value="retail">Audience : Retail</SelectItem>
+              <SelectItem value="none">Non envoyés</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <Button
           size="sm"
@@ -412,6 +438,17 @@ function KanbanCard({ prospect, onOpen }: { prospect: Prospect; onOpen: () => vo
                 className="text-[10px] h-4 px-1.5 gap-0.5 border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400"
               >
                 <Zap className="h-2.5 w-2.5" /> Signal
+              </Badge>
+            )}
+            {prospect.lgm_lead_id && prospect.lgm_audience && (
+              <Badge
+                variant="outline"
+                className="text-[10px] h-4 px-1.5 gap-0.5 border-violet-500/50 bg-violet-500/10 text-violet-600 dark:text-violet-300"
+                title={prospect.lgm_status ? `Statut LGM : ${prospect.lgm_status}` : "Envoyé vers LGM"}
+              >
+                <Send className="h-2.5 w-2.5" />
+                LGM · {prospect.lgm_audience.replace(/^Arcade OS – /, "")}
+                {prospect.lgm_status ? ` · ${prospect.lgm_status}` : ""}
               </Badge>
             )}
             {prospect.montant_estime ? (
@@ -607,6 +644,8 @@ function ProspectSheet({
         />
 
         <AccrocheIASection prospect={prospect} onSaved={loadEvents} />
+
+        <LgmSection prospect={prospect} onSent={(next) => { onChange(next); setForm(next); loadEvents(); }} />
 
 
         <div className="mt-8 space-y-3">
@@ -1345,3 +1384,89 @@ function AttributionList({
   );
 }
 
+
+/* -------------------- LGM (La Growth Machine) -------------------- */
+
+const LGM_SUPPORTED: Segment[] = ["loisirs", "chr", "retail"];
+
+function LgmSection({
+  prospect, onSent,
+}: {
+  prospect: Prospect;
+  onSent: (p: Prospect) => void;
+}) {
+  const [sending, setSending] = useState(false);
+  const alreadySent = !!prospect.lgm_lead_id;
+  const segmentOk = LGM_SUPPORTED.includes(prospect.segment as Segment);
+
+  const send = async () => {
+    setSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("envoyer-vers-lgm", {
+        body: { prospect_id: prospect.id },
+      });
+      if (error) {
+        const details = (error as any)?.context?.text
+          ? await (error as any).context.text().catch(() => "")
+          : "";
+        let msg = error.message || "Envoi impossible";
+        try { const j = JSON.parse(details); if (j?.error) msg = j.error; } catch { /* noop */ }
+        toast.error(msg);
+        return;
+      }
+      if ((data as any)?.error) { toast.error((data as any).error); return; }
+      const audience = (data as any)?.audience ?? "LGM";
+      toast.success(`Envoyé vers l'audience ${audience}`);
+      // Recharger le prospect à jour
+      const { data: refreshed } = await (supabase as any)
+        .from("prospects").select("*").eq("id", prospect.id).maybeSingle();
+      if (refreshed) onSent(refreshed as Prospect);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Envoi impossible");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="mt-6 rounded-lg border border-border/60 bg-muted/20 p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <Send className="h-4 w-4 text-[hsl(var(--space-prospection,258_90%_66%))]" />
+        <div className="text-sm font-semibold">La Growth Machine</div>
+      </div>
+
+      {!segmentOk ? (
+        <div className="text-xs text-muted-foreground italic">
+          Segment « {segmentMeta(prospect.segment).label} » non supporté par LGM.
+          Passe le segment à Loisirs, CHR ou Retail pour envoyer ce prospect.
+        </div>
+      ) : alreadySent ? (
+        <div className="space-y-2">
+          <div className="text-xs text-muted-foreground">
+            Déjà dans LGM –{" "}
+            <span className="font-medium text-foreground">{prospect.lgm_audience}</span>
+            {prospect.lgm_sent_at && (
+              <> · envoyé le {new Date(prospect.lgm_sent_at).toLocaleDateString("fr-FR")}</>
+            )}
+            {prospect.lgm_status && <> · statut : {prospect.lgm_status}</>}
+          </div>
+          <Button size="sm" variant="outline" onClick={send} disabled={sending}>
+            {sending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
+            Renvoyer vers LGM
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="text-xs text-muted-foreground">
+            Envoie ce prospect vers l'audience LGM « Arcade OS – {segmentMeta(prospect.segment).label} ».
+            La dernière accroche IA enregistrée sera transmise en attribut personnalisé.
+          </div>
+          <Button size="sm" onClick={send} disabled={sending}>
+            {sending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
+            {sending ? "Envoi…" : "Envoyer vers LGM"}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}

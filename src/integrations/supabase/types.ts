@@ -1887,6 +1887,10 @@ export type Database = {
           email: string | null
           entreprise: string
           id: string
+          lgm_audience: string | null
+          lgm_lead_id: string | null
+          lgm_sent_at: string | null
+          lgm_status: string | null
           linkedin_url: string | null
           montant_estime: number | null
           notes: string | null
@@ -1908,6 +1912,10 @@ export type Database = {
           email?: string | null
           entreprise: string
           id?: string
+          lgm_audience?: string | null
+          lgm_lead_id?: string | null
+          lgm_sent_at?: string | null
+          lgm_status?: string | null
           linkedin_url?: string | null
           montant_estime?: number | null
           notes?: string | null
@@ -1929,6 +1937,10 @@ export type Database = {
           email?: string | null
           entreprise?: string
           id?: string
+          lgm_audience?: string | null
+          lgm_lead_id?: string | null
+          lgm_sent_at?: string | null
+          lgm_status?: string | null
           linkedin_url?: string | null
           montant_estime?: number | null
           notes?: string | null

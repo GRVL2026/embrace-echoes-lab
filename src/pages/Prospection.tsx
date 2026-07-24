@@ -3,7 +3,7 @@ import { Navigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Loader2, Plus, Upload, Target, ExternalLink, Trash2, GripVertical, Mail, Phone,
-  Sparkles, Copy, RefreshCw, Save, Link2, Link2Off, Search, TrendingUp,
+  Sparkles, Copy, RefreshCw, Save, Link2, Link2Off, Search, TrendingUp, Zap,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -30,7 +30,7 @@ import {
 
 type Statut = "nouveau" | "connecte" | "repondu" | "rdv" | "devis" | "client" | "perdu";
 type Segment = "loisirs" | "chr" | "retail" | "revendeur" | "autre";
-type Source = "linkedin" | "salon" | "reco" | "site" | "autre";
+type Source = "linkedin" | "salon" | "reco" | "site" | "signal" | "autre";
 
 type Prospect = {
   id: string;
@@ -125,6 +125,27 @@ export default function Prospection() {
   const [selected, setSelected] = useState<Prospect | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [detecting, setDetecting] = useState(false);
+
+  const runDetection = useCallback(async () => {
+    setDetecting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("detecter-signaux-etablissements");
+      if (error) throw error;
+      const inserted = Number((data as any)?.inserted ?? 0);
+      const note = (data as any)?.note as string | undefined;
+      if (inserted > 0) {
+        toast.success(`${inserted} nouveaux prospects détectés`, { description: note });
+      } else {
+        toast(`Aucun nouvel établissement détecté`, { description: note });
+      }
+      await load();
+    } catch (e) {
+      toast.error("Détection impossible", { description: (e as Error).message });
+    } finally {
+      setDetecting(false);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -209,6 +230,17 @@ export default function Prospection() {
           <h1 className="font-display text-base sm:text-lg font-semibold truncate">Prospection</h1>
           <p className="text-xs text-muted-foreground truncate">CRM commercial — pipeline & suivi des leads</p>
         </div>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={runDetection}
+          disabled={detecting}
+          className="gap-2"
+          title="Détecter les établissements récemment créés en France (30 jours)"
+        >
+          {detecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+          <span className="hidden sm:inline">{detecting ? "Détection…" : "Détecter les signaux"}</span>
+        </Button>
         <Button size="sm" variant="outline" onClick={() => setImportOpen(true)} className="gap-2">
           <Upload className="h-4 w-4" /> <span className="hidden sm:inline">Importer CSV</span>
         </Button>
@@ -374,6 +406,14 @@ function KanbanCard({ prospect, onOpen }: { prospect: Prospect; onOpen: () => vo
           </div>
           <div className="mt-1.5 flex items-center gap-1 flex-wrap">
             <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", seg.className)}>{seg.label}</Badge>
+            {prospect.source === "signal" && (
+              <Badge
+                variant="outline"
+                className="text-[10px] h-4 px-1.5 gap-0.5 border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+              >
+                <Zap className="h-2.5 w-2.5" /> Signal
+              </Badge>
+            )}
             {prospect.montant_estime ? (
               <span className="text-[11px] font-medium text-foreground/90">{eur(prospect.montant_estime)}</span>
             ) : null}

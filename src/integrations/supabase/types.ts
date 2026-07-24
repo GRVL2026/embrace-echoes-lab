@@ -1893,6 +1893,7 @@ export type Database = {
           owner_id: string | null
           segment: string
           signal: string | null
+          siren: string | null
           source: string | null
           statut: string
           telephone: string | null
@@ -1913,6 +1914,7 @@ export type Database = {
           owner_id?: string | null
           segment?: string
           signal?: string | null
+          siren?: string | null
           source?: string | null
           statut?: string
           telephone?: string | null
@@ -1933,6 +1935,7 @@ export type Database = {
           owner_id?: string | null
           segment?: string
           signal?: string | null
+          siren?: string | null
           source?: string | null
           statut?: string
           telephone?: string | null

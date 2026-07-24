@@ -242,6 +242,28 @@ export default function Catalogue() {
                 ))}
               </select>
             </div>
+            {isAdmin && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleSyncShopify}
+                disabled={syncing}
+                className="h-9 gap-2"
+              >
+                {syncing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Synchronisation…
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4" />
+                    Synchroniser avec Shopify
+                  </>
+                )}
+              </Button>
+            )}
             <div className="flex items-center gap-2 rounded-md border border-border bg-card/40 px-3 py-1.5">
               <Switch id="incl-erp" checked={includeErp} onCheckedChange={setIncludeErp} />
               <Label htmlFor="incl-erp" className="text-xs cursor-pointer">

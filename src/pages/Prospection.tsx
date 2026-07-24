@@ -542,6 +542,18 @@ function KanbanCard({ prospect, onOpen }: { prospect: Prospect; onOpen: () => vo
     >
       <div className="flex items-start gap-1.5">
         <GripVertical className="h-3.5 w-3.5 text-muted-foreground/50 mt-0.5 flex-shrink-0" />
+        {liSearch && (
+          <a
+            href={liSearch.people}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            title={`Trouver ${prospect.contact_nom} sur LinkedIn`}
+            className="mt-0.5 flex-shrink-0 text-[#0A66C2] hover:text-[#0A66C2]/80"
+          >
+            <Linkedin className="h-3.5 w-3.5" />
+          </a>
+        )}
         <div className="min-w-0 flex-1">
           <div className="font-semibold text-sm truncate">{prospect.entreprise}</div>
           <div className="text-[11px] text-muted-foreground truncate">

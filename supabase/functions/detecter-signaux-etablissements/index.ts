@@ -5,6 +5,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const CRON_SECRET = Deno.env.get('CRON_SECRET') || '';
+const PAPPERS_API_KEY = Deno.env.get('PAPPERS_API_KEY') || '';
 
 type Segment = 'loisirs' | 'chr' | 'retail';
 
@@ -19,8 +20,9 @@ const NAF_MAP: { code: string; segment: Segment; libelle: string }[] = [
 ];
 
 const MAX_INSERT = 40;
-const PAGES_PER_NAF = 12; // 12 * 25 = 300 examinés max par NAF
-const API = 'https://recherche-entreprises.api.gouv.fr/search';
+const PER_PAGE = 20;
+const MAX_PAGES_PER_NAF = 3; // économie de crédits Pappers
+const API = 'https://api.pappers.fr/v2/recherche';
 
 function j(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -33,28 +35,26 @@ async function fetchWithRetry(url: string, tries = 2): Promise<any | null> {
   for (let i = 0; i < tries; i++) {
     try {
       const ctrl = new AbortController();
-      const to = setTimeout(() => ctrl.abort(), 12000);
+      const to = setTimeout(() => ctrl.abort(), 15000);
       const r = await fetch(url, { signal: ctrl.signal, headers: { 'Accept': 'application/json' } });
       clearTimeout(to);
       if (r.status === 429 || r.status >= 500) {
-        await new Promise((res) => setTimeout(res, 800));
+        await new Promise((res) => setTimeout(res, 1000));
         continue;
       }
       if (!r.ok) return null;
       return await r.json();
     } catch {
-      await new Promise((res) => setTimeout(res, 500));
+      await new Promise((res) => setTimeout(res, 600));
     }
   }
   return null;
 }
 
 async function isAuthorized(req: Request): Promise<boolean> {
-  // Service role via CRON_SECRET (tâche planifiée)
   const cron = req.headers.get('x-cron-secret');
   if (CRON_SECRET && cron === CRON_SECRET) return true;
 
-  // Utilisateur authentifié admin/direction
   const authHeader = req.headers.get('Authorization') || '';
   if (!authHeader.startsWith('Bearer ')) return false;
   const token = authHeader.slice(7);
@@ -69,11 +69,25 @@ async function isAuthorized(req: Request): Promise<boolean> {
   return (roles || []).some((r: any) => r.role === 'admin' || r.role === 'direction');
 }
 
+function extractDirigeant(entreprise: any): { nom: string | null; role: string | null } {
+  const dirs = entreprise?.representants || entreprise?.dirigeants || [];
+  if (!Array.isArray(dirs) || dirs.length === 0) return { nom: null, role: null };
+  const d = dirs[0];
+  // Personne physique
+  const prenom = (d.prenom || d.prenoms || '').toString().trim();
+  const nomFam = (d.nom || d.nom_complet || '').toString().trim();
+  let nom = [prenom, nomFam].filter(Boolean).join(' ').trim();
+  if (!nom) nom = (d.denomination || d.nom_complet || '').toString().trim();
+  const role = (d.qualite || d.fonction || d.role || '').toString().trim() || null;
+  return { nom: nom || null, role };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
     if (!(await isAuthorized(req))) return j(401, { error: 'Unauthorized' });
+    if (!PAPPERS_API_KEY) return j(500, { error: 'PAPPERS_API_KEY manquant' });
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -82,7 +96,7 @@ Deno.serve(async (req) => {
     const cutoff = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
     const cutoffStr = cutoff.toISOString().slice(0, 10);
 
-    // Set des SIREN déjà connus
+    // Prospects déjà connus
     const { data: existing } = await admin
       .from('prospects')
       .select('siren, entreprise, ville')
@@ -97,41 +111,52 @@ Deno.serve(async (req) => {
     const toInsert: any[] = [];
     const examples: string[] = [];
     let scanned = 0;
-    let apiSupportsDateFilter = false; // détecté à l'exécution
 
     outer:
     for (const naf of NAF_MAP) {
-      for (let page = 1; page <= PAGES_PER_NAF; page++) {
+      for (let page = 1; page <= MAX_PAGES_PER_NAF; page++) {
         if (toInsert.length >= MAX_INSERT) break outer;
 
-        const url = `${API}?activite_principale=${encodeURIComponent(naf.code)}&etat_administratif=A&per_page=25&page=${page}&minimal=true&include=siege`;
+        // Paramètres Pappers /v2/recherche : code_naf, date_creation_min (YYYY-MM-DD), entreprise_cessee=false
+        const params = new URLSearchParams({
+          api_token: PAPPERS_API_KEY,
+          code_naf: naf.code,
+          date_creation_min: cutoffStr,
+          entreprise_cessee: 'false',
+          precision: 'standard',
+          par_page: String(PER_PAGE),
+          page: String(page),
+        });
+        const url = `${API}?${params.toString()}`;
         const data = await fetchWithRetry(url);
-        if (!data || !Array.isArray(data.results) || data.results.length === 0) break;
+        if (!data) break;
+        const results: any[] = Array.isArray(data.resultats) ? data.resultats : [];
+        if (results.length === 0) break;
 
-        for (const r of data.results) {
+        for (const r of results) {
           scanned++;
-          const siege = r.siege || {};
-          const dateCrea: string | null = siege.date_creation || r.date_creation || null;
+          const dateCrea: string | null = r.date_creation || r.date_creation_formatee || null;
           if (!dateCrea) continue;
-          if (dateCrea < cutoffStr) continue; // > 30 jours
-
-          apiSupportsDateFilter = false; // (filtrage est manuel, restera false)
+          if (dateCrea < cutoffStr) continue; // sécurité côté fonction
 
           const siren = String(r.siren || '').trim();
           if (!siren || knownSiren.has(siren)) continue;
 
-          const nom = (r.nom_complet || r.nom_raison_sociale || '').trim();
-          const ville = (siege.libelle_commune || '').trim();
+          const nom = (r.nom_entreprise || r.denomination || r.nom_complet || '').toString().trim();
+          const siege = r.siege || {};
+          const ville = (siege.ville || r.ville || '').toString().trim();
           if (!nom) continue;
 
           const pairKey = `${nom.toLowerCase()}|${ville.toLowerCase()}`;
           if (knownPair.has(pairKey)) continue;
 
+          const dirig = extractDirigeant(r);
+
           const signal =
             `Nouvel établissement — ${naf.libelle} (${naf.code}) créé le ${dateCrea}` +
             (ville ? ` à ${ville}` : '');
 
-          toInsert.push({
+          const row: Record<string, any> = {
             entreprise: nom,
             ville: ville || null,
             siren,
@@ -139,38 +164,38 @@ Deno.serve(async (req) => {
             source: 'signal',
             statut: 'nouveau',
             signal,
-          });
+          };
+          if (dirig.nom) row.contact_nom = dirig.nom;
+          if (dirig.role) row.contact_role = dirig.role;
+
+          toInsert.push(row);
           knownSiren.add(siren);
           knownPair.add(pairKey);
           if (examples.length < 5) examples.push(nom);
 
           if (toInsert.length >= MAX_INSERT) break outer;
         }
-        // Petit throttle
-        await new Promise((res) => setTimeout(res, 120));
+        await new Promise((res) => setTimeout(res, 150));
       }
     }
 
     let inserted = 0;
     if (toInsert.length > 0) {
-      const { data: ins, error: insErr } = await admin
+      // Tentative avec contact_nom/contact_role ; fallback si colonnes absentes
+      let { data: ins, error: insErr } = await admin
         .from('prospects')
         .insert(toInsert)
         .select('id');
-      if (insErr) {
-        return j(500, { error: `insert failed: ${insErr.message}`, scanned });
+      if (insErr && /contact_(nom|role)/i.test(insErr.message)) {
+        const stripped = toInsert.map(({ contact_nom, contact_role, ...rest }) => rest);
+        const retry = await admin.from('prospects').insert(stripped).select('id');
+        ins = retry.data; insErr = retry.error;
       }
+      if (insErr) return j(500, { error: `insert failed: ${insErr.message}`, scanned });
       inserted = ins?.length ?? 0;
     }
 
-    return j(200, {
-      inserted,
-      scanned,
-      exemples: examples,
-      note: apiSupportsDateFilter
-        ? undefined
-        : "L'API recherche-entreprises.api.gouv.fr ne propose pas de filtre serveur par date de création : le filtrage 30 jours est appliqué côté fonction sur les résultats paginés (priorité loisirs > CHR > retail).",
-    });
+    return j(200, { inserted, scanned, exemples: examples });
   } catch (e) {
     return j(500, { error: (e as Error).message });
   }

@@ -242,6 +242,20 @@ export default function Prospection() {
           <h1 className="font-display text-base sm:text-lg font-semibold truncate">Prospection</h1>
           <p className="text-xs text-muted-foreground truncate">CRM commercial — pipeline & suivi des leads</p>
         </div>
+        <div className="hidden md:block">
+          <Select value={lgmFilter} onValueChange={(v) => setLgmFilter(v as typeof lgmFilter)}>
+            <SelectTrigger className="h-9 w-[180px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Audience LGM : Toutes</SelectItem>
+              <SelectItem value="loisirs">Audience : Loisirs</SelectItem>
+              <SelectItem value="chr">Audience : CHR</SelectItem>
+              <SelectItem value="retail">Audience : Retail</SelectItem>
+              <SelectItem value="none">Non envoyés</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <Button
           size="sm"
           variant="outline"

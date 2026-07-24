@@ -3,8 +3,21 @@ import { Navigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Loader2, Plus, Upload, Target, ExternalLink, Trash2, GripVertical, Mail, Phone,
-  Sparkles, Copy, RefreshCw, Save, Link2, Link2Off, Search, TrendingUp, Zap, Send,
+  Sparkles, Copy, RefreshCw, Save, Link2, Link2Off, Search, TrendingUp, Zap, Send, Linkedin,
 } from "lucide-react";
+
+/* -------------------- LinkedIn search helpers -------------------- */
+function buildLinkedInSearch(p: { contact_nom?: string | null; entreprise?: string | null; ville?: string | null }) {
+  const nom = (p.contact_nom ?? "").replace(/,/g, " ").replace(/\s+/g, " ").trim();
+  if (!nom) return null;
+  const parts = [nom, p.entreprise ?? "", p.ville ?? ""].map((s) => (s ?? "").trim()).filter(Boolean);
+  const kw = parts.join(" ");
+  const enc = encodeURIComponent(kw);
+  return {
+    people: `https://www.linkedin.com/search/results/people/?keywords=${enc}`,
+    sales: `https://www.linkedin.com/sales/search/people?query=(spellCorrectionEnabled:true,keywords:${enc})`,
+  };
+}
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";

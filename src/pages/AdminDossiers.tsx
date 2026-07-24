@@ -60,6 +60,7 @@ export default function AdminDossiers() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
+  const [prospectionRoles, setProspectionRoles] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
 

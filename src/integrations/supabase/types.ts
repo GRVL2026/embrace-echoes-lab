@@ -2843,6 +2843,16 @@ export type Database = {
           taux_moyen: number
         }[]
       }
+      get_ventes_famille_detail: {
+        Args: { _famille: string; _month: string }
+        Returns: {
+          article: string
+          ca_mois: number
+          ca_mois_n1: number
+          code: string
+          qte: number
+        }[]
+      }
       get_ventes_familles_mois: {
         Args: { _month: string }
         Returns: {

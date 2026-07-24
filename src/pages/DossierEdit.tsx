@@ -1490,7 +1490,7 @@ export default function DossierEdit() {
                           <td className="px-3 py-2 text-right tabular-nums">
                             {(p.qty * p.unit_price).toFixed(2)} €
                           </td>
-                          <td className="px-2 py-2 text-right">
+                          <td className="sticky right-0 z-10 bg-card px-2 py-2 text-right shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.4)] group-hover:bg-accent/40">
                             <Button
                               variant="ghost"
                               size="icon"

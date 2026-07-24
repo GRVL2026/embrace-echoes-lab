@@ -1472,7 +1472,7 @@ export default function DossierEdit() {
                               onChange={(e) =>
                                 updateProductLine(i, { qty: Math.max(1, Number(e.target.value) || 1) })
                               }
-                              className="h-8 w-20 text-right"
+                              className="h-8 w-16 text-right"
                             />
                           </td>
                           <td className="px-3 py-2 text-right">

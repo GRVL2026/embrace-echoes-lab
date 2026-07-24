@@ -139,6 +139,17 @@ function segmentMeta(s: string | null | undefined) {
   return SEGMENTS.find((x) => x.key === s) ?? SEGMENTS[SEGMENTS.length - 1];
 }
 
+function formatLgmStatus(raw: string | null | undefined): string {
+  if (!raw) return "";
+  const up = raw.toUpperCase();
+  if (up.includes("CONNECTION_ACCEPTED")) return "Connexion acceptée";
+  if (up.includes("REPLIED") || up.includes("REPLY") || up.includes("ANSWER")) return "A répondu";
+  if (up.includes("MESSAGE_SENT") || up.includes("SENT")) return "Message envoyé";
+  if (up.includes("OPENED")) return "Email ouvert";
+  const clean = raw.replace(/_/g, " ").toLowerCase().trim();
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
+}
+
 type Resume = {
   total: number; nouveau: number; connecte: number; repondu: number; rdv: number;
   devis: number; client: number; perdu: number; ca_attribue: number;

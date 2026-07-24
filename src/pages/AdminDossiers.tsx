@@ -368,6 +368,7 @@ export default function AdminDossiers() {
                               }
                             }}
                           />
+                        </TableCell>
                       </TableRow>
                     ))
                 )}

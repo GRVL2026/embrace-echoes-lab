@@ -2655,6 +2655,27 @@ export type Database = {
       }
       ensure_notification_prefs: { Args: { _uid: string }; Returns: undefined }
       gaia_query: { Args: { sql_query: string }; Returns: Json }
+      get_achats_resume: {
+        Args: never
+        Returns: {
+          arrivages: number
+          cmd_encours: number
+          montant_12m: number
+          montant_encours: number
+          nb_fournisseurs: number
+          reste_a_facturer: number
+          reste_a_recevoir: number
+        }[]
+      }
+      get_achats_top_fournisseurs: {
+        Args: { _limit?: number }
+        Returns: {
+          code_fourn: string
+          montant: number
+          nb_cmd: number
+          nom_fourn: string
+        }[]
+      }
       get_briefing_activite_hebdo: {
         Args: never
         Returns: {

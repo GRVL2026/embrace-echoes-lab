@@ -22,6 +22,7 @@ import {
   Building2,
   Gamepad2,
   Grid2x2,
+  ShoppingBag,
   type LucideIcon,
 } from "lucide-react";
 
@@ -31,7 +32,7 @@ export type SpaceKey =
   | "pilotage"
   | "ecommerce"
   | "sav"
-  | "logistique"
+  | "achats"
   | "reglages";
 
 export type NavCtx = {
@@ -191,12 +192,18 @@ export const SPACES: Space[] = [
     ],
   },
   {
-    key: "logistique",
-    label: "Logistique",
-    icon: Truck,
+    key: "achats",
+    label: "Achats",
+    icon: ShoppingBag,
     colorToken: "--space-logistique",
-    show: (c) => c.isAdmin,
+    show: (c) => c.isAdmin || c.isDirection,
     entries: [
+      {
+        label: "Dashboard achats",
+        to: "/achats",
+        icon: BarChart3,
+        match: startsWith("/achats"),
+      },
       {
         label: "Expéditions & imports",
         to: "/logistique",

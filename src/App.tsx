@@ -8,6 +8,7 @@ import Hub from "./pages/Hub";
 import Logistique from "./pages/Logistique";
 import Ecommerce from "./pages/Ecommerce";
 import Sav from "./pages/Sav";
+import Achats from "./pages/Achats";
 import SavTicket from "./pages/SavTicket";
 import Catalogue from "./pages/Catalogue";
 import DossiersList from "./pages/DossiersList";
@@ -76,6 +77,7 @@ const App = () => (
 
             <Route path="/dossiers/:id" element={<P><DossierEdit /></P>} />
             <Route path="/logistique" element={<P><Logistique /></P>} />
+            <Route path="/achats" element={<P><Achats /></P>} />
             <Route path="/ecommerce" element={<P><Ecommerce /></P>} />
             <Route path="/sav" element={<P><Sav /></P>} />
             <Route path="/sav/ticket/:id" element={<P><SavTicket /></P>} />

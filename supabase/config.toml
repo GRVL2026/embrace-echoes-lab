@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.detecter-signaux-etablissements]
 verify_jwt = false
+
+[functions.envoi-brief-matin]
+verify_jwt = false

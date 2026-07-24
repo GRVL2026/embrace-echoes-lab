@@ -1486,6 +1486,36 @@ export type Database = {
         }
         Relationships: []
       }
+      lgm_webhook_log: {
+        Row: {
+          action: string | null
+          event: string | null
+          id: string
+          lgm_lead_id: string | null
+          matched_prospect: string | null
+          payload: Json | null
+          received_at: string
+        }
+        Insert: {
+          action?: string | null
+          event?: string | null
+          id?: string
+          lgm_lead_id?: string | null
+          matched_prospect?: string | null
+          payload?: Json | null
+          received_at?: string
+        }
+        Update: {
+          action?: string | null
+          event?: string | null
+          id?: string
+          lgm_lead_id?: string | null
+          matched_prospect?: string | null
+          payload?: Json | null
+          received_at?: string
+        }
+        Relationships: []
+      }
       logi_expeditions: {
         Row: {
           cout_exw: number | null

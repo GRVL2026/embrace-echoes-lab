@@ -9,11 +9,9 @@ import {
   BarChart3,
   Package,
   ClipboardCheck,
-  Radar,
-  Bot,
   Globe,
   Wrench,
-  Truck,
+
   Settings,
   ShieldCheck,
   RefreshCw,
@@ -113,6 +111,22 @@ export const SPACES: Space[] = [
     ],
   },
   {
+    key: "achats",
+    label: "Achats",
+    icon: ShoppingBag,
+    colorToken: "--space-logistique",
+    show: (c) => c.isAdmin || c.isDirection,
+    entries: [
+      {
+        label: "Dashboard achats",
+        to: "/achats",
+        icon: BarChart3,
+        match: startsWith("/achats"),
+      },
+    ],
+  },
+  {
+
     key: "pilotage",
     label: "Pilotage",
     icon: Compass,
@@ -191,27 +205,9 @@ export const SPACES: Space[] = [
       },
     ],
   },
-  {
-    key: "achats",
-    label: "Achats",
-    icon: ShoppingBag,
-    colorToken: "--space-logistique",
-    show: (c) => c.isAdmin || c.isDirection,
-    entries: [
-      {
-        label: "Dashboard achats",
-        to: "/achats",
-        icon: BarChart3,
-        match: startsWith("/achats"),
-      },
-      {
-        label: "Expéditions & imports",
-        to: "/logistique",
-        icon: Truck,
-        match: startsWith("/logistique"),
-      },
-    ],
-  },
+
+
+
   {
     key: "reglages",
     label: "Réglages",

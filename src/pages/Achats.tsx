@@ -2,23 +2,25 @@ import { useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Loader2, ShoppingBag, Package, Truck, Ship, Users, Wallet, Boxes, Calendar,
+  Loader2, ShoppingBag, Package, Ship, Users, Calendar, Container, FileText, Truck,
 } from "lucide-react";
 import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell,
+  ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend,
 } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { KpiTile } from "@/components/ui/kpi-tile";
+import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { ChartTooltipContent, barTooltipCursor } from "@/components/admin/chartTooltip";
+import { ChartTooltipContent } from "@/components/admin/chartTooltip";
 
 type Resume = {
   cmd_encours: number | string | null;
-  montant_encours: number | string | null;
-  reste_a_recevoir: number | string | null;
+  en_commande_nb: number | string | null;
+  en_commande_montant: number | string | null;
+  en_transit_nb: number | string | null;
+  en_transit_montant: number | string | null;
   reste_a_facturer: number | string | null;
-  arrivages: number | string | null;
   nb_fournisseurs: number | string | null;
   montant_12m: number | string | null;
 };
@@ -30,27 +32,49 @@ type TopFourn = {
   montant: number | string | null;
 };
 
+type Arrivage = {
+  num_dossier: string;
+  statut_arrivage: string | null;
+  bateau: string | null;
+  eta: string | null;
+  etd: string | null;
+  transitaire: string | null;
+  conteneurs: string | null;
+  tailles: string | null;
+  fournisseurs: string | null;
+  nb_lignes: number | string | null;
+  nb_articles: number | string | null;
+  montant: number | string | null;
+  recu_pct: number | string | null;
+  derniere_cde: string | null;
+};
+
+type ContenuRow = {
+  nom_fourn: string | null;
+  libelle: string | null;
+  qte_cdee: number | string | null;
+  qte_recue: number | string | null;
+  qte_restante: number | string | null;
+  montant_ligne: number | string | null;
+  num_conteneur: string | null;
+  statut: string | null;
+};
+
 type AchatRow = {
   n_cde: string | null;
-  type_cde: string | null;
+  code_fourn: string | null;
+  nom_fourn: string | null;
   statut: string | null;
   date_cde: string | null;
   date_liv: string | null;
-  code_fourn: string | null;
-  nom_fourn: string | null;
   libelle_cde: string | null;
   qte_cdee: number | string | null;
   qte_recue: number | string | null;
   qte_restante: number | string | null;
   montant_ligne: number | string | null;
-  montant_ouvert: number | string | null;
-  reste_a_facturer: number | string | null;
   eta: string | null;
-  etd: string | null;
   bateau: string | null;
   num_conteneur: string | null;
-  transitaire: string | null;
-  description: string | null;
 };
 
 const eur = (n: number) =>
@@ -63,18 +87,31 @@ const fmtDate = (s: string | null) => {
   return d.toLocaleDateString("fr-FR");
 };
 
-const COLORS = ["#9B5CFF", "#ADFF00", "#5CC8FF", "#FF6B9D", "#FFB800", "#B0B0B0"];
+const COLORS = ["#9B5CFF", "#ADFF00", "#5CC8FF", "#FF6B9D", "#FFB800", "#B0B0B0", "#7CE0FF", "#FFA07A", "#A78BFA", "#34D399", "#F472B6", "#FBBF24"];
 
 const ENCOURS_STATUTS = ["Ouvert", "En attente d'envoi", "En attente d'impression"];
+const TRANSIT_STATUTS = ["En transit"];
+const CMD_STATUTS = ["En commande"];
 
 type SheetKind =
-  | { kind: "encours" }
+  | { kind: "encours"; filter: "en_commande" | "en_transit" }
   | { kind: "fournisseur"; code: string; nom: string }
+  | { kind: "arrivage"; dossier: string; bateau: string | null }
   | null;
+
+function statutTone(s: string | null): { bg: string; fg: string; label: string } {
+  const v = (s ?? "").toLowerCase();
+  if (v.includes("reçu") || v.includes("recu"))
+    return { bg: "bg-emerald-500/15", fg: "text-emerald-400 border-emerald-500/30", label: "Reçu" };
+  if (v.includes("transit"))
+    return { bg: "bg-amber-500/15", fg: "text-amber-400 border-amber-500/30", label: "En transit" };
+  return { bg: "bg-sky-500/15", fg: "text-sky-400 border-sky-500/30", label: s ?? "En commande" };
+}
 
 export default function Achats() {
   const { isAdmin, isDirection, loading } = useAuth();
   const [openSheet, setOpenSheet] = useState<SheetKind>(null);
+  const [showAllArrivages, setShowAllArrivages] = useState(false);
 
   const { data: resume, isPending: pendingResume } = useQuery({
     queryKey: ["achats-resume"],
@@ -100,32 +137,33 @@ export default function Achats() {
   const { data: arrivages, isPending: pendingArr } = useQuery({
     queryKey: ["achats-arrivages"],
     queryFn: async () => {
-      const today = new Date().toISOString().slice(0, 10);
-      const { data, error } = await (supabase as any)
-        .from("gaia_achats")
-        .select("n_cde,code_fourn,nom_fourn,eta,bateau,num_conteneur,transitaire,montant_ligne")
-        .gte("eta", today)
-        .order("eta", { ascending: true })
-        .limit(200);
+      const { data, error } = await (supabase as any).rpc("get_achats_arrivages");
       if (error) throw error;
-      return (data ?? []) as AchatRow[];
+      return (data ?? []) as Arrivage[];
     },
     enabled: isAdmin || isDirection,
   });
 
+  const encoursFilter = openSheet?.kind === "encours" ? openSheet.filter : null;
   const { data: encoursRows } = useQuery({
-    queryKey: ["achats-encours"],
+    queryKey: ["achats-encours", encoursFilter],
     queryFn: async () => {
+      const statuts = encoursFilter === "en_transit" ? TRANSIT_STATUTS : CMD_STATUTS;
       const { data, error } = await (supabase as any)
         .from("gaia_achats")
-        .select("n_cde,code_fourn,nom_fourn,statut,date_cde,montant_ligne,qte_restante")
+        .select("n_cde,code_fourn,nom_fourn,statut,date_cde,montant_ligne,qte_restante,eta,bateau,num_conteneur")
         .in("statut", ENCOURS_STATUTS)
         .order("date_cde", { ascending: false })
         .limit(500);
       if (error) throw error;
-      return (data ?? []) as AchatRow[];
+      const rows = (data ?? []) as AchatRow[];
+      // en_transit = a un conteneur/bateau/eta ; en_commande = rien
+      return rows.filter((r) => {
+        const inTransit = !!(r.num_conteneur || r.bateau || r.eta);
+        return encoursFilter === "en_transit" ? inTransit : !inTransit;
+      });
     },
-    enabled: (isAdmin || isDirection) && openSheet?.kind === "encours",
+    enabled: !!encoursFilter,
   });
 
   const fournCode = openSheet?.kind === "fournisseur" ? openSheet.code : null;
@@ -144,7 +182,18 @@ export default function Achats() {
     enabled: !!fournCode,
   });
 
-  const topChartData = useMemo(
+  const arrivageDossier = openSheet?.kind === "arrivage" ? openSheet.dossier : null;
+  const { data: contenuRows } = useQuery({
+    queryKey: ["achats-arrivage-contenu", arrivageDossier],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("get_achats_arrivage_contenu", { _dossier: arrivageDossier });
+      if (error) throw error;
+      return (data ?? []) as ContenuRow[];
+    },
+    enabled: !!arrivageDossier,
+  });
+
+  const pieData = useMemo(
     () =>
       (topFourn ?? [])
         .map((r) => ({
@@ -153,9 +202,25 @@ export default function Achats() {
           montant: Number(r.montant || 0),
           nb: Number(r.nb_cmd || 0),
         }))
+        .filter((r) => r.montant > 0)
         .sort((a, b) => b.montant - a.montant),
     [topFourn]
   );
+  const pieTotal = useMemo(() => pieData.reduce((s, r) => s + r.montant, 0), [pieData]);
+
+  const arrivagesSorted = useMemo(() => (arrivages ?? []).slice(), [arrivages]);
+  const arrivagesShown = showAllArrivages ? arrivagesSorted : arrivagesSorted.slice(0, 8);
+
+  const contenuGroups = useMemo(() => {
+    const map = new Map<string, ContenuRow[]>();
+    (contenuRows ?? []).forEach((row) => {
+      const k = row.nom_fourn ?? "—";
+      const arr = map.get(k) ?? [];
+      arr.push(row);
+      map.set(k, arr);
+    });
+    return Array.from(map.entries());
+  }, [contenuRows]);
 
   if (loading) {
     return (
@@ -193,170 +258,240 @@ export default function Achats() {
         {!pending && (
           <>
             {/* KPI */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-6">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-2">
               <KpiTile
-                title="Commandes en cours"
-                icon={<Package className="h-4 w-4 text-primary" />}
-                value={num(Number(r.cmd_encours || 0))}
+                title="En commande"
+                icon={<FileText className="h-4 w-4 text-primary" />}
+                value={eur(Number(r.en_commande_montant || 0))}
                 tone="primary"
-                onClick={() => setOpenSheet({ kind: "encours" })}
-                ariaLabel="Voir les commandes en cours"
-                hint={<span className="text-muted-foreground">Statuts : ouvert, en attente d'envoi/impression</span>}
+                onClick={() => setOpenSheet({ kind: "encours", filter: "en_commande" })}
+                ariaLabel="Voir les commandes non encore expédiées"
+                hint={
+                  <span className="text-muted-foreground">
+                    {num(Number(r.en_commande_nb || 0))} cmd · pas encore expédiées
+                  </span>
+                }
               />
               <KpiTile
-                title="Montant engagé"
-                icon={<Wallet className="h-4 w-4 text-secondary" />}
-                value={eur(Number(r.montant_encours || 0))}
-                tone="secondary"
-                onClick={() => setOpenSheet({ kind: "encours" })}
-                ariaLabel="Voir le détail engagé"
-                hint={<span className="text-muted-foreground">Sur les commandes en cours</span>}
-              />
-              <KpiTile
-                title="Reste à recevoir"
-                icon={<Boxes className="h-4 w-4 text-primary" />}
-                value={num(Number(r.reste_a_recevoir || 0))}
-                onClick={() => setOpenSheet({ kind: "encours" })}
-                ariaLabel="Voir les lignes en attente de réception"
-                hint={<span className="text-muted-foreground">Quantités non encore livrées</span>}
-              />
-              <KpiTile
-                title="Arrivages à venir"
+                title="En transit"
                 icon={<Ship className="h-4 w-4 text-secondary" />}
-                value={num(Number(r.arrivages || 0))}
-                hint={<span className="text-muted-foreground">Conteneurs avec ETA ≥ aujourd'hui</span>}
+                value={eur(Number(r.en_transit_montant || 0))}
+                tone="secondary"
+                onClick={() => setOpenSheet({ kind: "encours", filter: "en_transit" })}
+                ariaLabel="Voir les commandes en transit"
+                hint={
+                  <span className="text-muted-foreground">
+                    {num(Number(r.en_transit_nb || 0))} cmd · en mer / en route
+                  </span>
+                }
               />
               <KpiTile
-                title="Fournisseurs actifs"
-                icon={<Users className="h-4 w-4 text-primary" />}
-                value={num(Number(r.nb_fournisseurs || 0))}
-                hint={<span className="text-muted-foreground">Sur les 12 derniers mois</span>}
+                title="Reste à facturer"
+                icon={<Package className="h-4 w-4 text-primary" />}
+                value={eur(Number(r.reste_a_facturer || 0))}
+                hint={<span className="text-muted-foreground">à recevoir des fournisseurs</span>}
               />
               <KpiTile
                 title="Achats 12 mois"
                 icon={<Calendar className="h-4 w-4 text-secondary" />}
                 value={eur(Number(r.montant_12m || 0))}
                 tone="secondary"
-                hint={<span className="text-muted-foreground">Total commandes hors annulées</span>}
+                hint={
+                  <span className="text-muted-foreground">
+                    {num(Number(r.nb_fournisseurs || 0))} fournisseurs
+                  </span>
+                }
               />
             </div>
+            <p className="mb-6 text-xs text-muted-foreground">
+              En commande → En transit → Reçu. Une commande passe « en transit » dès qu'un conteneur/navire lui est associé.
+            </p>
 
-            {/* Top fournisseurs */}
+            {/* Arrivages */}
             <div className="rounded-lg border border-border bg-card/40 p-4 mb-6">
+              <div className="mb-3 flex items-center gap-2">
+                <Ship className="h-5 w-5 text-secondary" />
+                <h3 className="font-display text-lg font-semibold">Arrivages</h3>
+              </div>
+              {arrivagesSorted.length === 0 ? (
+                <div className="rounded-md border border-dashed border-border/60 bg-card/40 px-4 py-8 text-center text-sm text-muted-foreground">
+                  Aucun arrivage en cours. Les conteneurs apparaîtront ici dès qu'un dossier d'expédition
+                  (navire, conteneur, ETA) sera renseigné sur une commande fournisseur.
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {arrivagesShown.map((a) => {
+                      const tone = statutTone(a.statut_arrivage);
+                      const pct = a.recu_pct != null ? Math.max(0, Math.min(100, Number(a.recu_pct))) : null;
+                      return (
+                        <button
+                          key={a.num_dossier}
+                          onClick={() => setOpenSheet({ kind: "arrivage", dossier: a.num_dossier, bateau: a.bateau })}
+                          className="group text-left rounded-lg border border-border bg-card/60 p-3 hover:bg-card/80 hover:border-secondary/40 transition-colors"
+                        >
+                          <div className="mb-2 flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 text-sm font-semibold truncate">
+                                <Ship className="h-3.5 w-3.5 text-secondary flex-shrink-0" />
+                                <span className="truncate">{a.bateau ?? "Navire non précisé"}</span>
+                              </div>
+                              {a.eta && (
+                                <div className="mt-0.5 text-[11px] text-muted-foreground">
+                                  Arrivée : {fmtDate(a.eta)}
+                                </div>
+                              )}
+                            </div>
+                            <Badge variant="outline" className={`${tone.bg} ${tone.fg} text-[10px] uppercase`}>
+                              {tone.label}
+                            </Badge>
+                          </div>
+
+                          {(a.conteneurs || a.tailles || a.transitaire) && (
+                            <div className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <Container className="h-3.5 w-3.5 flex-shrink-0" />
+                              <span className="font-mono text-[11px] truncate">
+                                {a.conteneurs ?? "—"}
+                                {a.tailles ? ` · ${a.tailles}` : ""}
+                              </span>
+                              {a.transitaire && (
+                                <span className="ml-auto flex items-center gap-1 text-[10px]">
+                                  <Truck className="h-3 w-3" /> {a.transitaire}
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          {a.fournisseurs && (
+                            <div className="mb-2 truncate text-xs text-muted-foreground" title={a.fournisseurs}>
+                              {a.fournisseurs}
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">
+                              {num(Number(a.nb_articles || 0))} art · {num(Number(a.nb_lignes || 0))} lignes
+                            </span>
+                            <span className="font-semibold tabular-nums">{eur(Number(a.montant || 0))}</span>
+                          </div>
+
+                          {pct != null && (
+                            <div className="mt-2">
+                              <div className="h-1.5 w-full overflow-hidden rounded-full bg-border/60">
+                                <div
+                                  className="h-full rounded-full bg-emerald-500 transition-all"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                              <div className="mt-0.5 text-right text-[10px] text-muted-foreground tabular-nums">
+                                {pct.toFixed(0)}% reçu
+                              </div>
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {arrivagesSorted.length > 8 && (
+                    <div className="mt-3 text-center">
+                      <button
+                        onClick={() => setShowAllArrivages((v) => !v)}
+                        className="text-xs text-secondary hover:underline"
+                      >
+                        {showAllArrivages
+                          ? "Réduire"
+                          : `Voir tout (${arrivagesSorted.length})`}
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Top fournisseurs — camembert */}
+            <div className="rounded-lg border border-border bg-card/40 p-4">
               <div className="mb-3 flex items-center gap-2">
                 <Users className="h-5 w-5 text-primary" />
                 <h3 className="font-display text-lg font-semibold">Top fournisseurs — 12 derniers mois</h3>
               </div>
-              {topChartData.length === 0 ? (
+              {pieData.length === 0 ? (
                 <div className="py-12 text-center text-sm text-muted-foreground">
                   Aucune donnée fournisseur disponible.
                 </div>
               ) : (
-                <div style={{ width: "100%", height: Math.max(320, topChartData.length * 36) }}>
+                <div style={{ width: "100%", height: 360 }}>
                   <ResponsiveContainer>
-                    <BarChart
-                      data={topChartData}
-                      layout="vertical"
-                      margin={{ top: 8, right: 24, left: 24, bottom: 8 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-                      <XAxis
-                        type="number"
-                        tickFormatter={(v) => eur(Number(v))}
-                        stroke="hsl(var(--muted-foreground))"
-                        fontSize={11}
-                      />
-                      <YAxis
-                        type="category"
-                        dataKey="nom"
-                        width={160}
-                        stroke="hsl(var(--muted-foreground))"
-                        fontSize={11}
-                      />
+                    <PieChart>
+                      <Pie
+                        data={pieData}
+                        dataKey="montant"
+                        nameKey="nom"
+                        cx="40%"
+                        cy="50%"
+                        outerRadius={130}
+                        innerRadius={60}
+                        paddingAngle={1}
+                        stroke="hsl(var(--background))"
+                        strokeWidth={2}
+                        cursor="pointer"
+                        onClick={(d: any) => {
+                          const p = d?.payload ?? d;
+                          if (p?.code) setOpenSheet({ kind: "fournisseur", code: p.code, nom: p.nom });
+                        }}
+                      >
+                        {pieData.map((_, i) => (
+                          <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                        ))}
+                      </Pie>
                       <Tooltip
-                        cursor={barTooltipCursor}
                         content={
                           <ChartTooltipContent
                             hideLabel
-                            formatter={(v: any, _n: any, item: any) => [eur(Number(v)), item?.payload?.nom]}
+                            formatter={(v: any, _n: any, item: any) => {
+                              const val = Number(v);
+                              const pct = pieTotal ? (val / pieTotal) * 100 : 0;
+                              return [`${eur(val)} · ${pct.toFixed(1)}%`, item?.payload?.nom];
+                            }}
                           />
                         }
                       />
-                      <Bar
-                        dataKey="montant"
-                        name="Montant 12 m"
-                        radius={[0, 6, 6, 0]}
-                        cursor="pointer"
+                      <Legend
+                        layout="vertical"
+                        align="right"
+                        verticalAlign="middle"
+                        iconType="circle"
+                        wrapperStyle={{ fontSize: 11, paddingLeft: 12 }}
                         onClick={(d: any) => {
-                          if (d?.code) setOpenSheet({ kind: "fournisseur", code: d.code, nom: d.nom });
+                          const p = d?.payload ?? d;
+                          if (p?.code) setOpenSheet({ kind: "fournisseur", code: p.code, nom: p.nom });
                         }}
-                      >
-                        {topChartData.map((_, i) => (
-                          <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                        ))}
-                      </Bar>
-                    </BarChart>
+                      />
+                    </PieChart>
                   </ResponsiveContainer>
                 </div>
               )}
               <p className="mt-2 text-xs text-muted-foreground">
-                Cliquez une barre pour voir les commandes du fournisseur.
+                Cliquez une part ou une entrée de légende pour voir les commandes du fournisseur.
               </p>
-            </div>
-
-            {/* Arrivages */}
-            <div className="rounded-lg border border-border bg-card/40 p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <Ship className="h-5 w-5 text-secondary" />
-                <h3 className="font-display text-lg font-semibold">Arrivages à venir</h3>
-              </div>
-              {(arrivages ?? []).length === 0 ? (
-                <div className="py-10 text-center text-sm text-muted-foreground">
-                  Aucun arrivage à venir.
-                </div>
-              ) : (
-                <div className="overflow-auto">
-                  <table className="w-full text-sm">
-                    <thead className="text-xs uppercase text-muted-foreground">
-                      <tr className="border-b border-border">
-                        <th className="px-2 py-2 text-left">ETA</th>
-                        <th className="px-2 py-2 text-left">Fournisseur</th>
-                        <th className="px-2 py-2 text-left">Bateau</th>
-                        <th className="px-2 py-2 text-left">N° conteneur</th>
-                        <th className="px-2 py-2 text-left">Transitaire</th>
-                        <th className="px-2 py-2 text-right">Montant</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(arrivages ?? []).map((a, i) => (
-                        <tr key={(a.n_cde ?? "") + i} className="border-b border-border/60 hover:bg-card/60">
-                          <td className="px-2 py-2 tabular-nums">{fmtDate(a.eta)}</td>
-                          <td className="px-2 py-2">{a.nom_fourn ?? a.code_fourn ?? "—"}</td>
-                          <td className="px-2 py-2">{a.bateau ?? "—"}</td>
-                          <td className="px-2 py-2 font-mono text-xs">{a.num_conteneur ?? "—"}</td>
-                          <td className="px-2 py-2 text-muted-foreground">{a.transitaire ?? "—"}</td>
-                          <td className="px-2 py-2 text-right tabular-nums">{eur(Number(a.montant_ligne || 0))}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
             </div>
           </>
         )}
       </main>
 
-      {/* Détail : commandes en cours */}
+      {/* Détail : commandes en cours (En commande / En transit) */}
       <Sheet
         open={openSheet?.kind === "encours"}
         onOpenChange={(o) => !o && setOpenSheet(null)}
       >
         <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
           <SheetHeader>
-            <SheetTitle>Commandes en cours</SheetTitle>
+            <SheetTitle>
+              {encoursFilter === "en_transit" ? "Commandes en transit" : "Commandes en cours"}
+            </SheetTitle>
             <SheetDescription>
-              Commandes fournisseurs avec statut ouvert / en attente.
+              {encoursFilter === "en_transit"
+                ? "Commandes ouvertes déjà en transit (conteneur / navire / ETA)."
+                : "Commandes ouvertes pas encore expédiées."}
             </SheetDescription>
           </SheetHeader>
           <div className="mt-4 overflow-auto">
@@ -383,7 +518,7 @@ export default function Achats() {
                   </tr>
                 ))}
                 {(encoursRows ?? []).length === 0 && (
-                  <tr><td colSpan={6} className="px-2 py-6 text-center text-muted-foreground">Aucune commande en cours.</td></tr>
+                  <tr><td colSpan={6} className="px-2 py-6 text-center text-muted-foreground">Aucune commande.</td></tr>
                 )}
               </tbody>
             </table>
@@ -435,6 +570,61 @@ export default function Achats() {
                 )}
               </tbody>
             </table>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Détail : contenu d'un arrivage */}
+      <Sheet
+        open={openSheet?.kind === "arrivage"}
+        onOpenChange={(o) => !o && setOpenSheet(null)}
+      >
+        <SheetContent side="right" className="w-full sm:max-w-3xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>
+              {openSheet?.kind === "arrivage" ? (openSheet.bateau ?? "Arrivage") : "Arrivage"}
+            </SheetTitle>
+            <SheetDescription>
+              {openSheet?.kind === "arrivage" ? `Dossier : ${openSheet.dossier}` : ""}
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-4 space-y-4">
+            {contenuGroups.length === 0 && (
+              <div className="py-6 text-center text-sm text-muted-foreground">
+                Aucune ligne pour ce dossier.
+              </div>
+            )}
+            {contenuGroups.map(([fournisseur, rows]) => (
+              <div key={fournisseur} className="rounded-md border border-border/60">
+                <div className="border-b border-border/60 bg-card/60 px-3 py-2 text-xs font-semibold uppercase text-muted-foreground">
+                  {fournisseur}
+                </div>
+                <table className="w-full text-sm">
+                  <thead className="text-xs uppercase text-muted-foreground">
+                    <tr className="border-b border-border/60">
+                      <th className="px-2 py-2 text-left">Produit</th>
+                      <th className="px-2 py-2 text-right">Qté cdée</th>
+                      <th className="px-2 py-2 text-right">Qté reçue</th>
+                      <th className="px-2 py-2 text-right">Reste</th>
+                      <th className="px-2 py-2 text-right">Montant</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, i) => (
+                      <tr key={i} className="border-b border-border/40 last:border-0">
+                        <td className="px-2 py-2 truncate max-w-[280px]" title={row.libelle ?? undefined}>
+                          {row.libelle ?? "—"}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">{num(Number(row.qte_cdee || 0))}</td>
+                        <td className="px-2 py-2 text-right tabular-nums">{num(Number(row.qte_recue || 0))}</td>
+                        <td className="px-2 py-2 text-right tabular-nums">{num(Number(row.qte_restante || 0))}</td>
+                        <td className="px-2 py-2 text-right tabular-nums">{eur(Number(row.montant_ligne || 0))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
           </div>
         </SheetContent>
       </Sheet>

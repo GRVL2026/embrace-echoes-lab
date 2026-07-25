@@ -1,6 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { anthropicJson, isAnthropicOverload } from '../_shared/anthropic-fetch.ts';
+import { fetchCatalogSuggestions, renderSuggestionsForPrompt } from '../_shared/catalog-suggestions.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -82,12 +83,20 @@ Deno.serve(async (req) => {
     const canalLbl = CANAL_LABEL[canal];
     const maxTokens = canal === 'invitation' ? 220 : 400;
 
+    const suggestions = await fetchCatalogSuggestions(admin, segment, 4);
+    const suggestionsBlock = renderSuggestionsForPrompt(suggestions);
+
     const userPrompt = `Rédige une accroche de ${canalLbl} pour ce prospect.
 Entreprise : ${entreprise}
 Contact : ${contact_role || '—'}${ville ? ` à ${ville}` : ''}
 Segment : ${segLbl}
 Signal / contexte : ${signal || '(non renseigné, base-toi sur le segment)'}
-Canal : ${canalLbl}.`;
+Canal : ${canalLbl}.${suggestionsBlock ? `
+
+Machines RÉELLES de notre catalogue adaptées à ce type d'établissement :
+${suggestionsBlock}
+
+Cite 2-3 de ces machines (par leur nom EXACT tel qu'écrit ci-dessus), les plus adaptées à ce type d'établissement. Reste concret et crédible. Ne cite AUCUNE machine hors de cette liste.` : ''}`;
 
     const resp = await anthropicJson(apiKey, {
       model: MODEL,

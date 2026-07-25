@@ -9,6 +9,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { anthropicJson, isAnthropicOverload } from '../_shared/anthropic-fetch.ts';
+import { fetchCatalogSuggestions, renderSuggestionsForPrompt } from '../_shared/catalog-suggestions.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -123,15 +124,22 @@ async function enrichir(admin: any, p: any): Promise<Record<string, unknown>> {
   return patch;
 }
 
-async function genererAccroche(p: any): Promise<string> {
+async function genererAccroche(admin: any, p: any): Promise<string> {
   if (!ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY manquant');
   const segLbl = SEG_LABEL[p.segment ?? 'autre'] || String(p.segment ?? 'autre');
+  const suggestions = await fetchCatalogSuggestions(admin, p.segment, 4);
+  const suggestionsBlock = renderSuggestionsForPrompt(suggestions);
   const userPrompt = `Rédige une accroche de message LinkedIn pour ce prospect.
 Entreprise : ${p.entreprise}
 Contact : ${p.contact_role || '—'}${p.ville ? ` à ${p.ville}` : ''}
 Segment : ${segLbl}
 Signal / contexte : ${p.signal || '(non renseigné, base-toi sur le segment)'}
-Canal : message LinkedIn.`;
+Canal : message LinkedIn.${suggestionsBlock ? `
+
+Machines RÉELLES de notre catalogue adaptées à ce type d'établissement :
+${suggestionsBlock}
+
+Cite 2-3 de ces machines (par leur nom EXACT tel qu'écrit ci-dessus), les plus adaptées à ce type d'établissement. Reste concret et crédible. Ne cite AUCUNE machine hors de cette liste.` : ''}`;
   const resp = await anthropicJson(ANTHROPIC_API_KEY, {
     model: MODEL,
     max_tokens: 400,
@@ -201,7 +209,7 @@ Deno.serve(async (req) => {
         }
 
         // 2) Accroche IA
-        const accroche = await genererAccroche(p);
+        const accroche = await genererAccroche(admin, p);
 
         // 3) Journal + flag prêt
         const now = new Date().toISOString();

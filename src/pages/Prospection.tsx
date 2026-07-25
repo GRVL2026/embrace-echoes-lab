@@ -434,8 +434,9 @@ export default function Prospection() {
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <div className="overflow-x-auto -mx-4 px-4 pb-4">
-            <div className="flex gap-3 min-w-max">
+          <div className="overflow-x-auto sm:overflow-x-visible -mx-4 px-4 pb-4">
+            <div className="flex gap-3 min-w-max sm:min-w-0 sm:w-full">
+
               {STATUTS.map((s) => {
                 const items = byStatut.get(s.key) ?? [];
                 return (
@@ -504,9 +505,10 @@ function KanbanColumn({
   return (
     <div
       className={cn(
-        "w-72 flex-shrink-0 rounded-lg border bg-card/50 flex flex-col",
+        "w-72 sm:w-auto sm:flex-1 sm:basis-0 sm:min-w-[180px] flex-shrink-0 rounded-lg border bg-card/50 flex flex-col",
         dragOver ? "border-primary bg-primary/5" : "border-border",
       )}
+
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => {
@@ -529,7 +531,7 @@ function KanbanColumn({
           Potentiel : {eur(total)}
         </div>
       )}
-      <div className="flex-1 p-2 space-y-2 min-h-[200px]">
+      <div className="flex-1 p-2 space-y-2 min-h-[200px] max-h-[calc(100vh-260px)] overflow-y-auto overflow-x-hidden">
         {items.length === 0 && (
           <div className="text-xs text-muted-foreground text-center py-6">Glissez ici</div>
         )}

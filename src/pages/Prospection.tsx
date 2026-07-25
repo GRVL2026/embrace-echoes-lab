@@ -505,9 +505,10 @@ function KanbanColumn({
   return (
     <div
       className={cn(
-        "w-72 flex-shrink-0 rounded-lg border bg-card/50 flex flex-col",
+        "w-72 sm:w-auto sm:flex-1 sm:basis-0 sm:min-w-[180px] flex-shrink-0 rounded-lg border bg-card/50 flex flex-col",
         dragOver ? "border-primary bg-primary/5" : "border-border",
       )}
+
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => {

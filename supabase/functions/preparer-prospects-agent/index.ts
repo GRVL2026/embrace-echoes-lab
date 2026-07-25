@@ -209,7 +209,7 @@ Deno.serve(async (req) => {
         }
 
         // 2) Accroche IA
-        const accroche = await genererAccroche(p);
+        const accroche = await genererAccroche(admin, p);
 
         // 3) Journal + flag prêt
         const now = new Date().toISOString();

@@ -92,7 +92,10 @@ Deno.serve(async (req) => {
     };
     if (p.linkedin_url) payload.linkedinUrl = p.linkedin_url;
     if (p.email) payload.proEmail = p.email;
-    if (accroche && accroche.trim()) payload.accroche = accroche.trim();
+    // LGM utilise des slots d'attributs personnalisés à la racine du payload :
+    // customAttribute1..customAttribute10. Slot #1 est labellisé "Accroche"
+    // côté LGM (variable {{Accroche}} dans les séquences).
+    if (accroche && accroche.trim()) payload.customAttribute1 = accroche.trim();
 
     // ---- Appel LGM : POST /flow/leads?apikey=... ----
     const url = `${LGM_LEADS_URL}?apikey=${encodeURIComponent(LGM_API_KEY)}`;

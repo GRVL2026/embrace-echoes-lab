@@ -9,6 +9,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { anthropicJson, isAnthropicOverload } from '../_shared/anthropic-fetch.ts';
+import { fetchCatalogSuggestions, renderSuggestionsForPrompt } from '../_shared/catalog-suggestions.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;

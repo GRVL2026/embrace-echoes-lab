@@ -434,8 +434,9 @@ export default function Prospection() {
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <div className="overflow-x-auto -mx-4 px-4 pb-4">
-            <div className="flex gap-3 min-w-max">
+          <div className="overflow-x-auto sm:overflow-x-visible -mx-4 px-4 pb-4">
+            <div className="flex gap-3 min-w-max sm:min-w-0 sm:w-full">
+
               {STATUTS.map((s) => {
                 const items = byStatut.get(s.key) ?? [];
                 return (

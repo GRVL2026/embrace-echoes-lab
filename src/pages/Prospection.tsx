@@ -531,7 +531,7 @@ function KanbanColumn({
           Potentiel : {eur(total)}
         </div>
       )}
-      <div className="flex-1 p-2 space-y-2 min-h-[200px]">
+      <div className="flex-1 p-2 space-y-2 min-h-[200px] max-h-[calc(100vh-260px)] overflow-y-auto overflow-x-hidden">
         {items.length === 0 && (
           <div className="text-xs text-muted-foreground text-center py-6">Glissez ici</div>
         )}

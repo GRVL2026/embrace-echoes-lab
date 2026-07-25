@@ -493,6 +493,30 @@ export type Database = {
         }
         Relationships: []
       }
+      copilot_learnings: {
+        Row: {
+          created_at: string
+          faits_marquants: Json | null
+          id: string
+          jour: string
+          resume: string | null
+        }
+        Insert: {
+          created_at?: string
+          faits_marquants?: Json | null
+          id?: string
+          jour?: string
+          resume?: string | null
+        }
+        Update: {
+          created_at?: string
+          faits_marquants?: Json | null
+          id?: string
+          jour?: string
+          resume?: string | null
+        }
+        Relationships: []
+      }
       copilot_messages: {
         Row: {
           contenu: string

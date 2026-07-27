@@ -183,7 +183,7 @@ export function DossierPreview({
       const proj = p as Project | null;
       setFetchedProject(proj);
       if (proj?.share_slug && proj?.is_shared) {
-        setShareUrl(`${window.location.origin}/d/${proj.share_slug}`);
+        setShareUrl(buildShareUrl(proj.share_slug));
       }
       setLoading(false);
     })();
@@ -192,7 +192,7 @@ export function DossierPreview({
   // Track share url from live project when available.
   useEffect(() => {
     if (useLive && liveProject?.share_slug && liveProject?.is_shared) {
-      setShareUrl(`${window.location.origin}/d/${liveProject.share_slug}`);
+      setShareUrl(buildShareUrl(liveProject.share_slug));
     }
   }, [useLive, liveProject?.share_slug, liveProject?.is_shared]);
 

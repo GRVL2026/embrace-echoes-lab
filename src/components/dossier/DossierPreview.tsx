@@ -627,6 +627,10 @@ export function DossierPreview({
           <Button variant="ghost" size="sm" onClick={openShareDialog} className="text-white hover:bg-white/10">
             Modifier
           </Button>
+          <Button variant="ghost" size="sm" onClick={regenerateShareLink} disabled={sharing} className="text-white hover:bg-white/10" title="Régénérer le lien (révoque l'ancien)">
+            {sharing ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1 h-3 w-3" />}
+            Régénérer
+          </Button>
           {shareInfo.share_visibility === "password" && shareInfo.share_password ? (
             <div className="flex w-full items-center gap-2 border-t border-white/10 pt-2 sm:w-auto sm:border-none sm:pt-0">
               <Lock className="h-3 w-3 text-white/60" />

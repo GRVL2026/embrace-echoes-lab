@@ -667,7 +667,7 @@ export function DossierPreview({
         </div>
       ) : (
         <div className="dossier-scroll flex-1 overflow-y-auto snap-y snap-mandatory">
-          <div className="dossier-print-root mx-auto flex w-full max-w-[1600px] flex-col gap-4 p-3 sm:gap-6 sm:p-6">
+          <div ref={printRootRef} className="dossier-print-root mx-auto flex w-full max-w-[1600px] flex-col gap-4 p-3 sm:gap-6 sm:p-6">
             {/* PARTIE A — slides images */}
             {slidePages.map((m, i) => (
               <div id={`dossier-page-${i}`} key={m.id} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">

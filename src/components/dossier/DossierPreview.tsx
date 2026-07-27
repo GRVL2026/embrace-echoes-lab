@@ -551,9 +551,9 @@ export function DossierPreview({
             </>
           )}
           {shareMode && (
-            <Button variant="ghost" size="sm" onClick={handlePrint} disabled={loading} className="text-white hover:bg-white/10">
-              <Download className="mr-1 h-4 w-4" />
-              Télécharger PDF
+            <Button variant="ghost" size="sm" onClick={handlePrint} disabled={loading || exporting} className="text-white hover:bg-white/10">
+              {exporting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Download className="mr-1 h-4 w-4" />}
+              {exporting ? "Export…" : "Télécharger PDF"}
             </Button>
           )}
           <Button variant="ghost" size="sm" onClick={() => goTo(current - 1)} disabled={current === 0} className="text-white hover:bg-white/10">

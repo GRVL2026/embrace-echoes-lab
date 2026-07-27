@@ -592,10 +592,25 @@ export function DossierPreview({
             </>
           )}
           {shareMode && (
-            <Button variant="ghost" size="sm" onClick={handlePrint} disabled={loading || exporting} className="text-white hover:bg-white/10">
-              {exporting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Download className="mr-1 h-4 w-4" />}
-              {exporting ? "Export…" : "Télécharger PDF"}
-            </Button>
+            <>
+              <Button variant="ghost" size="sm" onClick={handlePrint} disabled={loading || exporting} className="text-white hover:bg-white/10">
+                {exporting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Download className="mr-1 h-4 w-4" />}
+                {exporting ? "Export…" : "Télécharger PDF"}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const el = document.documentElement;
+                  if (!document.fullscreenElement) el.requestFullscreen?.().catch(() => {});
+                  else document.exitFullscreen?.().catch(() => {});
+                }}
+                className="text-white hover:bg-white/10"
+                title="Plein écran"
+              >
+                Plein écran
+              </Button>
+            </>
           )}
           <Button variant="ghost" size="sm" onClick={() => goTo(current - 1)} disabled={current === 0} className="text-white hover:bg-white/10">
             <ChevronLeft className="h-4 w-4" />

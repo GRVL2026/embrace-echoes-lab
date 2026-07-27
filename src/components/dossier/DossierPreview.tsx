@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Loader2, X, ChevronLeft, ChevronRight, Phone, Mail, Globe, MapPin, Download, Share2, Copy, Check, Lock, Eye, EyeOff } from "lucide-react";

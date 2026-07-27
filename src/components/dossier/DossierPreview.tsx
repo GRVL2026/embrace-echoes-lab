@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Loader2, X, ChevronLeft, ChevronRight, Phone, Mail, Globe, MapPin, Download, Share2, Copy, Check, Lock, Eye, EyeOff } from "lucide-react";
@@ -302,28 +304,111 @@ export function DossierPreview({
     el?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
-  const handlePrint = () => {
-    document.body.classList.add("dossier-printing");
-    // Only mark as sent when the print dialog actually completes (user printed/saved PDF),
-    // not on the mere click that opens the browser print options.
-    const onAfterPrint = () => {
-      window.removeEventListener("afterprint", onAfterPrint);
-      document.body.classList.remove("dossier-printing");
-      if (!shareMode && project?.id) {
-        markSentIfDraft(project.id, project.status).then((next) => {
-          if (next !== project.status) {
-            setFetchedProject((prev) => (prev ? { ...prev, status: next } : prev));
-            onStatusChange?.(next);
-          }
+  const printRootRef = useRef<HTMLDivElement | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  const handlePrint = async () => {
+    if (exporting) return;
+    const root = printRootRef.current;
+    if (!root) return;
+    const slides = Array.from(root.querySelectorAll<HTMLElement>(".dossier-slide"));
+    if (slides.length === 0) {
+      toast({ title: "Aucune slide à exporter", variant: "destructive" as any });
+      return;
+    }
+
+    setExporting(true);
+    const W = 1280;
+    const H = 720;
+    // Offscreen host to render each slide at a fixed 16:9 size
+    const host = document.createElement("div");
+    host.setAttribute("aria-hidden", "true");
+    host.style.cssText = [
+      "position:fixed",
+      "left:-100000px",
+      "top:0",
+      `width:${W}px`,
+      `height:${H}px`,
+      "overflow:hidden",
+      "background:transparent",
+      "pointer-events:none",
+      "z-index:-1",
+    ].join(";");
+    document.body.appendChild(host);
+
+    try {
+      const pdf = new jsPDF({ orientation: "landscape", unit: "px", format: [W, H] });
+
+      for (let i = 0; i < slides.length; i++) {
+        const clone = slides[i].cloneNode(true) as HTMLElement;
+        // Force fixed 16:9 sizing on the clone (strip preview-only styling)
+        clone.style.width = `${W}px`;
+        clone.style.height = `${H}px`;
+        clone.style.margin = "0";
+        clone.style.padding = "0";
+        clone.style.borderRadius = "0";
+        clone.style.boxShadow = "none";
+        clone.style.transform = "none";
+        // Inner <section> may use aspect-ratio; force explicit box
+        clone.querySelectorAll<HTMLElement>("section, .dossier-page").forEach((s) => {
+          s.style.width = `${W}px`;
+          s.style.height = `${H}px`;
+          s.style.aspectRatio = "auto";
+          s.style.minHeight = "0";
         });
+
+        host.innerHTML = "";
+        host.appendChild(clone);
+
+        // Wait for all images inside the clone to load
+        const imgs = Array.from(clone.querySelectorAll<HTMLImageElement>("img"));
+        await Promise.all(
+          imgs.map((img) =>
+            img.complete && img.naturalWidth > 0
+              ? Promise.resolve()
+              : new Promise<void>((res) => {
+                  img.onload = () => res();
+                  img.onerror = () => res();
+                }),
+          ),
+        );
+        // Extra tick for layout
+        await new Promise((r) => requestAnimationFrame(() => r(null)));
+
+        const canvas = await html2canvas(clone, {
+          scale: 2,
+          useCORS: true,
+          allowTaint: false,
+          backgroundColor: null,
+          width: W,
+          height: H,
+          windowWidth: W,
+          windowHeight: H,
+          logging: false,
+        });
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+
+        if (i > 0) pdf.addPage([W, H], "landscape");
+        pdf.addImage(dataUrl, "JPEG", 0, 0, W, H, undefined, "FAST");
       }
-    };
-    window.addEventListener("afterprint", onAfterPrint);
-    setTimeout(() => {
-      window.print();
-      // Safety net if afterprint never fires (rare)
-      setTimeout(() => document.body.classList.remove("dossier-printing"), 1000);
-    }, 100);
+
+      const fileName = `${slugify(clientName || "dossier")}.pdf`;
+      pdf.save(fileName);
+
+      if (!shareMode && project?.id) {
+        const next = await markSentIfDraft(project.id, project.status);
+        if (next !== project.status) {
+          setFetchedProject((prev) => (prev ? { ...prev, status: next } : prev));
+          onStatusChange?.(next);
+        }
+      }
+    } catch (e: any) {
+      console.error("[DossierPreview] PDF export failed", e);
+      toast({ title: "Export PDF impossible", description: e?.message ?? "Erreur inconnue", variant: "destructive" as any });
+    } finally {
+      host.remove();
+      setExporting(false);
+    }
   };
 
   const shareInfo = {
@@ -458,17 +543,17 @@ export function DossierPreview({
                 {sharing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Share2 className="mr-1 h-4 w-4" />}
                 Partager
               </Button>
-              <Button variant="ghost" size="sm" onClick={handlePrint} disabled={loading} className="text-white hover:bg-white/10">
-                <Download className="mr-1 h-4 w-4" />
-                Télécharger PDF
+              <Button variant="ghost" size="sm" onClick={handlePrint} disabled={loading || exporting} className="text-white hover:bg-white/10">
+                {exporting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Download className="mr-1 h-4 w-4" />}
+                {exporting ? "Export…" : "Télécharger PDF"}
               </Button>
               <div className="mx-1 h-6 w-px bg-white/20" />
             </>
           )}
           {shareMode && (
-            <Button variant="ghost" size="sm" onClick={handlePrint} disabled={loading} className="text-white hover:bg-white/10">
-              <Download className="mr-1 h-4 w-4" />
-              Télécharger PDF
+            <Button variant="ghost" size="sm" onClick={handlePrint} disabled={loading || exporting} className="text-white hover:bg-white/10">
+              {exporting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Download className="mr-1 h-4 w-4" />}
+              {exporting ? "Export…" : "Télécharger PDF"}
             </Button>
           )}
           <Button variant="ghost" size="sm" onClick={() => goTo(current - 1)} disabled={current === 0} className="text-white hover:bg-white/10">
@@ -582,7 +667,7 @@ export function DossierPreview({
         </div>
       ) : (
         <div className="dossier-scroll flex-1 overflow-y-auto snap-y snap-mandatory">
-          <div className="dossier-print-root mx-auto flex w-full max-w-[1600px] flex-col gap-4 p-3 sm:gap-6 sm:p-6">
+          <div ref={printRootRef} className="dossier-print-root mx-auto flex w-full max-w-[1600px] flex-col gap-4 p-3 sm:gap-6 sm:p-6">
             {/* PARTIE A — slides images */}
             {slidePages.map((m, i) => (
               <div id={`dossier-page-${i}`} key={m.id} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">

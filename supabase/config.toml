@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.preparer-prospects-agent]
 verify_jwt = false
+
+[functions.dossier-og]
+verify_jwt = false

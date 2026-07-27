@@ -3,7 +3,7 @@ import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Loader2, X, ChevronLeft, ChevronRight, Phone, Mail, Globe, MapPin, Download, Share2, Copy, Check, Lock, Eye, EyeOff } from "lucide-react";
+import { Loader2, X, ChevronLeft, ChevronRight, Phone, Mail, Globe, MapPin, Download, Share2, Copy, Check, Lock, Eye, EyeOff, RefreshCw } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { renderPlan2D } from "@/lib/plan2DRender";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -71,6 +71,24 @@ function randomSuffix(len = 6) {
   let s = "";
   for (let i = 0; i < len; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
   return s;
+}
+
+/** Cryptographically strong non-guessable token (base32-like, len chars). */
+function cryptoToken(len = 32) {
+  const alphabet = "abcdefghijkmnpqrstuvwxyz23456789";
+  const bytes = new Uint8Array(len);
+  crypto.getRandomValues(bytes);
+  let s = "";
+  for (let i = 0; i < len; i++) s += alphabet[bytes[i] % alphabet.length];
+  return s;
+}
+
+const SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL ?? "";
+/** URL to share externally: goes through the OG edge function so link previews render a card,
+ *  then redirects the browser to the SPA /d/:slug route. */
+function buildShareUrl(slug: string): string {
+  if (SUPABASE_URL) return `${SUPABASE_URL}/functions/v1/dossier-og/${slug}`;
+  return `${window.location.origin}/d/${slug}`;
 }
 
 function Page({ children, index, total }: { children: React.ReactNode; index: number; total: number }) {
@@ -165,7 +183,7 @@ export function DossierPreview({
       const proj = p as Project | null;
       setFetchedProject(proj);
       if (proj?.share_slug && proj?.is_shared) {
-        setShareUrl(`${window.location.origin}/d/${proj.share_slug}`);
+        setShareUrl(buildShareUrl(proj.share_slug));
       }
       setLoading(false);
     })();
@@ -174,7 +192,7 @@ export function DossierPreview({
   // Track share url from live project when available.
   useEffect(() => {
     if (useLive && liveProject?.share_slug && liveProject?.is_shared) {
-      setShareUrl(`${window.location.origin}/d/${liveProject.share_slug}`);
+      setShareUrl(buildShareUrl(liveProject.share_slug));
     }
   }, [useLive, liveProject?.share_slug, liveProject?.is_shared]);
 
@@ -436,19 +454,9 @@ export function DossierPreview({
     try {
       let slug = shareInfo.share_slug;
       if (!slug) {
-        const base = slugify(project.client_name || brand?.name || "dossier");
-        for (let attempt = 0; attempt < 5; attempt++) {
-          const candidate = `${base}-${randomSuffix(5)}`;
-          const { data: existing } = await (supabase as any)
-            .from("projects")
-            .select("id")
-            .eq("share_slug", candidate)
-            .maybeSingle();
-          if (!existing) {
-            slug = candidate;
-            break;
-          }
-        }
+        const base = slugify(project.client_name || brand?.name || "dossier").slice(0, 20);
+        // 32-char cryptographic token → total >= 24 chars, non-guessable
+        slug = `${base}-${cryptoToken(32)}`;
       }
       if (!slug) throw new Error("Impossible de générer un slug");
       const payload: any = {
@@ -468,7 +476,7 @@ export function DossierPreview({
         setFetchedProject((prev) => (prev ? { ...prev, status: nextStatus } : prev));
         onStatusChange?.(nextStatus);
       }
-      const url = `${window.location.origin}/d/${slug}`;
+      const url = buildShareUrl(slug);
       setShareUrl(url);
       setShareOverlay(payload);
       setFetchedProject((prev) => (prev ? { ...prev, ...payload } : prev));
@@ -487,6 +495,39 @@ export function DossierPreview({
       setSharing(false);
     }
   };
+
+  const regenerateShareLink = async () => {
+    if (!project) return;
+    if (!confirm("Régénérer le lien ? L'ancien lien cessera de fonctionner immédiatement.")) return;
+    setSharing(true);
+    try {
+      const base = slugify(project.client_name || brand?.name || "dossier").slice(0, 20);
+      const newSlug = `${base}-${cryptoToken(32)}`;
+      const { error } = await (supabase as any)
+        .from("projects")
+        .update({ share_slug: newSlug, is_shared: true })
+        .eq("id", project.id);
+      if (error) throw error;
+      const url = buildShareUrl(newSlug);
+      setShareUrl(url);
+      const overlay = { ...(shareOverlay ?? {}), share_slug: newSlug, is_shared: true };
+      setShareOverlay(overlay);
+      setFetchedProject((prev) => (prev ? { ...prev, share_slug: newSlug, is_shared: true } : prev));
+      try {
+        await navigator.clipboard.writeText(url);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+        toast({ title: "Nouveau lien copié", description: "L'ancien lien est révoqué." });
+      } catch {
+        toast({ title: "Nouveau lien généré", description: url });
+      }
+    } catch (e: any) {
+      toast({ title: "Erreur", description: e?.message ?? "Impossible de régénérer", variant: "destructive" });
+    } finally {
+      setSharing(false);
+    }
+  };
+
 
   const copyPassword = async () => {
     const pwd = shareInfo.share_password ?? "";
@@ -551,10 +592,25 @@ export function DossierPreview({
             </>
           )}
           {shareMode && (
-            <Button variant="ghost" size="sm" onClick={handlePrint} disabled={loading || exporting} className="text-white hover:bg-white/10">
-              {exporting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Download className="mr-1 h-4 w-4" />}
-              {exporting ? "Export…" : "Télécharger PDF"}
-            </Button>
+            <>
+              <Button variant="ghost" size="sm" onClick={handlePrint} disabled={loading || exporting} className="text-white hover:bg-white/10">
+                {exporting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Download className="mr-1 h-4 w-4" />}
+                {exporting ? "Export…" : "Télécharger PDF"}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const el = document.documentElement;
+                  if (!document.fullscreenElement) el.requestFullscreen?.().catch(() => {});
+                  else document.exitFullscreen?.().catch(() => {});
+                }}
+                className="text-white hover:bg-white/10"
+                title="Plein écran"
+              >
+                Plein écran
+              </Button>
+            </>
           )}
           <Button variant="ghost" size="sm" onClick={() => goTo(current - 1)} disabled={current === 0} className="text-white hover:bg-white/10">
             <ChevronLeft className="h-4 w-4" />
@@ -585,6 +641,10 @@ export function DossierPreview({
           <a href={shareUrl} target="_blank" rel="noreferrer" className="text-white/80 underline hover:text-white">Ouvrir</a>
           <Button variant="ghost" size="sm" onClick={openShareDialog} className="text-white hover:bg-white/10">
             Modifier
+          </Button>
+          <Button variant="ghost" size="sm" onClick={regenerateShareLink} disabled={sharing} className="text-white hover:bg-white/10" title="Régénérer le lien (révoque l'ancien)">
+            {sharing ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1 h-3 w-3" />}
+            Régénérer
           </Button>
           {shareInfo.share_visibility === "password" && shareInfo.share_password ? (
             <div className="flex w-full items-center gap-2 border-t border-white/10 pt-2 sm:w-auto sm:border-none sm:pt-0">

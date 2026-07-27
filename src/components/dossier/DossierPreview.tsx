@@ -73,6 +73,24 @@ function randomSuffix(len = 6) {
   return s;
 }
 
+/** Cryptographically strong non-guessable token (base32-like, len chars). */
+function cryptoToken(len = 32) {
+  const alphabet = "abcdefghijkmnpqrstuvwxyz23456789";
+  const bytes = new Uint8Array(len);
+  crypto.getRandomValues(bytes);
+  let s = "";
+  for (let i = 0; i < len; i++) s += alphabet[bytes[i] % alphabet.length];
+  return s;
+}
+
+const SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL ?? "";
+/** URL to share externally: goes through the OG edge function so link previews render a card,
+ *  then redirects the browser to the SPA /d/:slug route. */
+function buildShareUrl(slug: string): string {
+  if (SUPABASE_URL) return `${SUPABASE_URL}/functions/v1/dossier-og/${slug}`;
+  return `${window.location.origin}/d/${slug}`;
+}
+
 function Page({ children, index, total }: { children: React.ReactNode; index: number; total: number }) {
   return (
     <section

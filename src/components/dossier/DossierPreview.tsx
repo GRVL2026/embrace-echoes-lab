@@ -454,19 +454,9 @@ export function DossierPreview({
     try {
       let slug = shareInfo.share_slug;
       if (!slug) {
-        const base = slugify(project.client_name || brand?.name || "dossier");
-        for (let attempt = 0; attempt < 5; attempt++) {
-          const candidate = `${base}-${randomSuffix(5)}`;
-          const { data: existing } = await (supabase as any)
-            .from("projects")
-            .select("id")
-            .eq("share_slug", candidate)
-            .maybeSingle();
-          if (!existing) {
-            slug = candidate;
-            break;
-          }
-        }
+        const base = slugify(project.client_name || brand?.name || "dossier").slice(0, 20);
+        // 32-char cryptographic token → total >= 24 chars, non-guessable
+        slug = `${base}-${cryptoToken(32)}`;
       }
       if (!slug) throw new Error("Impossible de générer un slug");
       const payload: any = {
@@ -486,7 +476,7 @@ export function DossierPreview({
         setFetchedProject((prev) => (prev ? { ...prev, status: nextStatus } : prev));
         onStatusChange?.(nextStatus);
       }
-      const url = `${window.location.origin}/d/${slug}`;
+      const url = buildShareUrl(slug);
       setShareUrl(url);
       setShareOverlay(payload);
       setFetchedProject((prev) => (prev ? { ...prev, ...payload } : prev));
@@ -505,6 +495,39 @@ export function DossierPreview({
       setSharing(false);
     }
   };
+
+  const regenerateShareLink = async () => {
+    if (!project) return;
+    if (!confirm("Régénérer le lien ? L'ancien lien cessera de fonctionner immédiatement.")) return;
+    setSharing(true);
+    try {
+      const base = slugify(project.client_name || brand?.name || "dossier").slice(0, 20);
+      const newSlug = `${base}-${cryptoToken(32)}`;
+      const { error } = await (supabase as any)
+        .from("projects")
+        .update({ share_slug: newSlug, is_shared: true })
+        .eq("id", project.id);
+      if (error) throw error;
+      const url = buildShareUrl(newSlug);
+      setShareUrl(url);
+      const overlay = { ...(shareOverlay ?? {}), share_slug: newSlug, is_shared: true };
+      setShareOverlay(overlay);
+      setFetchedProject((prev) => (prev ? { ...prev, share_slug: newSlug, is_shared: true } : prev));
+      try {
+        await navigator.clipboard.writeText(url);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+        toast({ title: "Nouveau lien copié", description: "L'ancien lien est révoqué." });
+      } catch {
+        toast({ title: "Nouveau lien généré", description: url });
+      }
+    } catch (e: any) {
+      toast({ title: "Erreur", description: e?.message ?? "Impossible de régénérer", variant: "destructive" });
+    } finally {
+      setSharing(false);
+    }
+  };
+
 
   const copyPassword = async () => {
     const pwd = shareInfo.share_password ?? "";

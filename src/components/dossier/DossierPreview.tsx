@@ -543,9 +543,9 @@ export function DossierPreview({
                 {sharing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Share2 className="mr-1 h-4 w-4" />}
                 Partager
               </Button>
-              <Button variant="ghost" size="sm" onClick={handlePrint} disabled={loading} className="text-white hover:bg-white/10">
-                <Download className="mr-1 h-4 w-4" />
-                Télécharger PDF
+              <Button variant="ghost" size="sm" onClick={handlePrint} disabled={loading || exporting} className="text-white hover:bg-white/10">
+                {exporting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Download className="mr-1 h-4 w-4" />}
+                {exporting ? "Export…" : "Télécharger PDF"}
               </Button>
               <div className="mx-1 h-6 w-px bg-white/20" />
             </>

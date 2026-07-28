@@ -164,6 +164,10 @@ export function DossierPreview({
   const [dialogVisibility, setDialogVisibility] = useState<"public" | "password">("public");
   const [dialogPassword, setDialogPassword] = useState("");
   const [shareOverlay, setShareOverlay] = useState<{ share_slug?: string | null; is_shared?: boolean | null; share_visibility?: string | null; share_password?: string | null } | null>(null);
+  const [presenting, setPresenting] = useState(false);
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+
 
   // Fetch the project when not driven by live form state or preloaded bundle.
   useEffect(() => {
@@ -304,20 +308,54 @@ export function DossierPreview({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && onClose) onClose();
-      if (e.key === "ArrowRight") setCurrent((c) => Math.min(c + 1, totalPages - 1));
+      if (e.key === "Escape") {
+        if (presenting) { setPresenting(false); e.preventDefault(); return; }
+        if (onClose) onClose();
+        return;
+      }
+      if (e.key === "ArrowRight" || (presenting && e.key === " ")) {
+        setCurrent((c) => Math.min(c + 1, totalPages - 1));
+        if (presenting) e.preventDefault();
+      }
       if (e.key === "ArrowLeft") setCurrent((c) => Math.max(c - 1, 0));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [totalPages, onClose]);
+  }, [totalPages, onClose, presenting]);
+
+  // Lock body scroll while presenting.
+  useEffect(() => {
+    if (!presenting) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [presenting]);
 
   const goTo = (i: number) => {
     const clamped = Math.max(0, Math.min(totalPages - 1, i));
     setCurrent(clamped);
+    if (presenting) return;
     const el = document.getElementById(`dossier-page-${clamped}`);
     el?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchStartX.current = t.clientX;
+    touchStartY.current = t.clientY;
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current == null || touchStartY.current == null) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStartX.current;
+    const dy = t.clientY - touchStartY.current;
+    touchStartX.current = null;
+    touchStartY.current = null;
+    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return;
+    if (dx < 0) setCurrent((c) => Math.min(c + 1, totalPages - 1));
+    else setCurrent((c) => Math.max(c - 1, 0));
+  };
+
 
   const printRootRef = useRef<HTMLDivElement | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -421,7 +459,21 @@ export function DossierPreview({
       }
 
       const fileName = `${slugify(clientName || "dossier")}.pdf`;
-      pdf.save(fileName);
+      try {
+        pdf.save(fileName);
+      } catch {
+        // iOS Safari fallback: some contexts block <a download>. Open blob in new tab.
+        const blob = pdf.output("blob");
+        const url = URL.createObjectURL(blob);
+        const w = window.open(url, "_blank");
+        if (!w) {
+          const a = document.createElement("a");
+          a.href = url; a.download = fileName; a.rel = "noopener";
+          document.body.appendChild(a); a.click(); a.remove();
+        }
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      }
+
 
       if (!shareMode && project?.id) {
         const next = await markSentIfDraft(project.id, project.status);
@@ -588,7 +640,7 @@ export function DossierPreview({
     ? "flex h-full w-full flex-col bg-black/90"
     : `${shareMode ? "min-h-screen" : "fixed inset-0 z-[100]"} flex flex-col bg-black/90`;
   return (
-    <div className={rootClass}>
+    <div className={`${rootClass}${presenting ? " presenting-mode" : ""}`}>
 
       <div className="dossier-toolbar flex min-h-12 flex-shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-black/60 px-3 py-2 sm:px-4 text-white backdrop-blur">
         <div className="flex items-center gap-3 text-sm">
@@ -602,28 +654,29 @@ export function DossierPreview({
                 {sharing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Share2 className="mr-1 h-4 w-4" />}
                 Partager
               </Button>
-              <Button variant="ghost" size="sm" onClick={handlePrint} disabled={loading || exporting} className="text-white hover:bg-white/10">
+              <Button type="button" variant="ghost" size="sm" onClick={handlePrint} disabled={loading || exporting} className="text-white hover:bg-white/10 min-h-9">
                 {exporting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Download className="mr-1 h-4 w-4" />}
                 {exporting ? "Export…" : "Télécharger PDF"}
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setPresenting(true)} disabled={loading || totalPages === 0} className="text-white hover:bg-white/10 min-h-9" title="Plein écran">
+                Plein écran
               </Button>
               <div className="mx-1 h-6 w-px bg-white/20" />
             </>
           )}
           {shareMode && (
             <>
-              <Button variant="ghost" size="sm" onClick={handlePrint} disabled={loading || exporting} className="text-white hover:bg-white/10">
+              <Button type="button" variant="ghost" size="sm" onClick={handlePrint} disabled={loading || exporting} className="text-white hover:bg-white/10 min-h-9">
                 {exporting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Download className="mr-1 h-4 w-4" />}
                 {exporting ? "Export…" : "Télécharger PDF"}
               </Button>
               <Button
+                type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => {
-                  const el = document.documentElement;
-                  if (!document.fullscreenElement) el.requestFullscreen?.().catch(() => {});
-                  else document.exitFullscreen?.().catch(() => {});
-                }}
-                className="text-white hover:bg-white/10"
+                onClick={() => setPresenting(true)}
+                disabled={loading || totalPages === 0}
+                className="text-white hover:bg-white/10 min-h-9"
                 title="Plein écran"
               >
                 Plein écran
@@ -646,6 +699,8 @@ export function DossierPreview({
           )}
         </div>
       </div>
+
+
 
       {shareUrl && !shareMode && (
         <div className="dossier-toolbar flex flex-shrink-0 flex-wrap items-center gap-2 border-b border-white/10 bg-black/40 px-4 py-2 text-xs text-white">
@@ -744,11 +799,12 @@ export function DossierPreview({
           Chargement…
         </div>
       ) : (
-        <div className="dossier-scroll flex-1 overflow-y-auto snap-y snap-mandatory">
-          <div ref={printRootRef} className="dossier-print-root mx-auto flex w-full max-w-[1600px] flex-col gap-4 p-3 sm:gap-6 sm:p-6">
+        <div className="dossier-scroll flex-1 overflow-y-auto snap-y snap-mandatory" onTouchStart={presenting ? onTouchStart : undefined} onTouchEnd={presenting ? onTouchEnd : undefined} onClick={presenting ? ((e) => { if (e.target === e.currentTarget) setCurrent((c) => Math.min(c + 1, totalPages - 1)); }) : undefined}>
+          <div ref={printRootRef} className="dossier-print-root mx-auto flex w-full max-w-[1600px] flex-col gap-4 p-3 sm:gap-6 sm:p-6" onClick={presenting ? ((e) => { if (e.target === e.currentTarget) setCurrent((c) => Math.min(c + 1, totalPages - 1)); }) : undefined}>
+
             {/* PARTIE A — slides images */}
             {slidePages.map((m, i) => (
-              <div id={`dossier-page-${i}`} key={m.id} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
+              <div id={`dossier-page-${i}`} key={m.id} className={`dossier-slide w-full overflow-hidden rounded-lg shadow-2xl${i === current ? " is-current" : ""}`} data-slide-idx={i}>
                 <section className="dossier-page relative w-full snap-center" style={{ aspectRatio: "16 / 9" }}>
                   <img src={m.image_url!} alt={m.title ?? `Slide ${i + 1}`} className="h-full w-full object-cover" />
                 </section>
@@ -1006,7 +1062,7 @@ export function DossierPreview({
               return pages.map((node, i) => {
                 const pageIdx = offset + i;
                 return (
-                  <div id={`dossier-page-${pageIdx}`} key={`custom-${i}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
+                  <div id={`dossier-page-${pageIdx}`} key={`custom-${i}`} className={`dossier-slide w-full overflow-hidden rounded-lg shadow-2xl${pageIdx === current ? " is-current" : ""}`} data-slide-idx={pageIdx}>
                     <Page index={pageIdx + 1} total={totalPages}>{node}</Page>
                   </div>
                 );
@@ -1015,6 +1071,39 @@ export function DossierPreview({
           </div>
         </div>
       )}
+
+      {presenting && (
+        <div className="presenting-controls" aria-hidden={false}>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setPresenting(false); }}
+            className="presenting-close"
+            aria-label="Quitter le plein écran"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setCurrent((c) => Math.max(c - 1, 0)); }}
+            disabled={current === 0}
+            className="presenting-arrow presenting-arrow-left"
+            aria-label="Slide précédente"
+          >
+            <ChevronLeft className="h-8 w-8" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setCurrent((c) => Math.min(c + 1, totalPages - 1)); }}
+            disabled={current >= totalPages - 1}
+            className="presenting-arrow presenting-arrow-right"
+            aria-label="Slide suivante"
+          >
+            <ChevronRight className="h-8 w-8" />
+          </button>
+          <div className="presenting-counter">{current + 1} / {totalPages || 1}</div>
+        </div>
+      )}
     </div>
   );
 }
+

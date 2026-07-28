@@ -88,8 +88,6 @@ const SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL ?? "";
  *  then redirects the browser to the SPA /d/:slug route. */
 function buildShareUrl(slug: string): string {
   return `https://dossiers.avranchesautomatic.workers.dev/d/${slug}`;
-  if (SUPABASE_URL) return `${SUPABASE_URL}/functions/v1/dossier-og/${slug}`;
-  return `${window.location.origin}/d/${slug}`;
 }
 
 function Page({ children, index, total }: { children: React.ReactNode; index: number; total: number }) {

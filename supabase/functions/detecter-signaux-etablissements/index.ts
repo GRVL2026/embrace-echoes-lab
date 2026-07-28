@@ -31,25 +31,54 @@ function j(status: number, body: unknown) {
   });
 }
 
-async function fetchWithRetry(url: string, tries = 2): Promise<any | null> {
+type FetchResult =
+  | { ok: true; data: any }
+  | { ok: false; status: number; body: string; message: string };
+
+async function fetchWithRetry(url: string, tries = 2): Promise<FetchResult> {
+  let lastStatus = 0;
+  let lastBody = '';
+  let lastMessage = 'unknown error';
   for (let i = 0; i < tries; i++) {
     try {
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), 15000);
       const r = await fetch(url, { signal: ctrl.signal, headers: { 'Accept': 'application/json' } });
       clearTimeout(to);
+      lastStatus = r.status;
       if (r.status === 429 || r.status >= 500) {
+        try { lastBody = (await r.text()).slice(0, 300); } catch { lastBody = ''; }
+        lastMessage = `HTTP ${r.status}`;
         await new Promise((res) => setTimeout(res, 1000));
         continue;
       }
-      if (!r.ok) return null;
-      return await r.json();
-    } catch {
+      if (r.status === 401 || r.status === 402 || r.status === 403) {
+        try { lastBody = (await r.text()).slice(0, 300); } catch { lastBody = ''; }
+        return {
+          ok: false,
+          status: r.status,
+          body: lastBody,
+          message: `Pappers: credits epuises ou cle invalide (HTTP ${r.status})`,
+        };
+      }
+      if (!r.ok) {
+        try { lastBody = (await r.text()).slice(0, 300); } catch { lastBody = ''; }
+        return { ok: false, status: r.status, body: lastBody, message: `HTTP ${r.status}` };
+      }
+      try {
+        const data = await r.json();
+        return { ok: true, data };
+      } catch (e) {
+        return { ok: false, status: r.status, body: '', message: `invalid JSON: ${(e as Error).message}` };
+      }
+    } catch (e) {
+      lastMessage = (e as Error).message || 'fetch failed';
       await new Promise((res) => setTimeout(res, 600));
     }
   }
-  return null;
+  return { ok: false, status: lastStatus, body: lastBody, message: lastMessage };
 }
+
 
 async function isAuthorized(req: Request): Promise<boolean> {
   const cron = req.headers.get('x-cron-secret');
@@ -101,10 +130,11 @@ function extractDirigeant(entreprise: any): { nom: string | null; role: string |
 async function fetchDirigeant(siren: string): Promise<{ nom: string | null; role: string | null }> {
   // /v2/entreprise renvoie systématiquement le bloc representants (personnes physiques + morales)
   const params = new URLSearchParams({ api_token: PAPPERS_API_KEY, siren });
-  const data = await fetchWithRetry(`https://api.pappers.fr/v2/entreprise?${params.toString()}`);
-  if (!data) return { nom: null, role: null };
-  return extractDirigeant(data);
+  const res = await fetchWithRetry(`https://api.pappers.fr/v2/entreprise?${params.toString()}`);
+  if (!res.ok) return { nom: null, role: null };
+  return extractDirigeant(res.data);
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -134,10 +164,13 @@ Deno.serve(async (req) => {
 
     const toInsert: any[] = [];
     const examples: string[] = [];
+    const apiErrors: { naf: string; page: number; status: number; message: string; body?: string }[] = [];
     let scanned = 0;
+    let napiOk = 0;
 
     outer:
     for (const naf of NAF_MAP) {
+      let nafHadSuccess = false;
       for (let page = 1; page <= MAX_PAGES_PER_NAF; page++) {
         if (toInsert.length >= MAX_INSERT) break outer;
 
@@ -152,10 +185,21 @@ Deno.serve(async (req) => {
           page: String(page),
         });
         const url = `${API}?${params.toString()}`;
-        const data = await fetchWithRetry(url);
-        if (!data) break;
+        const res = await fetchWithRetry(url);
+        if (!res.ok) {
+          apiErrors.push({
+            naf: naf.code,
+            page,
+            status: res.status,
+            message: res.message,
+            body: res.body ? res.body.slice(0, 200) : undefined,
+          });
+          break; // passer au code NAF suivant
+        }
+        nafHadSuccess = true;
+        const data = res.data;
         const results: any[] = Array.isArray(data.resultats) ? data.resultats : [];
-        if (results.length === 0) break;
+        if (results.length === 0) break; // vraie absence de résultats
 
         for (const r of results) {
           scanned++;
@@ -206,6 +250,12 @@ Deno.serve(async (req) => {
         }
         await new Promise((res) => setTimeout(res, 150));
       }
+      if (nafHadSuccess) napiOk++;
+    }
+
+    // Si aucun code NAF n'a répondu correctement, on considère Pappers injoignable.
+    if (napiOk === 0 && apiErrors.length > 0) {
+      return j(502, { error: 'Pappers injoignable', apiErrors });
     }
 
     let inserted = 0;
@@ -220,11 +270,12 @@ Deno.serve(async (req) => {
         const retry = await admin.from('prospects').insert(stripped).select('id');
         ins = retry.data; insErr = retry.error;
       }
-      if (insErr) return j(500, { error: `insert failed: ${insErr.message}`, scanned });
+      if (insErr) return j(500, { error: `insert failed: ${insErr.message}`, scanned, apiErrors, napi_ok: napiOk });
       inserted = ins?.length ?? 0;
     }
 
-    return j(200, { inserted, scanned, exemples: examples });
+    return j(200, { inserted, scanned, exemples: examples, apiErrors, napi_ok: napiOk });
+
   } catch (e) {
     return j(500, { error: (e as Error).message });
   }

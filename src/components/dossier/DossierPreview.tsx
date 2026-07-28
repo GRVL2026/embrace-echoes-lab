@@ -804,7 +804,7 @@ export function DossierPreview({
 
             {/* PARTIE A — slides images */}
             {slidePages.map((m, i) => (
-              <div id={`dossier-page-${i}`} key={m.id} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
+              <div id={`dossier-page-${i}`} key={m.id} className={`dossier-slide w-full overflow-hidden rounded-lg shadow-2xl${i === current ? " is-current" : ""}`} data-slide-idx={i}>
                 <section className="dossier-page relative w-full snap-center" style={{ aspectRatio: "16 / 9" }}>
                   <img src={m.image_url!} alt={m.title ?? `Slide ${i + 1}`} className="h-full w-full object-cover" />
                 </section>

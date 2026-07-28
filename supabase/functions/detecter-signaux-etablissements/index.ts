@@ -31,25 +31,54 @@ function j(status: number, body: unknown) {
   });
 }
 
-async function fetchWithRetry(url: string, tries = 2): Promise<any | null> {
+type FetchResult =
+  | { ok: true; data: any }
+  | { ok: false; status: number; body: string; message: string };
+
+async function fetchWithRetry(url: string, tries = 2): Promise<FetchResult> {
+  let lastStatus = 0;
+  let lastBody = '';
+  let lastMessage = 'unknown error';
   for (let i = 0; i < tries; i++) {
     try {
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), 15000);
       const r = await fetch(url, { signal: ctrl.signal, headers: { 'Accept': 'application/json' } });
       clearTimeout(to);
+      lastStatus = r.status;
       if (r.status === 429 || r.status >= 500) {
+        try { lastBody = (await r.text()).slice(0, 300); } catch { lastBody = ''; }
+        lastMessage = `HTTP ${r.status}`;
         await new Promise((res) => setTimeout(res, 1000));
         continue;
       }
-      if (!r.ok) return null;
-      return await r.json();
-    } catch {
+      if (r.status === 401 || r.status === 402 || r.status === 403) {
+        try { lastBody = (await r.text()).slice(0, 300); } catch { lastBody = ''; }
+        return {
+          ok: false,
+          status: r.status,
+          body: lastBody,
+          message: `Pappers: credits epuises ou cle invalide (HTTP ${r.status})`,
+        };
+      }
+      if (!r.ok) {
+        try { lastBody = (await r.text()).slice(0, 300); } catch { lastBody = ''; }
+        return { ok: false, status: r.status, body: lastBody, message: `HTTP ${r.status}` };
+      }
+      try {
+        const data = await r.json();
+        return { ok: true, data };
+      } catch (e) {
+        return { ok: false, status: r.status, body: '', message: `invalid JSON: ${(e as Error).message}` };
+      }
+    } catch (e) {
+      lastMessage = (e as Error).message || 'fetch failed';
       await new Promise((res) => setTimeout(res, 600));
     }
   }
-  return null;
+  return { ok: false, status: lastStatus, body: lastBody, message: lastMessage };
 }
+
 
 async function isAuthorized(req: Request): Promise<boolean> {
   const cron = req.headers.get('x-cron-secret');

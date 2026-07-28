@@ -308,20 +308,54 @@ export function DossierPreview({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && onClose) onClose();
-      if (e.key === "ArrowRight") setCurrent((c) => Math.min(c + 1, totalPages - 1));
+      if (e.key === "Escape") {
+        if (presenting) { setPresenting(false); e.preventDefault(); return; }
+        if (onClose) onClose();
+        return;
+      }
+      if (e.key === "ArrowRight" || (presenting && e.key === " ")) {
+        setCurrent((c) => Math.min(c + 1, totalPages - 1));
+        if (presenting) e.preventDefault();
+      }
       if (e.key === "ArrowLeft") setCurrent((c) => Math.max(c - 1, 0));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [totalPages, onClose]);
+  }, [totalPages, onClose, presenting]);
+
+  // Lock body scroll while presenting.
+  useEffect(() => {
+    if (!presenting) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [presenting]);
 
   const goTo = (i: number) => {
     const clamped = Math.max(0, Math.min(totalPages - 1, i));
     setCurrent(clamped);
+    if (presenting) return;
     const el = document.getElementById(`dossier-page-${clamped}`);
     el?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchStartX.current = t.clientX;
+    touchStartY.current = t.clientY;
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current == null || touchStartY.current == null) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStartX.current;
+    const dy = t.clientY - touchStartY.current;
+    touchStartX.current = null;
+    touchStartY.current = null;
+    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return;
+    if (dx < 0) setCurrent((c) => Math.min(c + 1, totalPages - 1));
+    else setCurrent((c) => Math.max(c - 1, 0));
+  };
+
 
   const printRootRef = useRef<HTMLDivElement | null>(null);
   const [exporting, setExporting] = useState(false);

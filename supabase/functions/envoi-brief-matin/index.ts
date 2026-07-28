@@ -304,16 +304,18 @@ Deno.serve(async (req) => {
     if (!RESEND_API_KEY) return j(500, { error: 'RESEND_API_KEY manquant' });
 
     let testMode = false;
+    let forcedType: 'hebdo' | 'quotidien' | null = null;
     if (req.method === 'POST') {
       try {
         const body = await req.json();
         if (body?.test === true) testMode = true;
+        if (body?.type === 'hebdo' || body?.type === 'quotidien') forcedType = body.type;
       } catch { /* no body */ }
     }
 
     const { iso, dow } = parisToday();
 
-    if (dow === 0) return j(200, { skipped: 'dimanche' });
+    if (forcedType === null && dow === 0) return j(200, { skipped: 'dimanche' });
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
     const to = testMode ? TEST_TO : PROD_TO;
@@ -324,7 +326,8 @@ Deno.serve(async (req) => {
     let subtitle: string;
     let inner: string;
 
-    if (dow === 1) {
+    const useWeekly = forcedType ? forcedType === 'hebdo' : dow === 1;
+    if (useWeekly) {
       type = 'hebdo';
       const start = addDaysISO(iso, -7);
       const endIncl = addDaysISO(iso, -1);

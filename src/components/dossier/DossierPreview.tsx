@@ -799,8 +799,9 @@ export function DossierPreview({
           Chargement…
         </div>
       ) : (
-        <div className="dossier-scroll flex-1 overflow-y-auto snap-y snap-mandatory">
-          <div ref={printRootRef} className="dossier-print-root mx-auto flex w-full max-w-[1600px] flex-col gap-4 p-3 sm:gap-6 sm:p-6">
+        <div className="dossier-scroll flex-1 overflow-y-auto snap-y snap-mandatory" onTouchStart={presenting ? onTouchStart : undefined} onTouchEnd={presenting ? onTouchEnd : undefined} onClick={presenting ? ((e) => { if (e.target === e.currentTarget) setCurrent((c) => Math.min(c + 1, totalPages - 1)); }) : undefined}>
+          <div ref={printRootRef} className="dossier-print-root mx-auto flex w-full max-w-[1600px] flex-col gap-4 p-3 sm:gap-6 sm:p-6" onClick={presenting ? ((e) => { if (e.target === e.currentTarget) setCurrent((c) => Math.min(c + 1, totalPages - 1)); }) : undefined}>
+
             {/* PARTIE A — slides images */}
             {slidePages.map((m, i) => (
               <div id={`dossier-page-${i}`} key={m.id} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">

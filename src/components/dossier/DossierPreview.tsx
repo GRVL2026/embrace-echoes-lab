@@ -1071,6 +1071,39 @@ export function DossierPreview({
           </div>
         </div>
       )}
+
+      {presenting && (
+        <div className="presenting-controls" aria-hidden={false}>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setPresenting(false); }}
+            className="presenting-close"
+            aria-label="Quitter le plein écran"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setCurrent((c) => Math.max(c - 1, 0)); }}
+            disabled={current === 0}
+            className="presenting-arrow presenting-arrow-left"
+            aria-label="Slide précédente"
+          >
+            <ChevronLeft className="h-8 w-8" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setCurrent((c) => Math.min(c + 1, totalPages - 1)); }}
+            disabled={current >= totalPages - 1}
+            className="presenting-arrow presenting-arrow-right"
+            aria-label="Slide suivante"
+          >
+            <ChevronRight className="h-8 w-8" />
+          </button>
+          <div className="presenting-counter">{current + 1} / {totalPages || 1}</div>
+        </div>
+      )}
     </div>
   );
 }
+

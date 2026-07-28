@@ -522,14 +522,15 @@ export function DossierPreview({
       const newSlug = `${base}-${cryptoToken(32)}`;
       const { error } = await (supabase as any)
         .from("projects")
-        .update({ share_slug: newSlug, is_shared: true })
+        .update({ share_slug: newSlug })
         .eq("id", project.id);
       if (error) throw error;
       const url = buildShareUrl(newSlug);
       setShareUrl(url);
-      const overlay = { ...(shareOverlay ?? {}), share_slug: newSlug, is_shared: true };
+      const overlay = { ...(shareOverlay ?? {}), share_slug: newSlug };
       setShareOverlay(overlay);
-      setFetchedProject((prev) => (prev ? { ...prev, share_slug: newSlug, is_shared: true } : prev));
+      setFetchedProject((prev) => (prev ? { ...prev, share_slug: newSlug } : prev));
+
       try {
         await navigator.clipboard.writeText(url);
         setCopied(true);

@@ -500,6 +500,7 @@ export type Database = {
           id: string
           jour: string
           resume: string | null
+          sources: Json | null
         }
         Insert: {
           created_at?: string
@@ -507,6 +508,7 @@ export type Database = {
           id?: string
           jour?: string
           resume?: string | null
+          sources?: Json | null
         }
         Update: {
           created_at?: string
@@ -514,6 +516,7 @@ export type Database = {
           id?: string
           jour?: string
           resume?: string | null
+          sources?: Json | null
         }
         Relationships: []
       }

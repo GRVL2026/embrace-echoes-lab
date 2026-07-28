@@ -335,6 +335,7 @@ export function DossierPreview({
     }
 
     setExporting(true);
+    let imageTimedOut = false;
     const W = 1280;
     const H = 720;
     // Offscreen host to render each slide at a fixed 16:9 size
@@ -377,17 +378,29 @@ export function DossierPreview({
         host.innerHTML = "";
         host.appendChild(clone);
 
-        // Wait for all images inside the clone to load
+        // Wait for all images inside the clone to load (force eager, timeout 8s)
         const imgs = Array.from(clone.querySelectorAll<HTMLImageElement>("img"));
+        imgs.forEach((img) => {
+          try {
+            img.loading = "eager";
+            img.decoding = "sync";
+          } catch {}
+        });
         await Promise.all(
-          imgs.map((img) =>
-            img.complete && img.naturalWidth > 0
-              ? Promise.resolve()
-              : new Promise<void>((res) => {
-                  img.onload = () => res();
-                  img.onerror = () => res();
-                }),
-          ),
+          imgs.map((img) => {
+            if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+            const loadP = new Promise<void>((res) => {
+              img.onload = () => res();
+              img.onerror = () => res();
+            });
+            const timeoutP = new Promise<void>((res) =>
+              setTimeout(() => {
+                imageTimedOut = true;
+                res();
+              }, 8000),
+            );
+            return Promise.race([loadP, timeoutP]);
+          }),
         );
         // Extra tick for layout
         await new Promise((r) => requestAnimationFrame(() => r(null)));
@@ -418,6 +431,13 @@ export function DossierPreview({
           setFetchedProject((prev) => (prev ? { ...prev, status: next } : prev));
           onStatusChange?.(next);
         }
+      }
+
+      if (imageTimedOut) {
+        toast({
+          title: "Export terminé avec avertissement",
+          description: "Certaines images n'ont pas pu être chargées",
+        });
       }
     } catch (e: any) {
       console.error("[DossierPreview] PDF export failed", e);

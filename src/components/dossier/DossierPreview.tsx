@@ -87,8 +87,7 @@ const SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL ?? "";
 /** URL to share externally: goes through the OG edge function so link previews render a card,
  *  then redirects the browser to the SPA /d/:slug route. */
 function buildShareUrl(slug: string): string {
-  if (SUPABASE_URL) return `${SUPABASE_URL}/functions/v1/dossier-og/${slug}`;
-  return `${window.location.origin}/d/${slug}`;
+  return `https://dossiers.avranchesautomatic.workers.dev/d/${slug}`;
 }
 
 function Page({ children, index, total }: { children: React.ReactNode; index: number; total: number }) {

@@ -1062,7 +1062,7 @@ export function DossierPreview({
               return pages.map((node, i) => {
                 const pageIdx = offset + i;
                 return (
-                  <div id={`dossier-page-${pageIdx}`} key={`custom-${i}`} className="dossier-slide w-full overflow-hidden rounded-lg shadow-2xl">
+                  <div id={`dossier-page-${pageIdx}`} key={`custom-${i}`} className={`dossier-slide w-full overflow-hidden rounded-lg shadow-2xl${pageIdx === current ? " is-current" : ""}`} data-slide-idx={pageIdx}>
                     <Page index={pageIdx + 1} total={totalPages}>{node}</Page>
                   </div>
                 );

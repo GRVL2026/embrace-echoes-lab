@@ -428,3 +428,97 @@
   .revue-dashboard * { overflow: visible !important; }
 }
 
+/* ============ Mode présentation dossier (overlay CSS, mobile-safe) ============ */
+.presenting-mode .dossier-toolbar { display: none !important; }
+.presenting-mode .dossier-scroll {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  background: #000 !important;
+  overflow: hidden !important;
+  z-index: 200 !important;
+  scroll-snap-type: none !important;
+  cursor: pointer;
+}
+.presenting-mode .dossier-print-root {
+  max-width: none !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  gap: 0 !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  background: #000 !important;
+}
+.presenting-mode .dossier-slide { display: none !important; }
+.presenting-mode .dossier-slide.is-current {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 100vw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+  animation: dossier-slide-in 220ms ease-out;
+}
+.presenting-mode .dossier-slide.is-current > section,
+.presenting-mode .dossier-slide.is-current .dossier-page {
+  width: min(100vw, calc(100vh * 16 / 9)) !important;
+  width: min(100vw, calc(100dvh * 16 / 9)) !important;
+  height: min(100vh, calc(100vw * 9 / 16)) !important;
+  height: min(100dvh, calc(100vw * 9 / 16)) !important;
+  aspect-ratio: 16 / 9 !important;
+  min-height: 0 !important;
+  flex: 0 0 auto !important;
+}
+@keyframes dossier-slide-in {
+  from { opacity: 0; transform: translateX(8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.presenting-controls { position: fixed; inset: 0; pointer-events: none; z-index: 201; }
+.presenting-controls > * { pointer-events: auto; }
+.presenting-close {
+  position: absolute; top: 12px; right: 12px;
+  width: 44px; height: 44px; border-radius: 9999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.12); color: #fff;
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,0.2);
+}
+.presenting-close:hover { background: rgba(255,255,255,0.2); }
+.presenting-counter {
+  position: absolute; bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  left: 50%; transform: translateX(-50%);
+  padding: 6px 14px; border-radius: 9999px;
+  background: rgba(0,0,0,0.55); color: #fff;
+  font-size: 13px; font-variant-numeric: tabular-nums;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+.presenting-arrow {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 56px; height: 56px; border-radius: 9999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.10); color: #fff;
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,0.18);
+  transition: background 120ms;
+}
+.presenting-arrow:hover:not(:disabled) { background: rgba(255,255,255,0.22); }
+.presenting-arrow:disabled { opacity: 0.25; cursor: default; }
+.presenting-arrow-left { left: 16px; }
+.presenting-arrow-right { right: 16px; }
+@media (max-width: 640px) {
+  .presenting-arrow { width: 44px; height: 44px; }
+  .presenting-arrow-left { left: 8px; }
+  .presenting-arrow-right { right: 8px; }
+}
+
+

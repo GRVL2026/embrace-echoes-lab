@@ -164,10 +164,13 @@ Deno.serve(async (req) => {
 
     const toInsert: any[] = [];
     const examples: string[] = [];
+    const apiErrors: { naf: string; page: number; status: number; message: string; body?: string }[] = [];
     let scanned = 0;
+    let napiOk = 0;
 
     outer:
     for (const naf of NAF_MAP) {
+      let nafHadSuccess = false;
       for (let page = 1; page <= MAX_PAGES_PER_NAF; page++) {
         if (toInsert.length >= MAX_INSERT) break outer;
 
@@ -182,10 +185,21 @@ Deno.serve(async (req) => {
           page: String(page),
         });
         const url = `${API}?${params.toString()}`;
-        const data = await fetchWithRetry(url);
-        if (!data) break;
+        const res = await fetchWithRetry(url);
+        if (!res.ok) {
+          apiErrors.push({
+            naf: naf.code,
+            page,
+            status: res.status,
+            message: res.message,
+            body: res.body ? res.body.slice(0, 200) : undefined,
+          });
+          break; // passer au code NAF suivant
+        }
+        nafHadSuccess = true;
+        const data = res.data;
         const results: any[] = Array.isArray(data.resultats) ? data.resultats : [];
-        if (results.length === 0) break;
+        if (results.length === 0) break; // vraie absence de résultats
 
         for (const r of results) {
           scanned++;
@@ -236,6 +250,12 @@ Deno.serve(async (req) => {
         }
         await new Promise((res) => setTimeout(res, 150));
       }
+      if (nafHadSuccess) napiOk++;
+    }
+
+    // Si aucun code NAF n'a répondu correctement, on considère Pappers injoignable.
+    if (napiOk === 0 && apiErrors.length > 0) {
+      return j(502, { error: 'Pappers injoignable', apiErrors });
     }
 
     let inserted = 0;
@@ -250,11 +270,12 @@ Deno.serve(async (req) => {
         const retry = await admin.from('prospects').insert(stripped).select('id');
         ins = retry.data; insErr = retry.error;
       }
-      if (insErr) return j(500, { error: `insert failed: ${insErr.message}`, scanned });
+      if (insErr) return j(500, { error: `insert failed: ${insErr.message}`, scanned, apiErrors, napi_ok: napiOk });
       inserted = ins?.length ?? 0;
     }
 
-    return j(200, { inserted, scanned, exemples: examples });
+    return j(200, { inserted, scanned, exemples: examples, apiErrors, napi_ok: napiOk });
+
   } catch (e) {
     return j(500, { error: (e as Error).message });
   }

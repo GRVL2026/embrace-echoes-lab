@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
 
     const { data: project } = await admin
       .from("projects")
-      .select("id, client_name, brand_id, selected_modules, is_shared, share_slug")
+      .select("id, client_name, brand_id, selected_modules, is_shared, share_slug, share_visibility")
       .eq("share_slug", slug)
       .eq("is_shared", true)
       .maybeSingle();
@@ -50,7 +50,11 @@ Deno.serve(async (req) => {
     let description = "Découvrez votre proposition sur-mesure.";
     let image: string | null = null;
 
-    if (project) {
+    // Only expose client-specific metadata when the dossier is publicly shared.
+    // Password-protected (or otherwise non-public) dossiers get generic branding.
+    const isPublic = project && (project as any).share_visibility === "public";
+
+    if (project && isPublic) {
       const clientName = (project.client_name ?? "").toString().trim();
       title = clientName ? `Dossier ${clientName} — Avranches Automatic` : title;
       description = clientName

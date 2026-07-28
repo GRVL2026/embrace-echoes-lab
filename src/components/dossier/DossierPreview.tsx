@@ -66,12 +66,6 @@ function slugify(input: string) {
     .slice(0, 40) || "dossier";
 }
 
-function randomSuffix(len = 6) {
-  const alphabet = "abcdefghijkmnpqrstuvwxyz23456789";
-  let s = "";
-  for (let i = 0; i < len; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
-  return s;
-}
 
 /** Cryptographically strong non-guessable token (base32-like, len chars). */
 function cryptoToken(len = 32) {
@@ -83,7 +77,7 @@ function cryptoToken(len = 32) {
   return s;
 }
 
-const SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL ?? "";
+
 /** URL to share externally: goes through the OG edge function so link previews render a card,
  *  then redirects the browser to the SPA /d/:slug route. */
 function buildShareUrl(slug: string): string {

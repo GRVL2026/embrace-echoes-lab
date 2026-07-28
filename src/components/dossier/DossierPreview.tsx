@@ -164,6 +164,10 @@ export function DossierPreview({
   const [dialogVisibility, setDialogVisibility] = useState<"public" | "password">("public");
   const [dialogPassword, setDialogPassword] = useState("");
   const [shareOverlay, setShareOverlay] = useState<{ share_slug?: string | null; is_shared?: boolean | null; share_visibility?: string | null; share_password?: string | null } | null>(null);
+  const [presenting, setPresenting] = useState(false);
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+
 
   // Fetch the project when not driven by live form state or preloaded bundle.
   useEffect(() => {

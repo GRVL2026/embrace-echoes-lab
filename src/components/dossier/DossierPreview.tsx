@@ -80,9 +80,13 @@ function cryptoToken(len = 32) {
 
 /** URL to share externally: goes through the OG edge function so link previews render a card,
  *  then redirects the browser to the SPA /d/:slug route. */
+const SHARE_ORIGIN =
+  (import.meta.env.VITE_DOSSIER_SHARE_ORIGIN as string | undefined)?.replace(/\/$/, "") ||
+  "https://dossiers.avranchesautomatic.workers.dev";
 function buildShareUrl(slug: string): string {
-  return `https://dossiers.avranchesautomatic.workers.dev/d/${slug}`;
+  return `${SHARE_ORIGIN}/d/${slug}`;
 }
+
 
 function Page({ children, index, total }: { children: React.ReactNode; index: number; total: number }) {
   return (

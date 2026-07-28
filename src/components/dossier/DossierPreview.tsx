@@ -640,7 +640,7 @@ export function DossierPreview({
     ? "flex h-full w-full flex-col bg-black/90"
     : `${shareMode ? "min-h-screen" : "fixed inset-0 z-[100]"} flex flex-col bg-black/90`;
   return (
-    <div className={rootClass}>
+    <div className={`${rootClass}${presenting ? " presenting-mode" : ""}`}>
 
       <div className="dossier-toolbar flex min-h-12 flex-shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-black/60 px-3 py-2 sm:px-4 text-white backdrop-blur">
         <div className="flex items-center gap-3 text-sm">
@@ -654,28 +654,29 @@ export function DossierPreview({
                 {sharing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Share2 className="mr-1 h-4 w-4" />}
                 Partager
               </Button>
-              <Button variant="ghost" size="sm" onClick={handlePrint} disabled={loading || exporting} className="text-white hover:bg-white/10">
+              <Button type="button" variant="ghost" size="sm" onClick={handlePrint} disabled={loading || exporting} className="text-white hover:bg-white/10 min-h-9">
                 {exporting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Download className="mr-1 h-4 w-4" />}
                 {exporting ? "Export…" : "Télécharger PDF"}
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setPresenting(true)} disabled={loading || totalPages === 0} className="text-white hover:bg-white/10 min-h-9" title="Plein écran">
+                Plein écran
               </Button>
               <div className="mx-1 h-6 w-px bg-white/20" />
             </>
           )}
           {shareMode && (
             <>
-              <Button variant="ghost" size="sm" onClick={handlePrint} disabled={loading || exporting} className="text-white hover:bg-white/10">
+              <Button type="button" variant="ghost" size="sm" onClick={handlePrint} disabled={loading || exporting} className="text-white hover:bg-white/10 min-h-9">
                 {exporting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Download className="mr-1 h-4 w-4" />}
                 {exporting ? "Export…" : "Télécharger PDF"}
               </Button>
               <Button
+                type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => {
-                  const el = document.documentElement;
-                  if (!document.fullscreenElement) el.requestFullscreen?.().catch(() => {});
-                  else document.exitFullscreen?.().catch(() => {});
-                }}
-                className="text-white hover:bg-white/10"
+                onClick={() => setPresenting(true)}
+                disabled={loading || totalPages === 0}
+                className="text-white hover:bg-white/10 min-h-9"
                 title="Plein écran"
               >
                 Plein écran
@@ -698,6 +699,8 @@ export function DossierPreview({
           )}
         </div>
       </div>
+
+
 
       {shareUrl && !shareMode && (
         <div className="dossier-toolbar flex flex-shrink-0 flex-wrap items-center gap-2 border-b border-white/10 bg-black/40 px-4 py-2 text-xs text-white">

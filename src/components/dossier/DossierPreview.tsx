@@ -459,7 +459,21 @@ export function DossierPreview({
       }
 
       const fileName = `${slugify(clientName || "dossier")}.pdf`;
-      pdf.save(fileName);
+      try {
+        pdf.save(fileName);
+      } catch {
+        // iOS Safari fallback: some contexts block <a download>. Open blob in new tab.
+        const blob = pdf.output("blob");
+        const url = URL.createObjectURL(blob);
+        const w = window.open(url, "_blank");
+        if (!w) {
+          const a = document.createElement("a");
+          a.href = url; a.download = fileName; a.rel = "noopener";
+          document.body.appendChild(a); a.click(); a.remove();
+        }
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      }
+
 
       if (!shareMode && project?.id) {
         const next = await markSentIfDraft(project.id, project.status);

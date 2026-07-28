@@ -82,7 +82,33 @@ Deno.serve(async (req) => {
       }
     }
 
-    const ogImage = image ?? `${APP_ORIGIN}/pwa-512.png`;
+    // Serve an optimized JPEG ~1200x630 (< 300 Ko) for social previews.
+    // Supabase Storage supports on-the-fly image transformation via
+    // /storage/v1/render/image/public/... with width/height/quality/format params.
+    // For any other origin (HD slide, external CDN), fall back to a branded cover.
+    const BRAND_COVER = `${APP_ORIGIN}/og-cover.jpg`;
+    function optimizeOgImage(src: string | null): string {
+      if (!src) return BRAND_COVER;
+      try {
+        const u = new URL(src, APP_ORIGIN);
+        // Supabase public object URL → render endpoint with resize params
+        const m = u.pathname.match(/^\/storage\/v1\/object\/public\/(.+)$/);
+        if (m) {
+          u.pathname = `/storage/v1/render/image/public/${m[1]}`;
+          u.searchParams.set("width", "1200");
+          u.searchParams.set("height", "630");
+          u.searchParams.set("resize", "cover");
+          u.searchParams.set("quality", "72");
+          u.searchParams.set("format", "origin");
+          return u.toString();
+        }
+        // Non-Supabase HD image → don't reference it (too heavy for WhatsApp)
+        return BRAND_COVER;
+      } catch {
+        return BRAND_COVER;
+      }
+    }
+    const ogImage = optimizeOgImage(image);
     const html = `<!doctype html>
 <html lang="fr">
 <head>
@@ -94,6 +120,11 @@ Deno.serve(async (req) => {
 <meta property="og:description" content="${esc(description)}" />
 <meta property="og:url" content="${esc(targetUrl)}" />
 <meta property="og:image" content="${esc(ogImage)}" />
+<meta property="og:image:secure_url" content="${esc(ogImage)}" />
+<meta property="og:image:type" content="image/jpeg" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="${esc(title)}" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="${esc(title)}" />
 <meta name="twitter:description" content="${esc(description)}" />

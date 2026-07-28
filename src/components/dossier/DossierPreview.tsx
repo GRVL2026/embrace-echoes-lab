@@ -80,9 +80,13 @@ function cryptoToken(len = 32) {
 
 /** URL to share externally: goes through the OG edge function so link previews render a card,
  *  then redirects the browser to the SPA /d/:slug route. */
+const SHARE_ORIGIN =
+  (import.meta.env.VITE_DOSSIER_SHARE_ORIGIN as string | undefined)?.replace(/\/$/, "") ||
+  "https://dossiers.avranchesautomatic.workers.dev";
 function buildShareUrl(slug: string): string {
-  return `https://dossiers.avranchesautomatic.workers.dev/d/${slug}`;
+  return `${SHARE_ORIGIN}/d/${slug}`;
 }
+
 
 function Page({ children, index, total }: { children: React.ReactNode; index: number; total: number }) {
   return (
@@ -518,14 +522,15 @@ export function DossierPreview({
       const newSlug = `${base}-${cryptoToken(32)}`;
       const { error } = await (supabase as any)
         .from("projects")
-        .update({ share_slug: newSlug, is_shared: true })
+        .update({ share_slug: newSlug })
         .eq("id", project.id);
       if (error) throw error;
       const url = buildShareUrl(newSlug);
       setShareUrl(url);
-      const overlay = { ...(shareOverlay ?? {}), share_slug: newSlug, is_shared: true };
+      const overlay = { ...(shareOverlay ?? {}), share_slug: newSlug };
       setShareOverlay(overlay);
-      setFetchedProject((prev) => (prev ? { ...prev, share_slug: newSlug, is_shared: true } : prev));
+      setFetchedProject((prev) => (prev ? { ...prev, share_slug: newSlug } : prev));
+
       try {
         await navigator.clipboard.writeText(url);
         setCopied(true);

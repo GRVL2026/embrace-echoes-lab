@@ -130,10 +130,11 @@ function extractDirigeant(entreprise: any): { nom: string | null; role: string |
 async function fetchDirigeant(siren: string): Promise<{ nom: string | null; role: string | null }> {
   // /v2/entreprise renvoie systématiquement le bloc representants (personnes physiques + morales)
   const params = new URLSearchParams({ api_token: PAPPERS_API_KEY, siren });
-  const data = await fetchWithRetry(`https://api.pappers.fr/v2/entreprise?${params.toString()}`);
-  if (!data) return { nom: null, role: null };
-  return extractDirigeant(data);
+  const res = await fetchWithRetry(`https://api.pappers.fr/v2/entreprise?${params.toString()}`);
+  if (!res.ok) return { nom: null, role: null };
+  return extractDirigeant(res.data);
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });

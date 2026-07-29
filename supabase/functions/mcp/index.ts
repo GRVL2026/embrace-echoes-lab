@@ -124,18 +124,62 @@ var list_prospects_default = defineTool3({
   }
 });
 
+// src/lib/mcp/tools/run-sql.ts
+import { createClient as createClient4 } from "npm:@supabase/supabase-js@^2.98.0";
+import { defineTool as defineTool4 } from "npm:@lovable.dev/mcp-js@0.25.0";
+import { z as z4 } from "npm:zod@^3.25.76";
+function supabaseForUser4(ctx) {
+  return createClient4(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY,
+    {
+      global: { headers: { Authorization: `Bearer ${ctx.getToken()}` } },
+      auth: { persistSession: false, autoRefreshToken: false }
+    }
+  );
+}
+var run_sql_default = defineTool4({
+  name: "run_sql",
+  title: "Ex\xE9cuter une requ\xEAte SQL (lecture seule)",
+  description: "Ex\xE9cute une requ\xEAte SQL en lecture seule (SELECT / WITH) sur la base Arcade OS. Passe par la fonction gaia_query : les mots-cl\xE9s d'\xE9criture (INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, GRANT, TRUNCATE) sont refus\xE9s, timeout 8s, r\xE9sultat tronqu\xE9 \xE0 500 lignes. RLS Supabase appliqu\xE9e au nom de l'utilisateur connect\xE9.",
+  inputSchema: {
+    sql: z4.string().min(1).describe("Requ\xEAte SQL commen\xE7ant par SELECT ou WITH. Utilise LIMIT et agr\xE8ge quand possible.")
+  },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  handler: async ({ sql }, ctx) => {
+    if (!ctx.isAuthenticated()) {
+      return { content: [{ type: "text", text: "Non authentifi\xE9." }], isError: true };
+    }
+    const supabase = supabaseForUser4(ctx);
+    const { data, error } = await supabase.rpc("gaia_query", { sql_query: sql });
+    if (error) {
+      return { content: [{ type: "text", text: error.message }], isError: true };
+    }
+    if (data && typeof data === "object" && !Array.isArray(data) && "error" in data) {
+      return {
+        content: [{ type: "text", text: String(data.error) }],
+        isError: true
+      };
+    }
+    return {
+      content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+      structuredContent: { result: data }
+    };
+  }
+});
+
 // src/lib/mcp/index.ts
 var projectRef = "yhfghipueqfkgysaulvl";
 var mcp_default = defineMcp({
   name: "arcade-os-mcp",
   title: "Arcade OS",
   version: "0.1.0",
-  instructions: "Outils Arcade OS (Avranches Automatic) : lister les dossiers commerciaux, chercher dans le catalogue produits, lister les prospects. Chaque appel s'ex\xE9cute au nom de l'utilisateur connect\xE9 (RLS Supabase).",
+  instructions: "Outils Arcade OS (Avranches Automatic) : lister les dossiers commerciaux, chercher dans le catalogue produits, lister les prospects, ex\xE9cuter du SQL en lecture seule. Chaque appel s'ex\xE9cute au nom de l'utilisateur connect\xE9 (RLS Supabase).",
   auth: auth.oauth.issuer({
     issuer: `https://${projectRef}.supabase.co/auth/v1`,
     acceptedAudiences: "authenticated"
   }),
-  tools: [list_dossiers_default, search_catalog_default, list_prospects_default]
+  tools: [list_dossiers_default, search_catalog_default, list_prospects_default, run_sql_default]
 });
 
 // lovable-mcp-supabase-entry.ts

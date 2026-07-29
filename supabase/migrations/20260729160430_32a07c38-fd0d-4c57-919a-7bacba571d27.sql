@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION public.gaia_query_restricted(text) TO PUBLIC;

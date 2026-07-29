@@ -748,7 +748,9 @@ function ProspectSheet({
               <Select value={form.statut} onValueChange={(v) => set("statut", v as Statut)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {STATUTS.map((s) => <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>)}
+                  {(Object.keys(STATUT_LABELS) as Statut[]).map((k) => (
+                    <SelectItem key={k} value={k}>{STATUT_LABELS[k]}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </Field>

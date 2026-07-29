@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.geocoder]
 verify_jwt = false
+
+[functions.carte-copilot]
+verify_jwt = false

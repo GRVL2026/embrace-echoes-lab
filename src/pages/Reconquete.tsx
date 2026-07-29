@@ -66,6 +66,7 @@ export default function Reconquete() {
   const [q, setQ] = useState("");
   const [statutFilter, setStatutFilter] = useState<string>("all");
   const [catFilter, setCatFilter] = useState<string>("all");
+  const [societeFilter, setSocieteFilter] = useState<string>("all"); // all | cessees | procedure | actives
 
   const { data, isLoading: loadingData, refetch, isFetching } = useQuery({
     queryKey: ["reconquete-list"],

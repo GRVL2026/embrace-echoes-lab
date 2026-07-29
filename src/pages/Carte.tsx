@@ -26,6 +26,8 @@ type ClientPt = {
   ca_total: number;
   derniere_commande: string | null;
   categorie: "actif" | "dormant" | "inactif";
+  etat_administratif?: string | null;
+  procedure_collective?: boolean | null;
 };
 type ProspectPt = {
   id: string;

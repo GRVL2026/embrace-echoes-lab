@@ -86,6 +86,13 @@ export const SPACES: Space[] = [
         show: (c) => c.canAccessDashboard,
         match: startsWith("/clients"),
       },
+      {
+        label: "Carte",
+        to: "/carte",
+        icon: MapIcon,
+        show: (c) => c.isAdmin || c.isDirection,
+        match: (p, _h) => p === "/carte",
+      },
 
       {
         label: "Pipeline",

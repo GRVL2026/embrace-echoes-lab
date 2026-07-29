@@ -365,10 +365,10 @@ export function ClientActionsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] p-0 gap-0 grid-rows-[auto_1fr_auto]">
-        <DialogHeader className="shrink-0 px-6 pt-6 pb-3 border-b border-border bg-background sticky top-0 z-10 space-y-1.5">
-          <DialogTitle>{data?.nom || code || "Client"}</DialogTitle>
-          <DialogDescription>
+      <DialogContent className="max-w-2xl h-[90vh] p-0 gap-0 grid grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
+        <DialogHeader className="min-w-0 px-6 pt-5 pb-3 pr-14 border-b border-border bg-background space-y-1.5">
+          <DialogTitle className="truncate">{data?.nom || code || "Client"}</DialogTitle>
+          <DialogDescription asChild>
             <div className="flex flex-wrap items-center gap-2 mt-1">
               {companyStatus && (
                 <CompanyStatusBadge
@@ -397,51 +397,10 @@ export function ClientActionsDialog({
                   Pool partagé
                 </span>
               )}
-              {data?.email && (
-                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                  <Mail className="h-3 w-3" /> {data.email}
-                </span>
-              )}
             </div>
-            {isAdmin && data && (
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                {data.archive ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={toggleArchive}
-                    disabled={archiving}
-                    className="gap-2"
-                  >
-                    {archiving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArchiveRestore className="h-4 w-4" />}
-                    Dé-archiver ce compte
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant={emphasizeArchive ? "destructive" : "outline"}
-                    onClick={toggleArchive}
-                    disabled={archiving}
-                    className="gap-2"
-                  >
-                    {archiving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
-                    {emphasizeArchive ? "Archiver ce compte cessé" : "Archiver ce compte"}
-                  </Button>
-                )}
-                {emphasizeArchive && (
-                  <span className="text-[11px] text-muted-foreground">
-                    Recommandé : société signalée comme cessée / en procédure collective.
-                  </span>
-                )}
-                {data.archive && data.archive_at && (
-                  <span className="text-[11px] text-muted-foreground">
-                    Archivé le {new Date(data.archive_at).toLocaleDateString("fr-FR")}
-                  </span>
-                )}
-              </div>
-            )}
           </DialogDescription>
         </DialogHeader>
+
 
         <div className="min-h-0 overflow-y-auto px-6 py-4 space-y-4">
         {loading ? (

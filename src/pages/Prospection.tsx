@@ -93,7 +93,7 @@ type ProspectEvent = {
 
 const STATUTS: { key: Statut; label: string }[] = [
   { key: "nouveau", label: "Nouveau" },
-  { key: "connecte", label: "Connecté" },
+  { key: "connecte", label: "Contacté" },
   { key: "repondu", label: "Répondu" },
   { key: "rdv", label: "RDV" },
   { key: "devis", label: "Devis" },

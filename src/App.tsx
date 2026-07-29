@@ -25,6 +25,7 @@ import MatriceClients from "./pages/MatriceClients";
 import MatriceFamilles from "./pages/MatriceFamilles";
 import Salle from "./pages/Salle";
 import Prospection from "./pages/Prospection";
+import Reconquete from "./pages/Reconquete";
 
 import GaiaCarnet from "./pages/GaiaCarnet";
 import Carte from "./pages/Carte";
@@ -79,6 +80,7 @@ const App = () => (
             <Route path="/clients" element={<P><Clients /></P>} />
             <Route path="/salle" element={<P><Salle /></P>} />
             <Route path="/prospection" element={<P><Prospection /></P>} />
+            <Route path="/reconquete" element={<P><Reconquete /></P>} />
             <Route path="/carte" element={<P><Carte /></P>} />
 
 

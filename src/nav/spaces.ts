@@ -23,6 +23,7 @@ import {
   ShoppingBag,
   Target,
   Map as MapIcon,
+  RotateCcw as RotateCcwIcon,
   type LucideIcon,
 } from "lucide-react";
 
@@ -45,6 +46,7 @@ export type NavCtx = {
   copilotEnabled: boolean;
   canAccessSalle: boolean;
   canAccessProspection: boolean;
+  canReactivation: boolean;
   salleOnly: boolean;
 };
 
@@ -133,6 +135,13 @@ export const SPACES: Space[] = [
         to: "/prospection",
         icon: Target,
         match: startsWith("/prospection"),
+      },
+      {
+        label: "À relancer",
+        to: "/reconquete",
+        icon: RotateCcwIcon,
+        show: (c) => c.canReactivation,
+        match: startsWith("/reconquete"),
       },
       {
         label: "Carte",

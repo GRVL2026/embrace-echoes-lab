@@ -234,18 +234,30 @@ const MAPPERS: Record<string, { table: string; map: Mapper; pk?: string }> = {
   'BD-Clients': {
     table: 'gaia_clients',
     pk: 'customer_id',
-    map: (r) => ({
-      customer_id: trim(r.CustomerID),
-      name: trim(r.CustomerName),
-      status: trim(r.CustomerStatus),
-      typologie: trim(r.Typologiedeclient ?? r['Typologiedeclient']),
-      adresse1: trim(r.AddressLine1),
-      adresse2: trim(r.AddressLine2),
-      code_postal: trim(r.PostalCode),
-      ville: trim(r.City),
-      pays: trim(r.Country),
-      email: trim(r.Email ?? r.EmailAddress ?? r.Mail),
-    }),
+    map: (r) => {
+      // Tolerant lookup: Cegid OData strips spaces/accents inconsistently.
+      const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\s_-]+/g, '').toLowerCase();
+      const pick = (candidates: string[]): any => {
+        if (!r || typeof r !== 'object') return undefined;
+        for (const k of candidates) if (k in r) return r[k];
+        const target = candidates.map(norm);
+        for (const k of Object.keys(r)) if (target.includes(norm(k))) return r[k];
+        return undefined;
+      };
+      return {
+        customer_id: trim(r.CustomerID),
+        name: trim(r.CustomerName),
+        status: trim(r.CustomerStatus),
+        typologie: trim(r.Typologiedeclient ?? r['Typologiedeclient']),
+        adresse1: trim(r.AddressLine1),
+        adresse2: trim(r.AddressLine2),
+        code_postal: trim(r.PostalCode),
+        ville: trim(r.City),
+        pays: trim(r.Country),
+        email: trim(pick(['Email', 'EmailAddress', 'Mail', 'AdresseEmail', 'Courriel'])),
+        telephone: trim(pick(['Phone1', 'Phone', 'PhoneNumber', 'Telephone', 'Tel', 'Tel1', 'Téléphone'])),
+      };
+    },
   },
   'BD-Ventes': {
     table: 'gaia_ventes',

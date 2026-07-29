@@ -293,9 +293,10 @@ export default function Prospection() {
     const { data: r } = await (supabase as any).rpc("get_prospection_resume");
     const first = Array.isArray(r) ? r[0] : r;
     if (first) setResume({
-      total: num(first.total), nouveau: num(first.nouveau), connecte: num(first.connecte),
-      repondu: num(first.repondu), rdv: num(first.rdv), devis: num(first.devis),
-      client: num(first.client), perdu: num(first.perdu), ca_attribue: num(first.ca_attribue),
+      total: num(first.total), nouveau: num(first.nouveau), contacte: num(first.contacte),
+      connecte: num(first.connecte), repondu: num(first.repondu), rdv: num(first.rdv),
+      devis: num(first.devis), client: num(first.client), perdu: num(first.perdu),
+      ca_attribue: num(first.ca_attribue),
     });
   };
 

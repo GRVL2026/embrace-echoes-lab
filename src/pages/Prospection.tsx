@@ -291,7 +291,7 @@ export default function Prospection() {
     await (supabase as any).from("prospect_events").insert({
       prospect_id: id, type: "statut", ancien_statut: old, nouveau_statut: newStatut,
     });
-    toast.success(`Statut → ${STATUTS.find((s) => s.key === newStatut)?.label}`);
+    toast.success(`Statut → ${STATUT_LABELS[newStatut]}`);
     // refresh resume
     const { data: r } = await (supabase as any).rpc("get_prospection_resume");
     const first = Array.isArray(r) ? r[0] : r;

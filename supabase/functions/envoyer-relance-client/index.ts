@@ -6,10 +6,17 @@ const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 
-const FROM = 'Avranches Automatic <contact@avranchesautomatic.com>';
+// Adresses autorisées à envoyer depuis leur propre boîte via Resend.
+// Le domaine avranchesautomatic.com est vérifié dans Resend.
+// Pour l'instant, on limite l'envoi à Léopaul (même règle que les autres
+// actions restreintes du module prospection).
+const ALLOWED_SENDERS = new Set<string>([
+  'leopaul@avranchesautomatic.com',
+]);
+const REQUIRED_DOMAIN = '@avranchesautomatic.com';
 
-function jsonErr(status: number, error: string) {
-  return new Response(JSON.stringify({ error }), {
+function jsonErr(status: number, error: string, extra?: Record<string, unknown>) {
+  return new Response(JSON.stringify({ error, ...(extra || {}) }), {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
@@ -45,34 +52,78 @@ Deno.serve(async (req) => {
     const { data: userData, error: userErr } = await sb.auth.getUser(jwt);
     if (userErr || !userData?.user) return jsonErr(401, 'Unauthorized');
 
-    const { data: canRea, error: canErr } = await sb.rpc('can_reactivation', { _uid: userData.user.id });
-    if (canErr || !canRea) return jsonErr(403, 'Forbidden');
+    const senderEmailRaw = (userData.user.email || '').trim();
+    const senderEmail = senderEmailRaw.toLowerCase();
+    if (!senderEmail) return jsonErr(401, 'Utilisateur sans email');
+
+    // Gating : uniquement les expéditeurs explicitement autorisés (Léopaul pour l'instant).
+    if (!ALLOWED_SENDERS.has(senderEmail)) {
+      return jsonErr(403, "Envoi non autorisé pour votre compte (fonctionnalité en pilote).");
+    }
+
+    // Garde-fou expéditeur : le domaine doit être signé par Resend.
+    if (!senderEmail.endsWith(REQUIRED_DOMAIN)) {
+      return jsonErr(
+        403,
+        `Impossible d'envoyer depuis ${senderEmailRaw} : seule une adresse ${REQUIRED_DOMAIN} peut être signée.`,
+      );
+    }
 
     const body = await req.json().catch(() => ({}));
     const code = String(body.code_client || '').trim();
+    const prospectId = String(body.prospect_id || '').trim();
     const objet = String(body.objet || '').trim();
     const corps = String(body.corps || '').trim();
     const prochaine = body.prochaine_relance ? String(body.prochaine_relance) : null;
-    if (!code || !objet || !corps) return jsonErr(400, 'code_client, objet et corps requis');
+    if ((!code && !prospectId) || !objet || !corps) {
+      return jsonErr(400, 'code_client (ou prospect_id), objet et corps sont requis');
+    }
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
-    const { data: client, error: cErr } = await admin
-      .from('gaia_clients')
-      .select('customer_id, name, email')
-      .eq('customer_id', code)
-      .maybeSingle();
-    if (cErr || !client) return jsonErr(404, 'Client introuvable');
-    if (!isEmail(client.email)) return jsonErr(400, "Email client non renseigné");
 
-    // Récupère le nom d'expéditeur (reply-to = commercial)
-    const { data: prof } = await admin
+    // Nom complet expéditeur (profiles.full_name > user.raw_user_meta_data > email local part).
+    const { data: senderProf } = await admin
       .from('profiles')
       .select('full_name, email')
       .eq('id', userData.user.id)
       .maybeSingle();
-    const replyTo = prof?.email || undefined;
+    const metaName =
+      (userData.user.user_metadata as any)?.full_name ||
+      (userData.user.user_metadata as any)?.name ||
+      null;
+    const senderName =
+      (senderProf?.full_name && String(senderProf.full_name).trim()) ||
+      (metaName && String(metaName).trim()) ||
+      senderEmailRaw.split('@')[0];
 
-    // Envoi Resend
+    // Résout le destinataire (client OU prospect).
+    let recipientEmail = '';
+    let recipientLabel = '';
+    if (code) {
+      const { data: client, error: cErr } = await admin
+        .from('gaia_clients')
+        .select('customer_id, name, email')
+        .eq('customer_id', code)
+        .maybeSingle();
+      if (cErr || !client) return jsonErr(404, 'Client introuvable');
+      recipientEmail = String(client.email || '').trim();
+      recipientLabel = client.name || client.customer_id;
+    } else {
+      const { data: prospect, error: pErr } = await admin
+        .from('prospects')
+        .select('id, entreprise, email')
+        .eq('id', prospectId)
+        .maybeSingle();
+      if (pErr || !prospect) return jsonErr(404, 'Prospect introuvable');
+      recipientEmail = String(prospect.email || '').trim();
+      recipientLabel = prospect.entreprise || prospect.id;
+    }
+    if (!isEmail(recipientEmail)) {
+      return jsonErr(400, `Email du destinataire non renseigné (${recipientLabel}).`);
+    }
+
+    // Envoi Resend depuis l'adresse du commercial connecté.
+    const fromHeader = `${senderName} <${senderEmailRaw}>`;
     const resendResp = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -80,42 +131,68 @@ Deno.serve(async (req) => {
         Authorization: `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: FROM,
-        to: [client.email],
+        from: fromHeader,
+        to: [recipientEmail],
         subject: objet,
         html: toHtml(corps),
         text: corps,
-        reply_to: replyTo,
+        reply_to: senderEmailRaw,
+        bcc: [senderEmailRaw],
       }),
     });
 
     if (!resendResp.ok) {
       const errText = await resendResp.text();
       console.error('[envoyer-relance-client] Resend error', resendResp.status, errText);
-      return new Response(
-        JSON.stringify({ error: 'Envoi échoué', status: resendResp.status, details: errText }),
-        { status: resendResp.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
+      let details = errText;
+      try {
+        const parsed = JSON.parse(errText);
+        details = parsed?.message || parsed?.error || errText;
+      } catch { /* keep raw text */ }
+      return jsonErr(resendResp.status, `Envoi Resend refusé : ${details}`, {
+        resend_status: resendResp.status,
+        resend_body: errText,
+      });
     }
     const resendData = await resendResp.json().catch(() => ({}));
 
-    // Log action type=mail (déclenche aussi le trigger d'attribution owner)
-    const contenu = `Objet : ${objet}\n\n${corps}`;
-    const { error: aErr } = await admin.from('client_actions').insert({
-      code_client: code,
-      auteur_id: userData.user.id,
-      type: 'mail',
-      contenu,
-      resultat: `envoyé à ${client.email}`,
-      prochaine_relance: prochaine,
-    });
-    if (aErr) {
-      console.error('[envoyer-relance-client] log action error', aErr);
+    // Journalise l'action côté client (déclenche aussi le trigger d'attribution owner).
+    if (code) {
+      const contenu = `Objet : ${objet}\n\nDe : ${fromHeader}\n\n${corps}`;
+      const { error: aErr } = await admin.from('client_actions').insert({
+        code_client: code,
+        auteur_id: userData.user.id,
+        type: 'mail',
+        contenu,
+        resultat: `envoyé à ${recipientEmail}`,
+        prochaine_relance: prochaine,
+      });
+      if (aErr) console.error('[envoyer-relance-client] log action error', aErr);
+    } else if (prospectId) {
+      // Prospect : attribue au commercial + note simple, statut « contacte » si vierge.
+      const { data: cur } = await admin
+        .from('prospects')
+        .select('owner_id, statut, notes')
+        .eq('id', prospectId)
+        .maybeSingle();
+      const nowIso = new Date().toISOString();
+      const noteLine = `[${nowIso.slice(0, 10)}] Mail envoyé (${senderEmailRaw}) — objet: ${objet}`;
+      const notes = cur?.notes ? `${cur.notes}\n${noteLine}` : noteLine;
+      const nextStatut = !cur?.statut || cur.statut === 'nouveau' ? 'contacte' : cur.statut;
+      const patch: Record<string, unknown> = {
+        notes,
+        statut: nextStatut,
+        updated_at: nowIso,
+      };
+      if (!cur?.owner_id) patch.owner_id = userData.user.id;
+      const { error: pErr } = await admin.from('prospects').update(patch).eq('id', prospectId);
+      if (pErr) console.error('[envoyer-relance-client] update prospect error', pErr);
     }
 
-    return new Response(JSON.stringify({ ok: true, id: resendData?.id ?? null }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ ok: true, id: resendData?.id ?? null, from: fromHeader, to: recipientEmail }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
   } catch (err) {
     console.error('[envoyer-relance-client]', err);
     return jsonErr(500, err instanceof Error ? err.message : 'Erreur interne');

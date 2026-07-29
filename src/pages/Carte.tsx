@@ -19,6 +19,8 @@ type ClientPt = {
   lat: number;
   lng: number;
   ca_12m: number;
+  ca_total: number;
+  derniere_commande: string | null;
   categorie: "actif" | "dormant" | "inactif";
 };
 type ProspectPt = {

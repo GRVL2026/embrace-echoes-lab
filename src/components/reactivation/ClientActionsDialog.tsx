@@ -70,16 +70,34 @@ type ClientRea = {
   ville: string | null;
   typologie: string | null;
   email: string | null;
+  telephone: string | null;
+  adresse1: string | null;
+  adresse2: string | null;
+  code_postal: string | null;
+  pays: string | null;
   owner_id: string | null;
   owner_nom: string | null;
   statut_relance: StatutRelance | null;
   statut_relance_maj: string | null;
   derniere_commande: string | null;
   ca_total: number | null;
+  derniere_action: { type: string; date: string; auteur: string | null } | null;
   familles: Array<{ famille: string; ca: number }>;
   produits_recents: Array<{ code: string; libelle: string; d: string }>;
   actions: ActionRow[];
 };
+
+function categorieFromDate(d: string | null): { label: string; cls: string } {
+  if (!d) return { label: "sans commande", cls: "bg-slate-500/15 text-slate-400 border-slate-500/30" };
+  const months = (Date.now() - new Date(d).getTime()) / (1000 * 60 * 60 * 24 * 30);
+  if (months <= 12) return { label: "actif", cls: "bg-emerald-500/15 text-emerald-500 border-emerald-500/30" };
+  if (months <= 36) return { label: "dormant", cls: "bg-amber-500/15 text-amber-500 border-amber-500/30" };
+  return { label: "inactif", cls: "bg-rose-500/15 text-rose-500 border-rose-500/30" };
+}
+
+const fmtEUR = (n: number | null | undefined) =>
+  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);
+const cleanPhone = (t: string | null | undefined) => (t || "").replace(/[^\d+]/g, "");
 
 export function ClientActionsDialog({
   code,

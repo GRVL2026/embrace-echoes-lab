@@ -19,6 +19,8 @@ type ClientPt = {
   lat: number;
   lng: number;
   ca_12m: number;
+  ca_total: number;
+  derniere_commande: string | null;
   categorie: "actif" | "dormant" | "inactif";
 };
 type ProspectPt = {
@@ -51,6 +53,12 @@ function fmtEUR(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)} M€`;
   if (n >= 1_000) return `${Math.round(n / 1000)} k€`;
   return `${Math.round(n)} €`;
+}
+
+function fmtMonth(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  return `${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
 function makeDivIcon(color: string, size: number): L.DivIcon {
@@ -146,11 +154,13 @@ export default function Carte() {
         const size = c.categorie === "actif" ? 8 + Math.round(20 * Math.sqrt((c.ca_12m || 0) / maxCa)) : 10;
         const m = L.marker([c.lat, c.lng], { icon: makeDivIcon(color, size) });
         m.bindPopup(
-          `<div style="font-family:system-ui,sans-serif;min-width:180px">
+          `<div style="font-family:system-ui,sans-serif;min-width:200px">
             <div style="font-weight:600;margin-bottom:4px">${escapeHtml(c.nom || "—")}</div>
             <div style="color:#64748b;font-size:12px">${escapeHtml(c.ville || "")}</div>
             <div style="margin-top:6px;font-size:12px">CA 12 mois : <b>${fmtEUR(c.ca_12m || 0)}</b></div>
-            <div style="font-size:11px;color:${color};margin-top:2px;text-transform:uppercase">${c.categorie}</div>
+            <div style="font-size:12px">CA total : <b>${fmtEUR(c.ca_total || 0)}</b></div>
+            <div style="font-size:12px;color:#475569">Dernière commande : <b>${c.derniere_commande ? fmtMonth(c.derniere_commande) : "aucune commande enregistrée"}</b></div>
+            <div style="font-size:11px;color:${color};margin-top:4px;text-transform:uppercase">${c.categorie}</div>
           </div>`
         );
         cluster.addLayer(m);

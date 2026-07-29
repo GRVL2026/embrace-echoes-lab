@@ -162,7 +162,7 @@ function formatLgmStatus(raw: string | null | undefined): string {
 }
 
 type Resume = {
-  total: number; nouveau: number; connecte: number; repondu: number; rdv: number;
+  total: number; nouveau: number; contacte: number; connecte: number; repondu: number; rdv: number;
   devis: number; client: number; perdu: number; ca_attribue: number;
 };
 

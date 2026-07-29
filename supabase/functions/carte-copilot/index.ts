@@ -157,21 +157,22 @@ Deno.serve(async (req) => {
     }
 
     if (!sql) return jsonErr(400, 'SQL vide');
-    const upper = sql.toUpperCase().replace(/\s+/g, ' ');
-    if (!/^\s*(SELECT|WITH)\b/i.test(sql)) return jsonErr(400, 'Requête non SELECT');
-    if (/\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|GRANT|TRUNCATE|REVOKE)\b/.test(upper)) {
-      return jsonErr(400, 'Requête non autorisée');
+    const check = validateSql(sql);
+    if (!check.ok) {
+      console.warn('SQL rejeté par la whitelist', check.error);
+      return jsonErr(400, `Requête refusée : ${check.error}`);
     }
 
-    // Exécute via gaia_query (user JWT — RLS + garde-fous appliqués)
-    const { data, error } = await sb.rpc('gaia_query' as any, { sql_query: sql });
+    // Exécute via gaia_query_restricted (SECURITY INVOKER — RLS + whitelist SQL appliquées).
+    const { data, error } = await sb.rpc('gaia_query_restricted' as any, { sql_query: sql });
     if (error) {
-      console.error('gaia_query error', error);
+      console.error('gaia_query_restricted error', error);
       return jsonErr(400, `Erreur SQL : ${error.message}`);
     }
     if (data && typeof data === 'object' && !Array.isArray(data) && 'error' in (data as any)) {
       return jsonErr(400, `Erreur SQL : ${(data as any).error}`);
     }
+
 
     const rows = Array.isArray(data) ? data : (data as any)?.rows ?? [];
 

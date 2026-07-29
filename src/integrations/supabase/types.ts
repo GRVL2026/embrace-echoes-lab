@@ -993,22 +993,37 @@ export type Database = {
       }
       gaia_clients: {
         Row: {
+          adresse1: string | null
+          adresse2: string | null
+          code_postal: string | null
           customer_id: string
           name: string | null
+          pays: string | null
           status: string | null
           typologie: string | null
+          ville: string | null
         }
         Insert: {
+          adresse1?: string | null
+          adresse2?: string | null
+          code_postal?: string | null
           customer_id: string
           name?: string | null
+          pays?: string | null
           status?: string | null
           typologie?: string | null
+          ville?: string | null
         }
         Update: {
+          adresse1?: string | null
+          adresse2?: string | null
+          code_postal?: string | null
           customer_id?: string
           name?: string | null
+          pays?: string | null
           status?: string | null
           typologie?: string | null
+          ville?: string | null
         }
         Relationships: []
       }

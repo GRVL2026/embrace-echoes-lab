@@ -239,6 +239,11 @@ const MAPPERS: Record<string, { table: string; map: Mapper; pk?: string }> = {
       name: trim(r.CustomerName),
       status: trim(r.CustomerStatus),
       typologie: trim(r.Typologiedeclient ?? r['Typologiedeclient']),
+      adresse1: trim(r.AddressLine1),
+      adresse2: trim(r.AddressLine2),
+      code_postal: trim(r.PostalCode),
+      ville: trim(r.City),
+      pays: trim(r.Country),
     }),
   },
   'BD-Ventes': {

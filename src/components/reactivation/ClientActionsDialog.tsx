@@ -162,6 +162,7 @@ export function ClientActionsDialog({
     setResultat("");
     setProchaine("");
     setType("appel");
+    setStatutResultant("auto");
     (async () => {
       await refresh();
       if (!cancel) setLoading(false);

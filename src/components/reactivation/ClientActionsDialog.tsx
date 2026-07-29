@@ -86,6 +86,10 @@ type ClientRea = {
   familles: Array<{ famille: string; ca: number }>;
   produits_recents: Array<{ code: string; libelle: string; d: string }>;
   actions: ActionRow[];
+  archive: boolean | null;
+  archive_at: string | null;
+  etat_administratif: string | null;
+  procedure_collective: boolean | null;
 };
 
 function categorieFromDate(d: string | null): { label: string; cls: string } {

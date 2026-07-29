@@ -244,16 +244,23 @@ export function ClientActionsDialog({
     });
     if (error || !res?.ok) {
       setSending(false);
-      toast({
-        title: "Envoi échoué",
-        description: (error as any)?.message || "Vérifiez l'email et réessayez.",
-        variant: "destructive",
-      });
+      let description = (error as any)?.message || "Vérifiez l'email et réessayez.";
+      const ctx = (error as any)?.context;
+      if (ctx && typeof ctx.text === "function") {
+        try {
+          const raw = await ctx.text();
+          const parsed = JSON.parse(raw);
+          if (parsed?.error) description = String(parsed.error);
+        } catch { /* keep default */ }
+      } else if (res?.error) {
+        description = String(res.error);
+      }
+      toast({ title: "Envoi échoué", description, variant: "destructive" });
       return;
     }
     await applyStatutAfterAction("mail");
     setSending(false);
-    toast({ title: "Mail envoyé", description: data?.email ?? "" });
+    toast({ title: "Mail envoyé", description: `À ${data?.email ?? ""} — copie dans votre boîte.` });
     setObjet("");
     setContenu("");
     setResultat("");
@@ -262,6 +269,7 @@ export function ClientActionsDialog({
     await refresh();
     onChanged?.();
   };
+
 
   const submitAction = async () => {
     if (!code || !user) return;

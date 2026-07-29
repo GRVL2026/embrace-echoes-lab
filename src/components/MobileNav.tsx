@@ -10,7 +10,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useAuth } from "@/contexts/AuthContext";
-import { SPACES, resolveActive, type NavCtx } from "@/nav/spaces";
+import { SPACES, resolveActive, visibleSpaces as computeVisibleSpaces, visibleEntries, type NavCtx } from "@/nav/spaces";
 import { useSpaceCollapse } from "@/nav/useSpaceCollapse";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +31,7 @@ export function MobileNav() {
     canAccessProspection,
     canReactivation,
     salleOnly,
+    menuAllowed,
     user,
     signOut,
   } = useAuth();
@@ -49,16 +50,18 @@ export function MobileNav() {
     canAccessProspection,
     canReactivation,
     salleOnly,
+    menuAllowed,
   };
 
-  const visibleSpaces = useMemo(
-    () => SPACES.filter((s) => !s.show || s.show(ctx)),
+  const visible = useMemo(
+    () => computeVisibleSpaces(ctx),
     // ctx depends only on primitive flags; safe to recompute
-    [isAdmin, isDirection, canAccessGaia, canAccessDashboard, canMargeGlobale, copilotEnabled, canAccessSalle, canAccessProspection, canReactivation, salleOnly],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isAdmin, isDirection, canAccessGaia, canAccessDashboard, canMargeGlobale, copilotEnabled, canAccessSalle, canAccessProspection, canReactivation, salleOnly, menuAllowed],
   );
   const active = resolveActive(pathname, hash, ctx);
   const { isCollapsed, toggle } = useSpaceCollapse(
-    visibleSpaces.map((s) => s.key),
+    visible.map((s) => s.key),
     active.space?.key ?? null,
   );
 
@@ -83,8 +86,8 @@ export function MobileNav() {
           )}
         </SheetHeader>
         <div className="flex-1 overflow-y-auto p-3 space-y-4">
-          {visibleSpaces.map((space) => {
-            const entries = space.entries.filter((e) => !e.show || e.show(ctx));
+          {visible.map((space) => {
+            const entries = visibleEntries(space, ctx);
             if (entries.length === 0) return null;
             const color = `hsl(var(${space.colorToken}))`;
             const sectionCollapsed = isCollapsed(space.key);

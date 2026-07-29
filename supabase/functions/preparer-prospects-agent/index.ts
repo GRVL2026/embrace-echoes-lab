@@ -116,9 +116,16 @@ async function checkAuth(req: Request): Promise<{ ok: true } | { ok: false; resp
   const { data: u, error: e } = await sb.auth.getUser(jwt);
   if (e || !u?.user) return { ok: false, response: jsonRes(401, { error: 'Unauthorized' }) };
   const admin = createClient(SUPABASE_URL, SERVICE_KEY);
-  const { data: roles } = await admin.from('user_roles').select('role').eq('user_id', u.user.id);
-  const allowed = (roles ?? []).some((r: any) => ['admin', 'direction'].includes(r.role));
-  if (!allowed) return { ok: false, response: jsonRes(403, { error: 'Forbidden' }) };
+  // Permission restreinte (défaut OFF, accordée compte par compte).
+  const { data: perm } = await admin
+    .from('user_menu_access')
+    .select('allowed')
+    .eq('user_id', u.user.id)
+    .eq('section_key', 'prospection.preparer')
+    .maybeSingle();
+  if (perm?.allowed !== true) {
+    return { ok: false, response: jsonRes(403, { error: 'Action réservée (permission manquante : prospection.preparer)' }) };
+  }
   return { ok: true };
 }
 

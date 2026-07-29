@@ -365,8 +365,8 @@ export function ClientActionsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[90vh] p-0 gap-0 grid-rows-[auto_1fr_auto]">
+        <DialogHeader className="shrink-0 px-6 pt-6 pb-3 border-b border-border bg-background sticky top-0 z-10 space-y-1.5">
           <DialogTitle>{data?.nom || code || "Client"}</DialogTitle>
           <DialogDescription>
             <div className="flex flex-wrap items-center gap-2 mt-1">
@@ -443,6 +443,7 @@ export function ClientActionsDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <div className="min-h-0 overflow-y-auto px-6 py-4 space-y-4">
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -739,8 +740,9 @@ export function ClientActionsDialog({
             </div>
           </>
         )}
+        </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0 px-6 py-3 border-t border-border bg-background sticky bottom-0">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Fermer
           </Button>

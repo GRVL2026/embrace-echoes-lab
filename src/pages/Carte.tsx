@@ -90,8 +90,10 @@ type CopilotResult = {
 };
 
 export default function Carte() {
-  const { isAdmin, isDirection } = useAuth();
+  const { isAdmin, isDirection, canReactivation } = useAuth();
   const authorized = isAdmin || isDirection;
+  const [reaCode, setReaCode] = useState<string | null>(null);
+  const [reaTab, setReaTab] = useState<"action" | "statut">("action");
   const search = new URLSearchParams(useLocation().search);
   const vue = search.get("vue"); // "prospection" | null
 
@@ -190,13 +192,15 @@ export default function Carte() {
         const size = c.categorie === "actif" ? 8 + Math.round(20 * Math.sqrt((c.ca_12m || 0) / maxCa)) : 10;
         const m = L.marker([c.lat, c.lng], { icon: makeDivIcon(color, size, !!filterCodes) });
         m.bindPopup(
-          `<div style="font-family:system-ui,sans-serif;min-width:200px">
+          `<div style="font-family:system-ui,sans-serif;min-width:220px" data-client-code="${escapeHtml(c.code_client)}">
             <div style="font-weight:600;margin-bottom:4px">${escapeHtml(c.nom || "—")}</div>
             <div style="color:#64748b;font-size:12px">${escapeHtml(c.ville || "")}</div>
             <div style="margin-top:6px;font-size:12px">CA 12 mois : <b>${fmtEUR(c.ca_12m || 0)}</b></div>
             <div style="font-size:12px">CA total : <b>${fmtEUR(c.ca_total || 0)}</b></div>
             <div style="font-size:12px;color:#475569">Dernière commande : <b>${c.derniere_commande ? fmtMonth(c.derniere_commande) : "aucune commande enregistrée"}</b></div>
             <div style="font-size:11px;color:${color};margin-top:4px;text-transform:uppercase">${c.categorie}</div>
+            <div class="rea-slot" data-code="${escapeHtml(c.code_client)}" style="margin-top:8px;padding-top:6px;border-top:1px solid #e2e8f0;font-size:11px;color:#64748b">Chargement…</div>
+            ${canReactivation ? `<div style="display:flex;gap:6px;margin-top:6px"><button data-rea-action="action" data-code="${escapeHtml(c.code_client)}" style="flex:1;padding:5px 8px;background:#9B5CFF;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-weight:500">+ Action</button><button data-rea-action="statut" data-code="${escapeHtml(c.code_client)}" style="flex:1;padding:5px 8px;background:#334155;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-weight:500">Statut</button></div>` : ""}
           </div>`
         );
         cluster.addLayer(m);

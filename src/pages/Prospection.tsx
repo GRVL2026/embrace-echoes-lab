@@ -97,6 +97,8 @@ const STATUTS: { key: Statut; label: string }[] = [
   { key: "contacte", label: "Contacté" },
   { key: "connecte", label: "Connecté (LinkedIn)" },
   { key: "repondu", label: "Répondu" },
+  { key: "rdv", label: "RDV" },
+  { key: "devis", label: "Devis" },
 ];
 
 // Libellés complets (inclut les statuts hors pipeline, conservés pour l'historique et l'attribution)
@@ -272,7 +274,7 @@ export default function Prospection() {
     STATUTS.forEach((s) => map.set(s.key, []));
     const visible = new Set(STATUTS.map((s) => s.key));
     for (const p of filteredProspects) {
-      // Statuts hors pipeline (client, perdu, rdv, devis) : conservés en base
+      // Statuts hors pipeline (client, perdu) : conservés en base
       // mais sortis du Kanban pour ne pas polluer la vue de reconquête active.
       if (!visible.has(p.statut as Statut)) continue;
       map.get(p.statut as Statut)!.push(p);

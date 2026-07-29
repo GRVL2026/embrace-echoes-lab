@@ -6,13 +6,17 @@ import { Navigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Loader2, Search, RefreshCw, PlusCircle, Tag } from "lucide-react";
+import { Loader2, Search, RefreshCw, PlusCircle, Tag, AlertTriangle } from "lucide-react";
 import {
   ClientActionsDialog,
   STATUT_LABEL,
   STATUT_COLOR,
   type StatutRelance,
 } from "@/components/reactivation/ClientActionsDialog";
+import {
+  CompanyStatusBadge,
+  resolveCompanyStatus,
+} from "@/components/reactivation/CompanyStatusBadge";
 import {
   Select,
   SelectContent,
@@ -35,6 +39,8 @@ type Row = {
   derniere_action_date: string | null;
   derniere_action_auteur: string | null;
   score: number;
+  etat_administratif: string | null;
+  procedure_collective: boolean | null;
 };
 
 function fmtEUR(n: number) {

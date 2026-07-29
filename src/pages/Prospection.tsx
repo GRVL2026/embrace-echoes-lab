@@ -41,7 +41,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-type Statut = "nouveau" | "connecte" | "repondu" | "rdv" | "devis" | "client" | "perdu";
+type Statut = "nouveau" | "contacte" | "connecte" | "repondu" | "rdv" | "devis" | "client" | "perdu";
 type Segment = "loisirs" | "chr" | "retail" | "revendeur" | "autre";
 type Source = "linkedin" | "salon" | "reco" | "site" | "signal" | "autre";
 
@@ -91,19 +91,30 @@ type ProspectEvent = {
   auteur: string | null;
 };
 
+// Colonnes visibles du Kanban (dans l'ordre du pipeline)
 const STATUTS: { key: Statut; label: string }[] = [
   { key: "nouveau", label: "Nouveau" },
-  { key: "connecte", label: "Contacté" },
+  { key: "contacte", label: "Contacté" },
+  { key: "connecte", label: "Connecté (LinkedIn)" },
   { key: "repondu", label: "Répondu" },
-  { key: "rdv", label: "RDV" },
-  { key: "devis", label: "Devis" },
-  { key: "client", label: "Client" },
-  { key: "perdu", label: "Perdu" },
 ];
+
+// Libellés complets (inclut les statuts hors pipeline, conservés pour l'historique et l'attribution)
+const STATUT_LABELS: Record<Statut, string> = {
+  nouveau: "Nouveau",
+  contacte: "Contacté",
+  connecte: "Connecté (LinkedIn)",
+  repondu: "Répondu",
+  rdv: "RDV",
+  devis: "Devis",
+  client: "Client (gagné)",
+  perdu: "Perdu",
+};
 
 const STATUT_COLOR: Record<Statut, string> = {
   nouveau: "hsl(220 15% 55%)",
-  connecte: "hsl(200 90% 60%)",
+  contacte: "hsl(200 90% 60%)",
+  connecte: "hsl(210 80% 55%)",
   repondu: "hsl(258 90% 66%)",
   rdv: "hsl(280 85% 65%)",
   devis: "hsl(48 100% 55%)",

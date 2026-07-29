@@ -15,7 +15,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/contexts/AuthContext";
-import { SPACES, resolveActive, type NavCtx, type Space } from "@/nav/spaces";
+import { SPACES, resolveActive, visibleSpaces as computeVisibleSpaces, visibleEntries, type NavCtx, type Space } from "@/nav/spaces";
 import { useSpaceCollapse } from "@/nav/useSpaceCollapse";
 import { AlertsBell } from "@/components/copilot/AlertsBell";
 
@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils";
  * du user (aucun bouton mort visible sans accès).
  */
 export function AppSidebar() {
-  const { isAdmin, isDirection, canAccessGaia, canAccessDashboard, canMargeGlobale, copilotEnabled, canAccessSalle, canAccessProspection, canReactivation, salleOnly } =
+  const { isAdmin, isDirection, canAccessGaia, canAccessDashboard, canMargeGlobale, copilotEnabled, canAccessSalle, canAccessProspection, canReactivation, salleOnly, menuAllowed } =
     useAuth();
   const { pathname, hash } = useLocation();
   const { state } = useSidebar();
@@ -46,12 +46,13 @@ export function AppSidebar() {
     canAccessProspection,
     canReactivation,
     salleOnly,
+    menuAllowed,
   };
 
   const active = resolveActive(pathname, hash, ctx);
-  const visibleSpaces = SPACES.filter((s) => !s.show || s.show(ctx));
+  const visible = computeVisibleSpaces(ctx);
   const { isCollapsed: isSectionCollapsed, toggle: toggleSection } = useSpaceCollapse(
-    visibleSpaces.map((s) => s.key),
+    visible.map((s) => s.key),
     active.space?.key ?? null,
   );
 

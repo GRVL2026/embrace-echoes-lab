@@ -70,16 +70,34 @@ type ClientRea = {
   ville: string | null;
   typologie: string | null;
   email: string | null;
+  telephone: string | null;
+  adresse1: string | null;
+  adresse2: string | null;
+  code_postal: string | null;
+  pays: string | null;
   owner_id: string | null;
   owner_nom: string | null;
   statut_relance: StatutRelance | null;
   statut_relance_maj: string | null;
   derniere_commande: string | null;
   ca_total: number | null;
+  derniere_action: { type: string; date: string; auteur: string | null } | null;
   familles: Array<{ famille: string; ca: number }>;
   produits_recents: Array<{ code: string; libelle: string; d: string }>;
   actions: ActionRow[];
 };
+
+function categorieFromDate(d: string | null): { label: string; cls: string } {
+  if (!d) return { label: "sans commande", cls: "bg-slate-500/15 text-slate-400 border-slate-500/30" };
+  const months = (Date.now() - new Date(d).getTime()) / (1000 * 60 * 60 * 24 * 30);
+  if (months <= 12) return { label: "actif", cls: "bg-emerald-500/15 text-emerald-500 border-emerald-500/30" };
+  if (months <= 36) return { label: "dormant", cls: "bg-amber-500/15 text-amber-500 border-amber-500/30" };
+  return { label: "inactif", cls: "bg-rose-500/15 text-rose-500 border-rose-500/30" };
+}
+
+const fmtEUR = (n: number | null | undefined) =>
+  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);
+const cleanPhone = (t: string | null | undefined) => (t || "").replace(/[^\d+]/g, "");
 
 export function ClientActionsDialog({
   code,
@@ -296,6 +314,77 @@ export function ClientActionsDialog({
           </div>
         ) : (
           <>
+            {data && (() => {
+              const cat = categorieFromDate(data.derniere_commande);
+              const tel = cleanPhone(data.telephone);
+              const adresseLigne = [data.adresse1, data.adresse2].filter(Boolean).join(", ");
+              const localite = [data.code_postal, data.ville].filter(Boolean).join(" ");
+              const fullAdresse = [adresseLigne, localite].filter(Boolean).join(" — ");
+              const lastAct = data.derniere_action;
+              return (
+                <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2 text-sm">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                    Contact & contexte
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      {tel ? (
+                        <a href={`tel:${tel}`} className="text-primary hover:underline font-medium">
+                          {data.telephone}
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground italic">Téléphone non renseigné</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      {hasEmail ? (
+                        <a href={`mailto:${data.email}`} className="text-primary hover:underline font-medium truncate">
+                          {data.email}
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground italic">Email non renseigné</span>
+                      )}
+                    </div>
+                    <div className="flex items-start gap-2 md:col-span-2">
+                      <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                      {fullAdresse ? (
+                        <span>{fullAdresse}</span>
+                      ) : (
+                        <span className="text-muted-foreground italic">Adresse non renseignée</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-border/60">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[11px] ${cat.cls}`}>
+                      {cat.label}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      Dernière cde :{" "}
+                      <b className="text-foreground">
+                        {data.derniere_commande
+                          ? new Date(data.derniere_commande).toLocaleDateString("fr-FR")
+                          : "aucune"}
+                      </b>
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      CA total : <b className="text-foreground">{fmtEUR(data.ca_total)}</b>
+                    </span>
+                    {lastAct ? (
+                      <span className="text-xs text-muted-foreground">
+                        Dernière action : <b className="text-foreground">{lastAct.type}</b>
+                        {" "}— {new Date(lastAct.date).toLocaleDateString("fr-FR")}
+                        {lastAct.auteur ? ` (${lastAct.auteur})` : ""}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground italic">Aucune action encore</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="flex gap-2 border-b">
               <button
                 className={`px-3 py-2 text-sm ${

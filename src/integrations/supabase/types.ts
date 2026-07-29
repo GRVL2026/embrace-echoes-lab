@@ -1054,6 +1054,7 @@ export type Database = {
             | null
           statut_relance_maj: string | null
           statut_relance_par: string | null
+          telephone: string | null
           typologie: string | null
           ville: string | null
         }
@@ -1075,6 +1076,7 @@ export type Database = {
             | null
           statut_relance_maj?: string | null
           statut_relance_par?: string | null
+          telephone?: string | null
           typologie?: string | null
           ville?: string | null
         }
@@ -1096,6 +1098,7 @@ export type Database = {
             | null
           statut_relance_maj?: string | null
           statut_relance_par?: string | null
+          telephone?: string | null
           typologie?: string | null
           ville?: string | null
         }

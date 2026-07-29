@@ -207,6 +207,20 @@ export default function Carte() {
           slot.innerHTML = parts.length
             ? parts.map((p) => `<div>${p}</div>`).join("")
             : `<em>Aucune action encore.</em>`;
+          // Hydrate contact block (phone/email)
+          const contactEl = el.querySelector<HTMLElement>(`.rea-contact[data-code="${code}"]`);
+          if (contactEl) {
+            const tel = (d.telephone || "").toString();
+            const telHref = tel.replace(/[^\d+]/g, "");
+            const email = d.email || "";
+            const telHtml = telHref
+              ? `<a href="tel:${telHref}" style="color:#9B5CFF;text-decoration:none;font-weight:500">📞 ${tel}</a>`
+              : `<span style="color:#94a3b8;font-style:italic">📞 Téléphone non renseigné</span>`;
+            const mailHtml = email
+              ? `<a href="mailto:${email}" style="color:#9B5CFF;text-decoration:none;font-weight:500;word-break:break-all">✉ ${email}</a>`
+              : `<span style="color:#94a3b8;font-style:italic">✉ Email non renseigné</span>`;
+            contactEl.innerHTML = `<div>${telHtml}</div><div style="margin-top:2px">${mailHtml}</div>`;
+          }
         } catch {
           slot.textContent = "";
         }
@@ -239,9 +253,10 @@ export default function Carte() {
         const size = c.categorie === "actif" ? 8 + Math.round(20 * Math.sqrt((c.ca_12m || 0) / maxCa)) : 10;
         const m = L.marker([c.lat, c.lng], { icon: makeDivIcon(color, size, !!filterCodes) });
         m.bindPopup(
-          `<div style="font-family:system-ui,sans-serif;min-width:220px" data-client-code="${escapeHtml(c.code_client)}">
+          `<div style="font-family:system-ui,sans-serif;min-width:240px" data-client-code="${escapeHtml(c.code_client)}">
             <div style="font-weight:600;margin-bottom:4px">${escapeHtml(c.nom || "—")}</div>
             <div style="color:#64748b;font-size:12px">${escapeHtml(c.ville || "")}</div>
+            <div class="rea-contact" data-code="${escapeHtml(c.code_client)}" style="margin-top:6px;font-size:12px;color:#64748b">📞 <em>chargement…</em></div>
             <div style="margin-top:6px;font-size:12px">CA 12 mois : <b>${fmtEUR(c.ca_12m || 0)}</b></div>
             <div style="font-size:12px">CA total : <b>${fmtEUR(c.ca_total || 0)}</b></div>
             <div style="font-size:12px;color:#475569">Dernière commande : <b>${c.derniere_commande ? fmtMonth(c.derniere_commande) : "aucune commande enregistrée"}</b></div>

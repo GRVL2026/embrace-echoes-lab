@@ -409,6 +409,38 @@ export function ClientActionsDialog({
           </div>
         ) : (
           <>
+            {isAdmin && data && (
+              <div className="flex flex-wrap items-center gap-2">
+                {data.archive ? (
+                  <Button size="sm" variant="outline" onClick={toggleArchive} disabled={archiving} className="gap-2">
+                    {archiving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArchiveRestore className="h-4 w-4" />}
+                    Dé-archiver ce compte
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant={emphasizeArchive ? "destructive" : "outline"}
+                    onClick={toggleArchive}
+                    disabled={archiving}
+                    className="gap-2"
+                  >
+                    {archiving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
+                    {emphasizeArchive ? "Archiver ce compte cessé" : "Archiver ce compte"}
+                  </Button>
+                )}
+                {emphasizeArchive && (
+                  <span className="text-[11px] text-muted-foreground">
+                    Recommandé : société signalée comme cessée / en procédure collective.
+                  </span>
+                )}
+                {data.archive && data.archive_at && (
+                  <span className="text-[11px] text-muted-foreground">
+                    Archivé le {new Date(data.archive_at).toLocaleDateString("fr-FR")}
+                  </span>
+                )}
+              </div>
+            )}
+
             {data && (() => {
               const cat = categorieFromDate(data.derniere_commande);
               const tel = cleanPhone(data.telephone);

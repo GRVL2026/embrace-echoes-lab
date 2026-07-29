@@ -32,7 +32,7 @@ export default defineTool({
     let q = supabase
       .from("prospects")
       .select(
-        "id, entreprise, contact_nom, segment, statut, ville:adresse, lgm_status, pret_a_envoyer, updated_at:created_at",
+        "id, entreprise, contact_nom, segment, statut, adresse, lgm_status, pret_a_envoyer, created_at",
       )
       .order("created_at", { ascending: false })
       .limit(limit ?? 25);

@@ -167,7 +167,11 @@ type Resume = {
 };
 
 export default function Prospection() {
-  const { isAdmin, isDirection, canAccessProspection, isLoading } = useAuth();
+  const { isAdmin, isDirection, canAccessProspection, isLoading, hasRestrictedAction } = useAuth();
+  const canDetecter = hasRestrictedAction("prospection.detecter_signaux");
+  const canPreparer = hasRestrictedAction("prospection.preparer");
+  const canEnvoyerLgm = hasRestrictedAction("prospection.envoyer_lgm");
+  const canImporterCsv = hasRestrictedAction("prospection.importer_csv");
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [loading, setLoading] = useState(true);
   const [resume, setResume] = useState<Resume | null>(null);
@@ -374,29 +378,33 @@ export default function Prospection() {
             </SelectContent>
           </Select>
         </div>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={runDetection}
-          disabled={detecting}
-          className="gap-2"
-          title="Détecter les établissements récemment créés en France (30 jours)"
-        >
-          {detecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-          <span className="hidden sm:inline">{detecting ? "Détection…" : "Détecter les signaux"}</span>
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={runPreparation}
-          disabled={preparing}
-          className="gap-2"
-          title="Enrichir et générer une accroche IA pour les signaux non préparés (agent semi-auto)"
-        >
-          {preparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-          <span className="hidden sm:inline">{preparing ? "Préparation…" : "Préparer les nouveaux"}</span>
-        </Button>
-        {readyToSend.length > 0 && (
+        {canDetecter && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={runDetection}
+            disabled={detecting}
+            className="gap-2"
+            title="Détecter les établissements récemment créés en France (30 jours)"
+          >
+            {detecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+            <span className="hidden sm:inline">{detecting ? "Détection…" : "Détecter les signaux"}</span>
+          </Button>
+        )}
+        {canPreparer && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={runPreparation}
+            disabled={preparing}
+            className="gap-2"
+            title="Enrichir et générer une accroche IA pour les signaux non préparés (agent semi-auto)"
+          >
+            {preparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            <span className="hidden sm:inline">{preparing ? "Préparation…" : "Préparer les nouveaux"}</span>
+          </Button>
+        )}
+        {canEnvoyerLgm && readyToSend.length > 0 && (
           <Button
             size="sm"
             onClick={bulkSendToLgm}
@@ -410,9 +418,11 @@ export default function Prospection() {
             </span>
           </Button>
         )}
-        <Button size="sm" variant="outline" onClick={() => setImportOpen(true)} className="gap-2">
-          <Upload className="h-4 w-4" /> <span className="hidden sm:inline">Importer CSV</span>
-        </Button>
+        {canImporterCsv && (
+          <Button size="sm" variant="outline" onClick={() => setImportOpen(true)} className="gap-2">
+            <Upload className="h-4 w-4" /> <span className="hidden sm:inline">Importer CSV</span>
+          </Button>
+        )}
         <Button size="sm" onClick={() => setAddOpen(true)} className="gap-2">
           <Plus className="h-4 w-4" /> Ajouter
         </Button>
@@ -648,6 +658,8 @@ function ProspectSheet({
   onChange: (p: Prospect) => void;
   onDeleted: (id: string) => void;
 }) {
+  const { hasRestrictedAction } = useAuth();
+  const canEnvoyerLgm = hasRestrictedAction("prospection.envoyer_lgm");
   const [form, setForm] = useState<Prospect>(prospect);
   const [saving, setSaving] = useState(false);
   const [events, setEvents] = useState<ProspectEvent[]>([]);
@@ -844,7 +856,9 @@ function ProspectSheet({
 
         <PappersEnrichSection prospect={prospect} onEnriched={(next) => { onChange(next); setForm(next); loadEvents(); }} />
 
-        <LgmSection prospect={prospect} onSent={(next) => { onChange(next); setForm(next); loadEvents(); }} />
+        {canEnvoyerLgm && (
+          <LgmSection prospect={prospect} onSent={(next) => { onChange(next); setForm(next); loadEvents(); }} />
+        )}
 
 
         <div className="mt-8 space-y-3">
@@ -1212,10 +1226,11 @@ function ImportCsvDialog({
       .filter(Boolean);
     if (rows.length === 0) { toast.error("Aucune ligne valide"); return; }
     setImporting(true);
-    const { error } = await (supabase as any).from("prospects").insert(rows);
+    const { data: inserted, error } = await (supabase as any).rpc("import_prospects_csv", { _rows: rows });
     setImporting(false);
     if (error) { toast.error(error.message); return; }
-    toast.success(`${rows.length} prospect${rows.length > 1 ? "s" : ""} importé${rows.length > 1 ? "s" : ""}`);
+    const n = Number(inserted ?? rows.length);
+    toast.success(`${n} prospect${n > 1 ? "s" : ""} importé${n > 1 ? "s" : ""}`);
     reset();
     onImported();
   };

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { SPACES, type Space, type NavEntry } from "@/nav/spaces";
+import { RESTRICTED_ACTIONS } from "@/nav/restricted-actions";
 import {
   Dialog,
   DialogContent,
@@ -255,6 +256,35 @@ export function MenuAccessDialog({
             })
           )}
         </div>
+
+        {!loading && (
+          <div className="pt-3 border-t border-border space-y-2">
+            <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+              Actions restreintes (défaut désactivé)
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              Ces permissions sont OFF par défaut pour tout le monde (y compris admin/direction).
+              Elles doivent être accordées explicitement compte par compte.
+            </div>
+            <div className="rounded-md border border-border bg-card/40 p-2 space-y-1">
+              {RESTRICTED_ACTIONS.map((a) => {
+                const on = access[a.key] === true;
+                return (
+                  <div key={a.key} className="flex items-center gap-3 rounded px-3 py-2 hover:bg-muted/40">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm truncate">{a.label}</div>
+                      <div className="text-[10px] text-muted-foreground">{a.description}</div>
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                        {a.key}
+                      </div>
+                    </div>
+                    <Switch checked={on} onCheckedChange={(v) => setKey(a.key, v)} />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>

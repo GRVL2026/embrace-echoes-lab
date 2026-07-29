@@ -96,8 +96,14 @@ async function isAuthorized(req: Request): Promise<boolean> {
   if (error || !data?.claims) return false;
   const uid = data.claims.sub as string;
   const admin = createClient(SUPABASE_URL, SERVICE_KEY);
-  const { data: roles } = await admin.from('user_roles').select('role').eq('user_id', uid);
-  return (roles || []).some((r: any) => r.role === 'admin' || r.role === 'direction');
+  // Permission restreinte (défaut OFF, accordée compte par compte).
+  const { data: perm } = await admin
+    .from('user_menu_access')
+    .select('allowed')
+    .eq('user_id', uid)
+    .eq('section_key', 'prospection.detecter_signaux')
+    .maybeSingle();
+  return perm?.allowed === true;
 }
 
 /**

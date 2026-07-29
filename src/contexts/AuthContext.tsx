@@ -32,6 +32,8 @@ type AuthContextValue = {
   salleOnly: boolean;
   /** Override d'accès par section/sous-section (admin-managed). */
   menuAllowed: (key: string) => boolean | undefined;
+  /** Permission stricte (défaut OFF) pour actions restreintes. */
+  hasRestrictedAction: (key: string) => boolean;
   refreshRoles: () => void;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (
@@ -219,6 +221,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         salleOnly,
         menuAllowed: (key: string) =>
           key in menuAccess ? menuAccess[key] : undefined,
+        hasRestrictedAction: (key: string) => menuAccess[key] === true,
         refreshRoles,
 
         signIn,

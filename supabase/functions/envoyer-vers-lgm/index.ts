@@ -46,9 +46,16 @@ Deno.serve(async (req) => {
     if (userErr || !userData?.user) return jsonRes(401, { error: 'Unauthorized' });
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
-    const { data: roles } = await admin.from('user_roles').select('role').eq('user_id', userData.user.id);
-    const allowed = (roles || []).some((r: any) => ['admin', 'direction'].includes(r.role));
-    if (!allowed) return jsonRes(403, { error: 'Forbidden' });
+    // Permission restreinte (défaut OFF, accordée compte par compte).
+    const { data: perm } = await admin
+      .from('user_menu_access')
+      .select('allowed')
+      .eq('user_id', userData.user.id)
+      .eq('section_key', 'prospection.envoyer_lgm')
+      .maybeSingle();
+    if (perm?.allowed !== true) {
+      return jsonRes(403, { error: 'Action réservée (permission manquante : prospection.envoyer_lgm)' });
+    }
 
     if (!LGM_API_KEY) return jsonRes(500, { error: 'LGM_API_KEY manquant côté serveur' });
 

@@ -323,12 +323,28 @@ export default function Carte() {
       const { data: res, error } = await supabase.functions.invoke("carte-copilot", {
         body: { question: q },
       });
-      if (error) throw error;
+      if (error) {
+        // Extraire le message réel du body JSON renvoyé par l'edge function (non-2xx)
+        let realMsg: string | null = null;
+        try {
+          const resp: Response | undefined = (error as any)?.context?.response ?? (error as any)?.context;
+          if (resp && typeof (resp as Response).text === "function") {
+            const txt = await (resp as Response).clone().text();
+            try {
+              const j = JSON.parse(txt);
+              realMsg = j?.error || j?.message || txt;
+            } catch {
+              realMsg = txt;
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+        throw new Error(realMsg || (error as any)?.message || "Erreur du copilote");
+      }
       if ((res as any)?.error) throw new Error((res as any).error);
       const rows: any[] = (res as any).rows ?? [];
       const codes = new Set<string>(rows.map((r) => String(r.code_client)).filter(Boolean));
-      // Si la requête a renvoyé un ca_periode (période demandée), on cumule dessus.
-      // Sinon on retombe sur ca_total (comportement historique).
       const hasPeriode = rows.some((r) => r.ca_periode != null);
       const ca_total = rows.reduce(
         (s, r) => s + (Number(hasPeriode ? r.ca_periode : r.ca_total) || 0),

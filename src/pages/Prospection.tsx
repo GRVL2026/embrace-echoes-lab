@@ -97,6 +97,8 @@ const STATUTS: { key: Statut; label: string }[] = [
   { key: "contacte", label: "Contacté" },
   { key: "connecte", label: "Connecté (LinkedIn)" },
   { key: "repondu", label: "Répondu" },
+  { key: "rdv", label: "RDV" },
+  { key: "devis", label: "Devis" },
 ];
 
 // Libellés complets (inclut les statuts hors pipeline, conservés pour l'historique et l'attribution)

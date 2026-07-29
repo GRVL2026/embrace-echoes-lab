@@ -117,10 +117,11 @@ export function ClientActionsDialog({
   initialTab?: "action" | "statut";
   onChanged?: () => void;
 }) {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [data, setData] = useState<ClientRea | null>(null);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<"action" | "statut">(initialTab);
+  const [archiving, setArchiving] = useState(false);
 
   // Form: add action
   const [type, setType] = useState<ActionType>("appel");

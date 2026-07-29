@@ -252,7 +252,13 @@ export default function Carte() {
       if ((res as any)?.error) throw new Error((res as any).error);
       const rows: any[] = (res as any).rows ?? [];
       const codes = new Set<string>(rows.map((r) => String(r.code_client)).filter(Boolean));
-      const ca_total = rows.reduce((s, r) => s + (Number(r.ca_total) || 0), 0);
+      // Si la requête a renvoyé un ca_periode (période demandée), on cumule dessus.
+      // Sinon on retombe sur ca_total (comportement historique).
+      const hasPeriode = rows.some((r) => r.ca_periode != null);
+      const ca_total = rows.reduce(
+        (s, r) => s + (Number(hasPeriode ? r.ca_periode : r.ca_total) || 0),
+        0,
+      );
       setCopilotResult({
         interpretation: String((res as any).interpretation || q),
         count: codes.size,

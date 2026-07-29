@@ -3,9 +3,12 @@ import { useLocation, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, MapPin, ArrowLeft } from "lucide-react";
+import { Loader2, MapPin, ArrowLeft, Search, Sparkles, X, RotateCcw } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { toast } from "@/hooks/use-toast";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster";
@@ -61,15 +64,29 @@ function fmtMonth(iso: string): string {
   return `${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
-function makeDivIcon(color: string, size: number): L.DivIcon {
+function normalize(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function makeDivIcon(color: string, size: number, highlight = false): L.DivIcon {
   const s = Math.max(8, Math.min(28, size));
+  const ring = highlight
+    ? "0 0 0 3px #ADFF00, 0 0 12px rgba(173,255,0,0.7)"
+    : "0 0 0 2px rgba(255,255,255,0.85), 0 2px 6px rgba(0,0,0,0.35)";
   return L.divIcon({
     className: "carte-marker",
-    html: `<span style="display:block;width:${s}px;height:${s}px;border-radius:9999px;background:${color};box-shadow:0 0 0 2px rgba(255,255,255,0.85), 0 2px 6px rgba(0,0,0,0.35);"></span>`,
+    html: `<span style="display:block;width:${s}px;height:${s}px;border-radius:9999px;background:${color};box-shadow:${ring};"></span>`,
     iconSize: [s, s],
     iconAnchor: [s / 2, s / 2],
   });
 }
+
+type CopilotResult = {
+  interpretation: string;
+  count: number;
+  ca_total: number;
+  codes: Set<string>;
+};
 
 export default function Carte() {
   const { isAdmin, isDirection } = useAuth();
@@ -115,16 +132,31 @@ export default function Carte() {
     };
   }, [data]);
 
+  // --- Recherche & Copilot ---
+  const [query, setQuery] = useState("");
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const [copilotResult, setCopilotResult] = useState<CopilotResult | null>(null);
+
+  const suggestions = useMemo(() => {
+    if (!data || query.trim().length < 2) return [];
+    const q = normalize(query.trim());
+    return data.clients
+      .filter((c) => c.nom && normalize(c.nom).includes(q))
+      .slice(0, 8);
+  }, [data, query]);
+
   // --- Leaflet init ---
   const mapEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const clusterRef = useRef<any>(null);
+  const markerByCodeRef = useRef<Map<string, L.Marker>>(new Map());
 
   useEffect(() => {
     if (!mapEl.current || mapRef.current) return;
     const map = L.map(mapEl.current, { preferCanvas: true }).setView([46.6, 2.5], 6);
     L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-      attribution: '&copy; OpenStreetMap &copy; CARTO',
+      attribution: "&copy; OpenStreetMap &copy; CARTO",
       subdomains: "abcd",
       maxZoom: 19,
     }).addTo(map);
@@ -139,20 +171,23 @@ export default function Carte() {
     };
   }, []);
 
-  // --- Redraw markers on data/layer change ---
+  // --- Redraw markers ---
   useEffect(() => {
     if (!mapRef.current || !clusterRef.current || !data) return;
     const cluster = clusterRef.current;
     cluster.clearLayers();
+    markerByCodeRef.current.clear();
 
+    const filterCodes = copilotResult?.codes ?? null;
     const maxCa = Math.max(1, ...data.clients.map((c) => c.ca_12m || 0));
 
     if (layers.actif || layers.dormant || layers.inactif) {
       for (const c of data.clients) {
         if (!layers[c.categorie]) continue;
+        if (filterCodes && !filterCodes.has(c.code_client)) continue;
         const color = COLORS[c.categorie];
         const size = c.categorie === "actif" ? 8 + Math.round(20 * Math.sqrt((c.ca_12m || 0) / maxCa)) : 10;
-        const m = L.marker([c.lat, c.lng], { icon: makeDivIcon(color, size) });
+        const m = L.marker([c.lat, c.lng], { icon: makeDivIcon(color, size, !!filterCodes) });
         m.bindPopup(
           `<div style="font-family:system-ui,sans-serif;min-width:200px">
             <div style="font-weight:600;margin-bottom:4px">${escapeHtml(c.nom || "—")}</div>
@@ -164,10 +199,11 @@ export default function Carte() {
           </div>`
         );
         cluster.addLayer(m);
+        markerByCodeRef.current.set(c.code_client, m);
       }
     }
 
-    if (layers.prospects) {
+    if (layers.prospects && !filterCodes) {
       for (const p of data.prospects) {
         const m = L.marker([p.lat, p.lng], { icon: makeDivIcon(COLORS.prospects, 12) });
         m.bindPopup(
@@ -181,7 +217,67 @@ export default function Carte() {
         cluster.addLayer(m);
       }
     }
-  }, [data, layers]);
+
+    // Auto-fit when copilot result active
+    if (filterCodes && filterCodes.size > 0 && mapRef.current) {
+      const pts: L.LatLngExpression[] = [];
+      for (const c of data.clients) {
+        if (filterCodes.has(c.code_client)) pts.push([c.lat, c.lng]);
+      }
+      if (pts.length > 0) {
+        mapRef.current.fitBounds(L.latLngBounds(pts as any), { padding: [40, 40], maxZoom: 11 });
+      }
+    }
+  }, [data, layers, copilotResult]);
+
+  const zoomToClient = (c: ClientPt) => {
+    setSuggestOpen(false);
+    setQuery(c.nom || "");
+    if (!mapRef.current) return;
+    mapRef.current.setView([c.lat, c.lng], 13);
+    const m = markerByCodeRef.current.get(c.code_client);
+    if (m) setTimeout(() => m.openPopup(), 200);
+  };
+
+  const askCopilot = async () => {
+    const q = query.trim();
+    if (!q || asking) return;
+    setSuggestOpen(false);
+    setAsking(true);
+    try {
+      const { data: res, error } = await supabase.functions.invoke("carte-copilot", {
+        body: { question: q },
+      });
+      if (error) throw error;
+      if ((res as any)?.error) throw new Error((res as any).error);
+      const rows: any[] = (res as any).rows ?? [];
+      const codes = new Set<string>(rows.map((r) => String(r.code_client)).filter(Boolean));
+      const ca_total = rows.reduce((s, r) => s + (Number(r.ca_total) || 0), 0);
+      setCopilotResult({
+        interpretation: String((res as any).interpretation || q),
+        count: codes.size,
+        ca_total,
+        codes,
+      });
+      if (codes.size === 0) {
+        toast({ title: "Aucun résultat", description: "La requête n'a rien retourné." });
+      }
+    } catch (e: any) {
+      toast({
+        title: "Erreur du copilote",
+        description: e?.message || "Impossible d'interpréter la question",
+        variant: "destructive",
+      });
+    } finally {
+      setAsking(false);
+    }
+  };
+
+  const resetCopilot = () => {
+    setCopilotResult(null);
+    setQuery("");
+    if (mapRef.current) mapRef.current.setView([46.6, 2.5], 6);
+  };
 
   if (!authorized) {
     return (
@@ -210,8 +306,103 @@ export default function Carte() {
         {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
       </div>
 
+      {/* Barre de recherche + copilote */}
+      <div className="relative z-[500] border-b border-border/60 bg-background px-3 py-2">
+        <div className="flex gap-2 items-start max-w-3xl mx-auto">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              value={query}
+              onChange={(e) => { setQuery(e.target.value); setSuggestOpen(true); }}
+              onFocus={() => setSuggestOpen(true)}
+              onBlur={() => setTimeout(() => setSuggestOpen(false), 150)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (suggestions.length === 1) zoomToClient(suggestions[0]);
+                  else askCopilot();
+                }
+                if (e.key === "Escape") setSuggestOpen(false);
+              }}
+              placeholder="Rechercher un client ou poser une question…"
+              className="pl-9 pr-9"
+              disabled={asking}
+            />
+            {query && (
+              <button
+                onClick={() => { setQuery(""); setSuggestOpen(false); }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Effacer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+            {suggestOpen && suggestions.length > 0 && (
+              <div className="absolute left-0 right-0 top-full mt-1 rounded-md border bg-popover shadow-lg overflow-hidden">
+                {suggestions.map((c) => (
+                  <button
+                    key={c.code_client}
+                    onMouseDown={(e) => { e.preventDefault(); zoomToClient(c); }}
+                    className="w-full text-left px-3 py-2 hover:bg-accent flex items-center justify-between gap-2 text-sm"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate font-medium">{c.nom}</div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {c.ville || "—"} · {fmtEUR(c.ca_12m || 0)} 12m
+                      </div>
+                    </div>
+                    <span
+                      className="inline-block h-2 w-2 rounded-full shrink-0"
+                      style={{ background: COLORS[c.categorie] }}
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <Button onClick={askCopilot} disabled={asking || !query.trim()} className="shrink-0">
+            {asking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            <span className="ml-2 hidden sm:inline">Demander</span>
+          </Button>
+        </div>
+        <div className="text-[11px] text-muted-foreground text-center mt-1 max-w-3xl mx-auto">
+          Ex : « clients de Bretagne à plus de 50 k€ sur 2026 », « dormants &gt; 100 k€ en PACA », « top 10 Normandie »
+        </div>
+      </div>
+
       <div className="relative flex-1">
         <div ref={mapEl} className="absolute inset-0" />
+
+        {/* Résultat copilote */}
+        {copilotResult && (
+          <Card className="absolute top-3 left-3 z-[400] p-3 max-w-sm shadow-lg border-primary/40">
+            <div className="flex items-start gap-2">
+              <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Question interprétée</div>
+                <div className="text-sm font-medium mb-2">{copilotResult.interpretation}</div>
+                <div className="flex gap-4 text-sm">
+                  <div>
+                    <div className="text-[11px] text-muted-foreground">Clients</div>
+                    <div className="font-semibold tabular-nums">{copilotResult.count}</div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] text-muted-foreground">CA cumulé</div>
+                    <div className="font-semibold tabular-nums">{fmtEUR(copilotResult.ca_total)}</div>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={resetCopilot}
+                  className="mt-2 h-7 text-xs"
+                >
+                  <RotateCcw className="h-3 w-3 mr-1" /> Réinitialiser
+                </Button>
+              </div>
+            </div>
+          </Card>
+        )}
 
         {/* Filtres */}
         <Card className="absolute top-3 right-3 z-[400] p-3 min-w-[200px] shadow-lg">

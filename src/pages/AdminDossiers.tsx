@@ -266,7 +266,7 @@ export default function AdminDossiers() {
               <TableBody>
                 {Object.values(profiles).length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="py-6 text-center text-muted-foreground">
                       Aucun utilisateur.
                     </TableCell>
                   </TableRow>
@@ -372,6 +372,16 @@ export default function AdminDossiers() {
                             }}
                           />
                         </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setMenuAccessUser(p)}
+                          >
+                            <MenuIcon className="h-3.5 w-3.5 mr-1" />
+                            Gérer
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))
                 )}
@@ -380,6 +390,13 @@ export default function AdminDossiers() {
           </div>
         </section>
       </main>
+
+      <MenuAccessDialog
+        open={!!menuAccessUser}
+        onOpenChange={(v) => !v && setMenuAccessUser(null)}
+        targetUser={menuAccessUser}
+        profiles={Object.values(profiles)}
+      />
     </div>
   );
 }

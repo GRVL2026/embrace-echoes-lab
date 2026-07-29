@@ -1041,10 +1041,12 @@ export type Database = {
           adresse2: string | null
           code_postal: string | null
           customer_id: string
+          email: string | null
           geocoded_at: string | null
           lat: number | null
           lng: number | null
           name: string | null
+          owner_id: string | null
           pays: string | null
           status: string | null
           statut_relance:
@@ -1060,10 +1062,12 @@ export type Database = {
           adresse2?: string | null
           code_postal?: string | null
           customer_id: string
+          email?: string | null
           geocoded_at?: string | null
           lat?: number | null
           lng?: number | null
           name?: string | null
+          owner_id?: string | null
           pays?: string | null
           status?: string | null
           statut_relance?:
@@ -1079,10 +1083,12 @@ export type Database = {
           adresse2?: string | null
           code_postal?: string | null
           customer_id?: string
+          email?: string | null
           geocoded_at?: string | null
           lat?: number | null
           lng?: number | null
           name?: string | null
+          owner_id?: string | null
           pays?: string | null
           status?: string | null
           statut_relance?:

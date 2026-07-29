@@ -129,6 +129,7 @@ export function ClientActionsDialog({
   const [contenu, setContenu] = useState("");
   const [resultat, setResultat] = useState("");
   const [prochaine, setProchaine] = useState("");
+  const [statutResultant, setStatutResultant] = useState<"auto" | StatutRelance>("auto");
   const [generating, setGenerating] = useState(false);
   const [sending, setSending] = useState(false);
 

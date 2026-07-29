@@ -27,6 +27,7 @@ import Salle from "./pages/Salle";
 import Prospection from "./pages/Prospection";
 
 import GaiaCarnet from "./pages/GaiaCarnet";
+import Carte from "./pages/Carte";
 import GaiaRevueView from "./pages/GaiaRevueView";
 import NotFound from "./pages/NotFound";
 import NotificationsSettings from "./pages/NotificationsSettings";

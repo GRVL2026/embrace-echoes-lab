@@ -126,7 +126,24 @@ Deno.serve(async (req) => {
       : '(inconnue)';
     const caTotal = Number((ctx as any).ca_total ?? 0);
 
-    const userPrompt = `Client : ${(ctx as any).nom || code}${(ctx as any).ville ? ` (${(ctx as any).ville})` : ''}
+    // Catégorie du client basée sur l'ancienneté de la dernière commande
+    const lastOrderDate = (ctx as any).derniere_commande ? new Date((ctx as any).derniere_commande) : null;
+    let categorie: 'ACTIF' | 'DORMANT' | 'INACTIF' | 'SANS_HISTORIQUE';
+    let ancienneteLabel = '—';
+    if (!lastOrderDate) {
+      categorie = 'SANS_HISTORIQUE';
+    } else {
+      const months = (Date.now() - lastOrderDate.getTime()) / (1000 * 60 * 60 * 24 * 30);
+      ancienneteLabel = `${Math.round(months)} mois depuis la dernière commande`;
+      if (months < 12) categorie = 'ACTIF';
+      else if (months <= 24) categorie = 'DORMANT';
+      else categorie = 'INACTIF';
+    }
+
+    const userPrompt = `CATÉGORIE CLIENT : ${categorie}${categorie !== 'SANS_HISTORIQUE' ? ` (${ancienneteLabel})` : ''}
+→ Applique STRICTEMENT l'angle correspondant défini dans les instructions système.
+
+Client : ${(ctx as any).nom || code}${(ctx as any).ville ? ` (${(ctx as any).ville})` : ''}
 Typologie : ${(ctx as any).typologie || '—'}
 Dernière commande : ${derniereCmd}
 CA cumulé : ${caTotal.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} €
@@ -137,7 +154,7 @@ ${lastAction ? `Dernière interaction (${lastAction.type}, ${new Date(lastAction
 Nouveautés / références catalogue à mobiliser (nom EXACT) :
 ${suggestionsBlock || '(catalogue non disponible)'}
 
-Rédige un email de réactivation. Réponds en JSON strict { "objet", "corps" }.`;
+Rédige l'email adapté à la catégorie ${categorie}. Réponds en JSON strict { "objet", "corps" }.`;
 
     const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
     if (!apiKey) return jsonErr(500, "IA non configurée (ANTHROPIC_API_KEY manquant)");

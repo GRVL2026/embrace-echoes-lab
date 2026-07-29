@@ -3219,7 +3219,9 @@ export type Database = {
           derniere_action_date: string
           derniere_action_type: string
           derniere_commande: string
+          etat_administratif: string
           nom: string
+          procedure_collective: boolean
           score: number
           statut_relance: string
           statut_relance_maj: string

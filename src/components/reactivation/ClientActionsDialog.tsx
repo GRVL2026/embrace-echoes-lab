@@ -733,11 +733,12 @@ export function ClientActionsDialog({
         )}
         </div>
 
-        <DialogFooter className="shrink-0 px-6 py-3 border-t border-border bg-background sticky bottom-0">
+        <DialogFooter className="px-6 py-3 border-t border-border bg-background">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Fermer
           </Button>
         </DialogFooter>
+
       </DialogContent>
     </Dialog>
   );

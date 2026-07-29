@@ -78,7 +78,7 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        {visibleSpaces.map((space) => (
+        {visible.map((space) => (
           <SpaceGroup
             key={space.key}
             space={space}
@@ -117,7 +117,7 @@ function SpaceGroup({
   sectionCollapsed: boolean;
   onToggleSection: () => void;
 }) {
-  const entries = space.entries.filter((e) => !e.show || e.show(ctx));
+  const entries = visibleEntries(space, ctx);
   if (entries.length === 0) return null;
 
   const isActiveSpace = activeSpaceKey === space.key;

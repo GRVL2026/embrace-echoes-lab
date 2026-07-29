@@ -2976,6 +2976,7 @@ export type Database = {
       }
       ensure_notification_prefs: { Args: { _uid: string }; Returns: undefined }
       gaia_query: { Args: { sql_query: string }; Returns: Json }
+      gaia_query_restricted: { Args: { sql_query: string }; Returns: Json }
       get_achats_arrivage_contenu: {
         Args: { _dossier: string }
         Returns: {

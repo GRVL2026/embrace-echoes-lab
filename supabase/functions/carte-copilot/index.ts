@@ -1,0 +1,120 @@
+import { createClient } from 'npm:@supabase/supabase-js@2';
+import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+import { anthropicJson, isAnthropicOverload } from '../_shared/anthropic-fetch.ts';
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
+const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const MODEL = 'claude-sonnet-5';
+
+const SYSTEM = `Tu es un assistant SQL pour Arcade OS (Avranches Automatic). Tu transformes une question en français en UNE seule requête SQL PostgreSQL, en LECTURE SEULE, exécutée via la fonction gaia_query (SELECT / WITH uniquement).
+
+TABLES DISPONIBLES :
+- gaia_clients(customer_id text, name text, status text, typologie text, adresse1, adresse2, code_postal text, ville text, pays text, lat numeric, lng numeric)
+- gaia_ventes(code_client text, invoice_date date, qty numeric, pu_rem numeric, montant_ht numeric, code_article text, tran_type text, classe_article text)  -- ventes récentes
+- gaia_historique(code_client text, invoice_date date, qty numeric, pu_rem numeric, montant_ht numeric, code_article text, classe_article text)  -- ventes archivées
+- prospects(id uuid, entreprise text, ville text, statut text, segment text, lat numeric, lng numeric, montant_estime numeric)
+- catalogue_erp(code text, description text, famille text, prix_ht numeric)
+
+RÈGLES CRITIQUES :
+1. Retourne UNIQUEMENT du JSON de la forme {"sql": "...", "interpretation": "..."}. Rien d'autre.
+2. La requête DOIT commencer par SELECT ou WITH. Aucune écriture. Aucun ; multiple.
+3. Renvoie TOUJOURS ces colonnes exactement dans cet ordre :
+   code_client, nom, ville, lat, lng, ca_12m, ca_total, derniere_commande, categorie
+   - ca_12m = somme montant_ht sur les 12 derniers mois (gaia_ventes UNION gaia_historique)
+   - ca_total = somme montant_ht sur toutes années (union des 2 tables)
+   - derniere_commande = max(invoice_date)
+   - categorie : 'actif' si derniere_commande >= now() - interval '12 months', 'dormant' si entre 12 et 36 mois, sinon 'inactif'
+4. Filtre TOUJOURS lat IS NOT NULL AND lng IS NOT NULL.
+5. Limite à 500 lignes max.
+6. Régions françaises → départements via LEFT(code_postal, 2) :
+   Bretagne = ('22','29','35','56'); Normandie = ('14','27','50','61','76'); PACA = ('04','05','06','13','83','84'); Île-de-France = ('75','77','78','91','92','93','94','95'); Auvergne-Rhône-Alpes = ('01','03','07','15','26','38','42','43','63','69','73','74'); Hauts-de-France = ('02','59','60','62','80'); Nouvelle-Aquitaine = ('16','17','19','23','24','33','40','47','64','79','86','87'); Occitanie = ('09','11','12','30','31','32','34','46','48','65','66','81','82'); Grand Est = ('08','10','51','52','54','55','57','67','68','88'); Pays de la Loire = ('44','49','53','72','85'); Centre-Val de Loire = ('18','28','36','37','41','45'); Bourgogne-Franche-Comté = ('21','25','39','58','70','71','89','90'); Corse = ('2A','2B').
+7. "CA sur 2026" = somme montant_ht where date_part('year', invoice_date) = 2026 (union des 2 tables).
+8. Pour "autour de Lyon" ou proximité géographique : filtre par département correspondant, ou par bounding box lat/lng si mentionné explicitement.
+9. Pattern recommandé : CTE "v" avec UNION ALL entre gaia_ventes et gaia_historique, puis agrégation par code_client, join sur gaia_clients.
+
+EXEMPLE (clients de Bretagne à plus de 50k€ en 2026) :
+WITH v AS (SELECT code_client, invoice_date, montant_ht FROM gaia_ventes UNION ALL SELECT code_client, invoice_date, montant_ht FROM gaia_historique), agg AS (SELECT code_client, SUM(montant_ht) FILTER (WHERE invoice_date >= now() - interval '12 months') AS ca_12m, SUM(montant_ht) AS ca_total, MAX(invoice_date) AS derniere_commande, SUM(montant_ht) FILTER (WHERE date_part('year', invoice_date) = 2026) AS ca_2026 FROM v GROUP BY code_client) SELECT c.customer_id AS code_client, c.name AS nom, c.ville, c.lat, c.lng, COALESCE(a.ca_12m,0) AS ca_12m, COALESCE(a.ca_total,0) AS ca_total, a.derniere_commande, CASE WHEN a.derniere_commande >= now() - interval '12 months' THEN 'actif' WHEN a.derniere_commande >= now() - interval '36 months' THEN 'dormant' ELSE 'inactif' END AS categorie FROM gaia_clients c LEFT JOIN agg a ON a.code_client = c.customer_id WHERE c.lat IS NOT NULL AND c.lng IS NOT NULL AND LEFT(c.code_postal,2) IN ('22','29','35','56') AND COALESCE(a.ca_2026,0) > 50000 ORDER BY ca_2026 DESC LIMIT 500`;
+
+function jsonErr(status: number, error: string) {
+  return new Response(JSON.stringify({ error }), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+
+  try {
+    const authHeader = req.headers.get('Authorization') || '';
+    if (!authHeader.startsWith('Bearer ')) return jsonErr(401, 'Unauthorized');
+    const jwt = authHeader.slice(7);
+    const sb = createClient(SUPABASE_URL, ANON_KEY, {
+      global: { headers: { Authorization: `Bearer ${jwt}` } },
+    });
+    const { data: userData, error: userErr } = await sb.auth.getUser(jwt);
+    if (userErr || !userData?.user) return jsonErr(401, 'Unauthorized');
+
+    const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+    const { data: roles } = await admin.from('user_roles').select('role').eq('user_id', userData.user.id);
+    const allowed = (roles ?? []).some((r: any) => r.role === 'admin' || r.role === 'direction');
+    if (!allowed) return jsonErr(403, 'Forbidden');
+
+    const body = await req.json().catch(() => ({}));
+    const question = String(body.question || '').trim();
+    if (!question) return jsonErr(400, 'question manquante');
+    if (question.length > 500) return jsonErr(400, 'question trop longue');
+
+    const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
+    if (!apiKey) return jsonErr(500, "IA non configurée");
+
+    let sql = '';
+    let interpretation = question;
+    try {
+      const resp = await anthropicJson(apiKey, {
+        model: MODEL,
+        max_tokens: 1500,
+        system: SYSTEM,
+        messages: [{ role: 'user', content: question }],
+      });
+      const text = (resp?.content?.[0]?.text ?? '').trim();
+      const match = text.match(/\{[\s\S]*\}/);
+      if (!match) throw new Error('Réponse IA invalide');
+      const parsed = JSON.parse(match[0]);
+      sql = String(parsed.sql || '').trim();
+      interpretation = String(parsed.interpretation || question);
+    } catch (e) {
+      if (isAnthropicOverload(e)) return jsonErr(503, (e as any).userMessage);
+      console.error('AI parse error', e);
+      return jsonErr(500, "Impossible d'interpréter la question");
+    }
+
+    if (!sql) return jsonErr(400, 'SQL vide');
+    const upper = sql.toUpperCase().replace(/\s+/g, ' ');
+    if (!/^\s*(SELECT|WITH)\b/i.test(sql)) return jsonErr(400, 'Requête non SELECT');
+    if (/\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|GRANT|TRUNCATE|REVOKE)\b/.test(upper)) {
+      return jsonErr(400, 'Requête non autorisée');
+    }
+
+    // Exécute via gaia_query (user JWT — RLS + garde-fous appliqués)
+    const { data, error } = await sb.rpc('gaia_query' as any, { sql_query: sql });
+    if (error) {
+      console.error('gaia_query error', error);
+      return jsonErr(400, `Erreur SQL : ${error.message}`);
+    }
+    if (data && typeof data === 'object' && !Array.isArray(data) && 'error' in (data as any)) {
+      return jsonErr(400, `Erreur SQL : ${(data as any).error}`);
+    }
+
+    const rows = Array.isArray(data) ? data : (data as any)?.rows ?? [];
+
+    return new Response(
+      JSON.stringify({ interpretation, sql, rows, count: rows.length }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
+  } catch (e: any) {
+    console.error(e);
+    return jsonErr(500, e?.message || 'Erreur serveur');
+  }
+});

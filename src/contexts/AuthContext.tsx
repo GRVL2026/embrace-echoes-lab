@@ -217,6 +217,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         salleEnabled,
         canAccessSalle,
         salleOnly,
+        menuAllowed: (key: string) =>
+          key in menuAccess ? menuAccess[key] : undefined,
         refreshRoles,
 
         signIn,

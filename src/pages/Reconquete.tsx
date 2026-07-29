@@ -6,7 +6,7 @@ import { Navigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Loader2, Search, RefreshCw, PlusCircle, Tag, AlertTriangle } from "lucide-react";
+import { Loader2, Search, RefreshCw, PlusCircle, Tag, AlertTriangle, LayoutGrid, List } from "lucide-react";
 import {
   ClientActionsDialog,
   STATUT_LABEL,

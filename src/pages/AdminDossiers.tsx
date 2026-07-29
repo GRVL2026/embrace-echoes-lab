@@ -16,11 +16,12 @@ import { Switch } from "@/components/ui/switch";
 import { UserMenu } from "@/components/UserMenu";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, Shield, Database, Link2, Sparkles } from "lucide-react";
+import { Loader2, Shield, Database, Link2, Sparkles, Menu as MenuIcon } from "lucide-react";
 import { MobileNav } from "@/components/MobileNav";
 import { AppTopNav } from "@/components/AppTopNav";
 import logoImg from "@/assets/logo.png";
 import { InviteUserDialog } from "@/components/admin/InviteUserDialog";
+import { MenuAccessDialog } from "@/components/admin/MenuAccessDialog";
 
 
 type Brand = { id: string; name: string };
@@ -63,6 +64,7 @@ export default function AdminDossiers() {
   const [prospectionRoles, setProspectionRoles] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+  const [menuAccessUser, setMenuAccessUser] = useState<Profile | null>(null);
 
   useEffect(() => {
     if (!user || !isAdmin) return;
@@ -258,12 +260,13 @@ export default function AdminDossiers() {
                   <TableHead className="text-right">Accès Dashboard (AA + Magasin)</TableHead>
                   <TableHead className="text-right">Accès Salle Hyper Nova</TableHead>
                   <TableHead className="text-right">Accès Prospection</TableHead>
+                  <TableHead className="text-right">Accès menu</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {Object.values(profiles).length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="py-6 text-center text-muted-foreground">
                       Aucun utilisateur.
                     </TableCell>
                   </TableRow>
@@ -369,6 +372,16 @@ export default function AdminDossiers() {
                             }}
                           />
                         </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setMenuAccessUser(p)}
+                          >
+                            <MenuIcon className="h-3.5 w-3.5 mr-1" />
+                            Gérer
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))
                 )}
@@ -377,6 +390,13 @@ export default function AdminDossiers() {
           </div>
         </section>
       </main>
+
+      <MenuAccessDialog
+        open={!!menuAccessUser}
+        onOpenChange={(v) => !v && setMenuAccessUser(null)}
+        targetUser={menuAccessUser}
+        profiles={Object.values(profiles)}
+      />
     </div>
   );
 }

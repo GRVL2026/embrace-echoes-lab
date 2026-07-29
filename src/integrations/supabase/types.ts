@@ -2380,6 +2380,30 @@ export type Database = {
         }
         Relationships: []
       }
+      user_menu_access: {
+        Row: {
+          allowed: boolean
+          section_key: string
+          updated_at: string
+          updated_by: string | null
+          user_id: string
+        }
+        Insert: {
+          allowed?: boolean
+          section_key: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id: string
+        }
+        Update: {
+          allowed?: boolean
+          section_key?: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           role: string

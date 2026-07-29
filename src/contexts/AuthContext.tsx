@@ -30,6 +30,8 @@ type AuthContextValue = {
   canAccessSalle: boolean;
   /** True quand l'utilisateur n'a QUE l'accès Salle (ni admin/direction, ni dashboard). */
   salleOnly: boolean;
+  /** Override d'accès par section/sous-section (admin-managed). */
+  menuAllowed: (key: string) => boolean | undefined;
   refreshRoles: () => void;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (
@@ -51,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [copilotEnabled, setCopilotEnabled] = useState<boolean>(true);
   const [dashboardEnabled, setDashboardEnabled] = useState<boolean>(false);
   const [salleEnabled, setSalleEnabled] = useState<boolean>(false);
+  const [menuAccess, setMenuAccess] = useState<Record<string, boolean>>({});
   const [rolesResolvedFor, setRolesResolvedFor] = useState<string | null>(null);
   const [roleError, setRoleError] = useState<string | null>(null);
   const [roleRefresh, setRoleRefresh] = useState(0);
@@ -96,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setCopilotEnabled(true);
       setDashboardEnabled(false);
       setSalleEnabled(false);
+      setMenuAccess({});
       setRolesResolvedFor(null);
       setRoleError(null);
       return;
@@ -108,9 +112,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRoleError(null);
 
     (async () => {
-      const [{ data, error }, { data: profile }] = await Promise.all([
+      const [{ data, error }, { data: profile }, { data: menu }] = await Promise.all([
         (supabase as any).from("user_roles").select("role").eq("user_id", userId),
         (supabase as any).from("profiles").select("copilote_enabled, dashboard_enabled, salle_enabled").eq("id", userId).maybeSingle(),
+        (supabase as any).from("user_menu_access").select("section_key, allowed").eq("user_id", userId),
       ]);
 
       if (!active) return;
@@ -124,6 +129,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setCopilotEnabled(profile?.copilote_enabled !== false);
       setDashboardEnabled(profile?.dashboard_enabled === true);
       setSalleEnabled(profile?.salle_enabled === true);
+      const accessMap: Record<string, boolean> = {};
+      ((menu ?? []) as { section_key: string; allowed: boolean }[]).forEach((m) => {
+        accessMap[m.section_key] = m.allowed;
+      });
+      setMenuAccess(accessMap);
       setRolesResolvedFor(userId);
     })();
 
@@ -207,6 +217,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         salleEnabled,
         canAccessSalle,
         salleOnly,
+        menuAllowed: (key: string) =>
+          key in menuAccess ? menuAccess[key] : undefined,
         refreshRoles,
 
         signIn,

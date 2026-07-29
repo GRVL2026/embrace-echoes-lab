@@ -147,40 +147,64 @@ Deno.serve(async (req) => {
 
     let sql = '';
     let interpretation = question;
-    try {
+    let rawText = '';
+    let parseError: string | null = null;
+
+    const tryInterpret = async (): Promise<boolean> => {
       const resp = await anthropicJson(apiKey, {
         model: MODEL,
         max_tokens: 1500,
         system: SYSTEM,
         messages: [{ role: 'user', content: question }],
       });
-      const text = (resp?.content?.[0]?.text ?? '').trim();
-      const match = text.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error('Réponse IA invalide');
-      const parsed = JSON.parse(match[0]);
-      sql = String(parsed.sql || '').trim();
-      interpretation = String(parsed.interpretation || question);
+      rawText = (resp?.content?.[0]?.text ?? '').trim();
+      const cleaned = rawText.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
+      const match = cleaned.match(/\{[\s\S]*\}/);
+      if (!match) { parseError = 'aucun JSON détecté'; return false; }
+      try {
+        const parsed = JSON.parse(match[0]);
+        const s = String(parsed.sql || '').trim();
+        if (!s) { parseError = 'champ sql vide'; return false; }
+        sql = s;
+        interpretation = String(parsed.interpretation || question);
+        return true;
+      } catch (err: any) {
+        parseError = `JSON invalide (${err?.message ?? 'parse error'})`;
+        return false;
+      }
+    };
+
+    try {
+      let ok = await tryInterpret();
+      if (!ok) {
+        console.warn('AI interpretation failed, retrying once', { parseError, rawText: rawText.slice(0, 200) });
+        ok = await tryInterpret();
+      }
+      if (!ok) {
+        const snippet = rawText ? rawText.slice(0, 300) : '(vide)';
+        return jsonErr(422, `Interprétation IA échouée (${parseError ?? 'inconnu'}) : ${snippet}`);
+      }
     } catch (e) {
       if (isAnthropicOverload(e)) return jsonErr(503, (e as any).userMessage);
-      console.error('AI parse error', e);
-      return jsonErr(500, "Impossible d'interpréter la question");
+      console.error('AI call error', e);
+      return jsonErr(500, `Interprétation IA échouée : ${(e as any)?.message ?? 'erreur inconnue'}`);
     }
 
-    if (!sql) return jsonErr(400, 'SQL vide');
+    if (!sql) return jsonErr(422, 'Interprétation IA échouée : SQL vide');
     const check = validateSql(sql);
     if (!check.ok) {
-      console.warn('SQL rejeté par la whitelist', check.error);
-      return jsonErr(400, `Requête refusée : ${check.error}`);
+      console.warn('SQL rejeté par la whitelist', check.error, sql);
+      return jsonErr(400, `SQL rejeté : ${check.error} — SQL: ${sql.slice(0, 400)}`);
     }
 
     // Exécute via gaia_query_restricted (SECURITY INVOKER — RLS + whitelist SQL appliquées).
     const { data, error } = await sb.rpc('gaia_query_restricted' as any, { sql_query: sql });
     if (error) {
-      console.error('gaia_query_restricted error', error);
-      return jsonErr(400, `Erreur SQL : ${error.message}`);
+      console.error('gaia_query_restricted error', error, sql);
+      return jsonErr(400, `SQL rejeté : ${error.message} — SQL: ${sql.slice(0, 400)}`);
     }
     if (data && typeof data === 'object' && !Array.isArray(data) && 'error' in (data as any)) {
-      return jsonErr(400, `Erreur SQL : ${(data as any).error}`);
+      return jsonErr(400, `SQL rejeté : ${(data as any).error} — SQL: ${sql.slice(0, 400)}`);
     }
 
 

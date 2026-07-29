@@ -33,6 +33,7 @@ import NotificationsSettings from "./pages/NotificationsSettings";
 import PublicDossier from "./pages/PublicDossier";
 import Login from "./pages/Login";
 import SignUp from "./pages/SignUp";
+import OAuthConsent from "./pages/OAuthConsent";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AppShell } from "./components/nav/AppShell";
@@ -65,6 +66,7 @@ const App = () => (
             {/* Public */}
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<SignUp />} />
+            <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
             <Route path="/d/:slug" element={<PublicDossier />} />
 
             {/* Protected */}

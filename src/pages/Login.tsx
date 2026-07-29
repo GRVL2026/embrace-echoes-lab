@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,8 +8,17 @@ import { toast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 
+/** Only allow same-origin relative paths as post-login redirect targets. */
+function safeNext(raw: string | null): string | null {
+  if (!raw) return null;
+  if (!raw.startsWith("/") || raw.startsWith("//")) return null;
+  return raw;
+}
+
 export default function Login() {
   const { signIn, user, isAdmin, isLoading, roleError, refreshRoles } = useAuth();
+  const [params] = useSearchParams();
+  const next = safeNext(params.get("next"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -32,7 +41,7 @@ export default function Login() {
   }
 
   if (user) {
-    return <Navigate to={isAdmin ? "/" : "/dossiers"} replace />;
+    return <Navigate to={next ?? (isAdmin ? "/" : "/dossiers")} replace />;
   }
 
   const onSubmit = async (e: FormEvent) => {

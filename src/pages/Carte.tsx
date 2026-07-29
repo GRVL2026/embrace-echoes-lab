@@ -404,7 +404,8 @@ export default function Carte() {
       </header>
 
 
-      {/* Barre de recherche + copilote */}
+      {/* Barre de recherche + copilote — réservée admin/direction */}
+      {(isAdmin || isDirection) && (
       <div className="relative z-[1100] border-b border-border/60 bg-background px-3 py-2">
         <div className="flex gap-2 items-start max-w-3xl mx-auto">
           <div className="relative flex-1">
@@ -467,6 +468,7 @@ export default function Carte() {
           Ex : « clients de Bretagne à plus de 50 k€ sur 2026 », « dormants &gt; 100 k€ en PACA », « top 10 Normandie »
         </div>
       </div>
+      )}
 
       <div className="relative flex-1 isolate">
         <div ref={mapEl} className="absolute inset-0 z-0" style={{ isolation: "isolate" }} />

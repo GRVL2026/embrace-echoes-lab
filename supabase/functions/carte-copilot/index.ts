@@ -37,16 +37,28 @@ RÈGLES CRITIQUES :
 5. Limite à 500 lignes max.
 6. Régions françaises → départements via LEFT(code_postal, 2) (et implicitement pays = 'FR') :
    Bretagne = ('22','29','35','56'); Normandie = ('14','27','50','61','76'); PACA = ('04','05','06','13','83','84'); Île-de-France = ('75','77','78','91','92','93','94','95'); Auvergne-Rhône-Alpes = ('01','03','07','15','26','38','42','43','63','69','73','74'); Hauts-de-France = ('02','59','60','62','80'); Nouvelle-Aquitaine = ('16','17','19','23','24','33','40','47','64','79','86','87'); Occitanie = ('09','11','12','30','31','32','34','46','48','65','66','81','82'); Grand Est = ('08','10','51','52','54','55','57','67','68','88'); Pays de la Loire = ('44','49','53','72','85'); Centre-Val de Loire = ('18','28','36','37','41','45'); Bourgogne-Franche-Comté = ('21','25','39','58','70','71','89','90'); Corse = ('2A','2B').
-7. RÈGLE PÉRIODE — TRÈS IMPORTANT : quand une année/période est demandée, tu DOIS :
+7. RÈGLE PÉRIODE — TRÈS IMPORTANT : quand une année/période/plage temporelle est demandée (explicite OU implicite), tu DOIS :
    (a) calculer ca_periode = SUM(montant_ht) FILTER (WHERE <condition période>) sur l'UNION gaia_ventes + gaia_historique,
    (b) filtrer les clients pour ne garder que ceux avec ca_periode > 0,
    (c) TRIER exclusivement par ca_periode DESC (jamais par ca_total),
    (d) NE PAS classer/afficher ca_total comme critère principal — ca_total reste renseigné à titre indicatif uniquement.
    Sans période demandée → ca_periode = NULL et tri par ca_total (ou par la métrique demandée).
-   Exemples de conditions période :
-   - "en 2026" → EXTRACT(year FROM invoice_date) = 2026
-   - "sur 2025-2026" → EXTRACT(year FROM invoice_date) IN (2025,2026)
-   - "depuis mars 2026" → invoice_date >= '2026-03-01'
+   Toutes les formulations temporelles courantes doivent être interprétées (JAMAIS renvoyer une erreur pour une plage temporelle) :
+   - "en 2026" / "sur 2026" / "au cours de 2026" → EXTRACT(year FROM invoice_date) = 2026
+   - "sur 2025-2026" / "2025 et 2026" → EXTRACT(year FROM invoice_date) IN (2025,2026)
+   - "depuis 2025" / "à partir de 2025" → invoice_date >= '2025-01-01'
+   - "depuis mars 2026" / "à partir de mars 2026" → invoice_date >= '2026-03-01'
+   - "depuis 2 ans" / "sur 2 ans" / "24 derniers mois" → invoice_date >= current_date - interval '24 months'
+   - "depuis 6 mois" / "6 derniers mois" → invoice_date >= current_date - interval '6 months'
+   - "cette année" → EXTRACT(year FROM invoice_date) = EXTRACT(year FROM current_date)
+   - "l'an dernier" / "année dernière" → EXTRACT(year FROM invoice_date) = EXTRACT(year FROM current_date) - 1
+   - "avant 2022" / "jusqu'en 2022" (exclus) → invoice_date < '2022-01-01'
+   - "jusqu'à 2022 inclus" → invoice_date <= '2022-12-31'
+   - "entre 2023 et 2024" / "de 2023 à 2024" → invoice_date BETWEEN '2023-01-01' AND '2024-12-31'
+   - "au T3 2026" → invoice_date >= '2026-07-01' AND invoice_date < '2026-10-01'
+   - "au S1 2026" → invoice_date >= '2026-01-01' AND invoice_date < '2026-07-01'
+   Dès qu'il y a le moindre doute sur la présence d'une période, PRIVILÉGIE l'interprétation temporelle plutôt qu'une erreur.
+   Ne renvoie une erreur (JSON avec sql vide) QUE si la question est totalement inintelligible.
 8. Pour "autour de Lyon" ou proximité géographique : filtre par département correspondant, ou par bounding box lat/lng si mentionné explicitement.
 9. "Clients en France" / "top clients France" → filtre c.pays = 'FR' (JAMAIS 'France').
 10. Pattern recommandé : CTE "v" avec UNION ALL entre gaia_ventes et gaia_historique, puis agrégation par code_client, join sur gaia_clients.

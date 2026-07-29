@@ -90,13 +90,34 @@ export default function Reconquete() {
         r.statut_relance !== statutFilter
       )
         return false;
+      if (societeFilter !== "all") {
+        const s = resolveCompanyStatus({
+          etat_administratif: r.etat_administratif,
+          procedure_collective: r.procedure_collective,
+        });
+        if (societeFilter === "cessees" && s !== "cessee") return false;
+        if (societeFilter === "procedure" && s !== "procedure") return false;
+        if (societeFilter === "actives" && s !== "active") return false;
+      }
       if (qLow) {
         const hay = `${r.nom ?? ""} ${r.ville ?? ""} ${r.code_client}`.toLowerCase();
         if (!hay.includes(qLow)) return false;
       }
       return true;
     });
-  }, [data, q, statutFilter, catFilter]);
+  }, [data, q, statutFilter, catFilter, societeFilter]);
+
+  const cesseesCount = useMemo(
+    () =>
+      (data ?? []).filter(
+        (r) =>
+          resolveCompanyStatus({
+            etat_administratif: r.etat_administratif,
+            procedure_collective: r.procedure_collective,
+          }) === "cessee",
+      ).length,
+    [data],
+  );
 
   if (isLoading) {
     return (

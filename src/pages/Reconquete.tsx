@@ -209,6 +209,31 @@ export default function Reconquete() {
               <SelectItem value="inactif">Inactifs</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={societeFilter} onValueChange={setSocieteFilter}>
+            <SelectTrigger className="w-[190px]">
+              <SelectValue placeholder="Société" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toutes sociétés</SelectItem>
+              <SelectItem value="cessees">
+                Sociétés cessées{cesseesCount > 0 ? ` (${cesseesCount})` : ""}
+              </SelectItem>
+              <SelectItem value="procedure">Procédure collective</SelectItem>
+              <SelectItem value="actives">Actives (INSEE)</SelectItem>
+            </SelectContent>
+          </Select>
+          {cesseesCount > 0 && societeFilter !== "cessees" && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1 border-rose-500/40 text-rose-500 hover:bg-rose-500/10"
+              onClick={() => setSocieteFilter("cessees")}
+            >
+              <AlertTriangle className="h-3.5 w-3.5" />
+              {cesseesCount} société{cesseesCount > 1 ? "s" : ""} cessée
+              {cesseesCount > 1 ? "s" : ""} à revoir
+            </Button>
+          )}
         </div>
       </Card>
 

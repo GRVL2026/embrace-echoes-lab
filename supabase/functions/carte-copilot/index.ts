@@ -7,14 +7,17 @@ const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const MODEL = 'claude-sonnet-5';
 
-const SYSTEM = `Tu es un assistant SQL pour Arcade OS (Avranches Automatic). Tu transformes une question en français en UNE seule requête SQL PostgreSQL, en LECTURE SEULE, exécutée via la fonction gaia_query (SELECT / WITH uniquement).
+const SYSTEM = `Tu es un assistant SQL pour Arcade OS (Avranches Automatic). Tu transformes une question en français en UNE seule requête SQL PostgreSQL, en LECTURE SEULE, exécutée via la fonction gaia_query_restricted (SELECT / WITH uniquement).
 
-TABLES DISPONIBLES :
+TABLES AUTORISÉES (whitelist stricte — toute autre table est refusée par le moteur) :
 - gaia_clients(customer_id text, name text, status text, typologie text, adresse1, adresse2, code_postal text, ville text, pays text, lat numeric, lng numeric)
 - gaia_ventes(code_client text, invoice_date date, qty numeric, pu_rem numeric, montant_ht numeric, code_article text, tran_type text, classe_article text)  -- ventes récentes
 - gaia_historique(code_client text, invoice_date date, qty numeric, pu_rem numeric, montant_ht numeric, code_article text, classe_article text)  -- ventes archivées
 - prospects(id uuid, entreprise text, ville text, statut text, segment text, lat numeric, lng numeric, montant_estime numeric)
 - catalogue_erp(code text, description text, famille text, prix_ht numeric)
+- client_actions(code_client text, type text, date timestamptz, auteur_id uuid)
+
+TU N'AS PAS ACCÈS aux tables profiles, user_roles, allowed_emails, invitations, notifications, gaia_commandes, gaia_achats, gaia_stock, aux schémas auth/storage/vault/pg_catalog/information_schema, ni aux vues v_gaia_* / mv_gaia_*. Toute requête qui les cite sera rejetée : NE LES MENTIONNE JAMAIS.
 
 CONVENTIONS DES DONNÉES (TRÈS IMPORTANT) :
 - gaia_clients.pays est un CODE ISO-2 en majuscules, JAMAIS le nom du pays. Valeurs réelles : 'FR' (France), 'BE' (Belgique), 'CH' (Suisse), 'DE' (Allemagne), 'ES' (Espagne), 'GB' (Royaume-Uni), 'IT' (Italie), 'LU' (Luxembourg), 'NL' (Pays-Bas), 'PT' (Portugal), 'MA' (Maroc), 'DZ' (Algérie), 'TN' (Tunisie), 'CI', 'SN', 'CD', 'CG', 'GA', 'DJ', 'GF' (Guyane), 'GP' (Guadeloupe), 'MQ', 'RE', 'YT', 'NC', 'PF', et divers autres. Écris TOUJOURS c.pays = 'FR' pour "France", jamais c.pays = 'France'.
@@ -25,7 +28,7 @@ CONVENTIONS DES DONNÉES (TRÈS IMPORTANT) :
 
 RÈGLES CRITIQUES :
 1. Retourne UNIQUEMENT du JSON de la forme {"sql": "...", "interpretation": "..."}. Rien d'autre.
-2. La requête DOIT commencer par SELECT ou WITH. Aucune écriture. Aucun ; multiple.
+2. La requête DOIT commencer par SELECT ou WITH. Aucune écriture. Aucun ; multiple. Aucun schéma préfixé sauf public.
 3. Renvoie TOUJOURS ces colonnes exactement dans cet ordre :
    code_client, nom, ville, lat, lng, ca_12m, ca_total, ca_periode, derniere_commande, categorie
    - ca_12m = somme montant_ht sur les 12 derniers mois (gaia_ventes UNION gaia_historique)
@@ -43,31 +46,53 @@ RÈGLES CRITIQUES :
    (c) TRIER exclusivement par ca_periode DESC (jamais par ca_total),
    (d) NE PAS classer/afficher ca_total comme critère principal — ca_total reste renseigné à titre indicatif uniquement.
    Sans période demandée → ca_periode = NULL et tri par ca_total (ou par la métrique demandée).
-   Toutes les formulations temporelles courantes doivent être interprétées (JAMAIS renvoyer une erreur pour une plage temporelle) :
-   - "en 2026" / "sur 2026" / "au cours de 2026" → EXTRACT(year FROM invoice_date) = 2026
-   - "sur 2025-2026" / "2025 et 2026" → EXTRACT(year FROM invoice_date) IN (2025,2026)
-   - "depuis 2025" / "à partir de 2025" → invoice_date >= '2025-01-01'
-   - "depuis mars 2026" / "à partir de mars 2026" → invoice_date >= '2026-03-01'
-   - "depuis 2 ans" / "sur 2 ans" / "24 derniers mois" → invoice_date >= current_date - interval '24 months'
-   - "depuis 6 mois" / "6 derniers mois" → invoice_date >= current_date - interval '6 months'
-   - "cette année" → EXTRACT(year FROM invoice_date) = EXTRACT(year FROM current_date)
-   - "l'an dernier" / "année dernière" → EXTRACT(year FROM invoice_date) = EXTRACT(year FROM current_date) - 1
-   - "avant 2022" / "jusqu'en 2022" (exclus) → invoice_date < '2022-01-01'
-   - "jusqu'à 2022 inclus" → invoice_date <= '2022-12-31'
-   - "entre 2023 et 2024" / "de 2023 à 2024" → invoice_date BETWEEN '2023-01-01' AND '2024-12-31'
-   - "au T3 2026" → invoice_date >= '2026-07-01' AND invoice_date < '2026-10-01'
-   - "au S1 2026" → invoice_date >= '2026-01-01' AND invoice_date < '2026-07-01'
-   Dès qu'il y a le moindre doute sur la présence d'une période, PRIVILÉGIE l'interprétation temporelle plutôt qu'une erreur.
-   Ne renvoie une erreur (JSON avec sql vide) QUE si la question est totalement inintelligible.
+   Toutes les formulations temporelles courantes doivent être interprétées.
 8. Pour "autour de Lyon" ou proximité géographique : filtre par département correspondant, ou par bounding box lat/lng si mentionné explicitement.
 9. "Clients en France" / "top clients France" → filtre c.pays = 'FR' (JAMAIS 'France').
 10. Pattern recommandé : CTE "v" avec UNION ALL entre gaia_ventes et gaia_historique, puis agrégation par code_client, join sur gaia_clients.
 
-EXEMPLE 1 — top 10 clients en France en 2026 (période demandée → tri sur ca_periode) :
-WITH v AS (SELECT code_client, invoice_date, montant_ht FROM gaia_ventes UNION ALL SELECT code_client, invoice_date, montant_ht FROM gaia_historique), agg AS (SELECT code_client, SUM(montant_ht) FILTER (WHERE invoice_date >= now() - interval '12 months') AS ca_12m, SUM(montant_ht) AS ca_total, SUM(montant_ht) FILTER (WHERE EXTRACT(year FROM invoice_date) = 2026) AS ca_periode, MAX(invoice_date) AS derniere_commande FROM v GROUP BY code_client) SELECT c.customer_id AS code_client, c.name AS nom, c.ville, c.lat, c.lng, COALESCE(a.ca_12m,0) AS ca_12m, COALESCE(a.ca_total,0) AS ca_total, COALESCE(a.ca_periode,0) AS ca_periode, a.derniere_commande, CASE WHEN a.derniere_commande >= now() - interval '12 months' THEN 'actif' WHEN a.derniere_commande >= now() - interval '36 months' THEN 'dormant' ELSE 'inactif' END AS categorie FROM gaia_clients c JOIN agg a ON a.code_client = c.customer_id WHERE c.lat IS NOT NULL AND c.lng IS NOT NULL AND c.pays = 'FR' AND COALESCE(a.ca_periode,0) > 0 ORDER BY a.ca_periode DESC NULLS LAST LIMIT 10;
+EXEMPLE — top 10 clients en France en 2026 (période demandée → tri sur ca_periode) :
+WITH v AS (SELECT code_client, invoice_date, montant_ht FROM gaia_ventes UNION ALL SELECT code_client, invoice_date, montant_ht FROM gaia_historique), agg AS (SELECT code_client, SUM(montant_ht) FILTER (WHERE invoice_date >= now() - interval '12 months') AS ca_12m, SUM(montant_ht) AS ca_total, SUM(montant_ht) FILTER (WHERE EXTRACT(year FROM invoice_date) = 2026) AS ca_periode, MAX(invoice_date) AS derniere_commande FROM v GROUP BY code_client) SELECT c.customer_id AS code_client, c.name AS nom, c.ville, c.lat, c.lng, COALESCE(a.ca_12m,0) AS ca_12m, COALESCE(a.ca_total,0) AS ca_total, COALESCE(a.ca_periode,0) AS ca_periode, a.derniere_commande, CASE WHEN a.derniere_commande >= now() - interval '12 months' THEN 'actif' WHEN a.derniere_commande >= now() - interval '36 months' THEN 'dormant' ELSE 'inactif' END AS categorie FROM gaia_clients c JOIN agg a ON a.code_client = c.customer_id WHERE c.lat IS NOT NULL AND c.lng IS NOT NULL AND c.pays = 'FR' AND COALESCE(a.ca_periode,0) > 0 ORDER BY a.ca_periode DESC NULLS LAST LIMIT 10;`;
 
-EXEMPLE 2 — top clients France toutes années (aucune période → ca_periode NULL, tri sur ca_total) :
-WITH v AS (SELECT code_client, invoice_date, montant_ht FROM gaia_ventes UNION ALL SELECT code_client, invoice_date, montant_ht FROM gaia_historique), agg AS (SELECT code_client, SUM(montant_ht) FILTER (WHERE invoice_date >= now() - interval '12 months') AS ca_12m, SUM(montant_ht) AS ca_total, MAX(invoice_date) AS derniere_commande FROM v GROUP BY code_client) SELECT c.customer_id AS code_client, c.name AS nom, c.ville, c.lat, c.lng, COALESCE(a.ca_12m,0) AS ca_12m, COALESCE(a.ca_total,0) AS ca_total, NULL::numeric AS ca_periode, a.derniere_commande, CASE WHEN a.derniere_commande >= now() - interval '12 months' THEN 'actif' WHEN a.derniere_commande >= now() - interval '36 months' THEN 'dormant' ELSE 'inactif' END AS categorie FROM gaia_clients c JOIN agg a ON a.code_client = c.customer_id WHERE c.lat IS NOT NULL AND c.lng IS NOT NULL AND c.pays = 'FR' ORDER BY a.ca_total DESC NULLS LAST LIMIT 10`;
+const ALLOWED_TABLES = new Set([
+  'gaia_clients','gaia_ventes','gaia_historique',
+  'catalogue_erp','prospects','client_actions',
+]);
+
+const FORBIDDEN_SCHEMA_RE = /\b(auth|storage|vault|realtime|supabase_functions|pg_catalog|pg_temp|information_schema|pg_policies|pg_roles|pg_shadow|pg_user)\./i;
+const FORBIDDEN_FN_RE = /\b(pg_read_|pg_ls_|pg_stat_file|dblink|copy_from|lo_import|lo_export|current_setting|set_config|pg_sleep|pg_terminate|pg_cancel|pg_reload)\b/i;
+const FORBIDDEN_KW_RE = /\b(insert|update|delete|drop|alter|create|grant|revoke|truncate|comment|copy|call|do|vacuum|analyze|reindex|cluster|refresh|listen|notify|lock|set|reset|show|begin|commit|rollback|savepoint|execute|prepare|deallocate|attach|detach)\b/i;
+
+function validateSql(sql: string): { ok: true } | { ok: false; error: string } {
+  if (!/^\s*(select|with)\s/i.test(sql)) return { ok: false, error: 'Requête non SELECT' };
+  if (sql.includes(';') && sql.replace(/;\s*$/, '').includes(';'))
+    return { ok: false, error: 'Instructions multiples interdites' };
+  if (FORBIDDEN_KW_RE.test(sql)) return { ok: false, error: 'Mot-clé interdit' };
+  if (FORBIDDEN_SCHEMA_RE.test(sql)) return { ok: false, error: 'Schéma non autorisé' };
+  if (FORBIDDEN_FN_RE.test(sql)) return { ok: false, error: 'Fonction non autorisée' };
+
+  const cleaned = sql
+    .replace(/'([^']|'')*'/g, ' ')
+    .replace(/--[^\n]*/g, ' ')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .toLowerCase();
+
+  const re = /(?:from|join)\s+(?:only\s+)?([a-z_][a-z0-9_$]*(?:\.[a-z_][a-z0-9_$]*)?)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(cleaned))) {
+    let ident = m[1];
+    if (ident.includes('.')) {
+      const [schema, name] = ident.split('.');
+      if (schema !== 'public') return { ok: false, error: `Objet non autorisé : ${ident}` };
+      ident = name;
+    }
+    if (!ALLOWED_TABLES.has(ident)) {
+      return { ok: false, error: `Table hors whitelist : ${ident}` };
+    }
+  }
+  return { ok: true };
+}
+
 
 function jsonErr(status: number, error: string) {
   return new Response(JSON.stringify({ error }), {

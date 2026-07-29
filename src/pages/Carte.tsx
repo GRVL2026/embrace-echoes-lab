@@ -389,7 +389,7 @@ export default function Carte() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
-      <div className="flex items-center justify-between border-b border-border/60 px-4 py-2 bg-background">
+      <header className="flex items-center justify-between border-b border-border/60 px-4 py-2 bg-background sticky top-0 z-40">
         <div className="flex items-center gap-3">
           <Link to={backHref} className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm">
             <ArrowLeft className="h-4 w-4" /> {backLabel}
@@ -401,7 +401,8 @@ export default function Carte() {
           </div>
         </div>
         {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-      </div>
+      </header>
+
 
       {/* Barre de recherche + copilote */}
       <div className="relative z-[1100] border-b border-border/60 bg-background px-3 py-2">

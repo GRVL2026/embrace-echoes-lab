@@ -76,9 +76,11 @@
   html, body { background-color: hsl(var(--background)); }
 
   /* App headers: background extends under the status bar, content sits below.
-     h-14 becomes a min-height so the header grows by the inset amount. */
+     h-14 becomes a min-height so the header grows by the inset amount.
+     `!important` wins over Tailwind `py-*` utility classes so every header
+     in the app respects the iOS notch, even when a page overrides padding. */
   header {
-    padding-top: var(--safe-top);
+    padding-top: calc(0.75rem + var(--safe-top)) !important;
     padding-left: max(var(--safe-left), 0.75rem);
     padding-right: max(var(--safe-right), 0.75rem);
   }
@@ -89,6 +91,7 @@
     }
   }
   header.h-14 { height: auto; min-height: calc(3.5rem + var(--safe-top)); }
+
 
   /* Toast viewport respects insets (top notch + bottom home indicator). */
   [data-radix-toast-viewport] {

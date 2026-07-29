@@ -194,6 +194,39 @@ export function ClientActionsDialog({
     toast({ title: "Proposition générée", description: "Vous pouvez éditer avant d'envoyer." });
   };
 
+  // Détermine le statut à appliquer après une action.
+  // - Choix explicite du commercial → prime.
+  // - Sinon règle auto : 1re action (mail/appel/visite) sur "sans statut" ou "a_contacter" → "contacte" ;
+  //   action suivante → "relance" ; "reactive"/"sans_suite" ne bougent pas.
+  //   Les actions de type "note" / "autre" ne déclenchent pas de transition auto.
+  const computeNextStatut = (
+    actionType: ActionType,
+    explicit: "auto" | StatutRelance,
+    current: StatutRelance | null,
+  ): StatutRelance | null => {
+    if (explicit !== "auto") return explicit;
+    if (actionType === "note" || actionType === "autre") return null;
+    if (!current || current === "a_contacter") return "contacte";
+    if (current === "contacte") return "relance";
+    // relance/reactive/sans_suite : on ne change rien automatiquement
+    return null;
+  };
+
+  const applyStatutAfterAction = async (actionType: ActionType) => {
+    if (!code || !user) return;
+    const current = (data?.statut_relance as StatutRelance | null) ?? null;
+    const next = computeNextStatut(actionType, statutResultant, current);
+    if (!next || next === current) return;
+    await (supabase as any)
+      .from("gaia_clients")
+      .update({
+        statut_relance: next,
+        statut_relance_maj: new Date().toISOString(),
+        statut_relance_par: user.id,
+      })
+      .eq("customer_id", code);
+  };
+
   const sendMail = async () => {
     if (!code || !hasEmail) return;
     if (!objet.trim() || !contenu.trim()) {
@@ -209,8 +242,8 @@ export function ClientActionsDialog({
         prochaine_relance: prochaine || null,
       },
     });
-    setSending(false);
     if (error || !res?.ok) {
+      setSending(false);
       toast({
         title: "Envoi échoué",
         description: (error as any)?.message || "Vérifiez l'email et réessayez.",
@@ -218,11 +251,14 @@ export function ClientActionsDialog({
       });
       return;
     }
+    await applyStatutAfterAction("mail");
+    setSending(false);
     toast({ title: "Mail envoyé", description: data?.email ?? "" });
     setObjet("");
     setContenu("");
     setResultat("");
     setProchaine("");
+    setStatutResultant("auto");
     await refresh();
     onChanged?.();
   };
@@ -245,16 +281,19 @@ export function ClientActionsDialog({
       resultat: resultat.trim() || null,
       prochaine_relance: prochaine || null,
     });
-    setSaving(false);
     if (error) {
+      setSaving(false);
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
       return;
     }
+    await applyStatutAfterAction(type);
+    setSaving(false);
     toast({ title: "Action enregistrée" });
     setObjet("");
     setContenu("");
     setResultat("");
     setProchaine("");
+    setStatutResultant("auto");
     await refresh();
     onChanged?.();
   };

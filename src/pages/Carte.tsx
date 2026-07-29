@@ -370,8 +370,8 @@ export default function Carte() {
         </div>
       </div>
 
-      <div className="relative flex-1">
-        <div ref={mapEl} className="absolute inset-0" />
+      <div className="relative flex-1 isolate">
+        <div ref={mapEl} className="absolute inset-0 z-0" style={{ isolation: "isolate" }} />
 
         {/* Résultat copilote */}
         {copilotResult && (

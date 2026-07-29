@@ -573,7 +573,7 @@ async function fetchBilansTargets(limit: number, afterCode: string | null): Prom
     join cible c on c.code = e.code_client
     where e.siren is not null
       and e.match_statut in ('auto','valide')
-      and (e.bilans_maj is null or e.bilans_maj < now() - interval '20 days')
+      and (e.bilans_maj is null or e.bilans_maj < now() - interval '12 months')
       ${afterCode ? `and e.code_client > ${escapeLit(afterCode)}` : ""}
     order by e.code_client
   `;
@@ -623,41 +623,29 @@ function extractBilansFromPappers(json: any): { comptes_publies: boolean; bilans
 }
 
 async function fetchPappers(siren: string): Promise<PappersFetchResult> {
-  if (!PAPPERS_API_KEY) return { ok: false, transient: true };
-  const url = `${PAPPERS_URL}?api_token=${encodeURIComponent(PAPPERS_API_KEY)}&siren=${encodeURIComponent(siren)}`;
+  // Bascule vers l'API publique gouv (gratuite). Le nom "fetchPappers" est conservé
+  // pour ne pas casser l'appelant, mais aucun crédit Pappers n'est consommé ici.
+  const { gouvBySiren, extractBilans } = await import("../_shared/gouv-entreprise.ts");
   try {
-    const res = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" } });
-    if (res.status === 404) {
-      // SIREN valide mais aucune donnée publiée
-      return { ok: true, comptes_publies: false, bilans: [] };
-    }
-    if (res.status === 429 || res.status >= 500) {
-      console.warn("Pappers transient", res.status, siren);
-      return { ok: false, transient: true };
-    }
-    if (!res.ok) {
-      console.warn("Pappers HTTP error", res.status, siren);
-      return { ok: false, transient: false };
-    }
-    const json = await res.json();
-    const { comptes_publies, bilans } = extractBilansFromPappers(json);
+    const hit = await gouvBySiren(siren);
+    if (!hit) return { ok: true, comptes_publies: false, bilans: [] };
+    const { comptes_publies, bilans } = extractBilans(hit);
     return { ok: true, comptes_publies, bilans };
   } catch (e) {
-    console.warn("Pappers fetch failed", (e as Error).message);
+    console.warn("gouv bilans fetch failed", (e as Error).message);
     return { ok: false, transient: true };
   }
 }
 
+
 async function bilansBatch() {
-  if (!PAPPERS_API_KEY) {
-    return { ok: false, error: "PAPPERS_API_KEY manquante" };
-  }
   const cursor = await loadBilansCursor();
   const targets = await fetchBilansTargets(BILANS_BATCH_SIZE, cursor);
   if (targets.length === 0) {
     await saveBilansCursor(null);
-    return { ok: true, done: true, processed: 0, cursor: null, note: "tous les bilans sont à jour (aucune cible non traitée ou plus vieille que 20 jours)" };
+    return { ok: true, done: true, processed: 0, cursor: null, note: "tous les bilans sont à jour (aucune cible non traitée ou plus vieille que 12 mois)" };
   }
+
   const stats = { updated: 0, sans_comptes: 0, skipped: 0, echec: 0 };
   for (const t of targets) {
     const r = await fetchPappers(t.siren);

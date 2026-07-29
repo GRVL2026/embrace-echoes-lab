@@ -145,15 +145,35 @@ export default function Reconquete() {
             Clients dormants (12-24 mois) et inactifs, triés par CA × ancienneté.
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => refetch()}
-          disabled={isFetching}
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
-          Rafraîchir
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="inline-flex rounded-md border border-border overflow-hidden">
+            <button
+              className={`px-2 py-1.5 text-xs inline-flex items-center gap-1 ${
+                view === "table" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-muted/50"
+              }`}
+              onClick={() => setView("table")}
+            >
+              <List className="h-3.5 w-3.5" /> Table
+            </button>
+            <button
+              className={`px-2 py-1.5 text-xs inline-flex items-center gap-1 border-l border-border ${
+                view === "kanban" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-muted/50"
+              }`}
+              onClick={() => setView("kanban")}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" /> Pipeline
+            </button>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetch()}
+            disabled={isFetching}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
+            Rafraîchir
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

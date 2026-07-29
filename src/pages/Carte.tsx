@@ -3,6 +3,7 @@ import { useLocation, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { ClientActionsDialog } from "@/components/reactivation/ClientActionsDialog";
 import { Loader2, MapPin, ArrowLeft, Search, Sparkles, X, RotateCcw } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";

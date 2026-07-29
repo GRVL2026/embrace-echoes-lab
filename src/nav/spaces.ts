@@ -134,6 +134,13 @@ export const SPACES: Space[] = [
         icon: Target,
         match: startsWith("/prospection"),
       },
+      {
+        label: "Carte",
+        to: "/carte?vue=prospection",
+        icon: MapIcon,
+        show: (c) => c.isAdmin || c.isDirection,
+        match: (p, _h) => p === "/carte",
+      },
     ],
   },
   {

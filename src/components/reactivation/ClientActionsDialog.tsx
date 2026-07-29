@@ -314,6 +314,77 @@ export function ClientActionsDialog({
           </div>
         ) : (
           <>
+            {data && (() => {
+              const cat = categorieFromDate(data.derniere_commande);
+              const tel = cleanPhone(data.telephone);
+              const adresseLigne = [data.adresse1, data.adresse2].filter(Boolean).join(", ");
+              const localite = [data.code_postal, data.ville].filter(Boolean).join(" ");
+              const fullAdresse = [adresseLigne, localite].filter(Boolean).join(" — ");
+              const lastAct = data.derniere_action;
+              return (
+                <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2 text-sm">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                    Contact & contexte
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      {tel ? (
+                        <a href={`tel:${tel}`} className="text-primary hover:underline font-medium">
+                          {data.telephone}
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground italic">Téléphone non renseigné</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      {hasEmail ? (
+                        <a href={`mailto:${data.email}`} className="text-primary hover:underline font-medium truncate">
+                          {data.email}
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground italic">Email non renseigné</span>
+                      )}
+                    </div>
+                    <div className="flex items-start gap-2 md:col-span-2">
+                      <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                      {fullAdresse ? (
+                        <span>{fullAdresse}</span>
+                      ) : (
+                        <span className="text-muted-foreground italic">Adresse non renseignée</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-border/60">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[11px] ${cat.cls}`}>
+                      {cat.label}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      Dernière cde :{" "}
+                      <b className="text-foreground">
+                        {data.derniere_commande
+                          ? new Date(data.derniere_commande).toLocaleDateString("fr-FR")
+                          : "aucune"}
+                      </b>
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      CA total : <b className="text-foreground">{fmtEUR(data.ca_total)}</b>
+                    </span>
+                    {lastAct ? (
+                      <span className="text-xs text-muted-foreground">
+                        Dernière action : <b className="text-foreground">{lastAct.type}</b>
+                        {" "}— {new Date(lastAct.date).toLocaleDateString("fr-FR")}
+                        {lastAct.auteur ? ` (${lastAct.auteur})` : ""}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground italic">Aucune action encore</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="flex gap-2 border-b">
               <button
                 className={`px-3 py-2 text-sm ${

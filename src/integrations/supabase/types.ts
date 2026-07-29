@@ -997,6 +997,9 @@ export type Database = {
           adresse2: string | null
           code_postal: string | null
           customer_id: string
+          geocoded_at: string | null
+          lat: number | null
+          lng: number | null
           name: string | null
           pays: string | null
           status: string | null
@@ -1008,6 +1011,9 @@ export type Database = {
           adresse2?: string | null
           code_postal?: string | null
           customer_id: string
+          geocoded_at?: string | null
+          lat?: number | null
+          lng?: number | null
           name?: string | null
           pays?: string | null
           status?: string | null
@@ -1019,6 +1025,9 @@ export type Database = {
           adresse2?: string | null
           code_postal?: string | null
           customer_id?: string
+          geocoded_at?: string | null
+          lat?: number | null
+          lng?: number | null
           name?: string | null
           pays?: string | null
           status?: string | null
@@ -1963,12 +1972,15 @@ export type Database = {
           effectif: string | null
           email: string | null
           entreprise: string
+          geocoded_at: string | null
           id: string
+          lat: number | null
           lgm_audience: string | null
           lgm_lead_id: string | null
           lgm_sent_at: string | null
           lgm_status: string | null
           linkedin_url: string | null
+          lng: number | null
           montant_estime: number | null
           notes: string | null
           owner_id: string | null
@@ -1997,12 +2009,15 @@ export type Database = {
           effectif?: string | null
           email?: string | null
           entreprise: string
+          geocoded_at?: string | null
           id?: string
+          lat?: number | null
           lgm_audience?: string | null
           lgm_lead_id?: string | null
           lgm_sent_at?: string | null
           lgm_status?: string | null
           linkedin_url?: string | null
+          lng?: number | null
           montant_estime?: number | null
           notes?: string | null
           owner_id?: string | null
@@ -2031,12 +2046,15 @@ export type Database = {
           effectif?: string | null
           email?: string | null
           entreprise?: string
+          geocoded_at?: string | null
           id?: string
+          lat?: number | null
           lgm_audience?: string | null
           lgm_lead_id?: string | null
           lgm_sent_at?: string | null
           lgm_status?: string | null
           linkedin_url?: string | null
+          lng?: number | null
           montant_estime?: number | null
           notes?: string | null
           owner_id?: string | null
@@ -3028,6 +3046,7 @@ export type Database = {
           part_reelle: number
         }[]
       }
+      get_map_points: { Args: never; Returns: Json }
       get_marge_client: {
         Args: { _annee?: number; _client?: string }
         Returns: {

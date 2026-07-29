@@ -22,6 +22,7 @@ import {
   Grid2x2,
   ShoppingBag,
   Target,
+  Map as MapIcon,
   type LucideIcon,
 } from "lucide-react";
 
@@ -85,6 +86,13 @@ export const SPACES: Space[] = [
         show: (c) => c.canAccessDashboard,
         match: startsWith("/clients"),
       },
+      {
+        label: "Carte",
+        to: "/carte",
+        icon: MapIcon,
+        show: (c) => c.isAdmin || c.isDirection,
+        match: (p, _h) => p === "/carte",
+      },
 
       {
         label: "Pipeline",
@@ -125,6 +133,13 @@ export const SPACES: Space[] = [
         to: "/prospection",
         icon: Target,
         match: startsWith("/prospection"),
+      },
+      {
+        label: "Carte",
+        to: "/carte?vue=prospection",
+        icon: MapIcon,
+        show: (c) => c.isAdmin || c.isDirection,
+        match: (p, _h) => p === "/carte",
       },
     ],
   },

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { SPACES, type Space, type NavEntry } from "@/nav/spaces";
+import { RESTRICTED_ACTIONS } from "@/nav/restricted-actions";
 import {
   Dialog,
   DialogContent,

@@ -3,6 +3,7 @@ import { useLocation, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { ClientActionsDialog } from "@/components/reactivation/ClientActionsDialog";
 import { Loader2, MapPin, ArrowLeft, Search, Sparkles, X, RotateCcw } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
@@ -89,8 +90,10 @@ type CopilotResult = {
 };
 
 export default function Carte() {
-  const { isAdmin, isDirection } = useAuth();
+  const { isAdmin, isDirection, canReactivation } = useAuth();
   const authorized = isAdmin || isDirection;
+  const [reaCode, setReaCode] = useState<string | null>(null);
+  const [reaTab, setReaTab] = useState<"action" | "statut">("action");
   const search = new URLSearchParams(useLocation().search);
   const vue = search.get("vue"); // "prospection" | null
 
@@ -164,11 +167,58 @@ export default function Carte() {
     // @ts-ignore
     clusterRef.current = (L as any).markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 55 });
     map.addLayer(clusterRef.current);
+
+    // Popup delegated click → open reactivation dialog
+    map.on("popupopen", async (e: any) => {
+      const el: HTMLElement = e.popup.getElement();
+      if (!el) return;
+      el.querySelectorAll<HTMLButtonElement>("button[data-rea-action]").forEach((btn) => {
+        btn.onclick = () => {
+          const code = btn.getAttribute("data-code") || "";
+          const action = btn.getAttribute("data-rea-action") as "action" | "statut";
+          if (!code) return;
+          setReaCode(code);
+          setReaTab(action);
+        };
+      });
+      // Lazy load statut + last action
+      const slot = el.querySelector<HTMLElement>(".rea-slot");
+      const code = slot?.getAttribute("data-code");
+      if (slot && code) {
+        try {
+          const { data } = await (supabase as any).rpc("get_client_reactivation", {
+            _code: code,
+          });
+          const d = data as any;
+          if (!d) { slot.textContent = ""; return; }
+          const parts: string[] = [];
+          if (d.statut_relance) {
+            const labels: Record<string, string> = {
+              a_contacter: "À contacter", contacte: "Contacté", relance: "Relance",
+              reactive: "Réactivé", sans_suite: "Sans suite",
+            };
+            parts.push(`Statut : <b>${labels[d.statut_relance] || d.statut_relance}</b>`);
+          }
+          const last = d.actions?.[0];
+          if (last) {
+            const dt = new Date(last.date).toLocaleDateString("fr-FR");
+            parts.push(`Dernière action : <b>${last.type}</b> — ${dt}${last.auteur ? ` (${last.auteur})` : ""}`);
+          }
+          slot.innerHTML = parts.length
+            ? parts.map((p) => `<div>${p}</div>`).join("")
+            : `<em>Aucune action encore.</em>`;
+        } catch {
+          slot.textContent = "";
+        }
+      }
+    });
+
     return () => {
       map.remove();
       mapRef.current = null;
       clusterRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // --- Redraw markers ---
@@ -189,13 +239,15 @@ export default function Carte() {
         const size = c.categorie === "actif" ? 8 + Math.round(20 * Math.sqrt((c.ca_12m || 0) / maxCa)) : 10;
         const m = L.marker([c.lat, c.lng], { icon: makeDivIcon(color, size, !!filterCodes) });
         m.bindPopup(
-          `<div style="font-family:system-ui,sans-serif;min-width:200px">
+          `<div style="font-family:system-ui,sans-serif;min-width:220px" data-client-code="${escapeHtml(c.code_client)}">
             <div style="font-weight:600;margin-bottom:4px">${escapeHtml(c.nom || "—")}</div>
             <div style="color:#64748b;font-size:12px">${escapeHtml(c.ville || "")}</div>
             <div style="margin-top:6px;font-size:12px">CA 12 mois : <b>${fmtEUR(c.ca_12m || 0)}</b></div>
             <div style="font-size:12px">CA total : <b>${fmtEUR(c.ca_total || 0)}</b></div>
             <div style="font-size:12px;color:#475569">Dernière commande : <b>${c.derniere_commande ? fmtMonth(c.derniere_commande) : "aucune commande enregistrée"}</b></div>
             <div style="font-size:11px;color:${color};margin-top:4px;text-transform:uppercase">${c.categorie}</div>
+            <div class="rea-slot" data-code="${escapeHtml(c.code_client)}" style="margin-top:8px;padding-top:6px;border-top:1px solid #e2e8f0;font-size:11px;color:#64748b">Chargement…</div>
+            ${canReactivation ? `<div style="display:flex;gap:6px;margin-top:6px"><button data-rea-action="action" data-code="${escapeHtml(c.code_client)}" style="flex:1;padding:5px 8px;background:#9B5CFF;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-weight:500">+ Action</button><button data-rea-action="statut" data-code="${escapeHtml(c.code_client)}" style="flex:1;padding:5px 8px;background:#334155;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-weight:500">Statut</button></div>` : ""}
           </div>`
         );
         cluster.addLayer(m);
@@ -439,6 +491,13 @@ export default function Carte() {
           </div>
         )}
       </div>
+
+      <ClientActionsDialog
+        code={reaCode}
+        open={!!reaCode}
+        onOpenChange={(v) => !v && setReaCode(null)}
+        initialTab={reaTab}
+      />
     </div>
   );
 }

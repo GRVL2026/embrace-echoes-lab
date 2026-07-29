@@ -23,6 +23,7 @@ type AuthContextValue = {
   canAccessGaia: boolean;
   canAccessDashboard: boolean;
   canAccessProspection: boolean;
+  canReactivation: boolean;
   copilotEnabled: boolean;
   dashboardEnabled: boolean;
   salleEnabled: boolean;
@@ -149,6 +150,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const canAccessGaia = isAdmin || isDirection;
   const isProspection = roles.includes("prospection");
   const canAccessProspection = isAdmin || isDirection || isProspection;
+  const REACTIVATION_EMAILS = new Set([
+    "romain.lirola@avranchesautomatic.com",
+    "valerie@avranchesautomatic.com",
+  ]);
+  const userEmail = (user?.email ?? "").toLowerCase();
+  const canReactivation = isAdmin || isDirection || REACTIVATION_EMAILS.has(userEmail);
   const salleEnabledOnly = !!user && !hasSalesRole && !dashboardEnabled && salleEnabled;
   const canAccessDashboard = !salleEnabledOnly && (hasSalesRole || dashboardEnabled);
   const canAccessSalle = canAccessGaia || salleEnabled;
@@ -194,6 +201,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         canAccessGaia,
         canAccessDashboard,
         canAccessProspection,
+        canReactivation,
         copilotEnabled,
         dashboardEnabled,
         salleEnabled,

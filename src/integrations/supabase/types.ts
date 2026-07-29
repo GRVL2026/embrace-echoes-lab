@@ -301,6 +301,50 @@ export type Database = {
         }
         Relationships: []
       }
+      client_actions: {
+        Row: {
+          auteur_id: string
+          code_client: string
+          contenu: string
+          created_at: string
+          date: string
+          id: string
+          prochaine_relance: string | null
+          resultat: string | null
+          type: Database["public"]["Enums"]["action_type_enum"]
+        }
+        Insert: {
+          auteur_id?: string
+          code_client: string
+          contenu: string
+          created_at?: string
+          date?: string
+          id?: string
+          prochaine_relance?: string | null
+          resultat?: string | null
+          type: Database["public"]["Enums"]["action_type_enum"]
+        }
+        Update: {
+          auteur_id?: string
+          code_client?: string
+          contenu?: string
+          created_at?: string
+          date?: string
+          id?: string
+          prochaine_relance?: string | null
+          resultat?: string | null
+          type?: Database["public"]["Enums"]["action_type_enum"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_actions_auteur_id_fkey"
+            columns: ["auteur_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       copilot_alertes: {
         Row: {
           action_suggeree: string | null
@@ -1003,6 +1047,11 @@ export type Database = {
           name: string | null
           pays: string | null
           status: string | null
+          statut_relance:
+            | Database["public"]["Enums"]["statut_relance_enum"]
+            | null
+          statut_relance_maj: string | null
+          statut_relance_par: string | null
           typologie: string | null
           ville: string | null
         }
@@ -1017,6 +1066,11 @@ export type Database = {
           name?: string | null
           pays?: string | null
           status?: string | null
+          statut_relance?:
+            | Database["public"]["Enums"]["statut_relance_enum"]
+            | null
+          statut_relance_maj?: string | null
+          statut_relance_par?: string | null
           typologie?: string | null
           ville?: string | null
         }
@@ -1031,6 +1085,11 @@ export type Database = {
           name?: string | null
           pays?: string | null
           status?: string | null
+          statut_relance?:
+            | Database["public"]["Enums"]["statut_relance_enum"]
+            | null
+          statut_relance_maj?: string | null
+          statut_relance_par?: string | null
           typologie?: string | null
           ville?: string | null
         }
@@ -2859,6 +2918,7 @@ export type Database = {
       can_access_salle: { Args: { _uid?: string }; Returns: boolean }
       can_marge_client: { Args: { _uid?: string }; Returns: boolean }
       can_marge_globale: { Args: { _uid?: string }; Returns: boolean }
+      can_reactivation: { Args: { _uid?: string }; Returns: boolean }
       cegid_sync_try_lock: {
         Args: { _ttl_seconds?: number }
         Returns: {
@@ -3012,6 +3072,7 @@ export type Database = {
           code_client: string
         }[]
       }
+      get_client_reactivation: { Args: { _code: string }; Returns: Json }
       get_cout_article_famille: {
         Args: { _famille: string }
         Returns: {
@@ -3114,6 +3175,24 @@ export type Database = {
           total: number
         }[]
       }
+      get_reconquete_list: {
+        Args: never
+        Returns: {
+          ca_total: number
+          categorie: string
+          code_client: string
+          derniere_action_auteur: string
+          derniere_action_date: string
+          derniere_action_type: string
+          derniere_commande: string
+          nom: string
+          score: number
+          statut_relance: string
+          statut_relance_maj: string
+          typologie: string
+          ville: string
+        }[]
+      }
       get_ventes_famille_detail: {
         Args: { _famille: string; _month: string }
         Returns: {
@@ -3163,7 +3242,13 @@ export type Database = {
       unaccent: { Args: { "": string }; Returns: string }
     }
     Enums: {
-      [_ in never]: never
+      action_type_enum: "mail" | "appel" | "visite" | "note" | "autre"
+      statut_relance_enum:
+        | "a_contacter"
+        | "contacte"
+        | "relance"
+        | "reactive"
+        | "sans_suite"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3290,6 +3375,15 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      action_type_enum: ["mail", "appel", "visite", "note", "autre"],
+      statut_relance_enum: [
+        "a_contacter",
+        "contacte",
+        "relance",
+        "reactive",
+        "sans_suite",
+      ],
+    },
   },
 } as const

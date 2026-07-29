@@ -443,6 +443,7 @@ export function ClientActionsDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <div className="min-h-0 overflow-y-auto px-6 py-4 space-y-4">
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-5 w-5 animate-spin" />

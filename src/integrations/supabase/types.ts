@@ -3250,6 +3250,7 @@ export type Database = {
           part_pct: number
         }[]
       }
+      import_prospects_csv: { Args: { _rows: Json }; Returns: number }
       is_admin: { Args: never; Returns: boolean }
       is_direction: { Args: never; Returns: boolean }
       notify_user: {

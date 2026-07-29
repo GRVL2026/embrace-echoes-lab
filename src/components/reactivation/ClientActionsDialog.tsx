@@ -618,6 +618,38 @@ export function ClientActionsDialog({
                   />
                 </div>
 
+                <div>
+                  <Label>Statut après cette action</Label>
+                  <Select
+                    value={statutResultant}
+                    onValueChange={(v) => setStatutResultant(v as "auto" | StatutRelance)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">
+                        Auto — {(() => {
+                          const cur = (data?.statut_relance as StatutRelance | null) ?? null;
+                          const next = computeNextStatut(type, "auto", cur);
+                          if (!next) return "inchangé";
+                          return `passe à « ${STATUT_LABEL[next]} »`;
+                        })()}
+                      </SelectItem>
+                      {(Object.keys(STATUT_LABEL) as StatutRelance[]).map((s) => (
+                        <SelectItem key={s} value={s}>
+                          Forcer : {STATUT_LABEL[s]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Choisissez « Réactivé » si commande obtenue, « Sans suite » si refus.
+                    Sinon laissez sur Auto.
+                  </p>
+                </div>
+
+
                 <div className="flex gap-2">
                   <Button onClick={submitAction} disabled={saving} variant="outline" className="flex-1">
                     {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

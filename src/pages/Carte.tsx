@@ -55,6 +55,12 @@ function fmtEUR(n: number): string {
   return `${Math.round(n)} €`;
 }
 
+function fmtMonth(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  return `${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+}
+
 function makeDivIcon(color: string, size: number): L.DivIcon {
   const s = Math.max(8, Math.min(28, size));
   return L.divIcon({

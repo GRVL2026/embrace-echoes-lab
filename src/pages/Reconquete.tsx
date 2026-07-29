@@ -258,142 +258,153 @@ export default function Reconquete() {
         </div>
       </Card>
 
-      <Card className="overflow-hidden">
-        {loadingData ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-6 w-6 animate-spin" />
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
-                <tr>
-                  <th className="text-left px-3 py-2">Client</th>
-                  <th className="text-left px-3 py-2">Ville</th>
-                  <th className="text-left px-3 py-2">Typologie</th>
-                  <th className="text-right px-3 py-2">CA total</th>
-                  <th className="text-left px-3 py-2">Dernière cde</th>
-                  <th className="text-left px-3 py-2">Statut</th>
-                  <th className="text-left px-3 py-2">Dernière action</th>
-                  <th className="text-right px-3 py-2">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((r) => {
-                  const m = monthsAgo(r.derniere_commande);
-                  return (
-                    <tr
-                      key={r.code_client}
-                      className="border-t border-border hover:bg-muted/30"
-                    >
-                      <td className="px-3 py-2 font-medium">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span>{r.nom || r.code_client}</span>
-                          <CompanyStatusBadge
-                            etat_administratif={r.etat_administratif}
-                            procedure_collective={r.procedure_collective}
-                          />
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-muted-foreground">{r.ville || "—"}</td>
-                      <td className="px-3 py-2 text-muted-foreground">
-                        {r.typologie || "—"}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {fmtEUR(r.ca_total)}
-                      </td>
-                      <td className="px-3 py-2">
-                        <span
-                          className={
-                            r.categorie === "inactif"
-                              ? "text-slate-400"
-                              : "text-amber-500"
-                          }
-                        >
-                          {fmtDate(r.derniere_commande)}
-                        </span>
-                        {m !== null && (
-                          <span className="text-xs text-muted-foreground ml-1">
-                            ({m}m)
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2">
-                        {r.statut_relance ? (
+      {view === "table" ? (
+        <Card className="overflow-hidden">
+          {loadingData ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th className="text-left px-3 py-2">Client</th>
+                    <th className="text-left px-3 py-2">Ville</th>
+                    <th className="text-left px-3 py-2">Typologie</th>
+                    <th className="text-right px-3 py-2">CA total</th>
+                    <th className="text-left px-3 py-2">Dernière cde</th>
+                    <th className="text-left px-3 py-2">Statut</th>
+                    <th className="text-left px-3 py-2">Dernière action</th>
+                    <th className="text-right px-3 py-2">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((r) => {
+                    const m = monthsAgo(r.derniere_commande);
+                    return (
+                      <tr
+                        key={r.code_client}
+                        className="border-t border-border hover:bg-muted/30"
+                      >
+                        <td className="px-3 py-2 font-medium">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span>{r.nom || r.code_client}</span>
+                            <CompanyStatusBadge
+                              etat_administratif={r.etat_administratif}
+                              procedure_collective={r.procedure_collective}
+                            />
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">{r.ville || "—"}</td>
+                        <td className="px-3 py-2 text-muted-foreground">
+                          {r.typologie || "—"}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {fmtEUR(r.ca_total)}
+                        </td>
+                        <td className="px-3 py-2">
                           <span
-                            className={`inline-flex px-2 py-0.5 rounded-full border text-xs ${
-                              STATUT_COLOR[r.statut_relance]
-                            }`}
+                            className={
+                              r.categorie === "inactif"
+                                ? "text-slate-400"
+                                : "text-amber-500"
+                            }
                           >
-                            {STATUT_LABEL[r.statut_relance]}
+                            {fmtDate(r.derniere_commande)}
                           </span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground italic">
-                            —
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-xs">
-                        {r.derniere_action_type ? (
-                          <>
-                            <span className="uppercase tracking-wider">
-                              {r.derniere_action_type}
-                            </span>{" "}
-                            <span className="text-muted-foreground">
-                              {r.derniere_action_date &&
-                                new Date(r.derniere_action_date).toLocaleDateString(
-                                  "fr-FR",
-                                )}
-                              {r.derniere_action_auteur &&
-                                ` • ${r.derniere_action_auteur}`}
+                          {m !== null && (
+                            <span className="text-xs text-muted-foreground ml-1">
+                              ({m}m)
                             </span>
-                          </>
-                        ) : (
-                          <span className="text-muted-foreground italic">
-                            aucune
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-right whitespace-nowrap">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            setDialogCode(r.code_client);
-                            setDialogTab("action");
-                          }}
-                        >
-                          <PlusCircle className="h-3.5 w-3.5 mr-1" /> Action
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            setDialogCode(r.code_client);
-                            setDialogTab("statut");
-                          }}
-                        >
-                          <Tag className="h-3.5 w-3.5 mr-1" /> Statut
-                        </Button>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          {r.statut_relance ? (
+                            <span
+                              className={`inline-flex px-2 py-0.5 rounded-full border text-xs ${
+                                STATUT_COLOR[r.statut_relance]
+                              }`}
+                            >
+                              {STATUT_LABEL[r.statut_relance]}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">
+                              —
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-xs">
+                          {r.derniere_action_type ? (
+                            <>
+                              <span className="uppercase tracking-wider">
+                                {r.derniere_action_type}
+                              </span>{" "}
+                              <span className="text-muted-foreground">
+                                {r.derniere_action_date &&
+                                  new Date(r.derniere_action_date).toLocaleDateString(
+                                    "fr-FR",
+                                  )}
+                                {r.derniere_action_auteur &&
+                                  ` • ${r.derniere_action_auteur}`}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground italic">
+                              aucune
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right whitespace-nowrap">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setDialogCode(r.code_client);
+                              setDialogTab("action");
+                            }}
+                          >
+                            <PlusCircle className="h-3.5 w-3.5 mr-1" /> Action
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setDialogCode(r.code_client);
+                              setDialogTab("statut");
+                            }}
+                          >
+                            <Tag className="h-3.5 w-3.5 mr-1" /> Statut
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filtered.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        className="text-center py-10 text-muted-foreground italic"
+                      >
+                        Aucun client à afficher avec ces filtres.
                       </td>
                     </tr>
-                  );
-                })}
-                {filtered.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={8}
-                      className="text-center py-10 text-muted-foreground italic"
-                    >
-                      Aucun client à afficher avec ces filtres.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      ) : (
+        <KanbanPipeline
+          rows={filtered}
+          loading={loadingData}
+          onOpen={(code, tab) => {
+            setDialogCode(code);
+            setDialogTab(tab);
+          }}
+        />
+      )}
 
       <ClientActionsDialog
         code={dialogCode}

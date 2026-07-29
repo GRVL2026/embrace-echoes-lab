@@ -125,19 +125,27 @@ Deno.serve(async (req) => {
     );
 
     // ---- Mise à jour prospect + journal ----
+    // Avance le statut vers "contacte" si le prospect est encore en "nouveau"
+    // (invitation LinkedIn envoyée = prise de contact, avant acceptation).
+    const shouldAdvance = (p.statut ?? 'nouveau') === 'nouveau';
+    const updatePayload: Record<string, unknown> = {
+      lgm_lead_id: lgm_lead_id || null,
+      lgm_audience: audienceName,
+      lgm_sent_at: new Date().toISOString(),
+    };
+    if (shouldAdvance) updatePayload.statut = 'contacte';
+
     await admin
       .from('prospects')
-      .update({
-        lgm_lead_id: lgm_lead_id || null,
-        lgm_audience: audienceName,
-        lgm_sent_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq('id', prospect_id);
 
     await admin.from('prospect_events').insert({
       prospect_id,
-      type: 'lgm',
+      type: shouldAdvance ? 'statut' : 'lgm',
       contenu: `Envoyé vers LGM – ${audienceName}`,
+      ancien_statut: shouldAdvance ? (p.statut ?? 'nouveau') : null,
+      nouveau_statut: shouldAdvance ? 'contacte' : null,
       auteur: userData.user.id,
     });
 

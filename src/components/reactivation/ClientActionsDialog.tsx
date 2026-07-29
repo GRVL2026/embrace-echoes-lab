@@ -278,6 +278,50 @@ export function ClientActionsDialog({
     onChanged?.();
   };
 
+  const toggleArchive = async () => {
+    if (!code) return;
+    const targetArchived = !data?.archive;
+    if (targetArchived) {
+      const msg =
+        `Archiver le compte « ${data?.nom || code} » ?\n\n` +
+        `• Il disparaîtra de la carte, des listes et du copilote.\n` +
+        `• Aucune donnée n'est supprimée : vous pourrez le dé-archiver à tout moment.\n` +
+        `• La synchro Cegid préservera ce statut.`;
+      if (!window.confirm(msg)) return;
+    } else {
+      if (!window.confirm(`Dé-archiver le compte « ${data?.nom || code} » et le remettre dans les listes ?`)) return;
+    }
+    setArchiving(true);
+    const { error } = await (supabase as any).rpc("set_client_archive", {
+      _code: code,
+      _archived: targetArchived,
+    });
+    setArchiving(false);
+    if (error) {
+      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({
+      title: targetArchived ? "Compte archivé" : "Compte dé-archivé",
+      description: targetArchived
+        ? "Il est désormais masqué partout dans l'application."
+        : "Il réapparaît dans les listes et sur la carte.",
+    });
+    await refresh();
+    onChanged?.();
+  };
+
+  const companyStatus = data
+    ? { etat_administratif: data.etat_administratif, procedure_collective: data.procedure_collective, archive: data.archive }
+    : null;
+  // Met en avant "Archiver ce compte" quand la société est cessée / en procédure et non déjà archivée.
+  const emphasizeArchive =
+    !!companyStatus &&
+    !companyStatus.archive &&
+    ((companyStatus.etat_administratif || "").toLowerCase().startsWith("cess") ||
+      (companyStatus.etat_administratif || "").toLowerCase() === "c" ||
+      companyStatus.procedure_collective === true);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
@@ -285,6 +329,13 @@ export function ClientActionsDialog({
           <DialogTitle>{data?.nom || code || "Client"}</DialogTitle>
           <DialogDescription>
             <div className="flex flex-wrap items-center gap-2 mt-1">
+              {companyStatus && (
+                <CompanyStatusBadge
+                  etat_administratif={companyStatus.etat_administratif}
+                  procedure_collective={companyStatus.procedure_collective}
+                  archive={companyStatus.archive}
+                />
+              )}
               {data?.statut_relance ? (
                 <span
                   className={`inline-flex items-center px-2 py-0.5 rounded-full border text-xs ${
@@ -311,6 +362,43 @@ export function ClientActionsDialog({
                 </span>
               )}
             </div>
+            {isAdmin && data && (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {data.archive ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={toggleArchive}
+                    disabled={archiving}
+                    className="gap-2"
+                  >
+                    {archiving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArchiveRestore className="h-4 w-4" />}
+                    Dé-archiver ce compte
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant={emphasizeArchive ? "destructive" : "outline"}
+                    onClick={toggleArchive}
+                    disabled={archiving}
+                    className="gap-2"
+                  >
+                    {archiving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
+                    {emphasizeArchive ? "Archiver ce compte cessé" : "Archiver ce compte"}
+                  </Button>
+                )}
+                {emphasizeArchive && (
+                  <span className="text-[11px] text-muted-foreground">
+                    Recommandé : société signalée comme cessée / en procédure collective.
+                  </span>
+                )}
+                {data.archive && data.archive_at && (
+                  <span className="text-[11px] text-muted-foreground">
+                    Archivé le {new Date(data.archive_at).toLocaleDateString("fr-FR")}
+                  </span>
+                )}
+              </div>
+            )}
           </DialogDescription>
         </DialogHeader>
 

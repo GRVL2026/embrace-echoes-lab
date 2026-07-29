@@ -244,6 +244,7 @@ const MAPPERS: Record<string, { table: string; map: Mapper; pk?: string }> = {
       code_postal: trim(r.PostalCode),
       ville: trim(r.City),
       pays: trim(r.Country),
+      email: trim(r.Email ?? r.EmailAddress ?? r.Mail),
     }),
   },
   'BD-Ventes': {

@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, Mail, Phone, MapPin, StickyNote, Circle } from "lucide-react";
+import { Loader2, Mail, Phone, MapPin, StickyNote, Circle, Sparkles, Send, User } from "lucide-react";
 
 export type StatutRelance =
   | "a_contacter"
@@ -67,8 +67,17 @@ type ActionRow = {
 type ClientRea = {
   code_client: string;
   nom: string | null;
+  ville: string | null;
+  typologie: string | null;
+  email: string | null;
+  owner_id: string | null;
+  owner_nom: string | null;
   statut_relance: StatutRelance | null;
   statut_relance_maj: string | null;
+  derniere_commande: string | null;
+  ca_total: number | null;
+  familles: Array<{ famille: string; ca: number }>;
+  produits_recents: Array<{ code: string; libelle: string; d: string }>;
   actions: ActionRow[];
 };
 
@@ -92,9 +101,12 @@ export function ClientActionsDialog({
 
   // Form: add action
   const [type, setType] = useState<ActionType>("appel");
+  const [objet, setObjet] = useState("");
   const [contenu, setContenu] = useState("");
   const [resultat, setResultat] = useState("");
   const [prochaine, setProchaine] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [sending, setSending] = useState(false);
 
   // Form: statut
   const [statut, setStatut] = useState<StatutRelance | "">("");
@@ -104,29 +116,90 @@ export function ClientActionsDialog({
     setTab(initialTab);
   }, [initialTab, code]);
 
+  const refresh = async () => {
+    if (!code) return;
+    const { data: res, error } = await (supabase as any).rpc("get_client_reactivation", { _code: code });
+    if (error) {
+      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      return;
+    }
+    const d = res as ClientRea;
+    setData(d);
+    setStatut((d?.statut_relance as StatutRelance) ?? "");
+  };
+
   useEffect(() => {
     if (!open || !code) return;
     let cancel = false;
     setLoading(true);
+    setObjet("");
+    setContenu("");
+    setResultat("");
+    setProchaine("");
+    setType("appel");
     (async () => {
-      const { data: res, error } = await (supabase as any).rpc(
-        "get_client_reactivation",
-        { _code: code },
-      );
-      if (cancel) return;
-      if (error) {
-        toast({ title: "Erreur", description: error.message, variant: "destructive" });
-      } else {
-        const d = res as ClientRea;
-        setData(d);
-        setStatut((d?.statut_relance as StatutRelance) ?? "");
-      }
-      setLoading(false);
+      await refresh();
+      if (!cancel) setLoading(false);
     })();
-    return () => {
-      cancel = true;
-    };
+    return () => { cancel = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, code]);
+
+  const hasEmail = !!(data?.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email));
+
+  const generateMail = async () => {
+    if (!code) return;
+    setGenerating(true);
+    const { data: res, error } = await supabase.functions.invoke("generer-relance-client", {
+      body: { code_client: code },
+    });
+    setGenerating(false);
+    if (error || !res?.objet) {
+      toast({
+        title: "Génération impossible",
+        description: (error as any)?.message || "Réessayez dans un instant.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setType("mail");
+    setObjet(res.objet);
+    setContenu(res.corps);
+    toast({ title: "Proposition générée", description: "Vous pouvez éditer avant d'envoyer." });
+  };
+
+  const sendMail = async () => {
+    if (!code || !hasEmail) return;
+    if (!objet.trim() || !contenu.trim()) {
+      toast({ title: "Objet et contenu requis", variant: "destructive" });
+      return;
+    }
+    setSending(true);
+    const { data: res, error } = await supabase.functions.invoke("envoyer-relance-client", {
+      body: {
+        code_client: code,
+        objet: objet.trim(),
+        corps: contenu.trim(),
+        prochaine_relance: prochaine || null,
+      },
+    });
+    setSending(false);
+    if (error || !res?.ok) {
+      toast({
+        title: "Envoi échoué",
+        description: (error as any)?.message || "Vérifiez l'email et réessayez.",
+        variant: "destructive",
+      });
+      return;
+    }
+    toast({ title: "Mail envoyé", description: data?.email ?? "" });
+    setObjet("");
+    setContenu("");
+    setResultat("");
+    setProchaine("");
+    await refresh();
+    onChanged?.();
+  };
 
   const submitAction = async () => {
     if (!code || !user) return;
@@ -135,11 +208,14 @@ export function ClientActionsDialog({
       return;
     }
     setSaving(true);
+    const contenuFinal = type === "mail" && objet.trim()
+      ? `Objet : ${objet.trim()}\n\n${contenu.trim()}`
+      : contenu.trim();
     const { error } = await (supabase as any).from("client_actions").insert({
       code_client: code,
       auteur_id: user.id,
       type,
-      contenu: contenu.trim(),
+      contenu: contenuFinal,
       resultat: resultat.trim() || null,
       prochaine_relance: prochaine || null,
     });
@@ -149,14 +225,11 @@ export function ClientActionsDialog({
       return;
     }
     toast({ title: "Action enregistrée" });
+    setObjet("");
     setContenu("");
     setResultat("");
     setProchaine("");
-    // Refresh
-    const { data: res } = await (supabase as any).rpc("get_client_reactivation", {
-      _code: code,
-    });
-    setData(res as ClientRea);
+    await refresh();
     onChanged?.();
   };
 
@@ -187,17 +260,33 @@ export function ClientActionsDialog({
         <DialogHeader>
           <DialogTitle>{data?.nom || code || "Client"}</DialogTitle>
           <DialogDescription>
-            {data?.statut_relance ? (
-              <span
-                className={`inline-flex items-center px-2 py-0.5 rounded-full border text-xs ${
-                  STATUT_COLOR[data.statut_relance as StatutRelance]
-                }`}
-              >
-                {STATUT_LABEL[data.statut_relance as StatutRelance]}
-              </span>
-            ) : (
-              <span className="text-muted-foreground text-xs">Aucun statut défini</span>
-            )}
+            <div className="flex flex-wrap items-center gap-2 mt-1">
+              {data?.statut_relance ? (
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full border text-xs ${
+                    STATUT_COLOR[data.statut_relance as StatutRelance]
+                  }`}
+                >
+                  {STATUT_LABEL[data.statut_relance as StatutRelance]}
+                </span>
+              ) : (
+                <span className="text-muted-foreground text-xs">Aucun statut défini</span>
+              )}
+              {data?.owner_nom ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs">
+                  <User className="h-3 w-3" /> {data.owner_nom}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-muted-foreground/20 text-muted-foreground text-xs">
+                  Pool partagé
+                </span>
+              )}
+              {data?.email && (
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                  <Mail className="h-3 w-3" /> {data.email}
+                </span>
+              )}
+            </div>
           </DialogDescription>
         </DialogHeader>
 
@@ -257,13 +346,43 @@ export function ClientActionsDialog({
                     />
                   </div>
                 </div>
+
+                <div className="flex items-center justify-between gap-2 pt-1">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={generateMail}
+                    disabled={generating}
+                    className="gap-2"
+                  >
+                    {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    Proposer un mail de relance
+                  </Button>
+                  {!hasEmail && (
+                    <span className="text-xs text-muted-foreground italic">
+                      Email non disponible — enregistrement seul
+                    </span>
+                  )}
+                </div>
+
+                {type === "mail" && (
+                  <div>
+                    <Label>Objet</Label>
+                    <Input
+                      value={objet}
+                      onChange={(e) => setObjet(e.target.value)}
+                      placeholder="Objet du mail"
+                    />
+                  </div>
+                )}
                 <div>
-                  <Label>Contenu</Label>
+                  <Label>{type === "mail" ? "Contenu du mail" : "Contenu"}</Label>
                   <Textarea
                     value={contenu}
                     onChange={(e) => setContenu(e.target.value)}
-                    placeholder="Sujet, résumé de l'échange, décisions…"
-                    rows={3}
+                    placeholder={type === "mail" ? "Corps du message…" : "Sujet, résumé de l'échange, décisions…"}
+                    rows={type === "mail" ? 10 : 3}
                   />
                 </div>
                 <div>
@@ -274,10 +393,19 @@ export function ClientActionsDialog({
                     placeholder="Ex : RDV programmé, à rappeler, refus…"
                   />
                 </div>
-                <Button onClick={submitAction} disabled={saving} className="w-full">
-                  {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  Enregistrer l'action
-                </Button>
+
+                <div className="flex gap-2">
+                  <Button onClick={submitAction} disabled={saving} variant="outline" className="flex-1">
+                    {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    Enregistrer l'action
+                  </Button>
+                  {type === "mail" && hasEmail && (
+                    <Button onClick={sendMail} disabled={sending} className="flex-1 gap-2">
+                      {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      Envoyer le mail
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
 
@@ -336,7 +464,7 @@ export function ClientActionsDialog({
                           </>
                         )}
                       </div>
-                      <div className="mt-1">{a.contenu}</div>
+                      <div className="mt-1 whitespace-pre-wrap">{a.contenu}</div>
                       {a.resultat && (
                         <div className="text-xs text-muted-foreground mt-1">
                           → {a.resultat}

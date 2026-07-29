@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "sdk_version": "0.25.0",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://yhfghipueqfkgysaulvl.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "arcade-os-mcp",
+      "version": "0.1.0",
+      "title": "Arcade OS"
+    },
+    "tools": [
+      {
+        "name": "list_dossiers",
+        "title": "Lister les dossiers commerciaux",
+        "description": "Liste les dossiers commerciaux visibles par l'utilisateur connecté (Arcade OS). Renvoie id, titre, client, statut et date de mise à jour.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "description": "Nombre max de dossiers (défaut 20)."
+            },
+            "statut": {
+              "type": "string",
+              "description": "Filtre optionnel par statut exact."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "search_catalog",
+        "title": "Rechercher dans le catalogue produits",
+        "description": "Recherche des produits actifs dans le catalogue Arcade OS par nom ou catégorie (bornes d'arcade, flippers, etc.).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Terme de recherche (nom ou catégorie du produit)."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "description": "Nombre max de résultats (défaut 15)."
+            }
+          },
+          "required": [
+            "query"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_prospects",
+        "title": "Lister les prospects",
+        "description": "Liste les prospects visibles par l'utilisateur (module Prospection). Filtre optionnel par statut ou segment.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "description": "Nombre max (défaut 25)."
+            },
+            "statut": {
+              "type": "string",
+              "description": "Statut kanban (ex: 'nouveau', 'contacte', 'chaud')."
+            },
+            "segment": {
+              "type": "string",
+              "description": "Segment: 'loisirs', 'chr', 'retail'..."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}

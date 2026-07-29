@@ -30,6 +30,8 @@ type AuthContextValue = {
   canAccessSalle: boolean;
   /** True quand l'utilisateur n'a QUE l'accès Salle (ni admin/direction, ni dashboard). */
   salleOnly: boolean;
+  /** Override d'accès par section/sous-section (admin-managed). */
+  menuAllowed: (key: string) => boolean | undefined;
   refreshRoles: () => void;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (

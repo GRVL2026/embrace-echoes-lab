@@ -1226,10 +1226,11 @@ function ImportCsvDialog({
       .filter(Boolean);
     if (rows.length === 0) { toast.error("Aucune ligne valide"); return; }
     setImporting(true);
-    const { error } = await (supabase as any).from("prospects").insert(rows);
+    const { data: inserted, error } = await (supabase as any).rpc("import_prospects_csv", { _rows: rows });
     setImporting(false);
     if (error) { toast.error(error.message); return; }
-    toast.success(`${rows.length} prospect${rows.length > 1 ? "s" : ""} importé${rows.length > 1 ? "s" : ""}`);
+    const n = Number(inserted ?? rows.length);
+    toast.success(`${n} prospect${n > 1 ? "s" : ""} importé${n > 1 ? "s" : ""}`);
     reset();
     onImported();
   };

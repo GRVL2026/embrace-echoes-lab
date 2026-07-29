@@ -22,6 +22,7 @@ import {
   Grid2x2,
   ShoppingBag,
   Target,
+  Map as MapIcon,
   type LucideIcon,
 } from "lucide-react";
 

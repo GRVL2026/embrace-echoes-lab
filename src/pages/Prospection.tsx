@@ -992,7 +992,7 @@ function EventRow({ ev }: { ev: ProspectEvent }) {
   const d = new Date(ev.created_at);
   const label =
     ev.type === "statut"
-      ? `Statut : ${STATUTS.find((s) => s.key === ev.ancien_statut)?.label ?? ev.ancien_statut} → ${STATUTS.find((s) => s.key === ev.nouveau_statut)?.label ?? ev.nouveau_statut}`
+      ? `Statut : ${(STATUT_LABELS as any)[ev.ancien_statut ?? ""] ?? ev.ancien_statut} → ${(STATUT_LABELS as any)[ev.nouveau_statut ?? ""] ?? ev.nouveau_statut}`
       : (ev.contenu || ev.type);
   return (
     <div className="rounded border border-border/60 bg-muted/30 px-2.5 py-1.5 text-xs">

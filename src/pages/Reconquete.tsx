@@ -265,7 +265,15 @@ export default function Reconquete() {
                       key={r.code_client}
                       className="border-t border-border hover:bg-muted/30"
                     >
-                      <td className="px-3 py-2 font-medium">{r.nom || r.code_client}</td>
+                      <td className="px-3 py-2 font-medium">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span>{r.nom || r.code_client}</span>
+                          <CompanyStatusBadge
+                            etat_administratif={r.etat_administratif}
+                            procedure_collective={r.procedure_collective}
+                          />
+                        </div>
+                      </td>
                       <td className="px-3 py-2 text-muted-foreground">{r.ville || "—"}</td>
                       <td className="px-3 py-2 text-muted-foreground">
                         {r.typologie || "—"}

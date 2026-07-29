@@ -266,9 +266,12 @@ export default function Prospection() {
   const byStatut = useMemo(() => {
     const map = new Map<Statut, Prospect[]>();
     STATUTS.forEach((s) => map.set(s.key, []));
+    const visible = new Set(STATUTS.map((s) => s.key));
     for (const p of filteredProspects) {
-      const arr = map.get(p.statut as Statut) ?? map.get("nouveau")!;
-      arr.push(p);
+      // Statuts hors pipeline (client, perdu, rdv, devis) : conservés en base
+      // mais sortis du Kanban pour ne pas polluer la vue de reconquête active.
+      if (!visible.has(p.statut as Statut)) continue;
+      map.get(p.statut as Statut)!.push(p);
     }
     return map;
   }, [filteredProspects]);

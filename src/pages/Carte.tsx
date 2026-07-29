@@ -167,11 +167,58 @@ export default function Carte() {
     // @ts-ignore
     clusterRef.current = (L as any).markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 55 });
     map.addLayer(clusterRef.current);
+
+    // Popup delegated click → open reactivation dialog
+    map.on("popupopen", async (e: any) => {
+      const el: HTMLElement = e.popup.getElement();
+      if (!el) return;
+      el.querySelectorAll<HTMLButtonElement>("button[data-rea-action]").forEach((btn) => {
+        btn.onclick = () => {
+          const code = btn.getAttribute("data-code") || "";
+          const action = btn.getAttribute("data-rea-action") as "action" | "statut";
+          if (!code) return;
+          setReaCode(code);
+          setReaTab(action);
+        };
+      });
+      // Lazy load statut + last action
+      const slot = el.querySelector<HTMLElement>(".rea-slot");
+      const code = slot?.getAttribute("data-code");
+      if (slot && code) {
+        try {
+          const { data } = await (supabase as any).rpc("get_client_reactivation", {
+            _code: code,
+          });
+          const d = data as any;
+          if (!d) { slot.textContent = ""; return; }
+          const parts: string[] = [];
+          if (d.statut_relance) {
+            const labels: Record<string, string> = {
+              a_contacter: "À contacter", contacte: "Contacté", relance: "Relance",
+              reactive: "Réactivé", sans_suite: "Sans suite",
+            };
+            parts.push(`Statut : <b>${labels[d.statut_relance] || d.statut_relance}</b>`);
+          }
+          const last = d.actions?.[0];
+          if (last) {
+            const dt = new Date(last.date).toLocaleDateString("fr-FR");
+            parts.push(`Dernière action : <b>${last.type}</b> — ${dt}${last.auteur ? ` (${last.auteur})` : ""}`);
+          }
+          slot.innerHTML = parts.length
+            ? parts.map((p) => `<div>${p}</div>`).join("")
+            : `<em>Aucune action encore.</em>`;
+        } catch {
+          slot.textContent = "";
+        }
+      }
+    });
+
     return () => {
       map.remove();
       mapRef.current = null;
       clusterRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // --- Redraw markers ---
@@ -444,6 +491,13 @@ export default function Carte() {
           </div>
         )}
       </div>
+
+      <ClientActionsDialog
+        code={reaCode}
+        open={!!reaCode}
+        onOpenChange={(v) => !v && setReaCode(null)}
+        initialTab={reaTab}
+      />
     </div>
   );
 }

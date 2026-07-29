@@ -207,6 +207,20 @@ export default function Carte() {
           slot.innerHTML = parts.length
             ? parts.map((p) => `<div>${p}</div>`).join("")
             : `<em>Aucune action encore.</em>`;
+          // Hydrate contact block (phone/email)
+          const contactEl = el.querySelector<HTMLElement>(`.rea-contact[data-code="${code}"]`);
+          if (contactEl) {
+            const tel = (d.telephone || "").toString();
+            const telHref = tel.replace(/[^\d+]/g, "");
+            const email = d.email || "";
+            const telHtml = telHref
+              ? `<a href="tel:${telHref}" style="color:#9B5CFF;text-decoration:none;font-weight:500">📞 ${tel}</a>`
+              : `<span style="color:#94a3b8;font-style:italic">📞 Téléphone non renseigné</span>`;
+            const mailHtml = email
+              ? `<a href="mailto:${email}" style="color:#9B5CFF;text-decoration:none;font-weight:500;word-break:break-all">✉ ${email}</a>`
+              : `<span style="color:#94a3b8;font-style:italic">✉ Email non renseigné</span>`;
+            contactEl.innerHTML = `<div>${telHtml}</div><div style="margin-top:2px">${mailHtml}</div>`;
+          }
         } catch {
           slot.textContent = "";
         }

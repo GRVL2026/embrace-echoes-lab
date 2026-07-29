@@ -71,13 +71,23 @@ function validateSql(sql: string): { ok: true } | { ok: false; error: string } {
   if (FORBIDDEN_SCHEMA_RE.test(sql)) return { ok: false, error: 'Schéma non autorisé' };
   if (FORBIDDEN_FN_RE.test(sql)) return { ok: false, error: 'Fonction non autorisée' };
 
-  const cleaned = sql
+  let cleaned = sql
     .replace(/'([^']|'')*'/g, ' ')
     .replace(/--[^\n]*/g, ' ')
     .replace(/\/\*[\s\S]*?\*\//g, ' ')
     .toLowerCase();
 
-  const re = /(?:from|join)\s+(?:only\s+)?([a-z_][a-z0-9_$]*(?:\.[a-z_][a-z0-9_$]*)?)/g;
+  // Neutralise les "FROM/IN" qui appartiennent à des fonctions SQL (EXTRACT,
+  // SUBSTRING, TRIM, OVERLAY, POSITION) : sinon la colonne suivante serait
+  // interprétée à tort comme un nom de table.
+  cleaned = cleaned
+    .replace(/\bextract\s*\(\s*[a-z_]+\s+from\b/g, 'extract(')
+    .replace(/\bsubstring\s*\(([^()]*?)\bfrom\b/g, 'substring($1 ')
+    .replace(/\btrim\s*\(\s*(?:both|leading|trailing)?\s*(?:'[^']*'\s+)?from\b/g, 'trim(')
+    .replace(/\boverlay\s*\(([^()]*?)\bfrom\b/g, 'overlay($1 ')
+    .replace(/\bposition\s*\(([^()]*?)\bin\b/g, 'position($1 ');
+
+  const re = /(?:\bfrom|\bjoin)\s+(?:only\s+)?([a-z_][a-z0-9_$]*(?:\.[a-z_][a-z0-9_$]*)?)/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(cleaned))) {
     let ident = m[1];

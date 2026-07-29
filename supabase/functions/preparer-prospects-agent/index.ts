@@ -10,11 +10,11 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { anthropicJson, isAnthropicOverload } from '../_shared/anthropic-fetch.ts';
 import { fetchCatalogSuggestions, renderSuggestionsForPrompt } from '../_shared/catalog-suggestions.ts';
+import { gouvBySiren, gouvSearch, extractEnrichissement } from '../_shared/gouv-entreprise.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const PAPPERS_API_KEY = Deno.env.get('PAPPERS_API_KEY') ?? '';
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
 const CRON_SECRET = Deno.env.get('CRON_SECRET') ?? '';
 const MODEL = 'claude-sonnet-5';
@@ -37,77 +37,26 @@ function jsonRes(status: number, body: unknown) {
   });
 }
 
-function pick<T>(...vals: (T | null | undefined | '')[]): T | null {
-  for (const v of vals) if (v !== null && v !== undefined && v !== '') return v as T;
-  return null;
-}
-function joinAddr(parts: (string | null | undefined)[]): string | null {
-  const s = parts.filter((p) => p && String(p).trim()).map((p) => String(p).trim()).join(', ');
-  return s || null;
-}
-
-async function pappersEntrepriseBySiren(siren: string) {
-  const url = `https://api.pappers.fr/v2/entreprise?api_token=${encodeURIComponent(PAPPERS_API_KEY)}&siren=${encodeURIComponent(siren)}`;
-  const r = await fetch(url, { headers: { Accept: 'application/json' } });
-  if (!r.ok) throw new Error(`Pappers ${r.status}`);
-  return await r.json();
-}
-async function pappersRecherche(name: string, ville: string | null): Promise<string | null> {
-  const params = new URLSearchParams({ api_token: PAPPERS_API_KEY, q: name, precision: 'standard', per_page: '5' });
-  if (ville) params.set('ville', ville);
-  const r = await fetch(`https://api.pappers.fr/v2/recherche?${params.toString()}`, { headers: { Accept: 'application/json' } });
-  if (!r.ok) throw new Error(`Pappers ${r.status}`);
-  const json = await r.json();
-  const hit = (json?.resultats ?? json?.results ?? [])[0];
-  return hit?.siren ? String(hit.siren) : null;
-}
-
-function extractFromDet(det: any) {
-  const dl = Array.isArray(det?.representants) ? det.representants
-    : Array.isArray(det?.dirigeants) ? det.dirigeants : [];
-  const pp = dl.find((d: any) => {
-    const t = String(d?.type_dirigeant ?? d?.type ?? '').toLowerCase();
-    return t.includes('physique') || (d?.nom && d?.prenom);
-  }) ?? dl[0];
-  const nom = pp ? ([pp.prenom ?? pp.prenoms ?? '', pp.nom ?? pp.nom_complet ?? ''].filter(Boolean).join(' ').trim() || null) : null;
-  const role = pp ? (pp.qualite ?? pp.fonction ?? pp.role ?? null) : null;
-  const s = det?.siege ?? {};
-  const fin = Array.isArray(det?.finances) ? det.finances : [];
-  const ca = fin.length
-    ? (() => {
-        const sorted = [...fin].sort((a: any, b: any) => Number(b.annee ?? 0) - Number(a.annee ?? 0));
-        const c = sorted.find((f: any) => f?.chiffre_affaires != null)?.chiffre_affaires;
-        return c != null ? Number(c) : (det?.chiffre_affaires != null ? Number(det.chiffre_affaires) : null);
-      })()
-    : (det?.chiffre_affaires != null ? Number(det.chiffre_affaires) : null);
-  const telArr = det?.telephones ?? det?.siege?.telephones;
-  const siteArr = det?.sites_internet ?? det?.siege?.sites_internet;
-  return {
-    siret: pick<string>(s.siret, det?.siret_siege, det?.siret),
-    adresse: pick<string>(s.adresse_ligne_complete, s.adresse_complete,
-      joinAddr([s.adresse_ligne_1, s.code_postal, s.ville]),
-      joinAddr([det?.adresse_ligne_1, det?.code_postal, det?.ville])),
-    effectif: pick<string>(det?.tranche_effectif, det?.libelle_tranche_effectif, det?.effectif),
-    ca_annuel: ca,
-    activite: pick<string>(det?.libelle_code_naf, det?.libelle_activite_principale, det?.libelle_activite, det?.activite_principale?.libelle),
-    telephone: pick<string>(det?.telephone, det?.siege?.telephone) ?? (Array.isArray(telArr) && telArr.length ? String(telArr[0]) : null),
-    site_web: pick<string>(det?.site_web, det?.site_internet, det?.siege?.site_web) ?? (Array.isArray(siteArr) && siteArr.length ? String(siteArr[0]) : null),
-    contact_nom: nom,
-    contact_role: role,
-  };
-}
-
 async function enrichir(admin: any, p: any): Promise<Record<string, unknown>> {
-  if (!PAPPERS_API_KEY) return {};
+  // Double-paiement pur : la fonction "detecter-signaux" vient déjà de remplir ces champs.
+  if (p.siren && p.contact_nom) return {};
+
   let siren: string | null = p.siren ? String(p.siren).replace(/\D/g, '').slice(0, 9) : null;
-  if (!siren) {
+  let hit: any = null;
+
+  if (siren) {
+    hit = await gouvBySiren(siren);
+  } else {
     if (!p.entreprise) return {};
-    siren = await pappersRecherche(p.entreprise, p.ville ?? null);
-    if (!siren) return {};
+    const q = [p.entreprise, p.ville].filter(Boolean).join(' ');
+    const results = await gouvSearch(q, 5);
+    if (!results || results.length === 0) return {};
+    hit = results[0];
+    siren = String(hit?.siren ?? '').replace(/\D/g, '').slice(0, 9) || null;
   }
-  const det = await pappersEntrepriseBySiren(siren);
-  if (!det) return {};
-  const enriched = { siren, ...extractFromDet(det) } as Record<string, any>;
+  if (!hit || !siren) return {};
+
+  const enriched = { siren, ...extractEnrichissement(hit) } as Record<string, any>;
   const patch: Record<string, unknown> = {};
   for (const k of Object.keys(enriched)) {
     const nv = enriched[k];
@@ -123,6 +72,7 @@ async function enrichir(admin: any, p: any): Promise<Record<string, unknown>> {
   }
   return patch;
 }
+
 
 async function genererAccroche(admin: any, p: any): Promise<string> {
   if (!ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY manquant');

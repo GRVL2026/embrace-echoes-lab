@@ -1,5 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+import { gouvBySiren, extractDirigeantPP } from '../_shared/gouv-entreprise.ts';
+import { reservePappersCredits, getPappersUsage, PAPPERS_MONTHLY_CAP } from '../_shared/pappers-quota.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -21,8 +23,9 @@ const NAF_MAP: { code: string; segment: Segment; libelle: string }[] = [
 
 const MAX_INSERT = 40;
 const PER_PAGE = 20;
-const MAX_PAGES_PER_NAF = 3; // économie de crédits Pappers
+const MAX_PAGES_PER_NAF = 2; // sortie anticipée si page non pleine
 const API = 'https://api.pappers.fr/v2/recherche';
+const LAST_RUN_KEY = 'signaux_last_run';
 
 function j(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -79,7 +82,6 @@ async function fetchWithRetry(url: string, tries = 2): Promise<FetchResult> {
   return { ok: false, status: lastStatus, body: lastBody, message: lastMessage };
 }
 
-
 async function isAuthorized(req: Request): Promise<boolean> {
   const cron = req.headers.get('x-cron-secret');
   if (CRON_SECRET && cron === CRON_SECRET) return true;
@@ -98,43 +100,29 @@ async function isAuthorized(req: Request): Promise<boolean> {
   return (roles || []).some((r: any) => r.role === 'admin' || r.role === 'direction');
 }
 
-function extractDirigeant(entreprise: any): { nom: string | null; role: string | null } {
-  // Chemins Pappers possibles selon l'endpoint : entreprise.representants[], entreprise.dirigeants[]
-  const dirs: any[] =
-    entreprise?.representants ||
-    entreprise?.dirigeants ||
-    entreprise?.entreprise?.representants ||
-    entreprise?.entreprise?.dirigeants ||
-    [];
-  if (!Array.isArray(dirs) || dirs.length === 0) return { nom: null, role: null };
-
-  // Priorité : première personne physique
-  const isPP = (d: any) =>
-    (d?.personne_morale === false) ||
-    (typeof d?.type === 'string' && d.type.toLowerCase().includes('physique')) ||
-    (!!d?.prenom || !!d?.prenoms) ||
-    (!d?.siren && !d?.denomination);
-
-  const d = dirs.find(isPP) || dirs[0];
-  if (!d) return { nom: null, role: null };
-
-  const prenom = (d.prenom || (Array.isArray(d.prenoms) ? d.prenoms[0] : d.prenoms) || '')
-    .toString().trim();
-  const nomFam = (d.nom || d.nom_usage || '').toString().trim();
-  let nom = [prenom, nomFam].filter(Boolean).join(' ').trim();
-  if (!nom) nom = (d.nom_complet || d.denomination || '').toString().trim();
-  const role = (d.qualite || d.fonction || d.role || '').toString().trim() || null;
-  return { nom: nom || null, role };
-}
-
+/**
+ * Récupère le dirigeant personne physique via l'API gouv (gratuite).
+ * Aucune clé requise, ~4 req/s en pratique.
+ */
 async function fetchDirigeant(siren: string): Promise<{ nom: string | null; role: string | null }> {
-  // /v2/entreprise renvoie systématiquement le bloc representants (personnes physiques + morales)
-  const params = new URLSearchParams({ api_token: PAPPERS_API_KEY, siren });
-  const res = await fetchWithRetry(`https://api.pappers.fr/v2/entreprise?${params.toString()}`);
-  if (!res.ok) return { nom: null, role: null };
-  return extractDirigeant(res.data);
+  try {
+    const hit = await gouvBySiren(siren);
+    if (!hit) return { nom: null, role: null };
+    return extractDirigeantPP(hit);
+  } catch {
+    return { nom: null, role: null };
+  }
 }
 
+async function loadLastRun(admin: any): Promise<string | null> {
+  const { data } = await admin.from('gaia_config').select('value').eq('key', LAST_RUN_KEY).maybeSingle();
+  const v = (data as any)?.value;
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
+  return null;
+}
+async function saveLastRun(admin: any, iso: string) {
+  await admin.from('gaia_config').upsert({ key: LAST_RUN_KEY, value: iso }, { onConflict: 'key' });
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -145,9 +133,17 @@ Deno.serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    // Fenêtre 30 jours
+    // Fenêtre incrémentale : max(dernier_run - 1 jour, aujourd'hui - 30 jours)
     const now = new Date();
-    const cutoff = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
+    const today = now.toISOString().slice(0, 10);
+    const hardFloor = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
+    let cutoff = hardFloor;
+    const lastRun = await loadLastRun(admin);
+    if (lastRun) {
+      const lr = new Date(lastRun + 'T00:00:00Z');
+      lr.setUTCDate(lr.getUTCDate() - 1); // recouvrement d'1 jour
+      if (lr > cutoff) cutoff = lr;
+    }
     const cutoffStr = cutoff.toISOString().slice(0, 10);
 
     // Prospects déjà connus
@@ -167,6 +163,7 @@ Deno.serve(async (req) => {
     const apiErrors: { naf: string; page: number; status: number; message: string; body?: string }[] = [];
     let scanned = 0;
     let napiOk = 0;
+    let quotaHit = false;
 
     outer:
     for (const naf of NAF_MAP) {
@@ -174,7 +171,14 @@ Deno.serve(async (req) => {
       for (let page = 1; page <= MAX_PAGES_PER_NAF; page++) {
         if (toInsert.length >= MAX_INSERT) break outer;
 
-        // Paramètres Pappers /v2/recherche : code_naf, date_creation_min (YYYY-MM-DD), entreprise_cessee=false
+        // Réserver 2 crédits Pappers avant l'appel /v2/recherche
+        const quota = await reservePappersCredits(admin, 'recherche');
+        if (!quota.ok) {
+          quotaHit = true;
+          apiErrors.push({ naf: naf.code, page, status: 0, message: `Plafond mensuel Pappers atteint (${quota.used}/${quota.cap})` });
+          break outer;
+        }
+
         const params = new URLSearchParams({
           api_token: PAPPERS_API_KEY,
           code_naf: naf.code,
@@ -194,18 +198,18 @@ Deno.serve(async (req) => {
             message: res.message,
             body: res.body ? res.body.slice(0, 200) : undefined,
           });
-          break; // passer au code NAF suivant
+          break; // NAF suivant
         }
         nafHadSuccess = true;
         const data = res.data;
         const results: any[] = Array.isArray(data.resultats) ? data.resultats : [];
-        if (results.length === 0) break; // vraie absence de résultats
+        if (results.length === 0) break;
 
         for (const r of results) {
           scanned++;
           const dateCrea: string | null = r.date_creation || r.date_creation_formatee || null;
           if (!dateCrea) continue;
-          if (dateCrea < cutoffStr) continue; // sécurité côté fonction
+          if (dateCrea < cutoffStr) continue;
 
           const siren = String(r.siren || '').trim();
           if (!siren || knownSiren.has(siren)) continue;
@@ -218,12 +222,9 @@ Deno.serve(async (req) => {
           const pairKey = `${nom.toLowerCase()}|${ville.toLowerCase()}`;
           if (knownPair.has(pairKey)) continue;
 
-          const dirig = extractDirigeant(r);
-          let finalDirig = dirig;
-          if (!dirig.nom) {
-            finalDirig = await fetchDirigeant(siren);
-            await new Promise((res) => setTimeout(res, 120));
-          }
+          // Dirigeant : gouv API (gratuit) — sleep 550ms pour rester sous ~2 req/s
+          const finalDirig = await fetchDirigeant(siren);
+          await new Promise((res) => setTimeout(res, 550));
 
           const signal =
             `Nouvel établissement — ${naf.libelle} (${naf.code}) créé le ${dateCrea}` +
@@ -248,19 +249,19 @@ Deno.serve(async (req) => {
 
           if (toInsert.length >= MAX_INSERT) break outer;
         }
-        await new Promise((res) => setTimeout(res, 150));
+        // Page non pleine ⇒ plus rien à lire pour ce NAF
+        if (results.length < PER_PAGE) break;
       }
       if (nafHadSuccess) napiOk++;
     }
 
-    // Si aucun code NAF n'a répondu correctement, on considère Pappers injoignable.
-    if (napiOk === 0 && apiErrors.length > 0) {
-      return j(502, { error: 'Pappers injoignable', apiErrors });
+    if (napiOk === 0 && apiErrors.length > 0 && !quotaHit) {
+      const usedNow = await getPappersUsage(admin);
+      return j(502, { error: 'Pappers injoignable', apiErrors, pappers_credits_used: usedNow, pappers_credits_cap: PAPPERS_MONTHLY_CAP });
     }
 
     let inserted = 0;
     if (toInsert.length > 0) {
-      // Tentative avec contact_nom/contact_role ; fallback si colonnes absentes
       let { data: ins, error: insErr } = await admin
         .from('prospects')
         .insert(toInsert)
@@ -270,11 +271,29 @@ Deno.serve(async (req) => {
         const retry = await admin.from('prospects').insert(stripped).select('id');
         ins = retry.data; insErr = retry.error;
       }
-      if (insErr) return j(500, { error: `insert failed: ${insErr.message}`, scanned, apiErrors, napi_ok: napiOk });
+      if (insErr) {
+        const usedNow = await getPappersUsage(admin);
+        return j(500, { error: `insert failed: ${insErr.message}`, scanned, apiErrors, napi_ok: napiOk, pappers_credits_used: usedNow, pappers_credits_cap: PAPPERS_MONTHLY_CAP });
+      }
       inserted = ins?.length ?? 0;
     }
 
-    return j(200, { inserted, scanned, exemples: examples, apiErrors, napi_ok: napiOk });
+    // Marquer le run comme réussi seulement si au moins un NAF a répondu correctement
+    if (napiOk > 0) await saveLastRun(admin, today);
+
+    const usedNow = await getPappersUsage(admin);
+    return j(200, {
+      inserted,
+      scanned,
+      exemples: examples,
+      apiErrors,
+      napi_ok: napiOk,
+      window_from: cutoffStr,
+      window_to: today,
+      pappers_credits_used: usedNow,
+      pappers_credits_cap: PAPPERS_MONTHLY_CAP,
+      quota_hit: quotaHit,
+    });
 
   } catch (e) {
     return j(500, { error: (e as Error).message });

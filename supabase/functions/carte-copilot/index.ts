@@ -150,42 +150,78 @@ Deno.serve(async (req) => {
     let rawText = '';
     let parseError: string | null = null;
 
-    const tryInterpret = async (): Promise<boolean> => {
-      const resp = await anthropicJson(apiKey, {
-        model: MODEL,
-        max_tokens: 1500,
-        system: SYSTEM,
-        messages: [{ role: 'user', content: question }],
+    const callAnthropic = async (): Promise<Response | { errorResponse: Response }> => {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          max_tokens: 1500,
+          system: SYSTEM,
+          messages: [{ role: 'user', content: question }],
+        }),
       });
-      rawText = (resp?.content?.[0]?.text ?? '').trim();
+      return resp;
+    };
+
+    const tryInterpret = async (): Promise<{ ok: boolean; errorResponse?: Response }> => {
+      const resp = await callAnthropic() as Response;
+      const raw = await resp.text();
+      if (!resp.ok) {
+        return {
+          ok: false,
+          errorResponse: jsonErr(502, `Anthropic ${resp.status} : ${raw.slice(0, 400)}`),
+        };
+      }
+      let data: any;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        return {
+          ok: false,
+          errorResponse: jsonErr(502, `Anthropic 200 mais JSON invalide. Body: ${raw.slice(0, 400)}`),
+        };
+      }
+      const textBlock = Array.isArray(data?.content) ? data.content.find((b: any) => b?.type === 'text') : null;
+      rawText = (textBlock?.text ?? '').trim();
+      if (!rawText) {
+        return {
+          ok: false,
+          errorResponse: jsonErr(502, `Anthropic 200 mais aucun bloc texte. stop_reason=${data?.stop_reason}. Body: ${raw.slice(0, 400)}`),
+        };
+      }
       const cleaned = rawText.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
       const match = cleaned.match(/\{[\s\S]*\}/);
-      if (!match) { parseError = 'aucun JSON détecté'; return false; }
+      if (!match) { parseError = 'aucun JSON détecté'; return { ok: false }; }
       try {
         const parsed = JSON.parse(match[0]);
         const s = String(parsed.sql || '').trim();
-        if (!s) { parseError = 'champ sql vide'; return false; }
+        if (!s) { parseError = 'champ sql vide'; return { ok: false }; }
         sql = s;
         interpretation = String(parsed.interpretation || question);
-        return true;
+        return { ok: true };
       } catch (err: any) {
         parseError = `JSON invalide (${err?.message ?? 'parse error'})`;
-        return false;
+        return { ok: false };
       }
     };
 
     try {
-      let ok = await tryInterpret();
-      if (!ok) {
+      let result = await tryInterpret();
+      if (!result.ok && !result.errorResponse) {
         console.warn('AI interpretation failed, retrying once', { parseError, rawText: rawText.slice(0, 200) });
-        ok = await tryInterpret();
+        result = await tryInterpret();
       }
-      if (!ok) {
+      if (!result.ok) {
+        if (result.errorResponse) return result.errorResponse;
         const snippet = rawText ? rawText.slice(0, 300) : '(vide)';
         return jsonErr(422, `Interprétation IA échouée (${parseError ?? 'inconnu'}) : ${snippet}`);
       }
     } catch (e) {
-      if (isAnthropicOverload(e)) return jsonErr(503, (e as any).userMessage);
       console.error('AI call error', e);
       return jsonErr(500, `Interprétation IA échouée : ${(e as any)?.message ?? 'erreur inconnue'}`);
     }

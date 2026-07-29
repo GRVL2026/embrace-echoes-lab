@@ -21,7 +21,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, Mail, Phone, MapPin, StickyNote, Circle, Sparkles, Send, User } from "lucide-react";
+import { Loader2, Mail, Phone, MapPin, StickyNote, Circle, Sparkles, Send, User, Archive, ArchiveRestore } from "lucide-react";
+import { CompanyStatusBadge } from "@/components/reactivation/CompanyStatusBadge";
 
 export type StatutRelance =
   | "a_contacter"

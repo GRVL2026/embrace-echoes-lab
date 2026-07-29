@@ -416,3 +416,126 @@ export default function Reconquete() {
     </div>
   );
 }
+
+const KANBAN_COLS: Array<{ key: StatutRelance | "a_contacter"; label: string }> = [
+  { key: "a_contacter", label: "À contacter" },
+  { key: "contacte", label: "Contacté" },
+  { key: "relance", label: "Relancé" },
+  { key: "reactive", label: "Réactivé" },
+  { key: "sans_suite", label: "Sans suite" },
+];
+
+function KanbanPipeline({
+  rows,
+  loading,
+  onOpen,
+}: {
+  rows: Row[];
+  loading: boolean;
+  onOpen: (code: string, tab: "action" | "statut") => void;
+}) {
+  if (loading) {
+    return (
+      <Card className="flex items-center justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </Card>
+    );
+  }
+  const groups = KANBAN_COLS.map((c) => ({
+    ...c,
+    items: rows
+      .filter((r) => (r.statut_relance ?? "a_contacter") === c.key)
+      .sort((a, b) => (b.score || 0) - (a.score || 0)),
+  }));
+  return (
+    <div className="grid gap-3 grid-cols-1 md:grid-cols-2 xl:grid-cols-5">
+      {groups.map((g) => {
+        const caCol = g.items.reduce((s, r) => s + (r.ca_total || 0), 0);
+        return (
+          <Card key={g.key} className="p-3 flex flex-col min-h-[200px]">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-flex px-2 py-0.5 rounded-full border text-xs ${
+                    STATUT_COLOR[g.key as StatutRelance]
+                  }`}
+                >
+                  {g.label}
+                </span>
+                <span className="text-xs text-muted-foreground">{g.items.length}</span>
+              </div>
+              <span className="text-[11px] text-muted-foreground tabular-nums">
+                {fmtEUR(caCol)}
+              </span>
+            </div>
+            <div className="space-y-2 overflow-y-auto max-h-[70vh] pr-1">
+              {g.items.length === 0 && (
+                <div className="text-xs text-muted-foreground italic py-6 text-center">
+                  Aucun client
+                </div>
+              )}
+              {g.items.slice(0, 100).map((r) => {
+                const m = monthsAgo(r.derniere_commande);
+                return (
+                  <button
+                    key={r.code_client}
+                    onClick={() => onOpen(r.code_client, "action")}
+                    className="w-full text-left border border-border rounded-md p-2 bg-muted/20 hover:bg-muted/50 transition"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-medium text-sm line-clamp-1">
+                        {r.nom || r.code_client}
+                      </div>
+                      <span className="text-[11px] tabular-nums text-muted-foreground shrink-0">
+                        {fmtEUR(r.ca_total)}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                      {r.ville && (
+                        <span className="text-[11px] text-muted-foreground">
+                          {r.ville}
+                        </span>
+                      )}
+                      <CompanyStatusBadge
+                        etat_administratif={r.etat_administratif}
+                        procedure_collective={r.procedure_collective}
+                      />
+                    </div>
+                    <div className="text-[11px] text-muted-foreground mt-1">
+                      Dernière cde : {fmtDate(r.derniere_commande)}
+                      {m !== null && ` (${m}m)`}
+                    </div>
+                    {r.derniere_action_type ? (
+                      <div className="text-[11px] mt-1">
+                        <span className="uppercase tracking-wider text-primary">
+                          {r.derniere_action_type}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {" "}
+                          {r.derniere_action_date &&
+                            new Date(r.derniere_action_date).toLocaleDateString(
+                              "fr-FR",
+                            )}
+                          {r.derniere_action_auteur && ` • ${r.derniere_action_auteur}`}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-muted-foreground italic mt-1">
+                        Aucune action
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+              {g.items.length > 100 && (
+                <div className="text-[11px] text-muted-foreground text-center italic">
+                  +{g.items.length - 100} autres…
+                </div>
+              )}
+            </div>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}

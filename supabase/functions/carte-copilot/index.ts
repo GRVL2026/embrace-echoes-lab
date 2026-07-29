@@ -126,15 +126,9 @@ Deno.serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
     const uid = userData.user.id;
-    const [{ data: roles }, { data: menu }] = await Promise.all([
-      admin.from('user_roles').select('role').eq('user_id', uid),
-      admin.from('user_menu_access').select('allowed').eq('user_id', uid).eq('section_key', 'commerce.carte').maybeSingle(),
-    ]);
+    const { data: roles } = await admin.from('user_roles').select('role').eq('user_id', uid);
     const isAdminOrDirection = (roles ?? []).some((r: any) => r.role === 'admin' || r.role === 'direction');
-    // Accès menu explicite : true = autorisé, false = refusé, null = fallback role admin/direction.
-    const menuAllowed = (menu as any)?.allowed;
-    const allowed = menuAllowed === true || (menuAllowed !== false && isAdminOrDirection);
-    if (!allowed) return jsonErr(403, 'Accès Carte non autorisé');
+    if (!isAdminOrDirection) return jsonErr(403, 'Accès réservé à la direction');
 
 
     const body = await req.json().catch(() => ({}));

@@ -41,7 +41,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-type Statut = "nouveau" | "connecte" | "repondu" | "rdv" | "devis" | "client" | "perdu";
+type Statut = "nouveau" | "contacte" | "connecte" | "repondu" | "rdv" | "devis" | "client" | "perdu";
 type Segment = "loisirs" | "chr" | "retail" | "revendeur" | "autre";
 type Source = "linkedin" | "salon" | "reco" | "site" | "signal" | "autre";
 
@@ -91,19 +91,30 @@ type ProspectEvent = {
   auteur: string | null;
 };
 
+// Colonnes visibles du Kanban (dans l'ordre du pipeline)
 const STATUTS: { key: Statut; label: string }[] = [
   { key: "nouveau", label: "Nouveau" },
-  { key: "connecte", label: "Contacté" },
+  { key: "contacte", label: "Contacté" },
+  { key: "connecte", label: "Connecté (LinkedIn)" },
   { key: "repondu", label: "Répondu" },
-  { key: "rdv", label: "RDV" },
-  { key: "devis", label: "Devis" },
-  { key: "client", label: "Client" },
-  { key: "perdu", label: "Perdu" },
 ];
+
+// Libellés complets (inclut les statuts hors pipeline, conservés pour l'historique et l'attribution)
+const STATUT_LABELS: Record<Statut, string> = {
+  nouveau: "Nouveau",
+  contacte: "Contacté",
+  connecte: "Connecté (LinkedIn)",
+  repondu: "Répondu",
+  rdv: "RDV",
+  devis: "Devis",
+  client: "Client (gagné)",
+  perdu: "Perdu",
+};
 
 const STATUT_COLOR: Record<Statut, string> = {
   nouveau: "hsl(220 15% 55%)",
-  connecte: "hsl(200 90% 60%)",
+  contacte: "hsl(200 90% 60%)",
+  connecte: "hsl(210 80% 55%)",
   repondu: "hsl(258 90% 66%)",
   rdv: "hsl(280 85% 65%)",
   devis: "hsl(48 100% 55%)",
@@ -151,7 +162,7 @@ function formatLgmStatus(raw: string | null | undefined): string {
 }
 
 type Resume = {
-  total: number; nouveau: number; connecte: number; repondu: number; rdv: number;
+  total: number; nouveau: number; contacte: number; connecte: number; repondu: number; rdv: number;
   devis: number; client: number; perdu: number; ca_attribue: number;
 };
 
@@ -224,9 +235,10 @@ export default function Prospection() {
     setProspects((rows as Prospect[]) ?? []);
     const first = Array.isArray(r) ? r[0] : r;
     setResume(first ? {
-      total: num(first.total), nouveau: num(first.nouveau), connecte: num(first.connecte),
-      repondu: num(first.repondu), rdv: num(first.rdv), devis: num(first.devis),
-      client: num(first.client), perdu: num(first.perdu), ca_attribue: num(first.ca_attribue),
+      total: num(first.total), nouveau: num(first.nouveau), contacte: num(first.contacte),
+      connecte: num(first.connecte), repondu: num(first.repondu), rdv: num(first.rdv),
+      devis: num(first.devis), client: num(first.client), perdu: num(first.perdu),
+      ca_attribue: num(first.ca_attribue),
     } : null);
     setLoading(false);
   }, []);
@@ -254,9 +266,12 @@ export default function Prospection() {
   const byStatut = useMemo(() => {
     const map = new Map<Statut, Prospect[]>();
     STATUTS.forEach((s) => map.set(s.key, []));
+    const visible = new Set(STATUTS.map((s) => s.key));
     for (const p of filteredProspects) {
-      const arr = map.get(p.statut as Statut) ?? map.get("nouveau")!;
-      arr.push(p);
+      // Statuts hors pipeline (client, perdu, rdv, devis) : conservés en base
+      // mais sortis du Kanban pour ne pas polluer la vue de reconquête active.
+      if (!visible.has(p.statut as Statut)) continue;
+      map.get(p.statut as Statut)!.push(p);
     }
     return map;
   }, [filteredProspects]);
@@ -276,14 +291,15 @@ export default function Prospection() {
     await (supabase as any).from("prospect_events").insert({
       prospect_id: id, type: "statut", ancien_statut: old, nouveau_statut: newStatut,
     });
-    toast.success(`Statut → ${STATUTS.find((s) => s.key === newStatut)?.label}`);
+    toast.success(`Statut → ${STATUT_LABELS[newStatut]}`);
     // refresh resume
     const { data: r } = await (supabase as any).rpc("get_prospection_resume");
     const first = Array.isArray(r) ? r[0] : r;
     if (first) setResume({
-      total: num(first.total), nouveau: num(first.nouveau), connecte: num(first.connecte),
-      repondu: num(first.repondu), rdv: num(first.rdv), devis: num(first.devis),
-      client: num(first.client), perdu: num(first.perdu), ca_attribue: num(first.ca_attribue),
+      total: num(first.total), nouveau: num(first.nouveau), contacte: num(first.contacte),
+      connecte: num(first.connecte), repondu: num(first.repondu), rdv: num(first.rdv),
+      devis: num(first.devis), client: num(first.client), perdu: num(first.perdu),
+      ca_attribue: num(first.ca_attribue),
     });
   };
 
@@ -732,7 +748,9 @@ function ProspectSheet({
               <Select value={form.statut} onValueChange={(v) => set("statut", v as Statut)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {STATUTS.map((s) => <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>)}
+                  {(Object.keys(STATUT_LABELS) as Statut[]).map((k) => (
+                    <SelectItem key={k} value={k}>{STATUT_LABELS[k]}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </Field>
@@ -976,7 +994,7 @@ function EventRow({ ev }: { ev: ProspectEvent }) {
   const d = new Date(ev.created_at);
   const label =
     ev.type === "statut"
-      ? `Statut : ${STATUTS.find((s) => s.key === ev.ancien_statut)?.label ?? ev.ancien_statut} → ${STATUTS.find((s) => s.key === ev.nouveau_statut)?.label ?? ev.nouveau_statut}`
+      ? `Statut : ${(STATUT_LABELS as any)[ev.ancien_statut ?? ""] ?? ev.ancien_statut} → ${(STATUT_LABELS as any)[ev.nouveau_statut ?? ""] ?? ev.nouveau_statut}`
       : (ev.contenu || ev.type);
   return (
     <div className="rounded border border-border/60 bg-muted/30 px-2.5 py-1.5 text-xs">

@@ -3201,6 +3201,7 @@ export type Database = {
           ca_attribue: number
           client: number
           connecte: number
+          contacte: number
           devis: number
           nouveau: number
           perdu: number

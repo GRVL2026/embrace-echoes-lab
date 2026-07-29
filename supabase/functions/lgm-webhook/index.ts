@@ -5,7 +5,11 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const WEBHOOK_SECRET = Deno.env.get('LGM_WEBHOOK_SECRET') ?? '';
 
-const STATUT_ORDER = ['nouveau', 'connecte', 'repondu', 'rdv', 'devis', 'client', 'perdu'];
+// Ordre du pipeline. "contacte" = invitation LinkedIn envoyée / prise de contact,
+// "connecte" = invitation acceptée (LGM webhook), "repondu" = réponse reçue.
+// Les statuts en aval (rdv, devis, client, perdu) restent en base pour l'historique
+// et l'attribution CA, même s'ils ne s'affichent plus dans le Kanban.
+const STATUT_ORDER = ['nouveau', 'contacte', 'connecte', 'repondu', 'rdv', 'devis', 'client', 'perdu'];
 
 function norm(s: unknown): string {
   return String(s ?? '')
@@ -30,8 +34,12 @@ function pick(obj: any, paths: string[]): string | null {
 function mapEventToStatut(evt: string): string | null {
   const n = norm(evt);
   if (!n) return null;
-  if (n.includes('repl') || n.includes('answer') || n.includes('repond') || n.includes('reply')) return 'repondu';
+  // Réponse / message reçu → repondu
+  if (n.includes('repl') || n.includes('answer') || n.includes('repond') || n.includes('reply') || n.includes('message')) return 'repondu';
+  // Invitation acceptée / connexion établie → connecte (LinkedIn)
   if (n.includes('accept') || n.includes('connect')) return 'connecte';
+  // Invitation envoyée / prise de contact (avant acceptation) → contacte
+  if (n.includes('invit') || n.includes('sent') || n.includes('envoy') || n.includes('contact')) return 'contacte';
   return null;
 }
 

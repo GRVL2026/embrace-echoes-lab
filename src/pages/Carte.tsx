@@ -255,10 +255,15 @@ export default function Carte() {
         const color = COLORS[c.categorie];
         const size = c.categorie === "actif" ? 8 + Math.round(20 * Math.sqrt((c.ca_12m || 0) / maxCa)) : 10;
         const m = L.marker([c.lat, c.lng], { icon: makeDivIcon(color, size, !!filterCodes) });
+        const statusHtml = companyStatusPopupHtml({
+          etat_administratif: c.etat_administratif,
+          procedure_collective: c.procedure_collective,
+        });
         m.bindPopup(
           `<div style="font-family:system-ui,sans-serif;min-width:240px" data-client-code="${escapeHtml(c.code_client)}">
             <div style="font-weight:600;margin-bottom:4px">${escapeHtml(c.nom || "—")}</div>
             <div style="color:#64748b;font-size:12px">${escapeHtml(c.ville || "")}</div>
+            ${statusHtml ? `<div style="margin-top:6px">${statusHtml}</div>` : ""}
             <div class="rea-contact" data-code="${escapeHtml(c.code_client)}" style="margin-top:6px;font-size:12px;color:#64748b">📞 <em>chargement…</em></div>
             <div style="margin-top:6px;font-size:12px">CA 12 mois : <b>${fmtEUR(c.ca_12m || 0)}</b></div>
             <div style="font-size:12px">CA total : <b>${fmtEUR(c.ca_total || 0)}</b></div>

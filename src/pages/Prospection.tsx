@@ -235,9 +235,10 @@ export default function Prospection() {
     setProspects((rows as Prospect[]) ?? []);
     const first = Array.isArray(r) ? r[0] : r;
     setResume(first ? {
-      total: num(first.total), nouveau: num(first.nouveau), connecte: num(first.connecte),
-      repondu: num(first.repondu), rdv: num(first.rdv), devis: num(first.devis),
-      client: num(first.client), perdu: num(first.perdu), ca_attribue: num(first.ca_attribue),
+      total: num(first.total), nouveau: num(first.nouveau), contacte: num(first.contacte),
+      connecte: num(first.connecte), repondu: num(first.repondu), rdv: num(first.rdv),
+      devis: num(first.devis), client: num(first.client), perdu: num(first.perdu),
+      ca_attribue: num(first.ca_attribue),
     } : null);
     setLoading(false);
   }, []);

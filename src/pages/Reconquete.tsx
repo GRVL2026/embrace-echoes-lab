@@ -6,13 +6,17 @@ import { Navigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Loader2, Search, RefreshCw, PlusCircle, Tag } from "lucide-react";
+import { Loader2, Search, RefreshCw, PlusCircle, Tag, AlertTriangle } from "lucide-react";
 import {
   ClientActionsDialog,
   STATUT_LABEL,
   STATUT_COLOR,
   type StatutRelance,
 } from "@/components/reactivation/ClientActionsDialog";
+import {
+  CompanyStatusBadge,
+  resolveCompanyStatus,
+} from "@/components/reactivation/CompanyStatusBadge";
 import {
   Select,
   SelectContent,
@@ -35,6 +39,8 @@ type Row = {
   derniere_action_date: string | null;
   derniere_action_auteur: string | null;
   score: number;
+  etat_administratif: string | null;
+  procedure_collective: boolean | null;
 };
 
 function fmtEUR(n: number) {
@@ -60,6 +66,7 @@ export default function Reconquete() {
   const [q, setQ] = useState("");
   const [statutFilter, setStatutFilter] = useState<string>("all");
   const [catFilter, setCatFilter] = useState<string>("all");
+  const [societeFilter, setSocieteFilter] = useState<string>("all"); // all | cessees | procedure | actives
 
   const { data, isLoading: loadingData, refetch, isFetching } = useQuery({
     queryKey: ["reconquete-list"],
@@ -83,13 +90,34 @@ export default function Reconquete() {
         r.statut_relance !== statutFilter
       )
         return false;
+      if (societeFilter !== "all") {
+        const s = resolveCompanyStatus({
+          etat_administratif: r.etat_administratif,
+          procedure_collective: r.procedure_collective,
+        });
+        if (societeFilter === "cessees" && s !== "cessee") return false;
+        if (societeFilter === "procedure" && s !== "procedure") return false;
+        if (societeFilter === "actives" && s !== "active") return false;
+      }
       if (qLow) {
         const hay = `${r.nom ?? ""} ${r.ville ?? ""} ${r.code_client}`.toLowerCase();
         if (!hay.includes(qLow)) return false;
       }
       return true;
     });
-  }, [data, q, statutFilter, catFilter]);
+  }, [data, q, statutFilter, catFilter, societeFilter]);
+
+  const cesseesCount = useMemo(
+    () =>
+      (data ?? []).filter(
+        (r) =>
+          resolveCompanyStatus({
+            etat_administratif: r.etat_administratif,
+            procedure_collective: r.procedure_collective,
+          }) === "cessee",
+      ).length,
+    [data],
+  );
 
   if (isLoading) {
     return (
@@ -181,6 +209,31 @@ export default function Reconquete() {
               <SelectItem value="inactif">Inactifs</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={societeFilter} onValueChange={setSocieteFilter}>
+            <SelectTrigger className="w-[190px]">
+              <SelectValue placeholder="Société" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toutes sociétés</SelectItem>
+              <SelectItem value="cessees">
+                Sociétés cessées{cesseesCount > 0 ? ` (${cesseesCount})` : ""}
+              </SelectItem>
+              <SelectItem value="procedure">Procédure collective</SelectItem>
+              <SelectItem value="actives">Actives (INSEE)</SelectItem>
+            </SelectContent>
+          </Select>
+          {cesseesCount > 0 && societeFilter !== "cessees" && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1 border-rose-500/40 text-rose-500 hover:bg-rose-500/10"
+              onClick={() => setSocieteFilter("cessees")}
+            >
+              <AlertTriangle className="h-3.5 w-3.5" />
+              {cesseesCount} société{cesseesCount > 1 ? "s" : ""} cessée
+              {cesseesCount > 1 ? "s" : ""} à revoir
+            </Button>
+          )}
         </div>
       </Card>
 
@@ -212,7 +265,15 @@ export default function Reconquete() {
                       key={r.code_client}
                       className="border-t border-border hover:bg-muted/30"
                     >
-                      <td className="px-3 py-2 font-medium">{r.nom || r.code_client}</td>
+                      <td className="px-3 py-2 font-medium">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span>{r.nom || r.code_client}</span>
+                          <CompanyStatusBadge
+                            etat_administratif={r.etat_administratif}
+                            procedure_collective={r.procedure_collective}
+                          />
+                        </div>
+                      </td>
                       <td className="px-3 py-2 text-muted-foreground">{r.ville || "—"}</td>
                       <td className="px-3 py-2 text-muted-foreground">
                         {r.typologie || "—"}

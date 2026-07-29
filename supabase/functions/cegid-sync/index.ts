@@ -538,7 +538,9 @@ async function syncFeedChunk(
   let done = false;
   try {
     // Full-refresh uniquement au premier morceau. Les appels suivants reprennent au curseur reçu.
-    if (options.reset) {
+    // Exception: gaia_clients est traité par UPSERT pour préserver les colonnes locales (archive, statut_relance, owner_id, lat/lng…).
+    const useUpsert = mapper.table === 'gaia_clients' && mapper.pk === 'customer_id';
+    if (options.reset && !useUpsert) {
       try {
         const del = mapper.pk
           ? await admin.from(mapper.table).delete().not(mapper.pk, 'is', null)
@@ -556,7 +558,11 @@ async function syncFeedChunk(
         const batch = pendingBuffer.slice(0, INSERT_BATCH);
         pendingBuffer = pendingBuffer.slice(INSERT_BATCH);
         try {
-          const ins = await admin.from(mapper.table).insert(batch);
+          // Pour gaia_clients: UPSERT sur customer_id — ne touche PAS aux colonnes hors payload
+          // (archive, archive_at, archive_par, statut_relance, owner_id, lat/lng…). Aucune suppression dure.
+          const ins = useUpsert
+            ? await admin.from(mapper.table).upsert(batch, { onConflict: 'customer_id' })
+            : await admin.from(mapper.table).insert(batch);
           if (ins.error) throw new Error(ins.error.message);
           chunkRows += batch.length;
         } catch (e: any) {

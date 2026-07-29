@@ -6,7 +6,7 @@ import { Navigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Loader2, Search, RefreshCw, PlusCircle, Tag, AlertTriangle } from "lucide-react";
+import { Loader2, Search, RefreshCw, PlusCircle, Tag, AlertTriangle, LayoutGrid, List } from "lucide-react";
 import {
   ClientActionsDialog,
   STATUT_LABEL,
@@ -66,7 +66,8 @@ export default function Reconquete() {
   const [q, setQ] = useState("");
   const [statutFilter, setStatutFilter] = useState<string>("all");
   const [catFilter, setCatFilter] = useState<string>("all");
-  const [societeFilter, setSocieteFilter] = useState<string>("all"); // all | cessees | procedure | actives
+  const [societeFilter, setSocieteFilter] = useState<string>("all");
+  const [view, setView] = useState<"table" | "kanban">("table");
 
   const { data, isLoading: loadingData, refetch, isFetching } = useQuery({
     queryKey: ["reconquete-list"],
@@ -144,15 +145,35 @@ export default function Reconquete() {
             Clients dormants (12-24 mois) et inactifs, triés par CA × ancienneté.
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => refetch()}
-          disabled={isFetching}
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
-          Rafraîchir
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="inline-flex rounded-md border border-border overflow-hidden">
+            <button
+              className={`px-2 py-1.5 text-xs inline-flex items-center gap-1 ${
+                view === "table" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-muted/50"
+              }`}
+              onClick={() => setView("table")}
+            >
+              <List className="h-3.5 w-3.5" /> Table
+            </button>
+            <button
+              className={`px-2 py-1.5 text-xs inline-flex items-center gap-1 border-l border-border ${
+                view === "kanban" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-muted/50"
+              }`}
+              onClick={() => setView("kanban")}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" /> Pipeline
+            </button>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetch()}
+            disabled={isFetching}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
+            Rafraîchir
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -237,142 +258,153 @@ export default function Reconquete() {
         </div>
       </Card>
 
-      <Card className="overflow-hidden">
-        {loadingData ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-6 w-6 animate-spin" />
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
-                <tr>
-                  <th className="text-left px-3 py-2">Client</th>
-                  <th className="text-left px-3 py-2">Ville</th>
-                  <th className="text-left px-3 py-2">Typologie</th>
-                  <th className="text-right px-3 py-2">CA total</th>
-                  <th className="text-left px-3 py-2">Dernière cde</th>
-                  <th className="text-left px-3 py-2">Statut</th>
-                  <th className="text-left px-3 py-2">Dernière action</th>
-                  <th className="text-right px-3 py-2">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((r) => {
-                  const m = monthsAgo(r.derniere_commande);
-                  return (
-                    <tr
-                      key={r.code_client}
-                      className="border-t border-border hover:bg-muted/30"
-                    >
-                      <td className="px-3 py-2 font-medium">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span>{r.nom || r.code_client}</span>
-                          <CompanyStatusBadge
-                            etat_administratif={r.etat_administratif}
-                            procedure_collective={r.procedure_collective}
-                          />
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-muted-foreground">{r.ville || "—"}</td>
-                      <td className="px-3 py-2 text-muted-foreground">
-                        {r.typologie || "—"}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {fmtEUR(r.ca_total)}
-                      </td>
-                      <td className="px-3 py-2">
-                        <span
-                          className={
-                            r.categorie === "inactif"
-                              ? "text-slate-400"
-                              : "text-amber-500"
-                          }
-                        >
-                          {fmtDate(r.derniere_commande)}
-                        </span>
-                        {m !== null && (
-                          <span className="text-xs text-muted-foreground ml-1">
-                            ({m}m)
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2">
-                        {r.statut_relance ? (
+      {view === "table" ? (
+        <Card className="overflow-hidden">
+          {loadingData ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th className="text-left px-3 py-2">Client</th>
+                    <th className="text-left px-3 py-2">Ville</th>
+                    <th className="text-left px-3 py-2">Typologie</th>
+                    <th className="text-right px-3 py-2">CA total</th>
+                    <th className="text-left px-3 py-2">Dernière cde</th>
+                    <th className="text-left px-3 py-2">Statut</th>
+                    <th className="text-left px-3 py-2">Dernière action</th>
+                    <th className="text-right px-3 py-2">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((r) => {
+                    const m = monthsAgo(r.derniere_commande);
+                    return (
+                      <tr
+                        key={r.code_client}
+                        className="border-t border-border hover:bg-muted/30"
+                      >
+                        <td className="px-3 py-2 font-medium">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span>{r.nom || r.code_client}</span>
+                            <CompanyStatusBadge
+                              etat_administratif={r.etat_administratif}
+                              procedure_collective={r.procedure_collective}
+                            />
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">{r.ville || "—"}</td>
+                        <td className="px-3 py-2 text-muted-foreground">
+                          {r.typologie || "—"}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {fmtEUR(r.ca_total)}
+                        </td>
+                        <td className="px-3 py-2">
                           <span
-                            className={`inline-flex px-2 py-0.5 rounded-full border text-xs ${
-                              STATUT_COLOR[r.statut_relance]
-                            }`}
+                            className={
+                              r.categorie === "inactif"
+                                ? "text-slate-400"
+                                : "text-amber-500"
+                            }
                           >
-                            {STATUT_LABEL[r.statut_relance]}
+                            {fmtDate(r.derniere_commande)}
                           </span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground italic">
-                            —
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-xs">
-                        {r.derniere_action_type ? (
-                          <>
-                            <span className="uppercase tracking-wider">
-                              {r.derniere_action_type}
-                            </span>{" "}
-                            <span className="text-muted-foreground">
-                              {r.derniere_action_date &&
-                                new Date(r.derniere_action_date).toLocaleDateString(
-                                  "fr-FR",
-                                )}
-                              {r.derniere_action_auteur &&
-                                ` • ${r.derniere_action_auteur}`}
+                          {m !== null && (
+                            <span className="text-xs text-muted-foreground ml-1">
+                              ({m}m)
                             </span>
-                          </>
-                        ) : (
-                          <span className="text-muted-foreground italic">
-                            aucune
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-right whitespace-nowrap">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            setDialogCode(r.code_client);
-                            setDialogTab("action");
-                          }}
-                        >
-                          <PlusCircle className="h-3.5 w-3.5 mr-1" /> Action
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            setDialogCode(r.code_client);
-                            setDialogTab("statut");
-                          }}
-                        >
-                          <Tag className="h-3.5 w-3.5 mr-1" /> Statut
-                        </Button>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          {r.statut_relance ? (
+                            <span
+                              className={`inline-flex px-2 py-0.5 rounded-full border text-xs ${
+                                STATUT_COLOR[r.statut_relance]
+                              }`}
+                            >
+                              {STATUT_LABEL[r.statut_relance]}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">
+                              —
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-xs">
+                          {r.derniere_action_type ? (
+                            <>
+                              <span className="uppercase tracking-wider">
+                                {r.derniere_action_type}
+                              </span>{" "}
+                              <span className="text-muted-foreground">
+                                {r.derniere_action_date &&
+                                  new Date(r.derniere_action_date).toLocaleDateString(
+                                    "fr-FR",
+                                  )}
+                                {r.derniere_action_auteur &&
+                                  ` • ${r.derniere_action_auteur}`}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground italic">
+                              aucune
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right whitespace-nowrap">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setDialogCode(r.code_client);
+                              setDialogTab("action");
+                            }}
+                          >
+                            <PlusCircle className="h-3.5 w-3.5 mr-1" /> Action
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setDialogCode(r.code_client);
+                              setDialogTab("statut");
+                            }}
+                          >
+                            <Tag className="h-3.5 w-3.5 mr-1" /> Statut
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filtered.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        className="text-center py-10 text-muted-foreground italic"
+                      >
+                        Aucun client à afficher avec ces filtres.
                       </td>
                     </tr>
-                  );
-                })}
-                {filtered.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={8}
-                      className="text-center py-10 text-muted-foreground italic"
-                    >
-                      Aucun client à afficher avec ces filtres.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      ) : (
+        <KanbanPipeline
+          rows={filtered}
+          loading={loadingData}
+          onOpen={(code, tab) => {
+            setDialogCode(code);
+            setDialogTab(tab);
+          }}
+        />
+      )}
 
       <ClientActionsDialog
         code={dialogCode}
@@ -381,6 +413,129 @@ export default function Reconquete() {
         initialTab={dialogTab}
         onChanged={() => refetch()}
       />
+    </div>
+  );
+}
+
+const KANBAN_COLS: Array<{ key: StatutRelance | "a_contacter"; label: string }> = [
+  { key: "a_contacter", label: "À contacter" },
+  { key: "contacte", label: "Contacté" },
+  { key: "relance", label: "Relancé" },
+  { key: "reactive", label: "Réactivé" },
+  { key: "sans_suite", label: "Sans suite" },
+];
+
+function KanbanPipeline({
+  rows,
+  loading,
+  onOpen,
+}: {
+  rows: Row[];
+  loading: boolean;
+  onOpen: (code: string, tab: "action" | "statut") => void;
+}) {
+  if (loading) {
+    return (
+      <Card className="flex items-center justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </Card>
+    );
+  }
+  const groups = KANBAN_COLS.map((c) => ({
+    ...c,
+    items: rows
+      .filter((r) => (r.statut_relance ?? "a_contacter") === c.key)
+      .sort((a, b) => (b.score || 0) - (a.score || 0)),
+  }));
+  return (
+    <div className="grid gap-3 grid-cols-1 md:grid-cols-2 xl:grid-cols-5">
+      {groups.map((g) => {
+        const caCol = g.items.reduce((s, r) => s + (r.ca_total || 0), 0);
+        return (
+          <Card key={g.key} className="p-3 flex flex-col min-h-[200px]">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-flex px-2 py-0.5 rounded-full border text-xs ${
+                    STATUT_COLOR[g.key as StatutRelance]
+                  }`}
+                >
+                  {g.label}
+                </span>
+                <span className="text-xs text-muted-foreground">{g.items.length}</span>
+              </div>
+              <span className="text-[11px] text-muted-foreground tabular-nums">
+                {fmtEUR(caCol)}
+              </span>
+            </div>
+            <div className="space-y-2 overflow-y-auto max-h-[70vh] pr-1">
+              {g.items.length === 0 && (
+                <div className="text-xs text-muted-foreground italic py-6 text-center">
+                  Aucun client
+                </div>
+              )}
+              {g.items.slice(0, 100).map((r) => {
+                const m = monthsAgo(r.derniere_commande);
+                return (
+                  <button
+                    key={r.code_client}
+                    onClick={() => onOpen(r.code_client, "action")}
+                    className="w-full text-left border border-border rounded-md p-2 bg-muted/20 hover:bg-muted/50 transition"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-medium text-sm line-clamp-1">
+                        {r.nom || r.code_client}
+                      </div>
+                      <span className="text-[11px] tabular-nums text-muted-foreground shrink-0">
+                        {fmtEUR(r.ca_total)}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                      {r.ville && (
+                        <span className="text-[11px] text-muted-foreground">
+                          {r.ville}
+                        </span>
+                      )}
+                      <CompanyStatusBadge
+                        etat_administratif={r.etat_administratif}
+                        procedure_collective={r.procedure_collective}
+                      />
+                    </div>
+                    <div className="text-[11px] text-muted-foreground mt-1">
+                      Dernière cde : {fmtDate(r.derniere_commande)}
+                      {m !== null && ` (${m}m)`}
+                    </div>
+                    {r.derniere_action_type ? (
+                      <div className="text-[11px] mt-1">
+                        <span className="uppercase tracking-wider text-primary">
+                          {r.derniere_action_type}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {" "}
+                          {r.derniere_action_date &&
+                            new Date(r.derniere_action_date).toLocaleDateString(
+                              "fr-FR",
+                            )}
+                          {r.derniere_action_auteur && ` • ${r.derniere_action_auteur}`}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-muted-foreground italic mt-1">
+                        Aucune action
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+              {g.items.length > 100 && (
+                <div className="text-[11px] text-muted-foreground text-center italic">
+                  +{g.items.length - 100} autres…
+                </div>
+              )}
+            </div>
+          </Card>
+        );
+      })}
     </div>
   );
 }

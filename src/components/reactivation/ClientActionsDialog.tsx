@@ -129,6 +129,7 @@ export function ClientActionsDialog({
   const [contenu, setContenu] = useState("");
   const [resultat, setResultat] = useState("");
   const [prochaine, setProchaine] = useState("");
+  const [statutResultant, setStatutResultant] = useState<"auto" | StatutRelance>("auto");
   const [generating, setGenerating] = useState(false);
   const [sending, setSending] = useState(false);
 
@@ -161,6 +162,7 @@ export function ClientActionsDialog({
     setResultat("");
     setProchaine("");
     setType("appel");
+    setStatutResultant("auto");
     (async () => {
       await refresh();
       if (!cancel) setLoading(false);
@@ -192,6 +194,39 @@ export function ClientActionsDialog({
     toast({ title: "Proposition générée", description: "Vous pouvez éditer avant d'envoyer." });
   };
 
+  // Détermine le statut à appliquer après une action.
+  // - Choix explicite du commercial → prime.
+  // - Sinon règle auto : 1re action (mail/appel/visite) sur "sans statut" ou "a_contacter" → "contacte" ;
+  //   action suivante → "relance" ; "reactive"/"sans_suite" ne bougent pas.
+  //   Les actions de type "note" / "autre" ne déclenchent pas de transition auto.
+  const computeNextStatut = (
+    actionType: ActionType,
+    explicit: "auto" | StatutRelance,
+    current: StatutRelance | null,
+  ): StatutRelance | null => {
+    if (explicit !== "auto") return explicit;
+    if (actionType === "note" || actionType === "autre") return null;
+    if (!current || current === "a_contacter") return "contacte";
+    if (current === "contacte") return "relance";
+    // relance/reactive/sans_suite : on ne change rien automatiquement
+    return null;
+  };
+
+  const applyStatutAfterAction = async (actionType: ActionType) => {
+    if (!code || !user) return;
+    const current = (data?.statut_relance as StatutRelance | null) ?? null;
+    const next = computeNextStatut(actionType, statutResultant, current);
+    if (!next || next === current) return;
+    await (supabase as any)
+      .from("gaia_clients")
+      .update({
+        statut_relance: next,
+        statut_relance_maj: new Date().toISOString(),
+        statut_relance_par: user.id,
+      })
+      .eq("customer_id", code);
+  };
+
   const sendMail = async () => {
     if (!code || !hasEmail) return;
     if (!objet.trim() || !contenu.trim()) {
@@ -207,8 +242,8 @@ export function ClientActionsDialog({
         prochaine_relance: prochaine || null,
       },
     });
-    setSending(false);
     if (error || !res?.ok) {
+      setSending(false);
       toast({
         title: "Envoi échoué",
         description: (error as any)?.message || "Vérifiez l'email et réessayez.",
@@ -216,11 +251,14 @@ export function ClientActionsDialog({
       });
       return;
     }
+    await applyStatutAfterAction("mail");
+    setSending(false);
     toast({ title: "Mail envoyé", description: data?.email ?? "" });
     setObjet("");
     setContenu("");
     setResultat("");
     setProchaine("");
+    setStatutResultant("auto");
     await refresh();
     onChanged?.();
   };
@@ -243,16 +281,19 @@ export function ClientActionsDialog({
       resultat: resultat.trim() || null,
       prochaine_relance: prochaine || null,
     });
-    setSaving(false);
     if (error) {
+      setSaving(false);
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
       return;
     }
+    await applyStatutAfterAction(type);
+    setSaving(false);
     toast({ title: "Action enregistrée" });
     setObjet("");
     setContenu("");
     setResultat("");
     setProchaine("");
+    setStatutResultant("auto");
     await refresh();
     onChanged?.();
   };
@@ -576,6 +617,38 @@ export function ClientActionsDialog({
                     placeholder="Ex : RDV programmé, à rappeler, refus…"
                   />
                 </div>
+
+                <div>
+                  <Label>Statut après cette action</Label>
+                  <Select
+                    value={statutResultant}
+                    onValueChange={(v) => setStatutResultant(v as "auto" | StatutRelance)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">
+                        Auto — {(() => {
+                          const cur = (data?.statut_relance as StatutRelance | null) ?? null;
+                          const next = computeNextStatut(type, "auto", cur);
+                          if (!next) return "inchangé";
+                          return `passe à « ${STATUT_LABEL[next]} »`;
+                        })()}
+                      </SelectItem>
+                      {(Object.keys(STATUT_LABEL) as StatutRelance[]).map((s) => (
+                        <SelectItem key={s} value={s}>
+                          Forcer : {STATUT_LABEL[s]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Choisissez « Réactivé » si commande obtenue, « Sans suite » si refus.
+                    Sinon laissez sur Auto.
+                  </p>
+                </div>
+
 
                 <div className="flex gap-2">
                   <Button onClick={submitAction} disabled={saving} variant="outline" className="flex-1">

@@ -230,97 +230,61 @@ Deno.serve(async (req) => {
     let rawText = '';
     let parseError: string | null = null;
 
-    const callAnthropic = async (): Promise<Response | { errorResponse: Response }> => {
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: MODEL,
-          max_tokens: 1500,
-          system: SYSTEM,
-          messages: [{ role: 'user', content: question }],
-        }),
-      });
-      return resp;
-    };
-
-    const tryInterpret = async (): Promise<{ ok: boolean; errorResponse?: Response }> => {
-      const resp = await callAnthropic() as Response;
-      const raw = await resp.text();
-      if (!resp.ok) {
-        return {
-          ok: false,
-          errorResponse: jsonErr(502, `Anthropic ${resp.status} : ${raw.slice(0, 400)}`),
-        };
-      }
-      let data: any;
-      try {
-        data = JSON.parse(raw);
-      } catch {
-        return {
-          ok: false,
-          errorResponse: jsonErr(502, `Anthropic 200 mais JSON invalide. Body: ${raw.slice(0, 400)}`),
-        };
-      }
-      const textBlock = Array.isArray(data?.content) ? data.content.find((b: any) => b?.type === 'text') : null;
+    const tryInterpret = async (): Promise<boolean> => {
+      const data = await callAnthropicWithRetry(apiKey, question);
+      const textBlock = Array.isArray(data?.content)
+        ? data.content.find((b: any) => b?.type === 'text')
+        : null;
       rawText = (textBlock?.text ?? '').trim();
-      if (!rawText) {
-        return {
-          ok: false,
-          errorResponse: jsonErr(502, `Anthropic 200 mais aucun bloc texte. stop_reason=${data?.stop_reason}. Body: ${raw.slice(0, 400)}`),
-        };
-      }
+      if (!rawText) { parseError = `aucun bloc texte (stop_reason=${data?.stop_reason})`; return false; }
       const cleaned = rawText.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
       const match = cleaned.match(/\{[\s\S]*\}/);
-      if (!match) { parseError = 'aucun JSON détecté'; return { ok: false }; }
+      if (!match) { parseError = 'aucun JSON détecté'; return false; }
       try {
         const parsed = JSON.parse(match[0]);
         const s = String(parsed.sql || '').trim();
-        if (!s) { parseError = 'champ sql vide'; return { ok: false }; }
+        if (!s) { parseError = 'champ sql vide'; return false; }
         sql = s;
         interpretation = String(parsed.interpretation || question);
-        return { ok: true };
+        return true;
       } catch (err: any) {
         parseError = `JSON invalide (${err?.message ?? 'parse error'})`;
-        return { ok: false };
+        return false;
       }
     };
 
     try {
-      let result = await tryInterpret();
-      if (!result.ok && !result.errorResponse) {
-        console.warn('AI interpretation failed, retrying once', { parseError, rawText: rawText.slice(0, 200) });
-        result = await tryInterpret();
+      let ok = await tryInterpret();
+      if (!ok) {
+        console.warn('[carte-copilot] interprétation échouée, nouvel essai', { parseError });
+        ok = await tryInterpret();
       }
-      if (!result.ok) {
-        if (result.errorResponse) return result.errorResponse;
-        const snippet = rawText ? rawText.slice(0, 300) : '(vide)';
-        return jsonErr(422, `Interprétation IA échouée (${parseError ?? 'inconnu'}) : ${snippet}`);
+      if (!ok) {
+        console.error('[carte-copilot] interprétation impossible', { parseError, rawText: rawText.slice(0, 300) });
+        return jsonErr(422, MSG_PARSE, `${parseError ?? 'inconnu'} — ${rawText.slice(0, 300) || '(vide)'}`, true);
       }
     } catch (e) {
-      console.error('AI call error', e);
-      return jsonErr(500, `Interprétation IA échouée : ${(e as any)?.message ?? 'erreur inconnue'}`);
+      const err = e as AiError;
+      console.error('[carte-copilot] appel IA échoué', err?.detail ?? e);
+      if (err?.kind === 'timeout') return jsonErr(504, MSG_TIMEOUT, err.detail, true);
+      if (err?.kind === 'overload') return jsonErr(503, MSG_OVERLOAD, err.detail, true);
+      return jsonErr(502, MSG_OVERLOAD, err?.detail ?? String(e), true);
     }
 
-    if (!sql) return jsonErr(422, 'Interprétation IA échouée : SQL vide');
     const check = validateSql(sql);
     if (!check.ok) {
-      console.warn('SQL rejeté par la whitelist', check.error, sql);
-      return jsonErr(400, `SQL rejeté : ${check.error} — SQL: ${sql.slice(0, 400)}`);
+      console.warn('[carte-copilot] SQL rejeté', check.error, sql);
+      return jsonErr(400, MSG_SQL, `${check.error} — SQL: ${sql.slice(0, 400)}`, true);
     }
 
     // Exécute via gaia_query_restricted (SECURITY INVOKER — RLS + whitelist SQL appliquées).
     const { data, error } = await sb.rpc('gaia_query_restricted' as any, { sql_query: sql });
     if (error) {
-      console.error('gaia_query_restricted error', error, sql);
-      return jsonErr(400, `SQL rejeté : ${error.message} — SQL: ${sql.slice(0, 400)}`);
+      console.error('[carte-copilot] gaia_query_restricted error', error, sql);
+      return jsonErr(400, MSG_SQL, `${error.message} — SQL: ${sql.slice(0, 400)}`, true);
     }
     if (data && typeof data === 'object' && !Array.isArray(data) && 'error' in (data as any)) {
-      return jsonErr(400, `SQL rejeté : ${(data as any).error} — SQL: ${sql.slice(0, 400)}`);
+      return jsonErr(400, MSG_SQL, `${(data as any).error} — SQL: ${sql.slice(0, 400)}`, true);
     }
 
 

@@ -189,10 +189,18 @@ Rédige l'email adapté à la catégorie ${categorie}. Réponds en JSON strict {
     const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
     if (!apiKey) return jsonErr(500, "IA non configurée (ANTHROPIC_API_KEY manquant)");
 
+    const langueLabel = LANG_LABEL[langue] || 'français';
+    const systemAvecLangue = `${SYSTEM}
+
+LANGUE DE RÉDACTION : ${langueLabel} (${langue}).
+Rédige INTÉGRALEMENT l'email dans cette langue — l'objet ET le corps — sans aucune phrase en français si la langue n'est pas le français.
+Conserve exactement le même ton, la même structure et les mêmes règles ci-dessus. Emploie la forme de politesse (vouvoiement) quand la langue le permet.
+Les noms de produits du catalogue restent tels quels, sans traduction.`;
+
     const resp = await anthropicJson(apiKey, {
       model: MODEL,
       max_tokens: 900,
-      system: SYSTEM,
+      system: systemAvecLangue,
       messages: [{ role: 'user', content: userPrompt }],
     });
 
@@ -205,7 +213,7 @@ Rédige l'email adapté à la catégorie ${categorie}. Réponds en JSON strict {
     const parsed = safeJsonExtract(text);
     if (!parsed) return jsonErr(502, "Réponse IA invalide");
 
-    return new Response(JSON.stringify(parsed), {
+    return new Response(JSON.stringify({ ...parsed, langue, langue_detectee: langueDetectee }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {
@@ -216,3 +224,4 @@ Rédige l'email adapté à la catégorie ${categorie}. Réponds en JSON strict {
     return jsonErr(500, err instanceof Error ? err.message : 'Erreur interne');
   }
 });
+

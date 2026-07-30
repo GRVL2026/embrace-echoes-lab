@@ -87,12 +87,28 @@ function makeDivIcon(color: string, size: number, highlight = false): L.DivIcon 
   });
 }
 
+type CopilotPoint = { code_client: string | null; nom: string; ville: string; lat: number; lng: number };
+
 type CopilotResult = {
   interpretation: string;
-  count: number;
+  count: number;          // lignes renvoyées (plafonnées à 500)
+  total: number | null;   // vrai total (COUNT(*) sans plafond)
+  truncated: boolean;
+  geoCount: number;       // lignes réellement géolocalisées
   ca_total: number;
   codes: Set<string>;
+  points: CopilotPoint[];
 };
+
+function pickCoord(row: any, keys: string[]): number | null {
+  for (const k of keys) {
+    const v = row?.[k];
+    if (v === null || v === undefined || v === "") continue;
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
 
 export default function Carte() {
   const { isAdmin, isDirection, canReactivation } = useAuth();

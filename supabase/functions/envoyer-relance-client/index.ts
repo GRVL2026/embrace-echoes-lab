@@ -6,13 +6,8 @@ const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 
-// Adresses autorisées à envoyer depuis leur propre boîte via Resend.
-// Le domaine avranchesautomatic.com est vérifié dans Resend.
-// Pour l'instant, on limite l'envoi à Léopaul (même règle que les autres
-// actions restreintes du module prospection).
-const ALLOWED_SENDERS = new Set<string>([
-  'leopaul@avranchesautomatic.com',
-]);
+// Permission restreinte (défaut OFF, accordée compte par compte dans l'administration).
+const REQUIRED_PERMISSION = 'relance.envoyer_mail';
 const REQUIRED_DOMAIN = '@avranchesautomatic.com';
 
 function jsonErr(status: number, error: string, extra?: Record<string, unknown>) {

@@ -94,11 +94,28 @@ type CopilotResult = {
   count: number;          // lignes renvoyées (plafonnées à 500)
   total: number | null;   // vrai total (COUNT(*) sans plafond)
   truncated: boolean;
-  geoCount: number;       // lignes réellement géolocalisées
+  geoCount: number;       // lignes réellement géolocalisées (coordonnées valides)
+  invalidCount: number;   // lignes avec coordonnées aberrantes / nulles
   ca_total: number;
   codes: Set<string>;
   points: CopilotPoint[];
 };
+
+// Plages de coordonnées plausibles. France métropolitaine d'abord, Europe en repli.
+const FRANCE_BOX = { latMin: 41, latMax: 52, lngMin: -6, lngMax: 10 };
+const EUROPE_BOX = { latMin: 34, latMax: 72, lngMin: -25, lngMax: 45 };
+
+function inBox(lat: number, lng: number, b: typeof FRANCE_BOX) {
+  return lat >= b.latMin && lat <= b.latMax && lng >= b.lngMin && lng <= b.lngMax;
+}
+
+/** Coordonnée exploitable : non nulle, pas 0,0, et dans l'Europe élargie. */
+function isSaneCoord(lat: number | null, lng: number | null): lat is number {
+  if (lat === null || lng === null) return false;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  if (lat === 0 && lng === 0) return false;
+  return inBox(lat, lng, EUROPE_BOX);
+}
 
 function pickCoord(row: any, keys: string[]): number | null {
   for (const k of keys) {
@@ -109,6 +126,7 @@ function pickCoord(row: any, keys: string[]): number | null {
   }
   return null;
 }
+
 
 export default function Carte() {
   const { isAdmin, isDirection, canReactivation } = useAuth();
@@ -316,7 +334,7 @@ export default function Carte() {
 
     // Points renvoyés par le copilote absents du jeu de données de la carte
     // (prospects, clients non présents dans get_map_points…) → affichés quand même.
-    const extraPts: L.LatLngExpression[] = [];
+    const extraPts: [number, number][] = [];
     if (copilotResult) {
       for (const p of copilotResult.points) {
         const key = p.code_client ? p.code_client : null;
@@ -333,16 +351,28 @@ export default function Carte() {
       }
     }
 
-    // Auto-fit when copilot result active
+    // Auto-fit sur les résultats du copilote, quel que soit leur nombre.
+    // Les coordonnées aberrantes (hors Europe, 0,0, nulles) sont ignorées.
     if (filterCodes && mapRef.current) {
-      const pts: L.LatLngExpression[] = [...extraPts];
+      const pts: [number, number][] = [...(extraPts as [number, number][])];
       for (const c of data.clients) {
-        if (filterCodes.has(String(c.code_client ?? "").trim())) pts.push([c.lat, c.lng]);
+        if (!filterCodes.has(String(c.code_client ?? "").trim())) continue;
+        if (!isSaneCoord(c.lat, c.lng)) continue;
+        pts.push([c.lat, c.lng]);
       }
-      if (pts.length > 0) {
-        mapRef.current.fitBounds(L.latLngBounds(pts as any), { padding: [40, 40], maxZoom: 11 });
+      // Si l'essentiel des points est en France métropolitaine, on cadre dessus
+      // pour éviter qu'un point lointain (DOM, Maghreb…) n'élargisse tout.
+      const inFrance = pts.filter(([la, ln]) => inBox(la, ln, FRANCE_BOX));
+      const fitPts = inFrance.length >= Math.max(1, Math.ceil(pts.length * 0.8)) ? inFrance : pts;
+      if (fitPts.length > 0) {
+        mapRef.current.fitBounds(L.latLngBounds(fitPts as any), {
+          padding: [60, 60],
+          maxZoom: 12,
+          animate: true,
+        });
       }
     }
+
   }, [data, layers, copilotResult]);
 
   const zoomToClient = (c: ClientPt) => {
@@ -395,17 +425,20 @@ export default function Carte() {
         rows.map((r) => String(r.code_client ?? "").trim()).filter(Boolean),
       );
       const points: CopilotPoint[] = [];
+      let invalidCount = 0;
       for (const r of rows) {
         const lat = pickCoord(r, ["lat", "latitude"]);
         const lng = pickCoord(r, ["lng", "lon", "long", "longitude"]);
-        if (lat === null || lng === null) continue;
-        if (Math.abs(lat) > 90 || Math.abs(lng) > 180) continue;
+        if (!isSaneCoord(lat, lng)) {
+          if (lat !== null || lng !== null) invalidCount++;
+          continue;
+        }
         points.push({
           code_client: r.code_client ? String(r.code_client).trim() : null,
           nom: String(r.nom ?? r.name ?? r.entreprise ?? "—"),
           ville: String(r.ville ?? ""),
           lat,
-          lng,
+          lng: lng as number,
         });
       }
       const hasPeriode = rows.some((r) => r.ca_periode != null);
@@ -421,10 +454,12 @@ export default function Carte() {
         total,
         truncated: Boolean((res as any).truncated) || rows.length >= 500,
         geoCount: points.length,
+        invalidCount,
         ca_total,
         codes,
         points,
       });
+
       if (rows.length === 0) {
         toast({
           title: "Aucun résultat",
@@ -631,6 +666,14 @@ export default function Carte() {
                     copilotResult.geoCount < copilotResult.count &&
                     ` — ${copilotResult.geoCount.toLocaleString("fr-FR")} géolocalisés`}
                 </div>
+                {copilotResult.invalidCount > 0 && (
+                  <div className="mt-1 text-[11px] text-amber-500">
+                    ⚠ {copilotResult.invalidCount.toLocaleString("fr-FR")} client
+                    {copilotResult.invalidCount > 1 ? "s ont" : " a"} des coordonnées invalides
+                    (ignoré{copilotResult.invalidCount > 1 ? "s" : ""} du cadrage — géocodage à corriger)
+                  </div>
+                )}
+
                 <Button
                   size="sm"
                   variant="outline"

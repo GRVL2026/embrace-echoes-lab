@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster";
@@ -477,7 +478,7 @@ export default function Carte() {
               </div>
             )}
           </div>
-          <Button onClick={askCopilot} disabled={asking || !query.trim()} className="shrink-0">
+          <Button onClick={() => askCopilot()} disabled={asking || !query.trim()} className="shrink-0">
             {asking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             <span className="ml-2 hidden sm:inline">Demander</span>
           </Button>

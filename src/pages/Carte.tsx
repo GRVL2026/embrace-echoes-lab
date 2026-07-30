@@ -127,6 +127,56 @@ function pickCoord(row: any, keys: string[]): number | null {
   return null;
 }
 
+type PopupClient = {
+  code_client: string;
+  nom: string | null;
+  ville: string | null;
+  ca_12m?: number | null;
+  ca_total?: number | null;
+  derniere_commande?: string | null;
+  categorie?: "actif" | "dormant" | "inactif" | null;
+  etat_administratif?: string | null;
+  procedure_collective?: boolean | null;
+};
+
+/** Gabarit unique du popup client (utilisé par la couche clients ET la branche de secours). */
+function popupClientHtml(p: PopupClient, canReactivation: boolean): string {
+  const code = escapeHtml(p.code_client);
+  const nom = p.nom || "—";
+  const color = p.categorie ? COLORS[p.categorie] : "#64748b";
+  const statusHtml = companyStatusPopupHtml({
+    etat_administratif: p.etat_administratif,
+    procedure_collective: p.procedure_collective,
+  });
+  return `<div style="font-family:system-ui,sans-serif;min-width:240px" data-client-code="${code}">
+    <div style="font-weight:600;margin-bottom:4px">${escapeHtml(nom)}</div>
+    <div style="color:#64748b;font-size:12px">${escapeHtml(p.ville || "")}</div>
+    ${statusHtml ? `<div style="margin-top:6px">${statusHtml}</div>` : ""}
+    <div class="rea-contact" data-code="${code}" style="margin-top:6px;font-size:12px;color:#64748b">📞 <em>chargement…</em></div>
+    ${p.ca_12m != null ? `<div style="margin-top:6px;font-size:12px">CA 12 mois : <b>${fmtEUR(p.ca_12m || 0)}</b></div>` : ""}
+    ${p.ca_total != null ? `<div style="font-size:12px">CA total : <b>${fmtEUR(p.ca_total || 0)}</b></div>` : ""}
+    ${p.derniere_commande !== undefined ? `<div style="font-size:12px;color:#475569">Dernière commande : <b>${p.derniere_commande ? fmtMonth(p.derniere_commande) : "aucune commande enregistrée"}</b></div>` : ""}
+    ${p.categorie ? `<div style="font-size:11px;color:${color};margin-top:4px;text-transform:uppercase">${p.categorie}</div>` : ""}
+    <div class="rea-slot" data-code="${code}" style="margin-top:8px;padding-top:6px;border-top:1px solid #e2e8f0;font-size:11px;color:#64748b">Chargement…</div>
+    ${canReactivation ? `<div style="display:flex;gap:6px;margin-top:6px"><button data-rea-action="action" data-code="${code}" style="flex:1;padding:5px 8px;background:#9B5CFF;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-weight:500">+ Action</button><button data-rea-action="statut" data-code="${code}" style="flex:1;padding:5px 8px;background:#334155;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-weight:500">Statut</button></div>` : ""}
+    <button data-fiche-client="${escapeHtml(p.nom || "")}" style="margin-top:6px;width:100%;padding:5px 8px;background:transparent;color:#9B5CFF;border:1px solid #9B5CFF;border-radius:4px;font-size:11px;cursor:pointer;font-weight:500">Ouvrir la fiche client →</button>
+  </div>`;
+}
+
+/** Gabarit du popup prospect (contact hydraté à l'ouverture). */
+function popupProspectHtml(p: { id: string; nom: string | null; ville: string | null; statut: string | null; segment: string | null }): string {
+  const id = escapeHtml(p.id);
+  return `<div style="font-family:system-ui,sans-serif;min-width:220px">
+    <div style="font-weight:600;margin-bottom:4px">${escapeHtml(p.nom || "—")}</div>
+    <div style="color:#64748b;font-size:12px">${escapeHtml(p.ville || "")}</div>
+    <div style="margin-top:6px;font-size:12px">Statut : <b>${escapeHtml(p.statut || "—")}</b></div>
+    <div style="font-size:12px">Segment : ${escapeHtml(p.segment || "—")}</div>
+    <div class="prospect-slot" data-id="${id}" style="margin-top:8px;padding-top:6px;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b">Chargement…</div>
+    <button data-fiche-prospect="${id}" style="margin-top:6px;width:100%;padding:5px 8px;background:transparent;color:#9B5CFF;border:1px solid #9B5CFF;border-radius:4px;font-size:11px;cursor:pointer;font-weight:500">Ouvrir dans Prospection →</button>
+  </div>`;
+}
+
+
 
 export default function Carte() {
   const { isAdmin, isDirection, canReactivation } = useAuth();

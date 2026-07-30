@@ -87,12 +87,28 @@ function makeDivIcon(color: string, size: number, highlight = false): L.DivIcon 
   });
 }
 
+type CopilotPoint = { code_client: string | null; nom: string; ville: string; lat: number; lng: number };
+
 type CopilotResult = {
   interpretation: string;
-  count: number;
+  count: number;          // lignes renvoyées (plafonnées à 500)
+  total: number | null;   // vrai total (COUNT(*) sans plafond)
+  truncated: boolean;
+  geoCount: number;       // lignes réellement géolocalisées
   ca_total: number;
   codes: Set<string>;
+  points: CopilotPoint[];
 };
+
+function pickCoord(row: any, keys: string[]): number | null {
+  for (const k of keys) {
+    const v = row?.[k];
+    if (v === null || v === undefined || v === "") continue;
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
 
 export default function Carte() {
   const { isAdmin, isDirection, canReactivation } = useAuth();
@@ -251,10 +267,12 @@ export default function Carte() {
     const filterCodes = copilotResult?.codes ?? null;
     const maxCa = Math.max(1, ...data.clients.map((c) => c.ca_12m || 0));
 
-    if (layers.actif || layers.dormant || layers.inactif) {
+    // Quand un résultat copilote est actif, on ignore les cases à cocher :
+    // les points demandés doivent toujours être visibles.
+    if (filterCodes || layers.actif || layers.dormant || layers.inactif) {
       for (const c of data.clients) {
-        if (!layers[c.categorie]) continue;
-        if (filterCodes && !filterCodes.has(c.code_client)) continue;
+        if (!filterCodes && !layers[c.categorie]) continue;
+        if (filterCodes && !filterCodes.has(String(c.code_client ?? "").trim())) continue;
         const color = COLORS[c.categorie];
         const size = c.categorie === "actif" ? 8 + Math.round(20 * Math.sqrt((c.ca_12m || 0) / maxCa)) : 10;
         const m = L.marker([c.lat, c.lng], { icon: makeDivIcon(color, size, !!filterCodes) });
@@ -277,7 +295,7 @@ export default function Carte() {
           </div>`
         );
         cluster.addLayer(m);
-        markerByCodeRef.current.set(c.code_client, m);
+        markerByCodeRef.current.set(String(c.code_client ?? "").trim(), m);
       }
     }
 
@@ -296,11 +314,30 @@ export default function Carte() {
       }
     }
 
+    // Points renvoyés par le copilote absents du jeu de données de la carte
+    // (prospects, clients non présents dans get_map_points…) → affichés quand même.
+    const extraPts: L.LatLngExpression[] = [];
+    if (copilotResult) {
+      for (const p of copilotResult.points) {
+        const key = p.code_client ? p.code_client : null;
+        if (key && markerByCodeRef.current.has(key)) continue;
+        const m = L.marker([p.lat, p.lng], { icon: makeDivIcon(COLORS.prospects, 12, true) });
+        m.bindPopup(
+          `<div style="font-family:system-ui,sans-serif;min-width:180px">
+            <div style="font-weight:600;margin-bottom:4px">${escapeHtml(p.nom || "—")}</div>
+            <div style="color:#64748b;font-size:12px">${escapeHtml(p.ville || "")}</div>
+          </div>`
+        );
+        cluster.addLayer(m);
+        extraPts.push([p.lat, p.lng]);
+      }
+    }
+
     // Auto-fit when copilot result active
-    if (filterCodes && filterCodes.size > 0 && mapRef.current) {
-      const pts: L.LatLngExpression[] = [];
+    if (filterCodes && mapRef.current) {
+      const pts: L.LatLngExpression[] = [...extraPts];
       for (const c of data.clients) {
-        if (filterCodes.has(c.code_client)) pts.push([c.lat, c.lng]);
+        if (filterCodes.has(String(c.code_client ?? "").trim())) pts.push([c.lat, c.lng]);
       }
       if (pts.length > 0) {
         mapRef.current.fitBounds(L.latLngBounds(pts as any), { padding: [40, 40], maxZoom: 11 });
@@ -354,22 +391,49 @@ export default function Carte() {
         });
       }
       const rows: any[] = (res as any).rows ?? [];
-      const codes = new Set<string>(rows.map((r) => String(r.code_client)).filter(Boolean));
+      const codes = new Set<string>(
+        rows.map((r) => String(r.code_client ?? "").trim()).filter(Boolean),
+      );
+      const points: CopilotPoint[] = [];
+      for (const r of rows) {
+        const lat = pickCoord(r, ["lat", "latitude"]);
+        const lng = pickCoord(r, ["lng", "lon", "long", "longitude"]);
+        if (lat === null || lng === null) continue;
+        if (Math.abs(lat) > 90 || Math.abs(lng) > 180) continue;
+        points.push({
+          code_client: r.code_client ? String(r.code_client).trim() : null,
+          nom: String(r.nom ?? r.name ?? r.entreprise ?? "—"),
+          ville: String(r.ville ?? ""),
+          lat,
+          lng,
+        });
+      }
       const hasPeriode = rows.some((r) => r.ca_periode != null);
       const ca_total = rows.reduce(
         (s, r) => s + (Number(hasPeriode ? r.ca_periode : r.ca_total) || 0),
         0,
       );
+      const totalRaw = (res as any).total;
+      const total = Number.isFinite(Number(totalRaw)) ? Number(totalRaw) : null;
       setCopilotResult({
         interpretation: String((res as any).interpretation || q),
-        count: codes.size,
+        count: rows.length,
+        total,
+        truncated: Boolean((res as any).truncated) || rows.length >= 500,
+        geoCount: points.length,
         ca_total,
         codes,
+        points,
       });
-      if (codes.size === 0) {
+      if (rows.length === 0) {
         toast({
           title: "Aucun résultat",
           description: "Aucun client ne correspond à cette recherche",
+        });
+      } else if (points.length === 0) {
+        toast({
+          title: "Aucun point à afficher",
+          description: `${rows.length} résultat(s), mais aucune coordonnée géographique exploitable (clients non géocodés).`,
         });
       }
     } catch (e: any) {
@@ -548,13 +612,24 @@ export default function Carte() {
                 <div className="text-sm font-medium mb-2">{copilotResult.interpretation}</div>
                 <div className="flex gap-4 text-sm">
                   <div>
-                    <div className="text-[11px] text-muted-foreground">Clients</div>
-                    <div className="font-semibold tabular-nums">{copilotResult.count}</div>
+                    <div className="text-[11px] text-muted-foreground">Résultats</div>
+                    <div className="font-semibold tabular-nums">
+                      {(copilotResult.total ?? copilotResult.count).toLocaleString("fr-FR")}
+                    </div>
                   </div>
                   <div>
                     <div className="text-[11px] text-muted-foreground">CA cumulé</div>
                     <div className="font-semibold tabular-nums">{fmtEUR(copilotResult.ca_total)}</div>
                   </div>
+                </div>
+                <div className="mt-1.5 text-[11px] text-muted-foreground">
+                  {copilotResult.total != null && copilotResult.total > copilotResult.count
+                    ? `${copilotResult.total.toLocaleString("fr-FR")} au total (${copilotResult.count.toLocaleString("fr-FR")} affichés sur la carte)`
+                    : `${copilotResult.count.toLocaleString("fr-FR")} résultat${copilotResult.count > 1 ? "s" : ""}, dont ${copilotResult.geoCount.toLocaleString("fr-FR")} géolocalisé${copilotResult.geoCount > 1 ? "s" : ""}`}
+                  {copilotResult.total != null &&
+                    copilotResult.total > copilotResult.count &&
+                    copilotResult.geoCount < copilotResult.count &&
+                    ` — ${copilotResult.geoCount.toLocaleString("fr-FR")} géolocalisés`}
                 </div>
                 <Button
                   size="sm"

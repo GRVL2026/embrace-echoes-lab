@@ -23,21 +23,35 @@ CONVENTIONS DES DONNÉES (TRÈS IMPORTANT) :
 - gaia_clients.pays est un CODE ISO-2 en majuscules, JAMAIS le nom du pays. Valeurs réelles : 'FR' (France), 'BE' (Belgique), 'CH' (Suisse), 'DE' (Allemagne), 'ES' (Espagne), 'GB' (Royaume-Uni), 'IT' (Italie), 'LU' (Luxembourg), 'NL' (Pays-Bas), 'PT' (Portugal), 'MA' (Maroc), 'DZ' (Algérie), 'TN' (Tunisie), 'CI', 'SN', 'CD', 'CG', 'GA', 'DJ', 'GF' (Guyane), 'GP' (Guadeloupe), 'MQ', 'RE', 'YT', 'NC', 'PF', et divers autres. Écris TOUJOURS c.pays = 'FR' pour "France", jamais c.pays = 'France'.
 - gaia_clients.typologie ∈ {'Client direct','Distributeur','Evénementiel','Forain','Opérateur','Particulier','Site Internet'}.
 - catalogue_erp.famille ∈ {'Accessoires','Basket','Changeurs','Composants','Conduites','Consommables','Enfant','Flippers','Grues','Jetons','Jeux d'adresse','Jeux de café','Jeux de force','Main d'oeuvre','Merchandising','Occasion','Palets','Pièces détachées','Theming','Tirs','Vending'}.
-- catégorie client dérivée : 'actif' si derniere_commande >= now() - interval '12 months', 'dormant' entre 12 et 36 mois, 'inactif' au-delà (ou jamais).
+- DÉFINITIONS MÉTIER — SEULE VÉRITÉ, identiques au RPC get_map_points de la carte. Il est INTERDIT d'inventer d'autres fenêtres temporelles (pas de 36 mois, pas de 18 mois, etc.) :
+    * actif   = derniere_commande >= CURRENT_DATE - interval '12 months'
+    * dormant = derniere_commande >= CURRENT_DATE - interval '24 months' ET < CURRENT_DATE - interval '12 months'
+    * inactif = derniere_commande < CURRENT_DATE - interval '24 months' OU aucune facture (NULL)
+  Écris systématiquement :
+    CASE WHEN a.derniere_commande >= CURRENT_DATE - interval '12 months' THEN 'actif'
+         WHEN a.derniere_commande >= CURRENT_DATE - interval '24 months' THEN 'dormant'
+         ELSE 'inactif' END
+  Les compteurs de référence (clients géolocalisés) sont : 440 actifs, 163 dormants, 1480 inactifs, 62 prospects. Tes chiffres doivent correspondre.
 - Pour tout filtre texte incertain (nom ville, nom client, famille libre…) : utilise ILIKE '%…%' et unaccent si nécessaire, jamais l'égalité stricte.
 
 RÈGLES CRITIQUES :
-1. Retourne UNIQUEMENT du JSON de la forme {"sql": "...", "interpretation": "..."}. Rien d'autre.
+1. Retourne UNIQUEMENT du JSON de la forme {"sql": "...", "count_sql": "...", "interpretation": "..."}. Rien d'autre.
+   - "sql" = la liste des points à afficher (plafonnée à 500 lignes).
+   - "count_sql" = OBLIGATOIRE. Une requête SELECT/WITH renvoyant UNE seule ligne et UNE seule colonne nommée "total" = COUNT(*) sur EXACTEMENT le même périmètre (mêmes filtres) que "sql", SANS aucun LIMIT et SANS ORDER BY. Elle sert à afficher le vrai total même si la liste est tronquée à 500.
+     Exemple : SELECT COUNT(*)::bigint AS total FROM (... même corps sans LIMIT ...) t
+     Si la question est un TOP N explicite (ex. "top 10"), count_sql renvoie N réellement disponible (COUNT sur le périmètre, plafonné mentalement au N demandé côté sql).
 2. La requête DOIT commencer par SELECT ou WITH. Aucune écriture. Aucun ; multiple. Aucun schéma préfixé sauf public.
-3. Renvoie TOUJOURS ces colonnes exactement dans cet ordre :
+3. CONTRAT DE COLONNES — STRICT. "sql" renvoie TOUJOURS ces colonnes, avec ces alias EXACTS :
    code_client, nom, ville, lat, lng, ca_12m, ca_total, ca_periode, derniere_commande, categorie
+   - Les coordonnées DOIVENT s'appeler "lat" et "lng" (jamais latitude/longitude/lon) : SELECT c.lat AS lat, c.lng AS lng, c.name AS nom, c.ville AS ville.
    - ca_12m = somme montant_ht sur les 12 derniers mois (gaia_ventes UNION gaia_historique)
    - ca_total = somme montant_ht sur toutes années (union des 2 tables)
    - ca_periode = SI la question mentionne une PÉRIODE ou une ANNÉE précise (ex. "en 2026", "sur 2025", "depuis janvier", "au T3 2026"...) → SUM(montant_ht) filtré sur cette période (union des 2 tables). SINON → NULL.
    - derniere_commande = max(invoice_date)
-   - categorie : 'actif' si derniere_commande >= now() - interval '12 months', 'dormant' si entre 12 et 36 mois, sinon 'inactif'
+   - categorie : selon les DÉFINITIONS MÉTIER ci-dessus (12 / 24 mois), sans exception.
+   Même pour une question de dénombrement ("combien de …"), "sql" renvoie la LISTE des entités (avec lat/lng), jamais un simple COUNT : le total vient de count_sql.
 4. Filtre TOUJOURS lat IS NOT NULL AND lng IS NOT NULL (sinon le point n'est pas affichable sur la carte).
-5. Limite à 500 lignes max.
+5. Limite à 500 lignes max dans "sql" uniquement (jamais dans count_sql).
 6. Régions françaises → départements via LEFT(code_postal, 2) (et implicitement pays = 'FR') :
    Bretagne = ('22','29','35','56'); Normandie = ('14','27','50','61','76'); PACA = ('04','05','06','13','83','84'); Île-de-France = ('75','77','78','91','92','93','94','95'); Auvergne-Rhône-Alpes = ('01','03','07','15','26','38','42','43','63','69','73','74'); Hauts-de-France = ('02','59','60','62','80'); Nouvelle-Aquitaine = ('16','17','19','23','24','33','40','47','64','79','86','87'); Occitanie = ('09','11','12','30','31','32','34','46','48','65','66','81','82'); Grand Est = ('08','10','51','52','54','55','57','67','68','88'); Pays de la Loire = ('44','49','53','72','85'); Centre-Val de Loire = ('18','28','36','37','41','45'); Bourgogne-Franche-Comté = ('21','25','39','58','70','71','89','90'); Corse = ('2A','2B').
 7. RÈGLE PÉRIODE — TRÈS IMPORTANT : quand une année/période/plage temporelle est demandée (explicite OU implicite), tu DOIS :
@@ -52,7 +66,10 @@ RÈGLES CRITIQUES :
 10. Pattern recommandé : CTE "v" avec UNION ALL entre gaia_ventes et gaia_historique, puis agrégation par code_client, join sur gaia_clients.
 
 EXEMPLE — top 10 clients en France en 2026 (période demandée → tri sur ca_periode) :
-WITH v AS (SELECT code_client, invoice_date, montant_ht FROM gaia_ventes UNION ALL SELECT code_client, invoice_date, montant_ht FROM gaia_historique), agg AS (SELECT code_client, SUM(montant_ht) FILTER (WHERE invoice_date >= now() - interval '12 months') AS ca_12m, SUM(montant_ht) AS ca_total, SUM(montant_ht) FILTER (WHERE EXTRACT(year FROM invoice_date) = 2026) AS ca_periode, MAX(invoice_date) AS derniere_commande FROM v GROUP BY code_client) SELECT c.customer_id AS code_client, c.name AS nom, c.ville, c.lat, c.lng, COALESCE(a.ca_12m,0) AS ca_12m, COALESCE(a.ca_total,0) AS ca_total, COALESCE(a.ca_periode,0) AS ca_periode, a.derniere_commande, CASE WHEN a.derniere_commande >= now() - interval '12 months' THEN 'actif' WHEN a.derniere_commande >= now() - interval '36 months' THEN 'dormant' ELSE 'inactif' END AS categorie FROM gaia_clients c JOIN agg a ON a.code_client = c.customer_id WHERE c.lat IS NOT NULL AND c.lng IS NOT NULL AND c.pays = 'FR' AND COALESCE(a.ca_periode,0) > 0 ORDER BY a.ca_periode DESC NULLS LAST LIMIT 10;`;
+sql = WITH v AS (SELECT code_client, invoice_date, montant_ht FROM gaia_ventes UNION ALL SELECT code_client, invoice_date, montant_ht FROM gaia_historique), agg AS (SELECT code_client, SUM(montant_ht) FILTER (WHERE invoice_date >= CURRENT_DATE - interval '12 months') AS ca_12m, SUM(montant_ht) AS ca_total, SUM(montant_ht) FILTER (WHERE EXTRACT(year FROM invoice_date) = 2026) AS ca_periode, MAX(invoice_date) AS derniere_commande FROM v GROUP BY code_client) SELECT c.customer_id AS code_client, c.name AS nom, c.ville AS ville, c.lat AS lat, c.lng AS lng, COALESCE(a.ca_12m,0) AS ca_12m, COALESCE(a.ca_total,0) AS ca_total, COALESCE(a.ca_periode,0) AS ca_periode, a.derniere_commande, CASE WHEN a.derniere_commande >= CURRENT_DATE - interval '12 months' THEN 'actif' WHEN a.derniere_commande >= CURRENT_DATE - interval '24 months' THEN 'dormant' ELSE 'inactif' END AS categorie FROM gaia_clients c JOIN agg a ON a.code_client = c.customer_id WHERE c.lat IS NOT NULL AND c.lng IS NOT NULL AND c.pays = 'FR' AND COALESCE(a.ca_periode,0) > 0 ORDER BY a.ca_periode DESC NULLS LAST LIMIT 10
+
+EXEMPLE — "combien de clients dormants ?" :
+count_sql = WITH v AS (SELECT code_client, invoice_date FROM gaia_ventes UNION ALL SELECT code_client, invoice_date FROM gaia_historique), agg AS (SELECT code_client, MAX(invoice_date) AS derniere_commande FROM v GROUP BY code_client) SELECT COUNT(*)::bigint AS total FROM gaia_clients c JOIN agg a ON a.code_client = c.customer_id WHERE c.lat IS NOT NULL AND c.lng IS NOT NULL AND a.derniere_commande < CURRENT_DATE - interval '12 months' AND a.derniere_commande >= CURRENT_DATE - interval '24 months'`;
 
 // Sécurité : plus AUCUNE analyse du SQL côté edge function (les whitelists par
 // regex produisaient des faux positifs : CTE ou colonne pris pour une table).
@@ -193,6 +210,7 @@ Deno.serve(async (req) => {
     if (!apiKey) return jsonErr(500, "IA non configurée");
 
     let sql = '';
+    let countSql = '';
     let interpretation = question;
     let rawText = '';
     let parseError: string | null = null;
@@ -212,6 +230,7 @@ Deno.serve(async (req) => {
         const s = String(parsed.sql || '').trim();
         if (!s) { parseError = 'champ sql vide'; return false; }
         sql = s;
+        countSql = String(parsed.count_sql || '').trim();
         interpretation = String(parsed.interpretation || question);
         return true;
       } catch (err: any) {
@@ -257,8 +276,37 @@ Deno.serve(async (req) => {
 
     const rows = Array.isArray(data) ? data : (data as any)?.rows ?? [];
 
+    // Total réel : COUNT(*) sans plafond, exécuté séparément de la liste des points.
+    let total: number | null = null;
+    if (countSql && validateSql(countSql).ok && !/\blimit\b/i.test(countSql)) {
+      const { data: cData, error: cErr } = await sb.rpc('gaia_query_restricted' as any, {
+        sql_query: countSql,
+      });
+      if (cErr) {
+        console.warn('[carte-copilot] count_sql erreur', cErr.message, countSql);
+      } else {
+        const cRows = Array.isArray(cData) ? cData : (cData as any)?.rows ?? [];
+        const first = cRows[0];
+        if (first && typeof first === 'object') {
+          const raw = (first as any).total ?? Object.values(first as any)[0];
+          const n = Number(raw);
+          if (Number.isFinite(n)) total = n;
+        }
+      }
+    }
+    const truncated = rows.length >= 500;
+    if (total == null) total = truncated ? null : rows.length;
+
     return new Response(
-      JSON.stringify({ interpretation, sql, rows, count: rows.length }),
+      JSON.stringify({
+        interpretation,
+        sql,
+        count_sql: countSql || null,
+        rows,
+        count: rows.length,
+        total,
+        truncated,
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (e: any) {

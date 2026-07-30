@@ -23,7 +23,15 @@ CONVENTIONS DES DONNÉES (TRÈS IMPORTANT) :
 - gaia_clients.pays est un CODE ISO-2 en majuscules, JAMAIS le nom du pays. Valeurs réelles : 'FR' (France), 'BE' (Belgique), 'CH' (Suisse), 'DE' (Allemagne), 'ES' (Espagne), 'GB' (Royaume-Uni), 'IT' (Italie), 'LU' (Luxembourg), 'NL' (Pays-Bas), 'PT' (Portugal), 'MA' (Maroc), 'DZ' (Algérie), 'TN' (Tunisie), 'CI', 'SN', 'CD', 'CG', 'GA', 'DJ', 'GF' (Guyane), 'GP' (Guadeloupe), 'MQ', 'RE', 'YT', 'NC', 'PF', et divers autres. Écris TOUJOURS c.pays = 'FR' pour "France", jamais c.pays = 'France'.
 - gaia_clients.typologie ∈ {'Client direct','Distributeur','Evénementiel','Forain','Opérateur','Particulier','Site Internet'}.
 - catalogue_erp.famille ∈ {'Accessoires','Basket','Changeurs','Composants','Conduites','Consommables','Enfant','Flippers','Grues','Jetons','Jeux d'adresse','Jeux de café','Jeux de force','Main d'oeuvre','Merchandising','Occasion','Palets','Pièces détachées','Theming','Tirs','Vending'}.
-- catégorie client dérivée : 'actif' si derniere_commande >= now() - interval '12 months', 'dormant' entre 12 et 36 mois, 'inactif' au-delà (ou jamais).
+- DÉFINITIONS MÉTIER — SEULE VÉRITÉ, identiques au RPC get_map_points de la carte. Il est INTERDIT d'inventer d'autres fenêtres temporelles (pas de 36 mois, pas de 18 mois, etc.) :
+    * actif   = derniere_commande >= CURRENT_DATE - interval '12 months'
+    * dormant = derniere_commande >= CURRENT_DATE - interval '24 months' ET < CURRENT_DATE - interval '12 months'
+    * inactif = derniere_commande < CURRENT_DATE - interval '24 months' OU aucune facture (NULL)
+  Écris systématiquement :
+    CASE WHEN a.derniere_commande >= CURRENT_DATE - interval '12 months' THEN 'actif'
+         WHEN a.derniere_commande >= CURRENT_DATE - interval '24 months' THEN 'dormant'
+         ELSE 'inactif' END
+  Les compteurs de référence (clients géolocalisés) sont : 440 actifs, 163 dormants, 1480 inactifs, 62 prospects. Tes chiffres doivent correspondre.
 - Pour tout filtre texte incertain (nom ville, nom client, famille libre…) : utilise ILIKE '%…%' et unaccent si nécessaire, jamais l'égalité stricte.
 
 RÈGLES CRITIQUES :

@@ -582,16 +582,14 @@ export function ClientActionsDialog({
                   )}
                 </div>
 
-                {(
-                  <div>
-                    <Label>Objet</Label>
-                    <Input
-                      value={objet}
-                      onChange={(e) => setObjet(e.target.value)}
-                      placeholder="Objet du mail"
-                    />
-                  </div>
-                )}
+                <div>
+                  <Label>Objet</Label>
+                  <Input
+                    value={objet}
+                    onChange={(e) => setObjet(e.target.value)}
+                    placeholder="Objet du mail"
+                  />
+                </div>
                 <div>
                   <Label>Contenu du mail</Label>
                   <Textarea

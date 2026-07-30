@@ -334,7 +334,7 @@ export default function Carte() {
 
     // Points renvoyés par le copilote absents du jeu de données de la carte
     // (prospects, clients non présents dans get_map_points…) → affichés quand même.
-    const extraPts: L.LatLngExpression[] = [];
+    const extraPts: [number, number][] = [];
     if (copilotResult) {
       for (const p of copilotResult.points) {
         const key = p.code_client ? p.code_client : null;

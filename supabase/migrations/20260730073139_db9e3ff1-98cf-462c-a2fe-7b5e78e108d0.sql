@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION public.gaia_query(text) TO authenticated, service_role;

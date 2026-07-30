@@ -33,6 +33,12 @@ export const RESTRICTED_ACTIONS: RestrictedAction[] = [
     label: "Prospection · Importer CSV",
     description: "Importer des prospects depuis un fichier CSV.",
   },
+  {
+    key: "relance.envoyer_mail",
+    label: "Réactivation · Envoyer le mail de relance",
+    description:
+      "Envoyer un mail de relance depuis sa propre adresse @avranchesautomatic.com (via Resend).",
+  },
 ];
 
 export const RESTRICTED_ACTION_KEYS = new Set(RESTRICTED_ACTIONS.map((a) => a.key));

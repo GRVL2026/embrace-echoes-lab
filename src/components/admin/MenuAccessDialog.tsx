@@ -164,7 +164,7 @@ export function MenuAccessDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>
             Accès menu — {targetUser?.full_name?.trim() || targetUser?.email || "—"}
@@ -201,7 +201,7 @@ export function MenuAccessDialog({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto py-3 pr-1 space-y-4">
+        <div className="py-3 space-y-4">
           {loading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />

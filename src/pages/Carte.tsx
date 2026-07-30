@@ -370,22 +370,49 @@ export default function Carte() {
         });
       }
       const rows: any[] = (res as any).rows ?? [];
-      const codes = new Set<string>(rows.map((r) => String(r.code_client)).filter(Boolean));
+      const codes = new Set<string>(
+        rows.map((r) => String(r.code_client ?? "").trim()).filter(Boolean),
+      );
+      const points: CopilotPoint[] = [];
+      for (const r of rows) {
+        const lat = pickCoord(r, ["lat", "latitude"]);
+        const lng = pickCoord(r, ["lng", "lon", "long", "longitude"]);
+        if (lat === null || lng === null) continue;
+        if (Math.abs(lat) > 90 || Math.abs(lng) > 180) continue;
+        points.push({
+          code_client: r.code_client ? String(r.code_client).trim() : null,
+          nom: String(r.nom ?? r.name ?? r.entreprise ?? "—"),
+          ville: String(r.ville ?? ""),
+          lat,
+          lng,
+        });
+      }
       const hasPeriode = rows.some((r) => r.ca_periode != null);
       const ca_total = rows.reduce(
         (s, r) => s + (Number(hasPeriode ? r.ca_periode : r.ca_total) || 0),
         0,
       );
+      const totalRaw = (res as any).total;
+      const total = Number.isFinite(Number(totalRaw)) ? Number(totalRaw) : null;
       setCopilotResult({
         interpretation: String((res as any).interpretation || q),
-        count: codes.size,
+        count: rows.length,
+        total,
+        truncated: Boolean((res as any).truncated) || rows.length >= 500,
+        geoCount: points.length,
         ca_total,
         codes,
+        points,
       });
-      if (codes.size === 0) {
+      if (rows.length === 0) {
         toast({
           title: "Aucun résultat",
           description: "Aucun client ne correspond à cette recherche",
+        });
+      } else if (points.length === 0) {
+        toast({
+          title: "Aucun point à afficher",
+          description: `${rows.length} résultat(s), mais aucune coordonnée géographique exploitable (clients non géocodés).`,
         });
       }
     } catch (e: any) {

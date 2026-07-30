@@ -181,6 +181,10 @@ function popupProspectHtml(p: { id: string; nom: string | null; ville: string | 
 export default function Carte() {
   const { isAdmin, isDirection, canReactivation } = useAuth();
   const authorized = isAdmin || isDirection;
+  const navigate = useNavigate();
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+  const queryClient = useQueryClient();
   const [reaCode, setReaCode] = useState<string | null>(null);
   const [reaTab, setReaTab] = useState<"action" | "statut">("action");
   const search = new URLSearchParams(useLocation().search);

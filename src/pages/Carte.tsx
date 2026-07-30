@@ -142,6 +142,7 @@ export default function Carte() {
 
   // --- Recherche & Copilot ---
   const [query, setQuery] = useState("");
+  const [copilotSheet, setCopilotSheet] = useState(false);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [asking, setAsking] = useState(false);
   const [copilotResult, setCopilotResult] = useState<CopilotResult | null>(null);

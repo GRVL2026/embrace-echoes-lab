@@ -115,6 +115,8 @@
   @media (min-width: 768px) {
     body:has(.copilot-inline-bar) .copilot-fab { display: none !important; }
   }
+  /* Une page qui fournit son propre FAB masque le FAB global (pas de doublon). */
+  body:has(.copilot-fab-page) .copilot-fab-global { display: none !important; }
 
   /* Toast viewport respects insets (top notch + bottom home indicator). */
   [data-radix-toast-viewport] {

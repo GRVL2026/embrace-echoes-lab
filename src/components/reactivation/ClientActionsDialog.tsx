@@ -125,6 +125,7 @@ export function ClientActionsDialog({
   const [archiving, setArchiving] = useState(false);
 
   // Form: add action
+
   // Seul type d'action possible aujourd'hui : mail (valeur de l'enum Postgres action_type_enum).
   const type: ActionType = "mail";
   const [objet, setObjet] = useState("");

@@ -30,6 +30,16 @@ export default defineTool({
       return { content: [{ type: "text", text: "Non authentifié." }], isError: true };
     }
     const supabase = supabaseForUser(ctx);
+    const [{ data: adminOk }, { data: dirOk }] = await Promise.all([
+      supabase.rpc("is_admin"),
+      supabase.rpc("is_direction"),
+    ]);
+    if (adminOk !== true && dirOk !== true) {
+      return {
+        content: [{ type: "text", text: "Réservé aux profils admin et direction." }],
+        isError: true,
+      };
+    }
     const { data, error } = await supabase.rpc("gaia_query", { sql_query: sql });
     if (error) {
       return { content: [{ type: "text", text: error.message }], isError: true };

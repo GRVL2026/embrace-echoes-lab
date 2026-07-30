@@ -151,6 +151,16 @@ var run_sql_default = defineTool4({
       return { content: [{ type: "text", text: "Non authentifi\xE9." }], isError: true };
     }
     const supabase = supabaseForUser4(ctx);
+    const [{ data: adminOk }, { data: dirOk }] = await Promise.all([
+      supabase.rpc("is_admin"),
+      supabase.rpc("is_direction")
+    ]);
+    if (adminOk !== true && dirOk !== true) {
+      return {
+        content: [{ type: "text", text: "R\xE9serv\xE9 aux profils admin et direction." }],
+        isError: true
+      };
+    }
     const { data, error } = await supabase.rpc("gaia_query", { sql_query: sql });
     if (error) {
       return { content: [{ type: "text", text: error.message }], isError: true };

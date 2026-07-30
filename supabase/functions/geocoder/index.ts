@@ -134,7 +134,7 @@ async function geocodeClients(): Promise<{ scanned: number; geocoded: number }> 
 
 // ---- Branche étrangère : Nominatim, granularité ville, cache geo_cache ----
 
-function jitter(customerId: string): { dLat: number; dLng: number; lat0: number } {
+function jitter(customerId: string): { dLat: number; dLng: number } {
   // hash déterministe -> angle + rayon (100 à 300 m)
   let h = 2166136261;
   for (let i = 0; i < customerId.length; i++) {
@@ -143,7 +143,7 @@ function jitter(customerId: string): { dLat: number; dLng: number; lat0: number 
   }
   const a = (Math.abs(h) % 3600) / 3600 * Math.PI * 2;
   const r = 100 + (Math.abs(Math.imul(h, 2654435761)) % 201); // 100..300 m
-  return { dLat: (r * Math.cos(a)) / 111320, dLng: (r * Math.sin(a)) / 111320, lat0: 0 };
+  return { dLat: (r * Math.cos(a)) / 111320, dLng: (r * Math.sin(a)) / 111320 };
 }
 
 function applyJitter(lat: number, lng: number, customerId: string): { lat: number; lng: number } {

@@ -17,7 +17,7 @@ export default defineTool({
   name: "run_sql",
   title: "Exécuter une requête SQL (lecture seule)",
   description:
-    "Exécute une requête SQL en lecture seule (SELECT / WITH) sur la base Arcade OS. Passe par la fonction gaia_query : les mots-clés d'écriture (INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, GRANT, TRUNCATE) sont refusés, timeout 8s, résultat tronqué à 500 lignes. RLS Supabase appliquée au nom de l'utilisateur connecté.",
+    "Exécute une requête SQL en lecture seule (SELECT / WITH) sur la base Arcade OS. Passe par la fonction gaia_query : les mots-clés d'écriture (INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, GRANT, TRUNCATE) sont refusés, timeout 8s, résultat tronqué à 500 lignes. Lecture exécutée sous le rôle technique copilot_readonly (périmètre restreint aux tables et vues qui lui sont explicitement accordées). Réservé aux profils admin et direction.",
   inputSchema: {
     sql: z
       .string()

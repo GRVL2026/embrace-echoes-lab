@@ -193,7 +193,7 @@ export function ClientActionsDialog({
     if (!code) return;
     setGenerating(true);
     const { data: res, error } = await supabase.functions.invoke("generer-relance-client", {
-      body: { code_client: code },
+      body: { code_client: code, ...(langueChoix === "FR" ? { langue: "FR" } : {}) },
     });
     setGenerating(false);
     if (error || !res?.objet) {
@@ -206,7 +206,12 @@ export function ClientActionsDialog({
     }
     setObjet(res.objet);
     setContenu(res.corps);
-    toast({ title: "Proposition générée", description: "Vous pouvez éditer avant d'envoyer." });
+    const lang = String(res.langue || "FR");
+    setLangueUtilisee(lang);
+    toast({
+      title: "Proposition générée",
+      description: `Rédigé en ${LANGUE_LABELS[lang] || lang} — vous pouvez éditer avant d'envoyer.`,
+    });
   };
 
   // Détermine le statut à appliquer après une action.

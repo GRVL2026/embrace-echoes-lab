@@ -92,19 +92,49 @@
   }
   header.h-14 { height: auto; min-height: calc(3.5rem + var(--safe-top)); }
 
+  /* ------------------------------------------------------------------
+     ÉCHELLE DE Z-INDEX UNIQUE (documentée) — aucun z-index arbitraire.
+       0 → 1000 : carte Leaflet (panes, contrôles, popups) — inchangé
+       1100     : en-têtes d'application + barre du copilote (sticky)
+       1200     : boutons flottants (FAB ✦)
+       1300     : overlay de dialogue / sheet
+       1301     : contenu de dialogue / sheet
+       1400     : toasts
+     ------------------------------------------------------------------ */
+  header { z-index: 1100; }
+
+  /* Rien ne doit flotter au-dessus d'un dialogue ouvert :
+     on masque le FAB et la barre du copilote dès qu'un overlay Radix existe. */
+  body:has([data-radix-dialog-overlay], [data-state="open"][role="dialog"]) .copilot-fab,
+  body:has([data-radix-dialog-overlay], [data-state="open"][role="dialog"]) .copilot-inline-bar {
+    display: none !important;
+  }
+
+  /* Une seule entrée pour le copilote : si la page fournit la barre inline
+     (desktop), le bouton flottant disparaît. */
+  @media (min-width: 768px) {
+    body:has(.copilot-inline-bar) .copilot-fab { display: none !important; }
+  }
+  /* Une page qui fournit son propre FAB masque le FAB global (pas de doublon). */
+  body:has(.copilot-fab-page) .copilot-fab-global { display: none !important; }
 
   /* Toast viewport respects insets (top notch + bottom home indicator). */
   [data-radix-toast-viewport] {
-    padding-top: max(1rem, calc(var(--safe-top) + 0.5rem)) !important;
+    top: calc(var(--safe-top) + 8px);
+    padding-top: 0 !important;
     padding-bottom: max(1rem, calc(var(--safe-bottom) + 0.5rem)) !important;
     padding-left: max(1rem, var(--safe-left)) !important;
     padding-right: max(1rem, var(--safe-right)) !important;
+  }
+  @media (min-width: 640px) {
+    [data-radix-toast-viewport] { top: auto; }
   }
 
   /* Opt-in utilities for floating footers / bottom action bars. */
   .safe-bottom { padding-bottom: max(var(--safe-bottom), 0px); }
   .safe-top    { padding-top: max(var(--safe-top), 0px); }
   .safe-x { padding-left: var(--safe-left); padding-right: var(--safe-right); }
+
 
   /* iOS Safari auto-zooms fields with font-size < 16px on focus and never zooms back.
      Force at least 16px on mobile for every editable control. */

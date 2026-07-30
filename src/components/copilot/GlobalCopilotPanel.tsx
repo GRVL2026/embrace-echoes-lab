@@ -41,14 +41,14 @@ export function GlobalCopilotPanel() {
         type="button"
         onClick={() => open()}
         className={cn(
-          "fixed bottom-4 right-4 z-[1100] h-12 w-12 rounded-full p-0 shadow-lg",
+          "copilot-fab copilot-fab-global fixed bottom-4 right-4 z-[1200] h-12 w-12 rounded-full p-0 shadow-lg",
           "bg-primary text-primary-foreground hover:bg-primary/90",
           "ring-2 ring-primary/30 hover:ring-primary/60 transition-all",
           "print:hidden",
         )}
         aria-label="Ouvrir le copilote (Cmd/Ctrl+K)"
         title="Copilote (Cmd/Ctrl+K)"
-        style={{ bottom: "calc(1rem + var(--safe-bottom, 0px))" }}
+        style={{ bottom: "calc(1rem + env(safe-area-inset-bottom, 0px))", right: "calc(1rem + env(safe-area-inset-right, 0px))" }}
       >
         <Sparkles className="h-5 w-5" />
       </Button>

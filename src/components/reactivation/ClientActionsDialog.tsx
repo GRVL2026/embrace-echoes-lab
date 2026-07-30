@@ -545,31 +545,23 @@ export function ClientActionsDialog({
 
             {tab === "action" && (
               <div className="space-y-3 py-2">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <Label>Type</Label>
-                    <Select value={type} onValueChange={(v) => setType(v as ActionType)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="appel">Appel</SelectItem>
-                        <SelectItem value="mail">Mail</SelectItem>
-                        <SelectItem value="visite">Visite</SelectItem>
-                        <SelectItem value="note">Note</SelectItem>
-                        <SelectItem value="autre">Autre</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Prochaine relance</Label>
+                    <Label htmlFor="prochaine-relance">Prochaine relance (optionnel)</Label>
                     <Input
+                      id="prochaine-relance"
                       type="date"
+                      min={new Date().toISOString().slice(0, 10)}
                       value={prochaine}
                       onChange={(e) => setProchaine(e.target.value)}
+                      className="mt-1"
                     />
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Format JJ/MM/AAAA — date à venir uniquement.
+                    </p>
                   </div>
                 </div>
+
 
                 <div className="flex items-center justify-between gap-2 pt-1">
                   <Button

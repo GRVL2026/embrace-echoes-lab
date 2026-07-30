@@ -480,7 +480,7 @@ export default function Carte() {
           </div>
           <Button onClick={() => askCopilot()} disabled={asking || !query.trim()} className="shrink-0">
             {asking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            <span className="ml-2 hidden sm:inline">Demander</span>
+            <span className="ml-2 hidden sm:inline">{asking ? "Recherche…" : "Demander"}</span>
           </Button>
         </div>
         <div className="text-[11px] text-muted-foreground text-center mt-1 max-w-3xl mx-auto">

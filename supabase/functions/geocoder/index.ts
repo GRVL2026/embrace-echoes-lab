@@ -13,7 +13,9 @@ const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 const BATCH_SIZE = 500; // limite raisonnable pour l'API BAN
 const MIN_SCORE = 0.3;
 const MAX_ATTEMPTS = 3;
-const MAX_NOMINATIM_PER_RUN = 100;
+const MAX_NOMINATIM_PER_RUN = 60;
+// Micro-territoires : aucun décalage (le point sortirait du pays ou en mer)
+const MICRO_TERRITOIRES = ['LU', 'MT', 'SM', 'HK', 'MO', 'SG', 'GG'];
 // Pays couverts par la BAN : France métropolitaine + DOM
 const BAN_COUNTRIES = ['FR', 'RE', 'GP', 'MQ', 'GF', 'YT'];
 const NOMINATIM_UA = 'Arcade OS - Avranches Automatic (leopaul@avranchesautomatic.com)';

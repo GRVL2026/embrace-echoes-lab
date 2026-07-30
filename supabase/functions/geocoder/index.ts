@@ -136,22 +136,54 @@ async function geocodeClients(): Promise<{ scanned: number; geocoded: number }> 
 
 // ---- Branche étrangère : Nominatim, granularité ville, cache geo_cache ----
 
-function jitter(customerId: string): { dLat: number; dLng: number } {
-  // hash déterministe -> angle + rayon (100 à 300 m)
+function hash32(s: string): number {
   let h = 2166136261;
-  for (let i = 0; i < customerId.length; i++) {
-    h ^= customerId.charCodeAt(i);
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
+  return h;
+}
+
+function jitter(customerId: string, minM = 100, maxM = 300): { dLat: number; dLng: number } {
+  const h = hash32(customerId);
   const a = (Math.abs(h) % 3600) / 3600 * Math.PI * 2;
-  const r = 100 + (Math.abs(Math.imul(h, 2654435761)) % 201); // 100..300 m
+  const span = Math.max(1, maxM - minM + 1);
+  const r = minM + (Math.abs(Math.imul(h, 2654435761)) % span);
   return { dLat: (r * Math.cos(a)) / 111320, dLng: (r * Math.sin(a)) / 111320 };
 }
 
-function applyJitter(lat: number, lng: number, customerId: string): { lat: number; lng: number } {
-  const { dLat, dLng } = jitter(customerId);
+function applyJitter(lat: number, lng: number, customerId: string, minM = 100, maxM = 300): { lat: number; lng: number } {
+  const { dLat, dLng } = jitter(customerId, minM, maxM);
   const cos = Math.max(0.1, Math.cos((lat * Math.PI) / 180));
   return { lat: lat + dLat, lng: lng + dLng / cos };
+}
+
+// Nettoyage des villes issues de Cegid avant appel Nominatim.
+function nettoyerVille(ville: string): string | null {
+  let v = (ville ?? '').toString();
+  v = v.replace(/\([^)]*\)/g, ' ');            // (MI), (BS)...
+  v = v.replace(/[^\p{L}\s'’-]+/gu, ' ');       // toute séquence contenant des chiffres / ponctuation
+  v = v.replace(/[_]+/g, ' ');
+  v = v.replace(/[\s'’-]{2,}/g, ' ');
+  v = v.replace(/\s+/g, ' ').trim();
+  v = v.replace(/^[-'’]+|[-'’]+$/g, '').trim();
+  if (!v) return null;
+  const lettres = v.match(/\p{L}/gu) || [];
+  if (lettres.length < 3) return null;
+  if (!/\p{L}{3,}/u.test(v)) return null;
+  return v;
+}
+
+async function chargerCentroides(): Promise<Map<string, { lat: number; lng: number }>> {
+  const m = new Map<string, { lat: number; lng: number }>();
+  const { data, error } = await admin.from('geo_pays_centroide').select('pays, lat, lng');
+  if (error) { console.error('geo_pays_centroide', error.message); return m; }
+  for (const r of (data || []) as any[]) {
+    const p = (r.pays ?? '').toString().trim().toUpperCase();
+    if (p && r.lat != null && r.lng != null) m.set(p, { lat: Number(r.lat), lng: Number(r.lng) });
+  }
+  return m;
 }
 
 async function nominatimCity(ville: string, pays: string): Promise<{ lat: number; lng: number } | null> {
@@ -175,7 +207,10 @@ async function nominatimCity(ville: string, pays: string): Promise<{ lat: number
   return { lat, lng };
 }
 
-async function geocodeClientsEtranger(): Promise<{ paires_traitees: number; geocodes: number; depuis_cache: number; restant: number }> {
+async function geocodeClientsEtranger(): Promise<{
+  paires_traitees: number; geocodes: number; depuis_cache: number; restant: number;
+  repli_pays: { clients_places: number; pays_inconnus: string[] };
+}> {
   const { data, error } = await admin
     .from('gaia_clients')
     .select('customer_id, ville, pays, geocode_attempts')
@@ -184,20 +219,49 @@ async function geocodeClientsEtranger(): Promise<{ paires_traitees: number; geoc
     .not('pays', 'is', null);
   if (error) throw error;
 
-  // Regroupement par (ville, pays), hors pays couverts par la BAN
+  const centroides = await chargerCentroides();
+  const paysInconnus = new Set<string>();
+  let repliPlaces = 0;
+
+  const now0 = new Date().toISOString();
+  const replier = async (id: string, pays: string, attempts: number) => {
+    const c = centroides.get(pays);
+    if (!c) {
+      paysInconnus.add(pays);
+      await admin.from('gaia_clients')
+        .update({ geocode_attempts: attempts + 1, geocode_last_attempt: now0 })
+        .eq('customer_id', id);
+      return;
+    }
+    const p = MICRO_TERRITOIRES.includes(pays)
+      ? { lat: c.lat, lng: c.lng }
+      : applyJitter(c.lat, c.lng, id, 3000, 10000);
+    await admin.from('gaia_clients')
+      .update({ lat: p.lat, lng: p.lng, geocoded_at: now0, geocode_source: 'pays' })
+      .eq('customer_id', id);
+    repliPlaces++;
+  };
+
+  // Regroupement par (ville nettoyée, pays), hors pays couverts par la BAN
   const groups = new Map<string, { ville: string; pays: string; clients: { id: string; attempts: number }[] }>();
+  const sansVille: { id: string; pays: string; attempts: number }[] = [];
+
   for (const r of (data || []) as any[]) {
-    const ville = (r.ville ?? '').toString().trim();
-    const pays = (r.pays ?? '').toString().trim();
-    if (!ville || pays.length !== 2) continue;
+    const pays = (r.pays ?? '').toString().trim().toUpperCase();
+    if (pays.length !== 2 || BAN_COUNTRIES.includes(pays)) continue;
+    const id = String(r.customer_id);
+    const attempts = Number(r.geocode_attempts) || 0;
+    const ville = nettoyerVille((r.ville ?? '').toString());
+    if (!ville) { sansVille.push({ id, pays, attempts }); continue; }
     const vNorm = ville.toUpperCase();
-    const pNorm = pays.toUpperCase();
-    if (BAN_COUNTRIES.includes(pNorm)) continue;
-    const key = `${vNorm}|${pNorm}`;
-    const g = groups.get(key) || { ville: vNorm, pays: pNorm, clients: [] };
-    g.clients.push({ id: String(r.customer_id), attempts: Number(r.geocode_attempts) || 0 });
+    const key = `${vNorm}|${pays}`;
+    const g = groups.get(key) || { ville: vNorm, pays, clients: [] };
+    g.clients.push({ id, attempts });
     groups.set(key, g);
   }
+
+  // Villes inexploitables -> repli pays immédiat (aucun appel réseau)
+  for (const c of sansVille) await replier(c.id, c.pays, c.attempts);
 
   let paires_traitees = 0;
   let geocodes = 0;
@@ -240,22 +304,25 @@ async function geocodeClientsEtranger(): Promise<{ paires_traitees: number; geoc
     if (fromCache) depuis_cache++;
     const now = new Date().toISOString();
 
-    const updates = g.clients.map(c => {
-      if (coord) {
-        const p = applyJitter(coord.lat, coord.lng, c.id);
+    if (coord) {
+      const updates = g.clients.map(c => {
+        const p = applyJitter(coord!.lat, coord!.lng, c.id);
         return admin.from('gaia_clients')
           .update({ lat: p.lat, lng: p.lng, geocoded_at: now, geocode_source: 'ville' })
           .eq('customer_id', c.id);
-      }
-      return admin.from('gaia_clients')
-        .update({ geocode_attempts: c.attempts + 1, geocode_last_attempt: now })
-        .eq('customer_id', c.id);
-    });
-    await Promise.all(updates);
-    if (coord) geocodes += g.clients.length;
+      });
+      await Promise.all(updates);
+      geocodes += g.clients.length;
+    } else {
+      // Nominatim (ou cache négatif) sans résultat -> repli pays
+      for (const c of g.clients) await replier(c.id, c.pays, c.attempts);
+    }
   }
 
-  return { paires_traitees, geocodes, depuis_cache, restant };
+  return {
+    paires_traitees, geocodes, depuis_cache, restant,
+    repli_pays: { clients_places: repliPlaces, pays_inconnus: [...paysInconnus].sort() },
+  };
 }
 
 async function geocodeProspects(): Promise<{ scanned: number; geocoded: number }> {

@@ -105,6 +105,17 @@ const fmtEUR = (n: number | null | undefined) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);
 const cleanPhone = (t: string | null | undefined) => (t || "").replace(/[^\d+]/g, "");
 
+/** Libellés des langues de rédaction retournées par l'IA. */
+const LANGUE_LABELS: Record<string, string> = {
+  FR: "français",
+  EN: "anglais",
+  ES: "espagnol",
+  IT: "italien",
+  DE: "allemand",
+  NL: "néerlandais",
+  PT: "portugais",
+};
+
 export function ClientActionsDialog({
   code,
   open,

@@ -582,7 +582,7 @@ export function ClientActionsDialog({
                   )}
                 </div>
 
-                {true && (
+                {(
                   <div>
                     <Label>Objet</Label>
                     <Input
@@ -597,8 +597,8 @@ export function ClientActionsDialog({
                   <Textarea
                     value={contenu}
                     onChange={(e) => setContenu(e.target.value)}
-                    placeholder={type === "mail" ? "Corps du message…" : "Sujet, résumé de l'échange, décisions…"}
-                    rows={type === "mail" ? 10 : 3}
+                    placeholder="Corps du message…"
+                    rows={10}
                   />
                 </div>
                 <div>
@@ -647,7 +647,7 @@ export function ClientActionsDialog({
                     {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                     Enregistrer l'action
                   </Button>
-                  {type === "mail" && hasEmail && (
+                  {hasEmail && (
                     <Button onClick={sendMail} disabled={sending} className="flex-1 gap-2">
                       {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                       Envoyer le mail

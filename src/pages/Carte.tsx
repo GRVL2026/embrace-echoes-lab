@@ -373,10 +373,22 @@ export default function Carte() {
         });
       }
     } catch (e: any) {
-      const dbg = authorized && e?.debug ? ` — ${String(e.debug).slice(0, 200)}` : "";
+      const dbg = authorized && e?.debug ? String(e.debug) : "";
       toast({
         title: "Copilote",
-        description: `${e?.message || "Erreur inattendue"}${dbg}`,
+        description: (
+          <span className="block max-w-full">
+            <span className="block break-words">{e?.message || "Erreur inattendue"}</span>
+            {dbg && (
+              <details className="mt-1">
+                <summary className="cursor-pointer text-xs opacity-70">Détail technique</summary>
+                <pre className="mt-1 max-h-24 overflow-auto whitespace-pre-wrap break-all text-[10px] leading-tight opacity-80">
+                  {dbg}
+                </pre>
+              </details>
+            )}
+          </span>
+        ) as any,
         variant: "destructive",
         action: (
           <ToastAction altText="Réessayer" onClick={() => askCopilot(q)}>
@@ -384,6 +396,7 @@ export default function Carte() {
           </ToastAction>
         ),
       });
+
     } finally {
       askingRef.current = false;
       setAsking(false);

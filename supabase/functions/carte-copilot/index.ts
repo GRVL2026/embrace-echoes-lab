@@ -104,11 +104,97 @@ function validateSql(sql: string): { ok: true } | { ok: false; error: string } {
 }
 
 
-function jsonErr(status: number, error: string) {
-  return new Response(JSON.stringify({ error }), {
+function jsonErr(status: number, error: string, debug?: string, includeDebug = false) {
+  const payload: Record<string, unknown> = { error, message: error };
+  if (includeDebug && debug) payload.debug = debug;
+  return new Response(JSON.stringify(payload), {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
+}
+
+const MSG_OVERLOAD = 'Le service IA est momentanément saturé. Réessaie dans quelques secondes.';
+const MSG_TIMEOUT = 'La requête a pris trop de temps. Réessaie ou reformule plus simplement.';
+const MSG_SQL = "Je n'ai pas pu exécuter cette recherche en toute sécurité. Reformule autrement.";
+const MSG_PARSE = 'Je n\'ai pas compris la question. Essaie par exemple : "top 10 clients en Bretagne en 2026".';
+
+const RETRYABLE = new Set([429, 500, 502, 503, 529]);
+const DELAYS = [1000, 2000, 4000];
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+class AiError extends Error {
+  constructor(public kind: 'overload' | 'timeout' | 'fatal', public detail: string) {
+    super(detail);
+  }
+}
+
+async function callAnthropicWithRetry(apiKey: string, question: string): Promise<any> {
+  let lastDetail = '';
+  let lastKind: 'overload' | 'timeout' | 'fatal' = 'overload';
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 30_000);
+    let resp: Response | null = null;
+    let netErr: unknown = null;
+    let timedOut = false;
+
+    try {
+      resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        signal: ctrl.signal,
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          max_tokens: 1500,
+          system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
+          messages: [{ role: 'user', content: question }],
+        }),
+      });
+    } catch (e) {
+      netErr = e;
+      timedOut = (e as any)?.name === 'AbortError';
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (resp?.ok) {
+      console.log(`[carte-copilot] anthropic attempt ${attempt}: 200`);
+      return await resp.json();
+    }
+
+    const status = resp?.status ?? 0;
+    console.log(
+      `[carte-copilot] anthropic attempt ${attempt}: ${timedOut ? 'timeout' : netErr ? 'network' : status}`,
+    );
+
+    if (resp && !RETRYABLE.has(status)) {
+      const body = await resp.text().catch(() => '');
+      throw new AiError('fatal', `Anthropic ${status}: ${body.slice(0, 400)}`);
+    }
+
+    lastKind = timedOut ? 'timeout' : 'overload';
+    lastDetail = timedOut
+      ? 'Timeout 30s'
+      : netErr
+        ? `Erreur réseau: ${(netErr as any)?.message}`
+        : `Anthropic ${status}: ${(await resp!.text().catch(() => '')).slice(0, 300)}`;
+
+    if (attempt === 3) break;
+    let wait = DELAYS[attempt - 1] + Math.floor(Math.random() * 300);
+    const ra = resp?.headers.get('retry-after');
+    if (ra) {
+      const s = Number(ra);
+      if (Number.isFinite(s) && s > 0) wait = Math.min(s * 1000, 15_000);
+    }
+    await sleep(wait);
+  }
+
+  throw new AiError(lastKind, lastDetail);
 }
 
 Deno.serve(async (req) => {

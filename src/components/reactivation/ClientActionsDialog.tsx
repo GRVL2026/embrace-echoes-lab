@@ -640,18 +640,39 @@ export function ClientActionsDialog({
                 </div>
 
 
+                {!hasEmail && (
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+                    <div className="font-medium text-amber-500">
+                      Pas d'email en base — relance par téléphone
+                    </div>
+                    {cleanPhone(data?.telephone) ? (
+                      <a
+                        href={`tel:${cleanPhone(data?.telephone)}`}
+                        className="mt-1 inline-flex items-center gap-2 text-base font-semibold text-primary hover:underline"
+                      >
+                        <Phone className="h-4 w-4" /> {data?.telephone}
+                      </a>
+                    ) : (
+                      <div className="mt-1 text-muted-foreground italic">
+                        Aucun téléphone renseigné non plus.
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex gap-2">
                   <Button onClick={submitAction} disabled={saving} variant="outline" className="flex-1">
                     {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                     Enregistrer l'action
                   </Button>
-                  {hasEmail && (
+                  {hasEmail && canSendMail && (
                     <Button onClick={sendMail} disabled={sending} className="flex-1 gap-2">
                       {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                      Envoyer le mail
+                      {sending ? "Envoi…" : "Envoyer le mail"}
                     </Button>
                   )}
                 </div>
+
               </div>
             )}
 

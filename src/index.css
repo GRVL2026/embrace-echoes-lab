@@ -99,6 +99,8 @@
        1200     : boutons flottants (FAB ✦)
        1300     : overlay de dialogue / sheet
        1301     : contenu de dialogue / sheet
+       1350     : popovers, selects, menus, tooltips, date-pickers ouverts DANS un dialogue
+       1400     : toasts
        1400     : toasts
      ------------------------------------------------------------------ */
   header { z-index: 1100; }

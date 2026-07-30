@@ -666,6 +666,14 @@ export default function Carte() {
                     copilotResult.geoCount < copilotResult.count &&
                     ` — ${copilotResult.geoCount.toLocaleString("fr-FR")} géolocalisés`}
                 </div>
+                {copilotResult.invalidCount > 0 && (
+                  <div className="mt-1 text-[11px] text-amber-500">
+                    ⚠ {copilotResult.invalidCount.toLocaleString("fr-FR")} client
+                    {copilotResult.invalidCount > 1 ? "s ont" : " a"} des coordonnées invalides
+                    (ignoré{copilotResult.invalidCount > 1 ? "s" : ""} du cadrage — géocodage à corriger)
+                  </div>
+                )}
+
                 <Button
                   size="sm"
                   variant="outline"

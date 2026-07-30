@@ -564,24 +564,42 @@ export function ClientActionsDialog({
                 </div>
 
 
-                <div className="flex items-center justify-between gap-2 pt-1">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={generateMail}
-                    disabled={generating}
-                    className="gap-2"
-                  >
-                    {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                    Proposer un mail de relance
-                  </Button>
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={generateMail}
+                      disabled={generating}
+                      className="gap-2"
+                    >
+                      {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                      Proposer un mail de relance
+                    </Button>
+                    {/* Langue : auto = déduite du pays du client, sinon français forcé. */}
+                    <select
+                      value={langueChoix}
+                      onChange={(e) => setLangueChoix(e.target.value as "auto" | "FR")}
+                      className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                      aria-label="Langue de rédaction"
+                    >
+                      <option value="auto">Langue : auto (pays du client)</option>
+                      <option value="FR">Forcer le français</option>
+                    </select>
+                    {langueUtilisee && (
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                        Rédigé en {LANGUE_LABELS[langueUtilisee] || langueUtilisee}
+                      </span>
+                    )}
+                  </div>
                   {!hasEmail && (
                     <span className="text-xs text-muted-foreground italic">
                       Email non disponible — enregistrement seul
                     </span>
                   )}
                 </div>
+
 
                 <div>
                   <Label>Objet</Label>

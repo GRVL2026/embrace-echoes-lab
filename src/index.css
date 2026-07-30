@@ -120,17 +120,35 @@
   /* Une page qui fournit son propre FAB masque le FAB global (pas de doublon). */
   body:has(.copilot-fab-page) .copilot-fab-global { display: none !important; }
 
-  /* Toast viewport respects insets (top notch + bottom home indicator). */
+  /* Toast viewport respects insets (top notch + bottom home indicator).
+     !important est requis : les classes utilitaires Tailwind (top-0) sont
+     dans la couche `utilities` et l'emportent sinon sur cette règle de base. */
   [data-radix-toast-viewport] {
-    top: calc(var(--safe-top) + 8px);
+    top: calc(var(--safe-top) + 8px) !important;
+    bottom: auto !important;
     padding-top: 0 !important;
     padding-bottom: max(1rem, calc(var(--safe-bottom) + 0.5rem)) !important;
     padding-left: max(1rem, var(--safe-left)) !important;
     padding-right: max(1rem, var(--safe-right)) !important;
   }
   @media (min-width: 640px) {
-    [data-radix-toast-viewport] { top: auto; }
+    [data-radix-toast-viewport] {
+      top: auto !important;
+      bottom: 0 !important;
+    }
   }
+
+  /* Sonner : même traitement (styles inline de la librairie → !important). */
+  [data-sonner-toaster] {
+    z-index: 1400 !important;
+  }
+  [data-sonner-toaster][data-y-position="top"] {
+    top: calc(var(--safe-top) + 8px) !important;
+  }
+  [data-sonner-toaster][data-y-position="bottom"] {
+    bottom: calc(var(--safe-bottom) + 8px) !important;
+  }
+
 
   /* Opt-in utilities for floating footers / bottom action bars. */
   .safe-bottom { padding-bottom: max(var(--safe-bottom), 0px); }

@@ -54,54 +54,21 @@ RÈGLES CRITIQUES :
 EXEMPLE — top 10 clients en France en 2026 (période demandée → tri sur ca_periode) :
 WITH v AS (SELECT code_client, invoice_date, montant_ht FROM gaia_ventes UNION ALL SELECT code_client, invoice_date, montant_ht FROM gaia_historique), agg AS (SELECT code_client, SUM(montant_ht) FILTER (WHERE invoice_date >= now() - interval '12 months') AS ca_12m, SUM(montant_ht) AS ca_total, SUM(montant_ht) FILTER (WHERE EXTRACT(year FROM invoice_date) = 2026) AS ca_periode, MAX(invoice_date) AS derniere_commande FROM v GROUP BY code_client) SELECT c.customer_id AS code_client, c.name AS nom, c.ville, c.lat, c.lng, COALESCE(a.ca_12m,0) AS ca_12m, COALESCE(a.ca_total,0) AS ca_total, COALESCE(a.ca_periode,0) AS ca_periode, a.derniere_commande, CASE WHEN a.derniere_commande >= now() - interval '12 months' THEN 'actif' WHEN a.derniere_commande >= now() - interval '36 months' THEN 'dormant' ELSE 'inactif' END AS categorie FROM gaia_clients c JOIN agg a ON a.code_client = c.customer_id WHERE c.lat IS NOT NULL AND c.lng IS NOT NULL AND c.pays = 'FR' AND COALESCE(a.ca_periode,0) > 0 ORDER BY a.ca_periode DESC NULLS LAST LIMIT 10;`;
 
-const ALLOWED_TABLES = new Set([
-  'gaia_clients','gaia_ventes','gaia_historique',
-  'catalogue_erp','prospects','client_actions',
-]);
-
-const FORBIDDEN_SCHEMA_RE = /\b(auth|storage|vault|realtime|supabase_functions|pg_catalog|pg_temp|information_schema|pg_policies|pg_roles|pg_shadow|pg_user)\./i;
-const FORBIDDEN_FN_RE = /\b(pg_read_|pg_ls_|pg_stat_file|dblink|copy_from|lo_import|lo_export|current_setting|set_config|pg_sleep|pg_terminate|pg_cancel|pg_reload)\b/i;
-const FORBIDDEN_KW_RE = /\b(insert|update|delete|drop|alter|create|grant|revoke|truncate|comment|copy|call|do|vacuum|analyze|reindex|cluster|refresh|listen|notify|lock|set|reset|show|begin|commit|rollback|savepoint|execute|prepare|deallocate|attach|detach)\b/i;
-
+// Sécurité : plus AUCUNE analyse du SQL côté edge function (les whitelists par
+// regex produisaient des faux positifs : CTE ou colonne pris pour une table).
+// La base impose elle-même le moindre privilège : gaia_query_restricted exécute
+// la requête sous le rôle copilot_readonly (SELECT sur 6 tables, aucune écriture),
+// avec statement_timeout 5s et un plafond de 500 lignes.
+// Le contrôle de rôle admin/direction ci-dessous reste indispensable.
 function validateSql(sql: string): { ok: true } | { ok: false; error: string } {
-  if (!/^\s*(select|with)\s/i.test(sql)) return { ok: false, error: 'Requête non SELECT' };
-  if (sql.includes(';') && sql.replace(/;\s*$/, '').includes(';'))
-    return { ok: false, error: 'Instructions multiples interdites' };
-  if (FORBIDDEN_KW_RE.test(sql)) return { ok: false, error: 'Mot-clé interdit' };
-  if (FORBIDDEN_SCHEMA_RE.test(sql)) return { ok: false, error: 'Schéma non autorisé' };
-  if (FORBIDDEN_FN_RE.test(sql)) return { ok: false, error: 'Fonction non autorisée' };
-
-  let cleaned = sql
-    .replace(/'([^']|'')*'/g, ' ')
-    .replace(/--[^\n]*/g, ' ')
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .toLowerCase();
-
-  // Neutralise les "FROM/IN" qui appartiennent à des fonctions SQL (EXTRACT,
-  // SUBSTRING, TRIM, OVERLAY, POSITION) : sinon la colonne suivante serait
-  // interprétée à tort comme un nom de table.
-  cleaned = cleaned
-    .replace(/\bextract\s*\(\s*[a-z_]+\s+from\b/g, 'extract(')
-    .replace(/\bsubstring\s*\(([^()]*?)\bfrom\b/g, 'substring($1 ')
-    .replace(/\btrim\s*\(\s*(?:both|leading|trailing)?\s*(?:'[^']*'\s+)?from\b/g, 'trim(')
-    .replace(/\boverlay\s*\(([^()]*?)\bfrom\b/g, 'overlay($1 ')
-    .replace(/\bposition\s*\(([^()]*?)\bin\b/g, 'position($1 ');
-
-  const re = /(?:\bfrom|\bjoin)\s+(?:only\s+)?([a-z_][a-z0-9_$]*(?:\.[a-z_][a-z0-9_$]*)?)/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(cleaned))) {
-    let ident = m[1];
-    if (ident.includes('.')) {
-      const [schema, name] = ident.split('.');
-      if (schema !== 'public') return { ok: false, error: `Objet non autorisé : ${ident}` };
-      ident = name;
-    }
-    if (!ALLOWED_TABLES.has(ident)) {
-      return { ok: false, error: `Table hors whitelist : ${ident}` };
-    }
-  }
+  const q = (sql ?? '').trim();
+  if (!q) return { ok: false, error: 'Requête vide' };
+  if (!/^(select|with)\s/i.test(q)) return { ok: false, error: 'Requête non SELECT' };
+  const trimmed = q.replace(/;\s*$/, '');
+  if (trimmed.includes(';')) return { ok: false, error: 'Instructions multiples interdites' };
   return { ok: true };
 }
+
 
 
 function jsonErr(status: number, error: string, debug?: string, includeDebug = false) {

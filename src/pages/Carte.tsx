@@ -494,7 +494,7 @@ export default function Carte() {
 
         {/* Résultat copilote */}
         {copilotResult && (
-          <Card className="absolute top-3 left-3 z-[1200] p-3 max-w-sm shadow-lg border-primary/40">
+          <Card className="absolute top-3 left-3 right-3 sm:right-auto z-[1200] p-3 sm:max-w-sm max-h-[70vh] overflow-y-auto overscroll-contain shadow-lg border-primary/40">
             <div className="flex items-start gap-2">
               <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">

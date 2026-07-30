@@ -133,6 +133,8 @@ export function ClientActionsDialog({
   const [prochaine, setProchaine] = useState("");
   const [statutResultant, setStatutResultant] = useState<"auto" | StatutRelance>("auto");
   const [generating, setGenerating] = useState(false);
+  const [langueChoix, setLangueChoix] = useState<"auto" | "FR">("auto");
+  const [langueUtilisee, setLangueUtilisee] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
 
   // Form: statut

@@ -622,6 +622,15 @@ export default function Carte() {
                     <div className="font-semibold tabular-nums">{fmtEUR(copilotResult.ca_total)}</div>
                   </div>
                 </div>
+                <div className="mt-1.5 text-[11px] text-muted-foreground">
+                  {copilotResult.total != null && copilotResult.total > copilotResult.count
+                    ? `${copilotResult.total.toLocaleString("fr-FR")} au total (${copilotResult.count.toLocaleString("fr-FR")} affichés sur la carte)`
+                    : `${copilotResult.count.toLocaleString("fr-FR")} résultat${copilotResult.count > 1 ? "s" : ""}, dont ${copilotResult.geoCount.toLocaleString("fr-FR")} géolocalisé${copilotResult.geoCount > 1 ? "s" : ""}`}
+                  {copilotResult.total != null &&
+                    copilotResult.total > copilotResult.count &&
+                    copilotResult.geoCount < copilotResult.count &&
+                    ` — ${copilotResult.geoCount.toLocaleString("fr-FR")} géolocalisés`}
+                </div>
                 <Button
                   size="sm"
                   variant="outline"

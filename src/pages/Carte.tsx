@@ -248,6 +248,11 @@ export default function Carte() {
   const mapRef = useRef<L.Map | null>(null);
   const clusterRef = useRef<any>(null);
   const markerByCodeRef = useRef<Map<string, L.Marker>>(new Map());
+  // Empêche une boucle de rechargement de get_map_points (une seule tentative par résultat).
+  const refetchedRef = useRef(false);
+  useEffect(() => {
+    refetchedRef.current = false;
+  }, [copilotResult]);
 
   useEffect(() => {
     if (!mapEl.current || mapRef.current) return;

@@ -5,7 +5,7 @@ import { anthropicJson, isAnthropicOverload } from '../_shared/anthropic-fetch.t
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const MODEL = 'claude-sonnet-5';
+const MODEL = 'claude-opus-5';
 
 const SYSTEM = `Tu es un assistant SQL pour Arcade OS (Avranches Automatic). Tu transformes une question en français en UNE seule requête SQL PostgreSQL, en LECTURE SEULE, exécutée via la fonction gaia_query_restricted (SELECT / WITH uniquement).
 

@@ -1575,6 +1575,27 @@ export type Database = {
         }
         Relationships: []
       }
+      geo_pays_centroide: {
+        Row: {
+          lat: number
+          lng: number
+          nom: string | null
+          pays: string
+        }
+        Insert: {
+          lat: number
+          lng: number
+          nom?: string | null
+          pays: string
+        }
+        Update: {
+          lat?: number
+          lng?: number
+          nom?: string | null
+          pays?: string
+        }
+        Relationships: []
+      }
       invitations_config: {
         Row: {
           copilote_enabled: boolean

@@ -39,32 +39,46 @@ type Signal = {
 // DETECTEURS SQL
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function safeRpc<T = any>(sql: string): Promise<T[]> {
+// Échecs de détecteurs : un détecteur cassé ne doit plus être confondu
+// avec un détecteur qui n'a rien trouvé — ils sont remontés dans le briefing.
+type DetecteurEchec = { detecteur: string; erreur: string };
+let detecteursEnEchec: DetecteurEchec[] = [];
+
+function noteEchec(detecteur: string, erreur: string) {
+  console.warn(`détecteur en échec [${detecteur}]`, erreur);
+  detecteursEnEchec.push({ detecteur, erreur: erreur.slice(0, 300) });
+}
+
+async function safeRpc<T = any>(detecteur: string, sql: string): Promise<T[]> {
   const { data, error } = await admin.rpc("gaia_query", { sql_query: sql });
   if (error) {
-    console.warn("gaia_query error", error.message);
+    noteEchec(detecteur, error.message);
     return [];
   }
   if (Array.isArray(data)) return data as T[];
   if (data && typeof data === "object" && "error" in (data as any)) {
-    console.warn("gaia_query returned error", (data as any).error);
+    noteEchec(detecteur, String((data as any).error));
     return [];
+  }
+  if (data && typeof data === "object" && Array.isArray((data as any).rows)) {
+    return (data as any).rows as T[];
   }
   return [];
 }
 
-async function safeTable(fn: () => Promise<{ data: any; error: any }>) {
+async function safeTable(detecteur: string, fn: () => Promise<{ data: any; error: any }>) {
   try {
     const { data, error } = await fn();
-    if (error) { console.warn("table query error", error.message); return []; }
+    if (error) { noteEchec(detecteur, error.message); return []; }
     return Array.isArray(data) ? data : [];
   } catch (e) {
-    console.warn("table query exception", (e as Error).message);
+    noteEchec(detecteur, (e as Error).message);
     return [];
   }
 }
 
 async function collectSignals(): Promise<Signal[]> {
+  detecteursEnEchec = [];
   const signals: Signal[] = [];
 
   // 1. Clients majeurs en fort déclin vs N-1
@@ -73,13 +87,16 @@ async function collectSignals(): Promise<Signal[]> {
     titre: "Clients majeurs en déclin (YTD vs N-1)",
     visibilite: "copilot",
     note: "Cible : clients dont le CA HT hors SFA a chuté de plus de 30% vs même période N-1 avec un CA N-1 > 20k€.",
-    rows: await safeRpc(`
-      select client, ca_n, ca_n1, (ca_n - ca_n1) as delta,
-             round(((ca_n - ca_n1) / nullif(ca_n1,0) * 100)::numeric, 1) as pct
-      from v_gaia_clients_evolution
+    rows: await safeRpc("clients_declin", `
+      select client, code_client,
+             ca_annee_courante as ca_n, ca_n1,
+             (ca_annee_courante - ca_n1) as delta,
+             round(((ca_annee_courante - ca_n1) / nullif(ca_n1,0) * 100)::numeric, 1) as pct,
+             derniere_facture
+      from v_gaia_clients_dormants
       where ca_n1 > 20000
-        and ca_n < ca_n1 * 0.7
-      order by (ca_n1 - ca_n) desc
+        and ca_annee_courante < ca_n1 * 0.7
+      order by (ca_n1 - ca_annee_courante) desc
       limit 15
     `),
   });
@@ -90,16 +107,16 @@ async function collectSignals(): Promise<Signal[]> {
     titre: "Devis importants sans mouvement 30-90j",
     visibilite: "copilot",
     note: "Devis (statut ouvert) montant > 10 000€ HT, dernière modif entre 30 et 90 jours.",
-    rows: await safeRpc(`
-      select numero, client, montant_ht, date_document,
+    rows: await safeRpc("devis_dormants", `
+      select n_cde as numero, client, code_client, total_ht as montant_ht, statut, date_document,
              extract(day from now() - date_document)::int as anciennete_j
-      from v_gaia_carn_documents
-      where type = 'devis'
+      from v_gaia_carnet_documents
+      where categorie = 'devis'
         and coalesce(sfa,false) = false
-        and montant_ht > 10000
+        and total_ht > 10000
         and coalesce(statut,'ouvert') not in ('perdu','gagne','ferme','annule')
-        and date_document between now() - interval '90 days' and now() - interval '30 days'
-      order by montant_ht desc
+        and date_document between (now() - interval '90 days')::date and (now() - interval '30 days')::date
+      order by total_ht desc
       limit 20
     `),
   });
@@ -110,28 +127,16 @@ async function collectSignals(): Promise<Signal[]> {
     titre: "Ruptures pièces magasin à forte rotation",
     visibilite: "copilot",
     note: "Articles MAGASIN en rupture (stock<=0) qui ont généré du CA sur 6 mois.",
-    rows: await safeRpc(`
-      select code, description, ca_6m, ventes_6m, stock
+    rows: await safeRpc("ruptures_magasin", `
+      select code, description, sous_famille, ca_6m,
+             qte_vendue_6m as ventes_6m, qty_disponible as stock
       from v_gaia_magasin_ruptures
       order by ca_6m desc nulls last
       limit 15
     `),
   });
 
-  // 4. Clients avec réparations mais 0 achat 6 mois
-  signals.push({
-    id: "sav_sans_relance",
-    titre: "Clients en SAV/réparation sans achat récent",
-    visibilite: "copilot",
-    note: "Clients avec au moins une intervention SAV en cours mais aucun achat > 0 depuis 6 mois : cible de relance commerciale.",
-    rows: await safeRpc(`
-      select distinct c.client, coalesce(s.dernier_ticket, null) as dernier_ticket
-      from v_gaia_clients_sav_actifs c
-      left join v_gaia_clients_dernier_achat s on s.client = c.client
-      where s.dernier_achat is null or s.dernier_achat < now() - interval '6 months'
-      limit 20
-    `),
-  });
+  // 4. (supprimé) Clients SAV sans achat récent : aucune vue SAV en base, détecteur retiré.
 
   // 5. Tickets SAV urgents / longs
   signals.push({
@@ -139,7 +144,7 @@ async function collectSignals(): Promise<Signal[]> {
     titre: "Tickets SAV urgents ou ouverts >7 jours",
     visibilite: "copilot",
     note: "D'après zendesk_stats_cache et zendesk_ticket_summaries.",
-    rows: await safeTable(() =>
+    rows: await safeTable("sav_urgents", () =>
       admin.from("zendesk_ticket_summaries")
         .select("*")
         .order("created_at", { ascending: false })
@@ -153,17 +158,26 @@ async function collectSignals(): Promise<Signal[]> {
     titre: "Dérive de marge par famille vs N-1",
     visibilite: "direction",
     note: "Familles dont le taux de marque brute a baissé de plus de 3 points vs N-1.",
-    rows: await safeRpc(`
-      select famille, tx_marque_n, tx_marque_n1, (tx_marque_n - tx_marque_n1) as delta_pts
-      from v_gaia_marge_famille_evolution
-      where tx_marque_n1 - tx_marque_n > 3
-      order by (tx_marque_n1 - tx_marque_n) desc
+    rows: await safeRpc("marge_derive", `
+      with tx as (
+        select annee, famille,
+               round((marge_estimee / nullif(ca_avec_cout,0) * 100)::numeric, 1) as tx_marque
+        from v_gaia_marge_famille
+      ),
+      derniere as (select max(annee) as an from tx)
+      select n.famille, n.tx_marque as tx_marque_n, p.tx_marque as tx_marque_n1,
+             round((n.tx_marque - p.tx_marque)::numeric, 1) as delta_pts
+      from tx n
+      join derniere d on d.an = n.annee
+      join tx p on p.famille = n.famille and p.annee = n.annee - 1
+      where p.tx_marque - n.tx_marque > 3
+      order by (p.tx_marque - n.tx_marque) desc
       limit 10
     `),
   });
 
   // 7. Items importance haute du dernier rapport de veille
-  const veille = await safeTable(() =>
+  const veille = await safeTable("veille_haute", () =>
     admin.from("veille_rapports")
       .select("id, created_at, contenu_json")
       .order("created_at", { ascending: false })
@@ -200,13 +214,10 @@ async function collectSignals(): Promise<Signal[]> {
     titre: "Gonflement anormal du carnet de reliquats",
     visibilite: "copilot",
     note: "Total reliquats vs il y a 1 mois : signaler si progression > 20%.",
-    rows: await safeRpc(`
-      with cur as (
-        select coalesce(sum(montant_ht),0) as total_now
-        from v_gaia_carn_documents
-        where type = 'reliquat' and coalesce(sfa,false) = false
-      )
-      select total_now from cur
+    rows: await safeRpc("reliquats_gonflement", `
+      select coalesce(sum(total_ht),0) as total_now, count(*)::int as nb_documents
+      from v_gaia_carnet_documents
+      where categorie = 'reliquat' and coalesce(sfa,false) = false
     `),
   });
 
@@ -216,7 +227,7 @@ async function collectSignals(): Promise<Signal[]> {
     titre: "Clients actifs en procédure collective ou cessés",
     visibilite: "direction",
     note: "Croisement gaia_entreprises × pipeline ouvert / CA 12 mois. Un client dans cette liste = créance à sécuriser, dossiers à revoir.",
-    rows: await safeRpc(`
+    rows: await safeRpc("entreprises", `
       with actifs as (
         select trim(code_client) as code
         from v_gaia_lignes
@@ -247,7 +258,7 @@ async function collectSignals(): Promise<Signal[]> {
     titre: "Clients actifs avec capitaux propres négatifs (dernier exercice)",
     visibilite: "direction",
     note: "Bilans Pappers (dernier exercice publié) × pipeline ouvert OU CA 12 mois > 0. Fragilité financière avérée : sécuriser encours et paiements.",
-    rows: await safeRpc(`
+    rows: await safeRpc("entreprises", `
       with actifs as (
         select trim(code_client) as code
         from v_gaia_lignes

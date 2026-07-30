@@ -413,17 +413,20 @@ export default function Carte() {
         rows.map((r) => String(r.code_client ?? "").trim()).filter(Boolean),
       );
       const points: CopilotPoint[] = [];
+      let invalidCount = 0;
       for (const r of rows) {
         const lat = pickCoord(r, ["lat", "latitude"]);
         const lng = pickCoord(r, ["lng", "lon", "long", "longitude"]);
-        if (lat === null || lng === null) continue;
-        if (Math.abs(lat) > 90 || Math.abs(lng) > 180) continue;
+        if (!isSaneCoord(lat, lng)) {
+          if (lat !== null || lng !== null) invalidCount++;
+          continue;
+        }
         points.push({
           code_client: r.code_client ? String(r.code_client).trim() : null,
           nom: String(r.nom ?? r.name ?? r.entreprise ?? "—"),
           ville: String(r.ville ?? ""),
           lat,
-          lng,
+          lng: lng as number,
         });
       }
       const hasPeriode = rows.some((r) => r.ca_periode != null);
@@ -439,10 +442,12 @@ export default function Carte() {
         total,
         truncated: Boolean((res as any).truncated) || rows.length >= 500,
         geoCount: points.length,
+        invalidCount,
         ca_total,
         codes,
         points,
       });
+
       if (rows.length === 0) {
         toast({
           title: "Aucun résultat",

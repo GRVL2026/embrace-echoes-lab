@@ -612,8 +612,10 @@ export default function Carte() {
                 <div className="text-sm font-medium mb-2">{copilotResult.interpretation}</div>
                 <div className="flex gap-4 text-sm">
                   <div>
-                    <div className="text-[11px] text-muted-foreground">Clients</div>
-                    <div className="font-semibold tabular-nums">{copilotResult.count}</div>
+                    <div className="text-[11px] text-muted-foreground">Résultats</div>
+                    <div className="font-semibold tabular-nums">
+                      {(copilotResult.total ?? copilotResult.count).toLocaleString("fr-FR")}
+                    </div>
                   </div>
                   <div>
                     <div className="text-[11px] text-muted-foreground">CA cumulé</div>

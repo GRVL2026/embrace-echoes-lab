@@ -267,10 +267,12 @@ export default function Carte() {
     const filterCodes = copilotResult?.codes ?? null;
     const maxCa = Math.max(1, ...data.clients.map((c) => c.ca_12m || 0));
 
-    if (layers.actif || layers.dormant || layers.inactif) {
+    // Quand un résultat copilote est actif, on ignore les cases à cocher :
+    // les points demandés doivent toujours être visibles.
+    if (filterCodes || layers.actif || layers.dormant || layers.inactif) {
       for (const c of data.clients) {
-        if (!layers[c.categorie]) continue;
-        if (filterCodes && !filterCodes.has(c.code_client)) continue;
+        if (!filterCodes && !layers[c.categorie]) continue;
+        if (filterCodes && !filterCodes.has(String(c.code_client ?? "").trim())) continue;
         const color = COLORS[c.categorie];
         const size = c.categorie === "actif" ? 8 + Math.round(20 * Math.sqrt((c.ca_12m || 0) / maxCa)) : 10;
         const m = L.marker([c.lat, c.lng], { icon: makeDivIcon(color, size, !!filterCodes) });
@@ -293,7 +295,7 @@ export default function Carte() {
           </div>`
         );
         cluster.addLayer(m);
-        markerByCodeRef.current.set(c.code_client, m);
+        markerByCodeRef.current.set(String(c.code_client ?? "").trim(), m);
       }
     }
 
@@ -312,11 +314,30 @@ export default function Carte() {
       }
     }
 
+    // Points renvoyés par le copilote absents du jeu de données de la carte
+    // (prospects, clients non présents dans get_map_points…) → affichés quand même.
+    const extraPts: L.LatLngExpression[] = [];
+    if (copilotResult) {
+      for (const p of copilotResult.points) {
+        const key = p.code_client ? p.code_client : null;
+        if (key && markerByCodeRef.current.has(key)) continue;
+        const m = L.marker([p.lat, p.lng], { icon: makeDivIcon(COLORS.prospects, 12, true) });
+        m.bindPopup(
+          `<div style="font-family:system-ui,sans-serif;min-width:180px">
+            <div style="font-weight:600;margin-bottom:4px">${escapeHtml(p.nom || "—")}</div>
+            <div style="color:#64748b;font-size:12px">${escapeHtml(p.ville || "")}</div>
+          </div>`
+        );
+        cluster.addLayer(m);
+        extraPts.push([p.lat, p.lng]);
+      }
+    }
+
     // Auto-fit when copilot result active
-    if (filterCodes && filterCodes.size > 0 && mapRef.current) {
-      const pts: L.LatLngExpression[] = [];
+    if (filterCodes && mapRef.current) {
+      const pts: L.LatLngExpression[] = [...extraPts];
       for (const c of data.clients) {
-        if (filterCodes.has(c.code_client)) pts.push([c.lat, c.lng]);
+        if (filterCodes.has(String(c.code_client ?? "").trim())) pts.push([c.lat, c.lng]);
       }
       if (pts.length > 0) {
         mapRef.current.fitBounds(L.latLngBounds(pts as any), { padding: [40, 40], maxZoom: 11 });

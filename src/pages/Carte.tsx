@@ -774,8 +774,8 @@ export default function Carte() {
                 {copilotResult.invalidCount > 0 && (
                   <div className="mt-1 text-[11px] text-amber-500">
                     ⚠ {copilotResult.invalidCount.toLocaleString("fr-FR")} client
-                    {copilotResult.invalidCount > 1 ? "s ont" : " a"} des coordonnées invalides
-                    (ignoré{copilotResult.invalidCount > 1 ? "s" : ""} du cadrage — géocodage à corriger)
+                    {copilotResult.invalidCount > 1 ? "s" : ""} pas encore géolocalisé
+                    {copilotResult.invalidCount > 1 ? "s" : ""} (géocodage en cours)
                   </div>
                 )}
 

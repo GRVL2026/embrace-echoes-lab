@@ -8,6 +8,7 @@ import { companyStatusPopupHtml } from "@/components/reactivation/CompanyStatusB
 import { Loader2, MapPin, ArrowLeft, Search, Sparkles, X, RotateCcw } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
@@ -406,26 +407,8 @@ export default function Carte() {
   const backHref = vue === "prospection" ? "/prospection" : "/clients";
   const backLabel = vue === "prospection" ? "Prospection" : "Clients";
 
-  return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)]">
-      <header className="flex items-center justify-between border-b border-border/60 px-4 py-2 bg-background sticky top-0">
-        <div className="flex items-center gap-3">
-          <Link to={backHref} className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm">
-            <ArrowLeft className="h-4 w-4" /> {backLabel}
-          </Link>
-          <div className="h-4 w-px bg-border/60" />
-          <div className="flex items-center gap-2">
-            <MapPin className="h-4 w-4 text-primary" />
-            <h1 className="font-display text-lg font-semibold">Carte du parc</h1>
-          </div>
-        </div>
-        {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-      </header>
-
-
-      {/* Barre de recherche + copilote — réservée admin/direction */}
-      {(isAdmin || isDirection) && (
-      <div className="copilot-inline-bar hidden md:block relative z-[1100] border-b border-border/60 bg-background px-3 py-2">
+  const copilotBar = (
+    <>
         <div className="flex gap-2 items-start max-w-3xl mx-auto">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -486,7 +469,56 @@ export default function Carte() {
         <div className="text-[11px] text-muted-foreground text-center mt-1 max-w-3xl mx-auto">
           Ex : « clients de Bretagne à plus de 50 k€ sur 2026 », « dormants &gt; 100 k€ en PACA », « top 10 Normandie »
         </div>
-      </div>
+    </>
+  );
+
+  return (
+    <div className="flex flex-col h-[calc(100vh-3.5rem)]">
+      <header className="flex items-center justify-between border-b border-border/60 px-4 py-2 bg-background sticky top-0">
+        <div className="flex items-center gap-3">
+          <Link to={backHref} className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm">
+            <ArrowLeft className="h-4 w-4" /> {backLabel}
+          </Link>
+          <div className="h-4 w-px bg-border/60" />
+          <div className="flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-primary" />
+            <h1 className="font-display text-lg font-semibold">Carte du parc</h1>
+          </div>
+        </div>
+        {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+      </header>
+
+
+      {/* Copilote — une seule entrée : barre inline (desktop) OU bouton flottant (mobile) */}
+      {(isAdmin || isDirection) && (
+        <>
+          <div className="copilot-inline-bar hidden md:block relative z-[1100] border-b border-border/60 bg-background px-3 py-2">
+            {copilotBar}
+          </div>
+
+          <Button
+            type="button"
+            onClick={() => setCopilotSheet(true)}
+            className="copilot-fab copilot-fab-page md:hidden fixed right-4 z-[1200] h-12 w-12 rounded-full p-0 shadow-lg"
+            style={{ bottom: "calc(1rem + env(safe-area-inset-bottom, 0px))", right: "calc(1rem + env(safe-area-inset-right, 0px))" }}
+            aria-label="Ouvrir le copilote carte"
+          >
+            <Sparkles className="h-5 w-5" />
+          </Button>
+
+          <Sheet open={copilotSheet} onOpenChange={setCopilotSheet}>
+            <SheetContent side="bottom" className="h-[90vh] flex flex-col p-0 gap-0">
+              <SheetHeader className="px-4 py-3 border-b border-border shrink-0">
+                <SheetTitle className="flex items-center gap-2 text-base">
+                  <Sparkles className="h-4 w-4 text-primary" /> Copilote carte
+                </SheetTitle>
+              </SheetHeader>
+              <div className="flex-1 min-h-0 overflow-y-auto p-3">
+                {copilotBar}
+              </div>
+            </SheetContent>
+          </Sheet>
+        </>
       )}
 
       <div className="relative flex-1 isolate">

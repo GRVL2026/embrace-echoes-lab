@@ -105,6 +105,17 @@ const fmtEUR = (n: number | null | undefined) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);
 const cleanPhone = (t: string | null | undefined) => (t || "").replace(/[^\d+]/g, "");
 
+/** Libellés des langues de rédaction retournées par l'IA. */
+const LANGUE_LABELS: Record<string, string> = {
+  FR: "français",
+  EN: "anglais",
+  ES: "espagnol",
+  IT: "italien",
+  DE: "allemand",
+  NL: "néerlandais",
+  PT: "portugais",
+};
+
 export function ClientActionsDialog({
   code,
   open,
@@ -125,6 +136,7 @@ export function ClientActionsDialog({
   const [archiving, setArchiving] = useState(false);
 
   // Form: add action
+
   // Seul type d'action possible aujourd'hui : mail (valeur de l'enum Postgres action_type_enum).
   const type: ActionType = "mail";
   const [objet, setObjet] = useState("");
@@ -133,6 +145,8 @@ export function ClientActionsDialog({
   const [prochaine, setProchaine] = useState("");
   const [statutResultant, setStatutResultant] = useState<"auto" | StatutRelance>("auto");
   const [generating, setGenerating] = useState(false);
+  const [langueChoix, setLangueChoix] = useState<"auto" | "FR">("auto");
+  const [langueUtilisee, setLangueUtilisee] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
 
   // Form: statut
@@ -164,6 +178,7 @@ export function ClientActionsDialog({
     setResultat("");
     setProchaine("");
     setStatutResultant("auto");
+    setLangueUtilisee(null);
     (async () => {
       await refresh();
       if (!cancel) setLoading(false);
@@ -179,7 +194,7 @@ export function ClientActionsDialog({
     if (!code) return;
     setGenerating(true);
     const { data: res, error } = await supabase.functions.invoke("generer-relance-client", {
-      body: { code_client: code },
+      body: { code_client: code, ...(langueChoix === "FR" ? { langue: "FR" } : {}) },
     });
     setGenerating(false);
     if (error || !res?.objet) {
@@ -192,7 +207,12 @@ export function ClientActionsDialog({
     }
     setObjet(res.objet);
     setContenu(res.corps);
-    toast({ title: "Proposition générée", description: "Vous pouvez éditer avant d'envoyer." });
+    const lang = String(res.langue || "FR");
+    setLangueUtilisee(lang);
+    toast({
+      title: "Proposition générée",
+      description: `Rédigé en ${LANGUE_LABELS[lang] || lang} — vous pouvez éditer avant d'envoyer.`,
+    });
   };
 
   // Détermine le statut à appliquer après une action.
@@ -564,24 +584,42 @@ export function ClientActionsDialog({
                 </div>
 
 
-                <div className="flex items-center justify-between gap-2 pt-1">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={generateMail}
-                    disabled={generating}
-                    className="gap-2"
-                  >
-                    {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                    Proposer un mail de relance
-                  </Button>
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={generateMail}
+                      disabled={generating}
+                      className="gap-2"
+                    >
+                      {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                      Proposer un mail de relance
+                    </Button>
+                    {/* Langue : auto = déduite du pays du client, sinon français forcé. */}
+                    <select
+                      value={langueChoix}
+                      onChange={(e) => setLangueChoix(e.target.value as "auto" | "FR")}
+                      className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                      aria-label="Langue de rédaction"
+                    >
+                      <option value="auto">Langue : auto (pays du client)</option>
+                      <option value="FR">Forcer le français</option>
+                    </select>
+                    {langueUtilisee && (
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                        Rédigé en {LANGUE_LABELS[langueUtilisee] || langueUtilisee}
+                      </span>
+                    )}
+                  </div>
                   {!hasEmail && (
                     <span className="text-xs text-muted-foreground italic">
                       Email non disponible — enregistrement seul
                     </span>
                   )}
                 </div>
+
 
                 <div>
                   <Label>Objet</Label>

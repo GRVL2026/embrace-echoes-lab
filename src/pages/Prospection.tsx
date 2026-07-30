@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Loader2, Plus, Upload, Target, ExternalLink, Trash2, GripVertical, Mail, Phone,
@@ -184,6 +184,21 @@ export default function Prospection() {
   const [preparing, setPreparing] = useState(false);
   const [bulkSending, setBulkSending] = useState(false);
   const [lgmFilter, setLgmFilter] = useState<"all" | "loisirs" | "chr" | "retail" | "none">("all");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Ouverture directe d'un prospect via /prospection?prospect=<id> (lien depuis la carte).
+  const deepLinkId = searchParams.get("prospect");
+  useEffect(() => {
+    if (!deepLinkId || prospects.length === 0) return;
+    const p = prospects.find((x) => x.id === deepLinkId);
+    if (p) {
+      setSelected(p);
+      const next = new URLSearchParams(searchParams);
+      next.delete("prospect");
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkId, prospects]);
 
   const runDetection = useCallback(async () => {
     setDetecting(true);

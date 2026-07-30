@@ -42,6 +42,25 @@ Tu réponds UNIQUEMENT en JSON valide :
 { "objet": "…", "corps": "…" }
 Le corps peut contenir des sauts de ligne (\\n) pour les paragraphes.`;
 
+const LANG_BY_COUNTRY: Record<string, string> = {
+  GB: 'EN', US: 'EN', IE: 'EN', AU: 'EN', NZ: 'EN', ZA: 'EN', SG: 'EN', HK: 'EN', IN: 'EN', MT: 'EN', CY: 'EN',
+  ES: 'ES',
+  IT: 'IT', SM: 'IT',
+  DE: 'DE', AT: 'DE', CH: 'DE',
+  NL: 'NL',
+  PT: 'PT',
+};
+
+const LANG_LABEL: Record<string, string> = {
+  FR: 'français', EN: 'anglais', ES: 'espagnol', IT: 'italien', DE: 'allemand', NL: 'néerlandais', PT: 'portugais',
+};
+
+/** Langue de rédaction déduite du code pays ISO-2 ; français par défaut. */
+function langFromCountry(pays: string | null | undefined): string {
+  const code = String(pays || '').trim().toUpperCase().slice(0, 2);
+  return LANG_BY_COUNTRY[code] || 'FR';
+}
+
 function jsonErr(status: number, error: string) {
   return new Response(JSON.stringify({ error }), {
     status,
@@ -81,11 +100,22 @@ Deno.serve(async (req) => {
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
     const body = await req.json().catch(() => ({}));
     const code = String(body.code_client || '').trim();
+    const langueForcee = String(body.langue || '').trim().toUpperCase();
     if (!code) return jsonErr(400, 'code_client requis');
 
     // Contexte client (via la RPC déjà autorisée pour cet user)
     const { data: ctx, error: ctxErr } = await sb.rpc('get_client_reactivation', { _code: code });
     if (ctxErr || !ctx) return jsonErr(404, 'Client introuvable');
+
+    // Pays (ISO-2) → langue de rédaction.
+    const { data: cli } = await admin
+      .from('gaia_clients')
+      .select('pays')
+      .eq('customer_id', code)
+      .maybeSingle();
+    const langueDetectee = langFromCountry((cli as any)?.pays);
+    const langue = langueForcee && LANG_LABEL[langueForcee] ? langueForcee : langueDetectee;
+
 
     const familles: string[] = Array.isArray((ctx as any).familles)
       ? (ctx as any).familles.map((f: any) => String(f.famille)).filter(Boolean)
@@ -159,10 +189,18 @@ Rédige l'email adapté à la catégorie ${categorie}. Réponds en JSON strict {
     const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
     if (!apiKey) return jsonErr(500, "IA non configurée (ANTHROPIC_API_KEY manquant)");
 
+    const langueLabel = LANG_LABEL[langue] || 'français';
+    const systemAvecLangue = `${SYSTEM}
+
+LANGUE DE RÉDACTION : ${langueLabel} (${langue}).
+Rédige INTÉGRALEMENT l'email dans cette langue — l'objet ET le corps — sans aucune phrase en français si la langue n'est pas le français.
+Conserve exactement le même ton, la même structure et les mêmes règles ci-dessus. Emploie la forme de politesse (vouvoiement) quand la langue le permet.
+Les noms de produits du catalogue restent tels quels, sans traduction.`;
+
     const resp = await anthropicJson(apiKey, {
       model: MODEL,
       max_tokens: 900,
-      system: SYSTEM,
+      system: systemAvecLangue,
       messages: [{ role: 'user', content: userPrompt }],
     });
 
@@ -175,7 +213,7 @@ Rédige l'email adapté à la catégorie ${categorie}. Réponds en JSON strict {
     const parsed = safeJsonExtract(text);
     if (!parsed) return jsonErr(502, "Réponse IA invalide");
 
-    return new Response(JSON.stringify(parsed), {
+    return new Response(JSON.stringify({ ...parsed, langue, langue_detectee: langueDetectee }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {
@@ -186,3 +224,4 @@ Rédige l'email adapté à la catégorie ${categorie}. Réponds en JSON strict {
     return jsonErr(500, err instanceof Error ? err.message : 'Erreur interne');
   }
 });
+

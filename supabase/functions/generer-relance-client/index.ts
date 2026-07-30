@@ -100,11 +100,22 @@ Deno.serve(async (req) => {
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
     const body = await req.json().catch(() => ({}));
     const code = String(body.code_client || '').trim();
+    const langueForcee = String(body.langue || '').trim().toUpperCase();
     if (!code) return jsonErr(400, 'code_client requis');
 
     // Contexte client (via la RPC déjà autorisée pour cet user)
     const { data: ctx, error: ctxErr } = await sb.rpc('get_client_reactivation', { _code: code });
     if (ctxErr || !ctx) return jsonErr(404, 'Client introuvable');
+
+    // Pays (ISO-2) → langue de rédaction.
+    const { data: cli } = await admin
+      .from('gaia_clients')
+      .select('pays')
+      .eq('customer_id', code)
+      .maybeSingle();
+    const langueDetectee = langFromCountry((cli as any)?.pays);
+    const langue = langueForcee && LANG_LABEL[langueForcee] ? langueForcee : langueDetectee;
+
 
     const familles: string[] = Array.isArray((ctx as any).familles)
       ? (ctx as any).familles.map((f: any) => String(f.famille)).filter(Boolean)

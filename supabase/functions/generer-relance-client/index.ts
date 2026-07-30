@@ -42,6 +42,25 @@ Tu réponds UNIQUEMENT en JSON valide :
 { "objet": "…", "corps": "…" }
 Le corps peut contenir des sauts de ligne (\\n) pour les paragraphes.`;
 
+const LANG_BY_COUNTRY: Record<string, string> = {
+  GB: 'EN', US: 'EN', IE: 'EN', AU: 'EN', NZ: 'EN', ZA: 'EN', SG: 'EN', HK: 'EN', IN: 'EN', MT: 'EN', CY: 'EN',
+  ES: 'ES',
+  IT: 'IT', SM: 'IT',
+  DE: 'DE', AT: 'DE', CH: 'DE',
+  NL: 'NL',
+  PT: 'PT',
+};
+
+const LANG_LABEL: Record<string, string> = {
+  FR: 'français', EN: 'anglais', ES: 'espagnol', IT: 'italien', DE: 'allemand', NL: 'néerlandais', PT: 'portugais',
+};
+
+/** Langue de rédaction déduite du code pays ISO-2 ; français par défaut. */
+function langFromCountry(pays: string | null | undefined): string {
+  const code = String(pays || '').trim().toUpperCase().slice(0, 2);
+  return LANG_BY_COUNTRY[code] || 'FR';
+}
+
 function jsonErr(status: number, error: string) {
   return new Response(JSON.stringify({ error }), {
     status,

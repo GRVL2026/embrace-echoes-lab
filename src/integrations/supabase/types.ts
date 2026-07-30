@@ -1042,6 +1042,9 @@ export type Database = {
           code_postal: string | null
           customer_id: string
           email: string | null
+          geocode_attempts: number
+          geocode_last_attempt: string | null
+          geocode_source: string | null
           geocoded_at: string | null
           lat: number | null
           lng: number | null
@@ -1064,6 +1067,9 @@ export type Database = {
           code_postal?: string | null
           customer_id: string
           email?: string | null
+          geocode_attempts?: number
+          geocode_last_attempt?: string | null
+          geocode_source?: string | null
           geocoded_at?: string | null
           lat?: number | null
           lng?: number | null
@@ -1086,6 +1092,9 @@ export type Database = {
           code_postal?: string | null
           customer_id?: string
           email?: string | null
+          geocode_attempts?: number
+          geocode_last_attempt?: string | null
+          geocode_source?: string | null
           geocoded_at?: string | null
           lat?: number | null
           lng?: number | null
@@ -1533,6 +1542,36 @@ export type Database = {
           taux_marque?: number | null
           tran_type?: string | null
           vendeur?: string | null
+        }
+        Relationships: []
+      }
+      geo_cache: {
+        Row: {
+          created_at: string
+          found: boolean
+          lat: number | null
+          lng: number | null
+          pays_norm: string
+          source: string
+          ville_norm: string
+        }
+        Insert: {
+          created_at?: string
+          found?: boolean
+          lat?: number | null
+          lng?: number | null
+          pays_norm: string
+          source?: string
+          ville_norm: string
+        }
+        Update: {
+          created_at?: string
+          found?: boolean
+          lat?: number | null
+          lng?: number | null
+          pays_norm?: string
+          source?: string
+          ville_norm?: string
         }
         Relationships: []
       }
@@ -2040,6 +2079,9 @@ export type Database = {
           effectif: string | null
           email: string | null
           entreprise: string
+          geocode_attempts: number
+          geocode_last_attempt: string | null
+          geocode_source: string | null
           geocoded_at: string | null
           id: string
           lat: number | null
@@ -2077,6 +2119,9 @@ export type Database = {
           effectif?: string | null
           email?: string | null
           entreprise: string
+          geocode_attempts?: number
+          geocode_last_attempt?: string | null
+          geocode_source?: string | null
           geocoded_at?: string | null
           id?: string
           lat?: number | null
@@ -2114,6 +2159,9 @@ export type Database = {
           effectif?: string | null
           email?: string | null
           entreprise?: string
+          geocode_attempts?: number
+          geocode_last_attempt?: string | null
+          geocode_source?: string | null
           geocoded_at?: string | null
           id?: string
           lat?: number | null

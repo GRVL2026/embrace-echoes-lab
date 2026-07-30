@@ -94,11 +94,28 @@ type CopilotResult = {
   count: number;          // lignes renvoyées (plafonnées à 500)
   total: number | null;   // vrai total (COUNT(*) sans plafond)
   truncated: boolean;
-  geoCount: number;       // lignes réellement géolocalisées
+  geoCount: number;       // lignes réellement géolocalisées (coordonnées valides)
+  invalidCount: number;   // lignes avec coordonnées aberrantes / nulles
   ca_total: number;
   codes: Set<string>;
   points: CopilotPoint[];
 };
+
+// Plages de coordonnées plausibles. France métropolitaine d'abord, Europe en repli.
+const FRANCE_BOX = { latMin: 41, latMax: 52, lngMin: -6, lngMax: 10 };
+const EUROPE_BOX = { latMin: 34, latMax: 72, lngMin: -25, lngMax: 45 };
+
+function inBox(lat: number, lng: number, b: typeof FRANCE_BOX) {
+  return lat >= b.latMin && lat <= b.latMax && lng >= b.lngMin && lng <= b.lngMax;
+}
+
+/** Coordonnée exploitable : non nulle, pas 0,0, et dans l'Europe élargie. */
+function isSaneCoord(lat: number | null, lng: number | null): lat is number {
+  if (lat === null || lng === null) return false;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  if (lat === 0 && lng === 0) return false;
+  return inBox(lat, lng, EUROPE_BOX);
+}
 
 function pickCoord(row: any, keys: string[]): number | null {
   for (const k of keys) {
@@ -109,6 +126,7 @@ function pickCoord(row: any, keys: string[]): number | null {
   }
   return null;
 }
+
 
 export default function Carte() {
   const { isAdmin, isDirection, canReactivation } = useAuth();

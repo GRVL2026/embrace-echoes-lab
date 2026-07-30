@@ -178,6 +178,7 @@ export function ClientActionsDialog({
     setResultat("");
     setProchaine("");
     setStatutResultant("auto");
+    setLangueUtilisee(null);
     (async () => {
       await refresh();
       if (!cancel) setLoading(false);

@@ -173,6 +173,7 @@ export function ClientActionsDialog({
   }, [open, code]);
 
   const hasEmail = !!(data?.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email));
+  const canSendMail = hasRestrictedAction("relance.envoyer_mail");
 
   const generateMail = async () => {
     if (!code) return;

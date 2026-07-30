@@ -408,7 +408,7 @@ export default function Carte() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
-      <header className="flex items-center justify-between border-b border-border/60 px-4 py-2 bg-background sticky top-0 z-40">
+      <header className="flex items-center justify-between border-b border-border/60 px-4 py-2 bg-background sticky top-0">
         <div className="flex items-center gap-3">
           <Link to={backHref} className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm">
             <ArrowLeft className="h-4 w-4" /> {backLabel}
@@ -425,7 +425,7 @@ export default function Carte() {
 
       {/* Barre de recherche + copilote — réservée admin/direction */}
       {(isAdmin || isDirection) && (
-      <div className="relative z-[1100] border-b border-border/60 bg-background px-3 py-2">
+      <div className="copilot-inline-bar hidden md:block relative z-[1100] border-b border-border/60 bg-background px-3 py-2">
         <div className="flex gap-2 items-start max-w-3xl mx-auto">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -494,7 +494,7 @@ export default function Carte() {
 
         {/* Résultat copilote */}
         {copilotResult && (
-          <Card className="absolute top-3 left-3 right-3 sm:right-auto z-[1200] p-3 sm:max-w-sm max-h-[70vh] overflow-y-auto overscroll-contain shadow-lg border-primary/40">
+          <Card className="absolute top-3 left-3 right-3 sm:right-auto z-[30] p-3 sm:max-w-sm max-h-[70vh] overflow-y-auto overscroll-contain shadow-lg border-primary/40">
             <div className="flex items-start gap-2">
               <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
@@ -524,7 +524,7 @@ export default function Carte() {
         )}
 
         {/* Filtres */}
-        <Card className="absolute top-3 right-3 z-[1200] p-3 min-w-[200px] shadow-lg">
+        <Card className="absolute top-3 right-3 z-[20] p-3 min-w-[200px] shadow-lg">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Couches</div>
           <div className="space-y-1.5">
             {(Object.keys(LABELS) as Layer[]).map((k) => (
@@ -547,7 +547,7 @@ export default function Carte() {
         </Card>
 
         {error && (
-          <div className="absolute bottom-3 left-3 z-[1200] rounded bg-destructive/10 text-destructive text-xs px-3 py-2">
+          <div className="absolute bottom-3 left-3 z-[20] rounded bg-destructive/10 text-destructive text-xs px-3 py-2">
             Erreur : {String((error as Error).message)}
           </div>
         )}

@@ -210,6 +210,7 @@ Deno.serve(async (req) => {
     if (!apiKey) return jsonErr(500, "IA non configurée");
 
     let sql = '';
+    let countSql = '';
     let interpretation = question;
     let rawText = '';
     let parseError: string | null = null;
@@ -229,6 +230,7 @@ Deno.serve(async (req) => {
         const s = String(parsed.sql || '').trim();
         if (!s) { parseError = 'champ sql vide'; return false; }
         sql = s;
+        countSql = String(parsed.count_sql || '').trim();
         interpretation = String(parsed.interpretation || question);
         return true;
       } catch (err: any) {
@@ -274,8 +276,37 @@ Deno.serve(async (req) => {
 
     const rows = Array.isArray(data) ? data : (data as any)?.rows ?? [];
 
+    // Total réel : COUNT(*) sans plafond, exécuté séparément de la liste des points.
+    let total: number | null = null;
+    if (countSql && validateSql(countSql).ok && !/\blimit\b/i.test(countSql)) {
+      const { data: cData, error: cErr } = await sb.rpc('gaia_query_restricted' as any, {
+        sql_query: countSql,
+      });
+      if (cErr) {
+        console.warn('[carte-copilot] count_sql erreur', cErr.message, countSql);
+      } else {
+        const cRows = Array.isArray(cData) ? cData : (cData as any)?.rows ?? [];
+        const first = cRows[0];
+        if (first && typeof first === 'object') {
+          const raw = (first as any).total ?? Object.values(first as any)[0];
+          const n = Number(raw);
+          if (Number.isFinite(n)) total = n;
+        }
+      }
+    }
+    const truncated = rows.length >= 500;
+    if (total == null) total = truncated ? null : rows.length;
+
     return new Response(
-      JSON.stringify({ interpretation, sql, rows, count: rows.length }),
+      JSON.stringify({
+        interpretation,
+        sql,
+        count_sql: countSql || null,
+        rows,
+        count: rows.length,
+        total,
+        truncated,
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (e: any) {

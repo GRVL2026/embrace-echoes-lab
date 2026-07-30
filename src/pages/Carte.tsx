@@ -351,16 +351,28 @@ export default function Carte() {
       }
     }
 
-    // Auto-fit when copilot result active
+    // Auto-fit sur les résultats du copilote, quel que soit leur nombre.
+    // Les coordonnées aberrantes (hors Europe, 0,0, nulles) sont ignorées.
     if (filterCodes && mapRef.current) {
-      const pts: L.LatLngExpression[] = [...extraPts];
+      const pts: [number, number][] = [...(extraPts as [number, number][])];
       for (const c of data.clients) {
-        if (filterCodes.has(String(c.code_client ?? "").trim())) pts.push([c.lat, c.lng]);
+        if (!filterCodes.has(String(c.code_client ?? "").trim())) continue;
+        if (!isSaneCoord(c.lat, c.lng)) continue;
+        pts.push([c.lat, c.lng]);
       }
-      if (pts.length > 0) {
-        mapRef.current.fitBounds(L.latLngBounds(pts as any), { padding: [40, 40], maxZoom: 11 });
+      // Si l'essentiel des points est en France métropolitaine, on cadre dessus
+      // pour éviter qu'un point lointain (DOM, Maghreb…) n'élargisse tout.
+      const inFrance = pts.filter(([la, ln]) => inBox(la, ln, FRANCE_BOX));
+      const fitPts = inFrance.length >= Math.max(1, Math.ceil(pts.length * 0.8)) ? inFrance : pts;
+      if (fitPts.length > 0) {
+        mapRef.current.fitBounds(L.latLngBounds(fitPts as any), {
+          padding: [60, 60],
+          maxZoom: 12,
+          animate: true,
+        });
       }
     }
+
   }, [data, layers, copilotResult]);
 
   const zoomToClient = (c: ClientPt) => {

@@ -51,16 +51,27 @@ Deno.serve(async (req) => {
     const senderEmail = senderEmailRaw.toLowerCase();
     if (!senderEmail) return jsonErr(401, 'Utilisateur sans email');
 
-    // Gating : uniquement les expéditeurs explicitement autorisés (Léopaul pour l'instant).
-    if (!ALLOWED_SENDERS.has(senderEmail)) {
-      return jsonErr(403, "Envoi non autorisé pour votre compte (fonctionnalité en pilote).");
+    const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+
+    // Gating : permission restreinte accordée dans l'administration (défaut OFF).
+    const { data: perm } = await admin
+      .from('user_menu_access')
+      .select('allowed')
+      .eq('user_id', userData.user.id)
+      .eq('section_key', REQUIRED_PERMISSION)
+      .maybeSingle();
+    if (perm?.allowed !== true) {
+      return jsonErr(
+        403,
+        `Envoi non autorisé pour votre compte (permission manquante : ${REQUIRED_PERMISSION}).`,
+      );
     }
 
     // Garde-fou expéditeur : le domaine doit être signé par Resend.
     if (!senderEmail.endsWith(REQUIRED_DOMAIN)) {
       return jsonErr(
         403,
-        `Impossible d'envoyer depuis ${senderEmailRaw} : seule une adresse ${REQUIRED_DOMAIN} peut être signée.`,
+        `Impossible d'envoyer depuis ${senderEmailRaw} : seule une adresse ${REQUIRED_DOMAIN} peut être signée par Resend.`,
       );
     }
 
@@ -74,7 +85,6 @@ Deno.serve(async (req) => {
       return jsonErr(400, 'code_client (ou prospect_id), objet et corps sont requis');
     }
 
-    const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
     // Nom complet expéditeur (profiles.full_name > user.raw_user_meta_data > email local part).
     const { data: senderProf } = await admin

@@ -227,7 +227,7 @@ async function collectSignals(): Promise<Signal[]> {
     titre: "Clients actifs en procédure collective ou cessés",
     visibilite: "direction",
     note: "Croisement gaia_entreprises × pipeline ouvert / CA 12 mois. Un client dans cette liste = créance à sécuriser, dossiers à revoir.",
-    rows: await safeRpc("entreprises", `
+    rows: await safeRpc("entreprises_risque_legal", `
       with actifs as (
         select trim(code_client) as code
         from v_gaia_lignes
@@ -258,7 +258,7 @@ async function collectSignals(): Promise<Signal[]> {
     titre: "Clients actifs avec capitaux propres négatifs (dernier exercice)",
     visibilite: "direction",
     note: "Bilans Pappers (dernier exercice publié) × pipeline ouvert OU CA 12 mois > 0. Fragilité financière avérée : sécuriser encours et paiements.",
-    rows: await safeRpc("entreprises", `
+    rows: await safeRpc("entreprises_capitaux_propres_negatifs", `
       with actifs as (
         select trim(code_client) as code
         from v_gaia_lignes
@@ -562,7 +562,7 @@ async function runSentinel() {
   const FEEDS = ['BD-Clients', 'BD-Ventes', 'BD-Historique', 'BD-Commandes', 'BD-Stock'] as const;
   const perFeed: { feed: string; last: Date | null; ageH: number }[] = [];
   for (const feed of FEEDS) {
-    const rows = await safeTable(() =>
+    const rows = await safeTable("mouvements_commerce", () =>
       admin.from('gaia_sync_log')
         .select('finished_at, ok, feed')
         .eq('ok', true).eq('feed', feed)
@@ -680,9 +680,14 @@ async function runSentinel() {
 
   // Upsert briefing du jour
 
+  const briefingContenu = {
+    ...(ai.briefing ?? {}),
+    detecteurs_en_echec: detecteursEnEchec,
+  };
+
   await admin.from("copilot_briefings").upsert({
     date: today,
-    contenu: ai.briefing,
+    contenu: briefingContenu,
     updated_at: new Date().toISOString(),
   });
 
@@ -728,7 +733,7 @@ async function runSentinel() {
     }
 
     // 3. Veille publiée (si un rapport frais existe)
-    const veilleLast = await safeTable(() =>
+    const veilleLast = await safeTable("veille_notification", () =>
       admin.from("veille_rapports").select("created_at").order("created_at", { ascending: false }).limit(1) as any
     );
     const lastVeilleAt = (veilleLast[0] as any)?.created_at;
@@ -747,7 +752,7 @@ async function runSentinel() {
     console.warn("dispatch notifications failed:", (e as Error).message);
   }
 
-  return { ok: true, signals_count: signals.length, alertes_generees: (ai.alertes ?? []).length, alertes_nouvelles: created, date: today };
+  return { ok: true, signals_count: signals.length, detecteurs_en_echec: detecteursEnEchec, alertes_generees: (ai.alertes ?? []).length, alertes_nouvelles: created, date: today };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

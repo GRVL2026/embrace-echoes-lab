@@ -141,7 +141,7 @@ function supabaseForUser4(ctx) {
 var run_sql_default = defineTool4({
   name: "run_sql",
   title: "Ex\xE9cuter une requ\xEAte SQL (lecture seule)",
-  description: "Ex\xE9cute une requ\xEAte SQL en lecture seule (SELECT / WITH) sur la base Arcade OS. Passe par la fonction gaia_query : les mots-cl\xE9s d'\xE9criture (INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, GRANT, TRUNCATE) sont refus\xE9s, timeout 8s, r\xE9sultat tronqu\xE9 \xE0 500 lignes. RLS Supabase appliqu\xE9e au nom de l'utilisateur connect\xE9.",
+  description: "Ex\xE9cute une requ\xEAte SQL en lecture seule (SELECT / WITH) sur la base Arcade OS. Passe par la fonction gaia_query : les mots-cl\xE9s d'\xE9criture (INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, GRANT, TRUNCATE) sont refus\xE9s, timeout 8s, r\xE9sultat tronqu\xE9 \xE0 500 lignes. Lecture ex\xE9cut\xE9e sous le r\xF4le technique copilot_readonly (p\xE9rim\xE8tre restreint aux tables et vues qui lui sont explicitement accord\xE9es). R\xE9serv\xE9 aux profils admin et direction.",
   inputSchema: {
     sql: z4.string().min(1).describe("Requ\xEAte SQL commen\xE7ant par SELECT ou WITH. Utilise LIMIT et agr\xE8ge quand possible.")
   },
@@ -151,6 +151,16 @@ var run_sql_default = defineTool4({
       return { content: [{ type: "text", text: "Non authentifi\xE9." }], isError: true };
     }
     const supabase = supabaseForUser4(ctx);
+    const [{ data: adminOk }, { data: dirOk }] = await Promise.all([
+      supabase.rpc("is_admin"),
+      supabase.rpc("is_direction")
+    ]);
+    if (adminOk !== true && dirOk !== true) {
+      return {
+        content: [{ type: "text", text: "R\xE9serv\xE9 aux profils admin et direction." }],
+        isError: true
+      };
+    }
     const { data, error } = await supabase.rpc("gaia_query", { sql_query: sql });
     if (error) {
       return { content: [{ type: "text", text: error.message }], isError: true };

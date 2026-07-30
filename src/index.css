@@ -107,8 +107,8 @@
 
   /* Rien ne doit flotter au-dessus d'un dialogue ouvert :
      on masque le FAB et la barre du copilote dès qu'un overlay Radix existe. */
-  body:has([data-radix-dialog-overlay], [data-state="open"][role="dialog"]) .copilot-fab,
-  body:has([data-radix-dialog-overlay], [data-state="open"][role="dialog"]) .copilot-inline-bar {
+  body:has([data-radix-dialog-overlay], [data-radix-alert-dialog-overlay], [data-state="open"][role="dialog"], [data-state="open"][role="alertdialog"]) .copilot-fab,
+  body:has([data-radix-dialog-overlay], [data-radix-alert-dialog-overlay], [data-state="open"][role="dialog"], [data-state="open"][role="alertdialog"]) .copilot-inline-bar {
     display: none !important;
   }
 

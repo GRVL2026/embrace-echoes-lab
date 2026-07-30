@@ -59,15 +59,18 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
     const token = url.searchParams.get('token') ?? '';
-    if (WEBHOOK_SECRET) {
-      if (token !== WEBHOOK_SECRET) {
-        return new Response(JSON.stringify({ error: 'invalid token' }), {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-    } else {
-      console.warn('LGM_WEBHOOK_SECRET not set — accepting without token verification');
+    // Fail-closed : sans secret configuré, on refuse (la fonction crée des prospects).
+    if (!WEBHOOK_SECRET) {
+      return new Response(JSON.stringify({ error: 'webhook not configured' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (token !== WEBHOOK_SECRET) {
+      return new Response(JSON.stringify({ error: 'invalid token' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     const payload = await req.json().catch(() => ({}));

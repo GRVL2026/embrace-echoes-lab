@@ -237,12 +237,13 @@ export default function Carte() {
               a_contacter: "À contacter", contacte: "Contacté", relance: "Relance",
               reactive: "Réactivé", sans_suite: "Sans suite",
             };
-            parts.push(`Statut : <b>${labels[d.statut_relance] || d.statut_relance}</b>`);
+            parts.push(`Statut : <b>${escapeHtml(labels[d.statut_relance] || String(d.statut_relance))}</b>`);
           }
           const last = d.actions?.[0];
           if (last) {
             const dt = new Date(last.date).toLocaleDateString("fr-FR");
-            parts.push(`Dernière action : <b>${last.type}</b> — ${dt}${last.auteur ? ` (${last.auteur})` : ""}`);
+            const auteur = last.auteur ? ` (${escapeHtml(String(last.auteur))})` : "";
+            parts.push(`Dernière action : <b>${escapeHtml(String(last.type ?? ""))}</b> — ${escapeHtml(dt)}${auteur}`);
           }
           slot.innerHTML = parts.length
             ? parts.map((p) => `<div>${p}</div>`).join("")
@@ -252,12 +253,12 @@ export default function Carte() {
           if (contactEl) {
             const tel = (d.telephone || "").toString();
             const telHref = tel.replace(/[^\d+]/g, "");
-            const email = d.email || "";
+            const email = String(d.email || "");
             const telHtml = telHref
-              ? `<a href="tel:${telHref}" style="color:#9B5CFF;text-decoration:none;font-weight:500">📞 ${tel}</a>`
+              ? `<a href="tel:${encodeURIComponent(telHref)}" style="color:#9B5CFF;text-decoration:none;font-weight:500">📞 ${escapeHtml(tel)}</a>`
               : `<span style="color:#94a3b8;font-style:italic">📞 Téléphone non renseigné</span>`;
             const mailHtml = email
-              ? `<a href="mailto:${email}" style="color:#9B5CFF;text-decoration:none;font-weight:500;word-break:break-all">✉ ${email}</a>`
+              ? `<a href="mailto:${escapeHtml(encodeURIComponent(email))}" style="color:#9B5CFF;text-decoration:none;font-weight:500;word-break:break-all">✉ ${escapeHtml(email)}</a>`
               : `<span style="color:#94a3b8;font-style:italic">✉ Email non renseigné</span>`;
             contactEl.innerHTML = `<div>${telHtml}</div><div style="margin-top:2px">${mailHtml}</div>`;
           }

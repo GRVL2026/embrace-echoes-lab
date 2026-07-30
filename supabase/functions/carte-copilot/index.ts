@@ -7,7 +7,7 @@ const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const MODEL = 'claude-opus-5';
 
-const SYSTEM = `Tu es un assistant SQL pour Arcade OS (Avranches Automatic). Tu transformes une question en français en UNE seule requête SQL PostgreSQL, en LECTURE SEULE, exécutée via la fonction gaia_query_restricted (SELECT / WITH uniquement).
+const SYSTEM = `Tu es un assistant SQL pour Arcade OS (Avranches Automatic). Tu transformes une question en français en UNE seule requête SQL PostgreSQL, en LECTURE SEULE, exécutée via la fonction gaia_query (SELECT / WITH uniquement).
 
 TABLES AUTORISÉES (whitelist stricte — toute autre table est refusée par le moteur) :
 - gaia_clients(customer_id text, name text, status text, typologie text, adresse1, adresse2, code_postal text, ville text, pays text, lat numeric, lng numeric)
@@ -31,7 +31,7 @@ CONVENTIONS DES DONNÉES (TRÈS IMPORTANT) :
     CASE WHEN a.derniere_commande >= CURRENT_DATE - interval '12 months' THEN 'actif'
          WHEN a.derniere_commande >= CURRENT_DATE - interval '24 months' THEN 'dormant'
          ELSE 'inactif' END
-  Les compteurs de référence (clients géolocalisés) sont : 440 actifs, 163 dormants, 1480 inactifs, 62 prospects. Tes chiffres doivent correspondre.
+  Les totaux doivent TOUJOURS être calculés par count_sql sur le périmètre demandé, jamais rapprochés de valeurs mémorisées. Le périmètre de référence de la carte est : clients géolocalisés (lat et lng non nuls), catégorisés selon les définitions 12 / 24 mois ci-dessus.
 - Pour tout filtre texte incertain (nom ville, nom client, famille libre…) : utilise ILIKE '%…%' et unaccent si nécessaire, jamais l'égalité stricte.
 
 RÈGLES CRITIQUES :
@@ -73,7 +73,7 @@ count_sql = WITH v AS (SELECT code_client, invoice_date FROM gaia_ventes UNION A
 
 // Sécurité : plus AUCUNE analyse du SQL côté edge function (les whitelists par
 // regex produisaient des faux positifs : CTE ou colonne pris pour une table).
-// La base impose elle-même le moindre privilège : gaia_query_restricted exécute
+// La base impose elle-même le moindre privilège : gaia_query exécute
 // la requête sous le rôle copilot_readonly (SELECT sur 6 tables, aucune écriture),
 // avec statement_timeout 5s et un plafond de 500 lignes.
 // Le contrôle de rôle admin/direction ci-dessous reste indispensable.
@@ -263,10 +263,10 @@ Deno.serve(async (req) => {
       return jsonErr(400, MSG_SQL, `${check.error} — SQL: ${sql.slice(0, 400)}`, true);
     }
 
-    // Exécute via gaia_query_restricted (SECURITY INVOKER — RLS + whitelist SQL appliquées).
-    const { data, error } = await sb.rpc('gaia_query_restricted' as any, { sql_query: sql });
+    // Exécute via gaia_query (SECURITY INVOKER — RLS + whitelist SQL appliquées).
+    const { data, error } = await sb.rpc('gaia_query' as any, { sql_query: sql });
     if (error) {
-      console.error('[carte-copilot] gaia_query_restricted error', error, sql);
+      console.error('[carte-copilot] gaia_query error', error, sql);
       return jsonErr(400, MSG_SQL, `${error.message} — SQL: ${sql.slice(0, 400)}`, true);
     }
     if (data && typeof data === 'object' && !Array.isArray(data) && 'error' in (data as any)) {
@@ -279,7 +279,7 @@ Deno.serve(async (req) => {
     // Total réel : COUNT(*) sans plafond, exécuté séparément de la liste des points.
     let total: number | null = null;
     if (countSql && validateSql(countSql).ok && !/\blimit\b/i.test(countSql)) {
-      const { data: cData, error: cErr } = await sb.rpc('gaia_query_restricted' as any, {
+      const { data: cData, error: cErr } = await sb.rpc('gaia_query' as any, {
         sql_query: countSql,
       });
       if (cErr) {

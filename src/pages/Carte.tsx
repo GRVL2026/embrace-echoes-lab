@@ -400,24 +400,7 @@ export default function Carte() {
         const color = COLORS[c.categorie];
         const size = c.categorie === "actif" ? 8 + Math.round(20 * Math.sqrt((c.ca_12m || 0) / maxCa)) : 10;
         const m = L.marker([c.lat, c.lng], { icon: makeDivIcon(color, size, !!filterCodes) });
-        const statusHtml = companyStatusPopupHtml({
-          etat_administratif: c.etat_administratif,
-          procedure_collective: c.procedure_collective,
-        });
-        m.bindPopup(
-          `<div style="font-family:system-ui,sans-serif;min-width:240px" data-client-code="${escapeHtml(c.code_client)}">
-            <div style="font-weight:600;margin-bottom:4px">${escapeHtml(c.nom || "—")}</div>
-            <div style="color:#64748b;font-size:12px">${escapeHtml(c.ville || "")}</div>
-            ${statusHtml ? `<div style="margin-top:6px">${statusHtml}</div>` : ""}
-            <div class="rea-contact" data-code="${escapeHtml(c.code_client)}" style="margin-top:6px;font-size:12px;color:#64748b">📞 <em>chargement…</em></div>
-            <div style="margin-top:6px;font-size:12px">CA 12 mois : <b>${fmtEUR(c.ca_12m || 0)}</b></div>
-            <div style="font-size:12px">CA total : <b>${fmtEUR(c.ca_total || 0)}</b></div>
-            <div style="font-size:12px;color:#475569">Dernière commande : <b>${c.derniere_commande ? fmtMonth(c.derniere_commande) : "aucune commande enregistrée"}</b></div>
-            <div style="font-size:11px;color:${color};margin-top:4px;text-transform:uppercase">${c.categorie}</div>
-            <div class="rea-slot" data-code="${escapeHtml(c.code_client)}" style="margin-top:8px;padding-top:6px;border-top:1px solid #e2e8f0;font-size:11px;color:#64748b">Chargement…</div>
-            ${canReactivation ? `<div style="display:flex;gap:6px;margin-top:6px"><button data-rea-action="action" data-code="${escapeHtml(c.code_client)}" style="flex:1;padding:5px 8px;background:#9B5CFF;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-weight:500">+ Action</button><button data-rea-action="statut" data-code="${escapeHtml(c.code_client)}" style="flex:1;padding:5px 8px;background:#334155;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-weight:500">Statut</button></div>` : ""}
-          </div>`
-        );
+        m.bindPopup(popupClientHtml(c, canReactivation));
         cluster.addLayer(m);
         markerByCodeRef.current.set(String(c.code_client ?? "").trim(), m);
       }
@@ -426,36 +409,47 @@ export default function Carte() {
     if (layers.prospects && !filterCodes) {
       for (const p of data.prospects) {
         const m = L.marker([p.lat, p.lng], { icon: makeDivIcon(COLORS.prospects, 12) });
-        m.bindPopup(
-          `<div style="font-family:system-ui,sans-serif;min-width:180px">
-            <div style="font-weight:600;margin-bottom:4px">${escapeHtml(p.nom || "—")}</div>
-            <div style="color:#64748b;font-size:12px">${escapeHtml(p.ville || "")}</div>
-            <div style="margin-top:6px;font-size:12px">Statut : <b>${escapeHtml(p.statut || "—")}</b></div>
-            <div style="font-size:12px">Segment : ${escapeHtml(p.segment || "—")}</div>
-          </div>`
-        );
+        m.bindPopup(popupProspectHtml(p));
         cluster.addLayer(m);
       }
     }
 
     // Points renvoyés par le copilote absents du jeu de données de la carte
-    // (prospects, clients non présents dans get_map_points…) → affichés quand même.
+    // (prospects, clients géocodés après le chargement de get_map_points…).
     const extraPts: [number, number][] = [];
+    let missingClient = false;
     if (copilotResult) {
       for (const p of copilotResult.points) {
         const key = p.code_client ? p.code_client : null;
         if (key && markerByCodeRef.current.has(key)) continue;
-        const m = L.marker([p.lat, p.lng], { icon: makeDivIcon(COLORS.prospects, 12, true) });
+        if (key) missingClient = true;
+        const isClient = !!key;
+        const m = L.marker([p.lat, p.lng], {
+          icon: makeDivIcon(isClient ? COLORS.inactif : COLORS.prospects, 12, true),
+        });
         m.bindPopup(
-          `<div style="font-family:system-ui,sans-serif;min-width:180px">
+          isClient
+            ? popupClientHtml(
+                { code_client: key as string, nom: p.nom, ville: p.ville },
+                canReactivation,
+              )
+            : `<div style="font-family:system-ui,sans-serif;min-width:180px">
             <div style="font-weight:600;margin-bottom:4px">${escapeHtml(p.nom || "—")}</div>
             <div style="color:#64748b;font-size:12px">${escapeHtml(p.ville || "")}</div>
-          </div>`
+          </div>`,
         );
         cluster.addLayer(m);
         extraPts.push([p.lat, p.lng]);
       }
     }
+
+    // Un client absent de get_map_points = jeu de données périmé (géocodage récent).
+    // On recharge une seule fois, puis on redessine avec la vraie catégorie.
+    if (missingClient && !refetchedRef.current) {
+      refetchedRef.current = true;
+      queryClient.invalidateQueries({ queryKey: ["map-points"] });
+    }
+
 
     // Auto-fit sur les résultats du copilote, quel que soit leur nombre.
     // Les coordonnées aberrantes (hors Europe, 0,0, nulles) sont ignorées.

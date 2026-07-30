@@ -1,0 +1,1 @@
+REVOKE SELECT ON public.user_roles, public.profiles FROM copilot_readonly;

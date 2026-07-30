@@ -275,7 +275,58 @@ export default function Carte() {
           setReaTab(action);
         };
       });
+      // Lien « Ouvrir la fiche client » → routeur (pas de rechargement complet).
+      el.querySelectorAll<HTMLButtonElement>("button[data-fiche-client]").forEach((btn) => {
+        btn.onclick = () => {
+          const nom = btn.getAttribute("data-fiche-client") || "";
+          if (!nom) return;
+          navigateRef.current(`/admin/gaia/client/${encodeURIComponent(nom)}`);
+        };
+      });
+      el.querySelectorAll<HTMLButtonElement>("button[data-fiche-prospect]").forEach((btn) => {
+        btn.onclick = () => {
+          const id = btn.getAttribute("data-fiche-prospect") || "";
+          if (!id) return;
+          navigateRef.current(`/prospection?prospect=${encodeURIComponent(id)}`);
+        };
+      });
+      // Hydratation contact prospect (tel / email / accroche)
+      const pSlot = el.querySelector<HTMLElement>(".prospect-slot");
+      const pId = pSlot?.getAttribute("data-id");
+      if (pSlot && pId) {
+        try {
+          const { data: pr } = await supabase
+            .from("prospects")
+            .select("telephone, email, accroche_defaut")
+            .eq("id", pId)
+            .maybeSingle();
+          const tel = String((pr as any)?.telephone || "");
+          const telHref = tel.replace(/[^\d+]/g, "");
+          const email = String((pr as any)?.email || "");
+          const accroche = String((pr as any)?.accroche_defaut || "");
+          const rows: string[] = [];
+          rows.push(
+            telHref
+              ? `<div><a href="tel:${encodeURIComponent(telHref)}" style="color:#9B5CFF;text-decoration:none;font-weight:500">📞 ${escapeHtml(tel)}</a></div>`
+              : `<div style="color:#94a3b8;font-style:italic">📞 Téléphone non renseigné</div>`,
+          );
+          rows.push(
+            email
+              ? `<div style="margin-top:2px"><a href="mailto:${escapeHtml(encodeURIComponent(email))}" style="color:#9B5CFF;text-decoration:none;font-weight:500;word-break:break-all">✉ ${escapeHtml(email)}</a></div>`
+              : `<div style="margin-top:2px;color:#94a3b8;font-style:italic">✉ Email non renseigné</div>`,
+          );
+          if (accroche) {
+            rows.push(
+              `<div style="margin-top:6px;font-size:11px;color:#475569;font-style:italic">« ${escapeHtml(accroche.slice(0, 220))}${accroche.length > 220 ? "…" : ""} »</div>`,
+            );
+          }
+          pSlot.innerHTML = rows.join("");
+        } catch {
+          pSlot.textContent = "";
+        }
+      }
       // Lazy load statut + last action
+
       const slot = el.querySelector<HTMLElement>(".rea-slot");
       const code = slot?.getAttribute("data-code");
       if (slot && code) {

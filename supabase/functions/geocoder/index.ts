@@ -310,8 +310,9 @@ Deno.serve(async (req) => {
 
   try {
     const clients = await geocodeClients();
+    const etranger = await geocodeClientsEtranger();
     const prospects = await geocodeProspects();
-    return new Response(JSON.stringify({ ok: true, clients, prospects }), {
+    return new Response(JSON.stringify({ ok: true, clients, etranger, prospects }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (e) {

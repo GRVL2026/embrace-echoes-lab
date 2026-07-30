@@ -314,35 +314,42 @@ export default function Carte() {
     if (m) setTimeout(() => m.openPopup(), 200);
   };
 
-  const askCopilot = async () => {
-    const q = query.trim();
-    if (!q || asking) return;
+  const askingRef = useRef(false);
+
+  const askCopilot = async (override?: string) => {
+    const q = (override ?? query).trim();
+    if (!q || askingRef.current) return;
+    askingRef.current = true;
     setSuggestOpen(false);
     setAsking(true);
     try {
       const { data: res, error } = await supabase.functions.invoke("carte-copilot", {
         body: { question: q },
       });
+      let human: string | null = null;
+      let debug: string | null = null;
       if (error) {
-        // Extraire le message réel du body JSON renvoyé par l'edge function (non-2xx)
-        let realMsg: string | null = null;
         try {
           const resp: Response | undefined = (error as any)?.context?.response ?? (error as any)?.context;
           if (resp && typeof (resp as Response).text === "function") {
             const txt = await (resp as Response).clone().text();
-            try {
-              const j = JSON.parse(txt);
-              realMsg = j?.error || j?.message || txt;
-            } catch {
-              realMsg = txt;
-            }
+            const j = JSON.parse(txt);
+            human = j?.message || j?.error || null;
+            debug = j?.debug || null;
           }
         } catch {
           /* ignore */
         }
-        throw new Error(realMsg || (error as any)?.message || "Erreur du copilote");
+        throw Object.assign(
+          new Error(human || "Le copilote est momentanément indisponible. Réessaie."),
+          { debug },
+        );
       }
-      if ((res as any)?.error) throw new Error((res as any).error);
+      if ((res as any)?.error) {
+        throw Object.assign(new Error((res as any).message || (res as any).error), {
+          debug: (res as any).debug,
+        });
+      }
       const rows: any[] = (res as any).rows ?? [];
       const codes = new Set<string>(rows.map((r) => String(r.code_client)).filter(Boolean));
       const hasPeriode = rows.some((r) => r.ca_periode != null);
@@ -357,18 +364,29 @@ export default function Carte() {
         codes,
       });
       if (codes.size === 0) {
-        toast({ title: "Aucun résultat", description: "La requête n'a rien retourné." });
+        toast({
+          title: "Aucun résultat",
+          description: "Aucun client ne correspond à cette recherche",
+        });
       }
     } catch (e: any) {
+      const dbg = authorized && e?.debug ? ` — ${String(e.debug).slice(0, 200)}` : "";
       toast({
-        title: "Erreur du copilote",
-        description: e?.message || "Impossible d'interpréter la question",
+        title: "Copilote",
+        description: `${e?.message || "Erreur inattendue"}${dbg}`,
         variant: "destructive",
+        action: (
+          <ToastAction altText="Réessayer" onClick={() => askCopilot(q)}>
+            Réessayer
+          </ToastAction>
+        ),
       });
     } finally {
+      askingRef.current = false;
       setAsking(false);
     }
   };
+
 
   const resetCopilot = () => {
     setCopilotResult(null);

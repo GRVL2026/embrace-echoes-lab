@@ -30,7 +30,7 @@ export type StatutRelance =
   | "relance"
   | "reactive"
   | "sans_suite";
-export type ActionType = "mail" | "appel" | "visite" | "note" | "autre";
+export type ActionType = "email" | "mail" | "appel" | "visite" | "note" | "autre";
 
 export const STATUT_LABEL: Record<StatutRelance, string> = {
   a_contacter: "À contacter",
@@ -47,7 +47,8 @@ export const STATUT_COLOR: Record<StatutRelance, string> = {
   sans_suite: "bg-slate-500/15 text-slate-400 border-slate-500/30",
 };
 
-const TYPE_ICON: Record<ActionType, typeof Mail> = {
+const TYPE_ICON: Record<string, typeof Mail> = {
+  email: Mail,
   mail: Mail,
   appel: Phone,
   visite: MapPin,
@@ -124,7 +125,8 @@ export function ClientActionsDialog({
   const [archiving, setArchiving] = useState(false);
 
   // Form: add action
-  const [type, setType] = useState<ActionType>("appel");
+  // Seul type d'action possible aujourd'hui : email (les anciens types restent lisibles).
+  const type: ActionType = "email";
   const [objet, setObjet] = useState("");
   const [contenu, setContenu] = useState("");
   const [resultat, setResultat] = useState("");
@@ -161,7 +163,6 @@ export function ClientActionsDialog({
     setContenu("");
     setResultat("");
     setProchaine("");
-    setType("appel");
     setStatutResultant("auto");
     (async () => {
       await refresh();
@@ -188,7 +189,6 @@ export function ClientActionsDialog({
       });
       return;
     }
-    setType("mail");
     setObjet(res.objet);
     setContenu(res.corps);
     toast({ title: "Proposition générée", description: "Vous pouvez éditer avant d'envoyer." });
@@ -278,7 +278,7 @@ export function ClientActionsDialog({
       return;
     }
     setSaving(true);
-    const contenuFinal = type === "mail" && objet.trim()
+    const contenuFinal = objet.trim()
       ? `Objet : ${objet.trim()}\n\n${contenu.trim()}`
       : contenu.trim();
     const { error } = await (supabase as any).from("client_actions").insert({
@@ -582,7 +582,7 @@ export function ClientActionsDialog({
                   )}
                 </div>
 
-                {type === "mail" && (
+                {true && (
                   <div>
                     <Label>Objet</Label>
                     <Input
@@ -593,7 +593,7 @@ export function ClientActionsDialog({
                   </div>
                 )}
                 <div>
-                  <Label>{type === "mail" ? "Contenu du mail" : "Contenu"}</Label>
+                  <Label>Contenu du mail</Label>
                   <Textarea
                     value={contenu}
                     onChange={(e) => setContenu(e.target.value)}

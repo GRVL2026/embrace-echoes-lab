@@ -295,7 +295,7 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (e: any) {
-    console.error(e);
-    return jsonErr(500, e?.message || 'Erreur serveur');
+    console.error('[carte-copilot]', e);
+    return jsonErr(500, "Une erreur est survenue. Réessaie dans quelques instants.", e?.message, true);
   }
 });

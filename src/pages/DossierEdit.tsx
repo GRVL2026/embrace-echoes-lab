@@ -84,7 +84,8 @@ type ErpArticle = {
   stock: number | null;
 };
 type PricingLine = { label: string; qty: number; amount: number };
-type Pricing = { lines: PricingLine[]; total_ht: number; monthly: number };
+type PricingExtra = { id: string; label: string; montant_ht: number; ordre: number };
+type Pricing = { lines: PricingLine[]; extras?: PricingExtra[]; total_ht: number; monthly: number };
 
 type Context = { contexte?: string; objectif?: string; enjeux?: string; lecture?: string };
 type Solution = { selection?: string; deploiement?: string; suivi?: string };

@@ -652,6 +652,21 @@ export default function DossierEdit() {
   const isRecurring = form?.offer === "location" || form?.offer === "leasing";
   const totalAmount = selectedProducts.reduce((s, p) => s + p.qty * p.unit_price, 0);
 
+  // --- Extras (livraison / installation) : toujours en dernière position du devis ---
+  const extras: PricingExtra[] = [...(form?.pricing?.extras ?? [])].sort((a, b) => a.ordre - b.ordre);
+  const extrasTotal = extras.reduce((s, e) => s + (Number(e.montant_ht) || 0), 0);
+  const addExtra = (label: string) => {
+    const id =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `extra_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const ordre = extras.length ? Math.max(...extras.map((e) => e.ordre)) + 1 : 1;
+    onExtrasChange([...extras, { id, label, montant_ht: 0, ordre }]);
+  };
+  const updateExtra = (id: string, patch: Partial<PricingExtra>) =>
+    onExtrasChange(extras.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+  const removeExtra = (id: string) => onExtrasChange(extras.filter((e) => e.id !== id));
+
   const contextFields: { key: keyof Context; label: string; rows?: number }[] = [
     { key: "contexte", label: "Contexte", rows: 3 },
     { key: "objectif", label: "Objectif", rows: 3 },

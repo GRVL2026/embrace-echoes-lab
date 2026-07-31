@@ -237,11 +237,18 @@ export default function DossierEdit() {
     setDirty(true);
   };
 
-  // Recompute pricing whenever products or offer change
+  // Recompute pricing whenever products, extras or offer change
   const onProductsChange = (next: SelectedProduct[]) => {
     setForm((f) => {
       if (!f) return f;
-      return { ...f, selected_products: next, pricing: computePricing(next, f.offer) };
+      return { ...f, selected_products: next, pricing: computePricing(next, f.offer, f.pricing?.extras ?? []) };
+    });
+    setDirty(true);
+  };
+  const onExtrasChange = (nextExtras: PricingExtra[]) => {
+    setForm((f) => {
+      if (!f) return f;
+      return { ...f, pricing: computePricing(f.selected_products ?? [], f.offer, nextExtras) };
     });
     setDirty(true);
   };
@@ -260,7 +267,7 @@ export default function DossierEdit() {
             : p.unit_price;
         return { ...p, unit_price: newPrice };
       });
-      return { ...f, offer: v, selected_products: nextProducts, pricing: computePricing(nextProducts, v) };
+      return { ...f, offer: v, selected_products: nextProducts, pricing: computePricing(nextProducts, v, f.pricing?.extras ?? []) };
     });
     setDirty(true);
   };

@@ -29,7 +29,7 @@ type Project = {
   status?: string | null;
   selected_modules: string[] | null;
   selected_products: { product_id?: string; name: string; qty: number; unit_price: number }[] | null;
-  pricing: { lines?: { label: string; qty: number; amount: number }[]; total_ht?: number; monthly?: number } | null;
+  pricing: { lines?: { label: string; qty: number; amount: number }[]; extras?: { id: string; label: string; montant_ht: number; ordre: number }[]; total_ht?: number; monthly?: number } | null;
   context: { contexte?: string; objectif?: string; enjeux?: string; lecture?: string } | null;
   solution: { selection?: string; deploiement?: string; suivi?: string } | null;
   scope: { fourniture?: string; livraison?: string; formation?: string; garantie?: string } | null;

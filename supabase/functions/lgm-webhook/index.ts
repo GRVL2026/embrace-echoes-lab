@@ -213,7 +213,23 @@ Deno.serve(async (req) => {
       const linkedinNew = pick(payload, ['linkedin', 'linkedinUrl', 'linkedin_url', 'lead.linkedin', 'lead.linkedinUrl', 'lead.linkedin_url']);
       const audience = pick(payload, ['audience', 'audienceName', 'lead.audience', 'lead.audienceName']);
 
-      const canCreate = !!(company || (firstName && lastName));
+      // Garde-fou miroir : crmId requis + URL LinkedIn plausible (domaine linkedin.com, pas une valeur factice).
+      const crmId = pick(payload, ['crmId']);
+      const linkedinNorm = norm(linkedinNew);
+      const linkedinOk =
+        !!linkedinNorm &&
+        linkedinNorm.includes('linkedin.com/') &&
+        !linkedinNorm.includes('test') &&
+        !linkedinNorm.includes('example');
+      const canCreate = !!crmId && linkedinOk && !!(company || (firstName && lastName));
+
+      if (!canCreate) {
+        console.warn('lgm-webhook: miroir refusé (crmId ou linkedin_url non plausible)', {
+          hasCrmId: !!crmId,
+          linkedinOk,
+        });
+      }
+
 
       if (canCreate) {
         // Dédoublonnage final avant insert (crmId + email)

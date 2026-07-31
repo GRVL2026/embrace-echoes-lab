@@ -28,7 +28,7 @@ export type SelectedProduct = {
   unit_price: number;
 };
 
-export type PricingLine = { label: string; qty: number; amount: number };
+export type PricingLine = { label: string; qty: number; amount: number; kind?: string; id?: string };
 export type Pricing = { lines: PricingLine[]; total_ht: number; monthly: number };
 
 /** Catégories NON plaçables (accessoires, monétique, consommables, etc.). */
@@ -66,18 +66,37 @@ export function unitPriceForOffer(row: CatalogRow, offer: string | null | undefi
   return Number(row.price ?? 0) || 0;
 }
 
-/** Recalcule la ligne pricing (identique à la logique de DossierEdit). */
-export function computePricing(products: SelectedProduct[], offer: string | null | undefined): Pricing {
-  const lines: PricingLine[] = products.map((p) => ({
+/**
+ * Recalcule la ligne pricing (identique à la logique de DossierEdit).
+ * Les lignes kind="extra" (livraison / installation) sont PRÉSERVÉES et
+ * replacées en dernière position ; elles comptent dans total_ht mais jamais
+ * dans monthly.
+ */
+export function computePricing(
+  products: SelectedProduct[],
+  offer: string | null | undefined,
+  existingLines: PricingLine[] = [],
+): Pricing {
+  const productLines: PricingLine[] = products.map((p) => ({
     label: p.name,
     qty: p.qty,
     amount: +(p.qty * p.unit_price).toFixed(2),
   }));
-  const total = lines.reduce((s, l) => s + l.amount, 0);
+  const extraLines: PricingLine[] = (existingLines ?? [])
+    .filter((l) => l?.kind === "extra")
+    .map((l) => ({
+      kind: "extra",
+      id: l.id,
+      label: l.label,
+      qty: 1,
+      amount: +Math.max(0, Number(l.amount) || 0).toFixed(2),
+    }));
+  const total = productLines.reduce((s, l) => s + l.amount, 0);
+  const extrasTotal = extraLines.reduce((s, l) => s + l.amount, 0);
   const isRecurring = offer === "location" || offer === "leasing";
   return {
-    lines,
-    total_ht: isRecurring ? 0 : +total.toFixed(2),
+    lines: [...productLines, ...extraLines],
+    total_ht: +((isRecurring ? 0 : total) + extrasTotal).toFixed(2),
     monthly: isRecurring ? +total.toFixed(2) : 0,
   };
 }

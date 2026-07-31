@@ -29,7 +29,7 @@ type Project = {
   status?: string | null;
   selected_modules: string[] | null;
   selected_products: { product_id?: string; name: string; qty: number; unit_price: number }[] | null;
-  pricing: { lines?: { label: string; qty: number; amount: number }[]; extras?: { id: string; label: string; montant_ht: number; ordre: number }[]; total_ht?: number; monthly?: number } | null;
+  pricing: { lines?: { label: string; qty: number; amount: number; kind?: string; id?: string }[]; extras?: { id: string; label: string; montant_ht: number; ordre: number }[]; total_ht?: number; monthly?: number } | null;
   context: { contexte?: string; objectif?: string; enjeux?: string; lecture?: string } | null;
   solution: { selection?: string; deploiement?: string; suivi?: string } | null;
   scope: { fourniture?: string; livraison?: string; formation?: string; garantie?: string } | null;
@@ -631,9 +631,23 @@ export function DossierPreview({
   const solution = project?.solution ?? {};
   const scope = project?.scope ?? {};
   const products = project?.selected_products ?? [];
-  const pricing = project?.pricing ?? { lines: [], extras: [], total_ht: 0, monthly: 0 };
-  const pricingExtras = [...(pricing.extras ?? [])].sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0));
-  const pricingExtrasTotal = pricingExtras.reduce((s, e) => s + (Number(e.montant_ht) || 0), 0);
+  const pricing = project?.pricing ?? { lines: [], total_ht: 0, monthly: 0 };
+  const allLines = Array.isArray(pricing.lines) ? pricing.lines : [];
+  const productLines = allLines.filter((l) => (l as any)?.kind !== "extra");
+  // Prestations : lignes kind="extra" (+ compat legacy pricing.extras)
+  const pricingExtras =
+    allLines.filter((l) => (l as any)?.kind === "extra").map((l, i) => ({
+      id: String((l as any).id ?? `extra_${i}`),
+      label: l.label,
+      amount: Number(l.amount) || 0,
+    }));
+  const legacyExtras = pricingExtras.length
+    ? []
+    : [...(pricing.extras ?? [])]
+        .sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0))
+        .map((e, i) => ({ id: String(e.id ?? `extra_${i}`), label: e.label, amount: Number(e.montant_ht) || 0 }));
+  const quoteExtras = pricingExtras.length ? pricingExtras : legacyExtras;
+  const pricingExtrasTotal = quoteExtras.reduce((s, e) => s + (Number(e.amount) || 0), 0);
   const isRecurring = project?.offer === "location" || project?.offer === "leasing";
   const contact = brand?.contact ?? {};
   const sites = Array.isArray(contact.sites) ? contact.sites : contact.sites ? [contact.sites] : [];
@@ -982,7 +996,7 @@ export function DossierPreview({
                 pages.push(
                   <PageFrame eyebrow="Investissement" title="Tarifs & budget">
                     <div className="flex h-full flex-col gap-4">
-                      {((pricing.lines ?? []).length > 0 || pricingExtras.length > 0) && (
+                      {(productLines.length > 0 || quoteExtras.length > 0) && (
                         <div className="flex-1 overflow-auto rounded-xl border" style={{ borderColor: "rgba(0,0,0,0.08)", background: "rgba(255,255,255,0.55)" }}>
                           <table className="w-full text-left text-sm">
                             <thead>
@@ -993,18 +1007,18 @@ export function DossierPreview({
                               </tr>
                             </thead>
                             <tbody>
-                              {(pricing.lines ?? []).map((l, i) => (
-                                <tr key={i} style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
+                              {productLines.map((l, i) => (
+                                <tr key={`p-${i}`} style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
                                   <td className="px-4 py-3">{l.label}</td>
                                   <td className="px-4 py-3 text-center">{l.qty}</td>
                                   <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmtEUR(l.amount)}</td>
                                 </tr>
                               ))}
-                              {pricingExtras.map((e) => (
+                              {quoteExtras.map((e) => (
                                 <tr key={e.id} style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
                                   <td className="px-4 py-3">{e.label}</td>
                                   <td className="px-4 py-3 text-center">1</td>
-                                  <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmtEUR(Number(e.montant_ht) || 0)}</td>
+                                  <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmtEUR(Number(e.amount) || 0)}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -1013,7 +1027,7 @@ export function DossierPreview({
                       )}
                       <div className="flex items-center justify-end gap-8 rounded-xl px-6 py-4" style={{ background: DARK, color: "white" }}>
                         {(() => {
-                          const linesTotal = (pricing.lines ?? []).reduce((s, l) => s + (Number(l.amount) || 0), 0);
+                          const linesTotal = productLines.reduce((s, l) => s + (Number(l.amount) || 0), 0);
                           const totalHT = Math.max(
                             Number(pricing.total_ht ?? 0) || 0,
                             (isRecurring ? 0 : linesTotal) + pricingExtrasTotal,

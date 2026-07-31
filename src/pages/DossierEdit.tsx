@@ -83,9 +83,9 @@ type ErpArticle = {
   prix_ht: number | null;
   stock: number | null;
 };
-type PricingLine = { label: string; qty: number; amount: number };
-type PricingExtra = { id: string; label: string; montant_ht: number; ordre: number };
-type Pricing = { lines: PricingLine[]; extras?: PricingExtra[]; total_ht: number; monthly: number };
+type PricingLine = { label: string; qty: number; amount: number; kind?: string; id?: string };
+type PricingExtra = { id: string; label: string; qty: number; amount: number; kind: "extra" };
+type Pricing = { lines: PricingLine[]; total_ht: number; monthly: number };
 
 type Context = { contexte?: string; objectif?: string; enjeux?: string; lecture?: string };
 type Solution = { selection?: string; deploiement?: string; suivi?: string };
@@ -112,23 +112,54 @@ type Project = {
   share_password?: string | null;
 };
 
+/** Extrait les lignes « prestations » (kind = "extra") d'un pricing, avec compat legacy. */
+function extractExtras(pricing: any): PricingExtra[] {
+  const fromLines = (Array.isArray(pricing?.lines) ? pricing.lines : [])
+    .filter((l: any) => l?.kind === "extra")
+    .map((l: any, i: number) => ({
+      id: String(l.id ?? `extra_${i}`),
+      label: String(l.label ?? ""),
+      qty: 1,
+      amount: Math.max(0, Number(l.amount) || 0),
+      kind: "extra" as const,
+    }));
+  if (fromLines.length > 0) return fromLines;
+  // Legacy : pricing.extras = [{ id, label, montant_ht, ordre }]
+  const legacy = Array.isArray(pricing?.extras) ? [...pricing.extras] : [];
+  return legacy
+    .sort((a: any, b: any) => (a?.ordre ?? 0) - (b?.ordre ?? 0))
+    .map((e: any, i: number) => ({
+      id: String(e?.id ?? `extra_${i}`),
+      label: String(e?.label ?? ""),
+      qty: 1,
+      amount: Math.max(0, Number(e?.montant_ht) || 0),
+      kind: "extra" as const,
+    }));
+}
+
 function computePricing(
   products: SelectedProduct[],
   offer: string | null,
   extras: PricingExtra[] = [],
 ): Pricing {
-  const lines: PricingLine[] = products.map((p) => ({
+  const productLines: PricingLine[] = products.map((p) => ({
     label: p.name,
     qty: p.qty,
     amount: +(p.qty * p.unit_price).toFixed(2),
   }));
-  const total = lines.reduce((s, l) => s + l.amount, 0);
-  const sortedExtras = [...extras].sort((a, b) => a.ordre - b.ordre);
-  const extrasTotal = sortedExtras.reduce((s, e) => s + (Number(e.montant_ht) || 0), 0);
+  const total = productLines.reduce((s, l) => s + l.amount, 0);
+  const extraLines: PricingLine[] = extras.map((e) => ({
+    kind: "extra",
+    id: e.id,
+    label: e.label,
+    qty: 1,
+    amount: +(Math.max(0, Number(e.amount) || 0)).toFixed(2),
+  }));
+  const extrasTotal = extraLines.reduce((s, l) => s + l.amount, 0);
   const isRecurring = offer === "location" || offer === "leasing";
   return {
-    lines,
-    extras: sortedExtras,
+    // Produits d'abord, prestations toujours en dernière position.
+    lines: [...productLines, ...extraLines],
     total_ht: +((isRecurring ? 0 : total) + extrasTotal).toFixed(2),
     monthly: isRecurring ? +total.toFixed(2) : 0,
   };
@@ -241,7 +272,7 @@ export default function DossierEdit() {
   const onProductsChange = (next: SelectedProduct[]) => {
     setForm((f) => {
       if (!f) return f;
-      return { ...f, selected_products: next, pricing: computePricing(next, f.offer, f.pricing?.extras ?? []) };
+      return { ...f, selected_products: next, pricing: computePricing(next, f.offer, extractExtras(f.pricing)) };
     });
     setDirty(true);
   };
@@ -267,7 +298,7 @@ export default function DossierEdit() {
             : p.unit_price;
         return { ...p, unit_price: newPrice };
       });
-      return { ...f, offer: v, selected_products: nextProducts, pricing: computePricing(nextProducts, v, f.pricing?.extras ?? []) };
+      return { ...f, offer: v, selected_products: nextProducts, pricing: computePricing(nextProducts, v, extractExtras(f.pricing)) };
     });
     setDirty(true);
   };
@@ -653,15 +684,14 @@ export default function DossierEdit() {
   const totalAmount = selectedProducts.reduce((s, p) => s + p.qty * p.unit_price, 0);
 
   // --- Extras (livraison / installation) : toujours en dernière position du devis ---
-  const extras: PricingExtra[] = [...(form?.pricing?.extras ?? [])].sort((a, b) => a.ordre - b.ordre);
-  const extrasTotal = extras.reduce((s, e) => s + (Number(e.montant_ht) || 0), 0);
+  const extras: PricingExtra[] = extractExtras(form?.pricing);
+  const extrasTotal = extras.reduce((s, e) => s + (Number(e.amount) || 0), 0);
   const addExtra = (label: string) => {
     const id =
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
         : `extra_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const ordre = extras.length ? Math.max(...extras.map((e) => e.ordre)) + 1 : 1;
-    onExtrasChange([...extras, { id, label, montant_ht: 0, ordre }]);
+    onExtrasChange([...extras, { id, label, qty: 1, amount: 0, kind: "extra" }]);
   };
   const updateExtra = (id: string, patch: Partial<PricingExtra>) =>
     onExtrasChange(extras.map((e) => (e.id === id ? { ...e, ...patch } : e)));
@@ -1594,8 +1624,8 @@ export default function DossierEdit() {
                           type="number"
                           min={0}
                           step="0.01"
-                          value={e.montant_ht}
-                          onChange={(ev) => updateExtra(e.id, { montant_ht: Number(ev.target.value) || 0 })}
+                          value={e.amount}
+                          onChange={(ev) => updateExtra(e.id, { amount: Math.max(0, Number(ev.target.value) || 0) })}
                           className="h-9 w-32 text-right"
                           aria-label={`Montant HT ${e.label}`}
                         />

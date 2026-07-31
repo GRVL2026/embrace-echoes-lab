@@ -272,7 +272,7 @@ export default function DossierEdit() {
   const onProductsChange = (next: SelectedProduct[]) => {
     setForm((f) => {
       if (!f) return f;
-      return { ...f, selected_products: next, pricing: computePricing(next, f.offer, f.pricing?.extras ?? []) };
+      return { ...f, selected_products: next, pricing: computePricing(next, f.offer, extractExtras(f.pricing)) };
     });
     setDirty(true);
   };

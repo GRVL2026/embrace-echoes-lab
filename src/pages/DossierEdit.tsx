@@ -1624,8 +1624,8 @@ export default function DossierEdit() {
                           type="number"
                           min={0}
                           step="0.01"
-                          value={e.montant_ht}
-                          onChange={(ev) => updateExtra(e.id, { montant_ht: Number(ev.target.value) || 0 })}
+                          value={e.amount}
+                          onChange={(ev) => updateExtra(e.id, { amount: Math.max(0, Number(ev.target.value) || 0) })}
                           className="h-9 w-32 text-right"
                           aria-label={`Montant HT ${e.label}`}
                         />

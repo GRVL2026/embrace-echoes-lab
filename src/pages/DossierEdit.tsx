@@ -298,7 +298,7 @@ export default function DossierEdit() {
             : p.unit_price;
         return { ...p, unit_price: newPrice };
       });
-      return { ...f, offer: v, selected_products: nextProducts, pricing: computePricing(nextProducts, v, f.pricing?.extras ?? []) };
+      return { ...f, offer: v, selected_products: nextProducts, pricing: computePricing(nextProducts, v, extractExtras(f.pricing)) };
     });
     setDirty(true);
   };

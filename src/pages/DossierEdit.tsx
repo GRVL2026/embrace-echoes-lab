@@ -112,23 +112,54 @@ type Project = {
   share_password?: string | null;
 };
 
+/** Extrait les lignes « prestations » (kind = "extra") d'un pricing, avec compat legacy. */
+function extractExtras(pricing: any): PricingExtra[] {
+  const fromLines = (Array.isArray(pricing?.lines) ? pricing.lines : [])
+    .filter((l: any) => l?.kind === "extra")
+    .map((l: any, i: number) => ({
+      id: String(l.id ?? `extra_${i}`),
+      label: String(l.label ?? ""),
+      qty: 1,
+      amount: Math.max(0, Number(l.amount) || 0),
+      kind: "extra" as const,
+    }));
+  if (fromLines.length > 0) return fromLines;
+  // Legacy : pricing.extras = [{ id, label, montant_ht, ordre }]
+  const legacy = Array.isArray(pricing?.extras) ? [...pricing.extras] : [];
+  return legacy
+    .sort((a: any, b: any) => (a?.ordre ?? 0) - (b?.ordre ?? 0))
+    .map((e: any, i: number) => ({
+      id: String(e?.id ?? `extra_${i}`),
+      label: String(e?.label ?? ""),
+      qty: 1,
+      amount: Math.max(0, Number(e?.montant_ht) || 0),
+      kind: "extra" as const,
+    }));
+}
+
 function computePricing(
   products: SelectedProduct[],
   offer: string | null,
   extras: PricingExtra[] = [],
 ): Pricing {
-  const lines: PricingLine[] = products.map((p) => ({
+  const productLines: PricingLine[] = products.map((p) => ({
     label: p.name,
     qty: p.qty,
     amount: +(p.qty * p.unit_price).toFixed(2),
   }));
-  const total = lines.reduce((s, l) => s + l.amount, 0);
-  const sortedExtras = [...extras].sort((a, b) => a.ordre - b.ordre);
-  const extrasTotal = sortedExtras.reduce((s, e) => s + (Number(e.montant_ht) || 0), 0);
+  const total = productLines.reduce((s, l) => s + l.amount, 0);
+  const extraLines: PricingLine[] = extras.map((e) => ({
+    kind: "extra",
+    id: e.id,
+    label: e.label,
+    qty: 1,
+    amount: +(Math.max(0, Number(e.amount) || 0)).toFixed(2),
+  }));
+  const extrasTotal = extraLines.reduce((s, l) => s + l.amount, 0);
   const isRecurring = offer === "location" || offer === "leasing";
   return {
-    lines,
-    extras: sortedExtras,
+    // Produits d'abord, prestations toujours en dernière position.
+    lines: [...productLines, ...extraLines],
     total_ht: +((isRecurring ? 0 : total) + extrasTotal).toFixed(2),
     monthly: isRecurring ? +total.toFixed(2) : 0,
   };

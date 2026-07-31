@@ -112,17 +112,24 @@ type Project = {
   share_password?: string | null;
 };
 
-function computePricing(products: SelectedProduct[], offer: string | null): Pricing {
+function computePricing(
+  products: SelectedProduct[],
+  offer: string | null,
+  extras: PricingExtra[] = [],
+): Pricing {
   const lines: PricingLine[] = products.map((p) => ({
     label: p.name,
     qty: p.qty,
     amount: +(p.qty * p.unit_price).toFixed(2),
   }));
   const total = lines.reduce((s, l) => s + l.amount, 0);
+  const sortedExtras = [...extras].sort((a, b) => a.ordre - b.ordre);
+  const extrasTotal = sortedExtras.reduce((s, e) => s + (Number(e.montant_ht) || 0), 0);
   const isRecurring = offer === "location" || offer === "leasing";
   return {
     lines,
-    total_ht: isRecurring ? 0 : +total.toFixed(2),
+    extras: sortedExtras,
+    total_ht: +((isRecurring ? 0 : total) + extrasTotal).toFixed(2),
     monthly: isRecurring ? +total.toFixed(2) : 0,
   };
 }

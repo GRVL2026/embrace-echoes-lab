@@ -251,12 +251,19 @@ Deno.serve(async (req) => {
           });
         }
 
-        // Segment déduit de l'audience
+        // Segment déduit du nom de l'audience LGM (« Arcade OS – Loisirs / – CHR / – Retail »)
         let segment: string | null = null;
         const an = norm(audience);
         if (an.includes('loisirs')) segment = 'loisirs';
         else if (an.includes('chr')) segment = 'chr';
         else if (an.includes('retail')) segment = 'retail';
+        else {
+          console.warn(
+            `lgm-webhook: AVERTISSEMENT audience LGM inconnue "${audience ?? '(vide)'}" — segment='autre'. ` +
+              `Vérifier que l'import Sales Navigator a été fait dans « Arcade OS – Loisirs », « – CHR » ou « – Retail ».`,
+          );
+        }
+
 
         // Statut initial selon l'événement
         const mapped = mapEventToStatut(event);

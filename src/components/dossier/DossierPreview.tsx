@@ -631,9 +631,23 @@ export function DossierPreview({
   const solution = project?.solution ?? {};
   const scope = project?.scope ?? {};
   const products = project?.selected_products ?? [];
-  const pricing = project?.pricing ?? { lines: [], extras: [], total_ht: 0, monthly: 0 };
-  const pricingExtras = [...(pricing.extras ?? [])].sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0));
-  const pricingExtrasTotal = pricingExtras.reduce((s, e) => s + (Number(e.montant_ht) || 0), 0);
+  const pricing = project?.pricing ?? { lines: [], total_ht: 0, monthly: 0 };
+  const allLines = Array.isArray(pricing.lines) ? pricing.lines : [];
+  const productLines = allLines.filter((l) => (l as any)?.kind !== "extra");
+  // Prestations : lignes kind="extra" (+ compat legacy pricing.extras)
+  const pricingExtras =
+    allLines.filter((l) => (l as any)?.kind === "extra").map((l, i) => ({
+      id: String((l as any).id ?? `extra_${i}`),
+      label: l.label,
+      amount: Number(l.amount) || 0,
+    }));
+  const legacyExtras = pricingExtras.length
+    ? []
+    : [...(pricing.extras ?? [])]
+        .sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0))
+        .map((e, i) => ({ id: String(e.id ?? `extra_${i}`), label: e.label, amount: Number(e.montant_ht) || 0 }));
+  const quoteExtras = pricingExtras.length ? pricingExtras : legacyExtras;
+  const pricingExtrasTotal = quoteExtras.reduce((s, e) => s + (Number(e.amount) || 0), 0);
   const isRecurring = project?.offer === "location" || project?.offer === "leasing";
   const contact = brand?.contact ?? {};
   const sites = Array.isArray(contact.sites) ? contact.sites : contact.sites ? [contact.sites] : [];

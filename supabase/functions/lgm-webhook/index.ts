@@ -51,6 +51,26 @@ function forward(current: string, target: string): boolean {
   return ti > ci;
 }
 
+/** Comparaison à temps constant (évite les fuites par timing). */
+function timingSafeEqual(a: string, b: string): boolean {
+  const ea = new TextEncoder().encode(a);
+  const eb = new TextEncoder().encode(b);
+  // Longueurs différentes : on compare quand même pour un coût ~constant.
+  let diff = ea.length ^ eb.length;
+  const n = Math.max(ea.length, eb.length);
+  for (let i = 0; i < n; i++) {
+    diff |= (ea[i] ?? 0) ^ (eb[i] ?? 0);
+  }
+  return diff === 0;
+}
+
+function clientIp(req: Request): string | null {
+  const h = req.headers;
+  const fwd = h.get('x-forwarded-for');
+  if (fwd) return fwd.split(',')[0].trim();
+  return h.get('cf-connecting-ip') ?? h.get('x-real-ip') ?? null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -59,19 +79,33 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
     const token = url.searchParams.get('token') ?? '';
-    // Fail-closed : sans secret configuré, on refuse (la fonction crée des prospects).
+    const ip = clientIp(req);
+
+    // 1) Fail-closed : sans secret configuré, aucune écriture en base, jamais d'acceptation.
     if (!WEBHOOK_SECRET) {
-      return new Response(JSON.stringify({ error: 'webhook not configured' }), {
-        status: 401,
+      console.error('lgm-webhook: LGM_WEBHOOK_SECRET manquant');
+      return new Response(JSON.stringify({ error: 'webhook non configuré' }), {
+        status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    if (token !== WEBHOOK_SECRET) {
+
+    // 2) Token requis, comparaison à temps constant.
+    if (!token || !timingSafeEqual(token, WEBHOOK_SECRET)) {
+      const raison = token ? 'token_incorrect' : 'token_absent';
+      // 3) Journalise la tentative refusée, sans toucher au moindre prospect.
+      await admin.from('lgm_webhook_log').insert({
+        payload: { rejete: true, raison, ip, method: req.method, path: url.pathname },
+        event: 'rejected',
+        lgm_lead_id: null,
+        action: `rejete:${raison}${ip ? ` ip=${ip}` : ''}`,
+      });
       return new Response(JSON.stringify({ error: 'invalid token' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
 
     const payload = await req.json().catch(() => ({}));
 

@@ -293,7 +293,7 @@ export function DossierPreview({
   const hasSolution = nonEmpty(sol.selection) || nonEmpty(sol.deploiement) || nonEmpty(sol.suivi);
   const hasScope = nonEmpty(scp.fourniture) || nonEmpty(scp.livraison) || nonEmpty(scp.formation) || nonEmpty(scp.garantie);
   const hasProducts = Array.isArray(project?.selected_products) && (project!.selected_products!.length > 0);
-  const hasPricing = (Array.isArray(prc.lines) && prc.lines.length > 0) || (prc.total_ht ?? 0) > 0 || (prc.monthly ?? 0) > 0;
+  const hasPricing = (Array.isArray(prc.lines) && prc.lines.length > 0) || (Array.isArray(prc.extras) && prc.extras.length > 0) || (prc.total_ht ?? 0) > 0 || (prc.monthly ?? 0) > 0;
   const hasContact = !!brand;
 
   const customPagesCount =

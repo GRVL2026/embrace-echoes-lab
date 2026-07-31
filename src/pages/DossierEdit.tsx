@@ -84,7 +84,8 @@ type ErpArticle = {
   stock: number | null;
 };
 type PricingLine = { label: string; qty: number; amount: number };
-type Pricing = { lines: PricingLine[]; total_ht: number; monthly: number };
+type PricingExtra = { id: string; label: string; montant_ht: number; ordre: number };
+type Pricing = { lines: PricingLine[]; extras?: PricingExtra[]; total_ht: number; monthly: number };
 
 type Context = { contexte?: string; objectif?: string; enjeux?: string; lecture?: string };
 type Solution = { selection?: string; deploiement?: string; suivi?: string };
@@ -111,17 +112,24 @@ type Project = {
   share_password?: string | null;
 };
 
-function computePricing(products: SelectedProduct[], offer: string | null): Pricing {
+function computePricing(
+  products: SelectedProduct[],
+  offer: string | null,
+  extras: PricingExtra[] = [],
+): Pricing {
   const lines: PricingLine[] = products.map((p) => ({
     label: p.name,
     qty: p.qty,
     amount: +(p.qty * p.unit_price).toFixed(2),
   }));
   const total = lines.reduce((s, l) => s + l.amount, 0);
+  const sortedExtras = [...extras].sort((a, b) => a.ordre - b.ordre);
+  const extrasTotal = sortedExtras.reduce((s, e) => s + (Number(e.montant_ht) || 0), 0);
   const isRecurring = offer === "location" || offer === "leasing";
   return {
     lines,
-    total_ht: isRecurring ? 0 : +total.toFixed(2),
+    extras: sortedExtras,
+    total_ht: +((isRecurring ? 0 : total) + extrasTotal).toFixed(2),
     monthly: isRecurring ? +total.toFixed(2) : 0,
   };
 }
@@ -229,11 +237,18 @@ export default function DossierEdit() {
     setDirty(true);
   };
 
-  // Recompute pricing whenever products or offer change
+  // Recompute pricing whenever products, extras or offer change
   const onProductsChange = (next: SelectedProduct[]) => {
     setForm((f) => {
       if (!f) return f;
-      return { ...f, selected_products: next, pricing: computePricing(next, f.offer) };
+      return { ...f, selected_products: next, pricing: computePricing(next, f.offer, f.pricing?.extras ?? []) };
+    });
+    setDirty(true);
+  };
+  const onExtrasChange = (nextExtras: PricingExtra[]) => {
+    setForm((f) => {
+      if (!f) return f;
+      return { ...f, pricing: computePricing(f.selected_products ?? [], f.offer, nextExtras) };
     });
     setDirty(true);
   };
@@ -252,7 +267,7 @@ export default function DossierEdit() {
             : p.unit_price;
         return { ...p, unit_price: newPrice };
       });
-      return { ...f, offer: v, selected_products: nextProducts, pricing: computePricing(nextProducts, v) };
+      return { ...f, offer: v, selected_products: nextProducts, pricing: computePricing(nextProducts, v, f.pricing?.extras ?? []) };
     });
     setDirty(true);
   };
@@ -636,6 +651,21 @@ export default function DossierEdit() {
 
   const isRecurring = form?.offer === "location" || form?.offer === "leasing";
   const totalAmount = selectedProducts.reduce((s, p) => s + p.qty * p.unit_price, 0);
+
+  // --- Extras (livraison / installation) : toujours en dernière position du devis ---
+  const extras: PricingExtra[] = [...(form?.pricing?.extras ?? [])].sort((a, b) => a.ordre - b.ordre);
+  const extrasTotal = extras.reduce((s, e) => s + (Number(e.montant_ht) || 0), 0);
+  const addExtra = (label: string) => {
+    const id =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `extra_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const ordre = extras.length ? Math.max(...extras.map((e) => e.ordre)) + 1 : 1;
+    onExtrasChange([...extras, { id, label, montant_ht: 0, ordre }]);
+  };
+  const updateExtra = (id: string, patch: Partial<PricingExtra>) =>
+    onExtrasChange(extras.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+  const removeExtra = (id: string) => onExtrasChange(extras.filter((e) => e.id !== id));
 
   const contextFields: { key: keyof Context; label: string; rows?: number }[] = [
     { key: "contexte", label: "Contexte", rows: 3 },
@@ -1518,7 +1548,82 @@ export default function DossierEdit() {
                   </table>
                 </div>
               )}
+
+              {/* Extras : livraison / installation — toujours en fin de devis */}
+              <div className="space-y-3 rounded-lg border border-dashed border-border bg-muted/20 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-medium">Prestations complémentaires</div>
+                    <p className="text-xs text-muted-foreground">
+                      Optionnelles. Affichées en dernière position du devis, après les produits.
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => addExtra("Livraison")}
+                      disabled={extras.some((e) => e.label.trim().toLowerCase() === "livraison")}
+                    >
+                      <Plus className="mr-1 h-4 w-4" /> Livraison
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => addExtra("Installation")}
+                      disabled={extras.some((e) => e.label.trim().toLowerCase() === "installation")}
+                    >
+                      <Plus className="mr-1 h-4 w-4" /> Installation
+                    </Button>
+                  </div>
+                </div>
+
+                {extras.length > 0 && (
+                  <div className="space-y-2">
+                    {extras.map((e) => (
+                      <div key={e.id} className="flex flex-wrap items-center gap-2">
+                        <Input
+                          value={e.label}
+                          onChange={(ev) => updateExtra(e.id, { label: ev.target.value })}
+                          className="h-9 w-full sm:w-56"
+                          placeholder="Libellé"
+                        />
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={e.montant_ht}
+                          onChange={(ev) => updateExtra(e.id, { montant_ht: Number(ev.target.value) || 0 })}
+                          className="h-9 w-32 text-right"
+                          aria-label={`Montant HT ${e.label}`}
+                        />
+                        <span className="text-xs text-muted-foreground">€ HT</span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={() => removeExtra(e.id)}
+                          aria-label={`Retirer ${e.label}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-end gap-6 border-t border-border pt-2 text-sm">
+                      <span className="text-xs uppercase tracking-wider text-muted-foreground">
+                        Total HT (produits {isRecurring ? "mensuels exclus" : "inclus"} + prestations)
+                      </span>
+                      <span className="font-semibold tabular-nums">
+                        {((isRecurring ? 0 : totalAmount) + extrasTotal).toFixed(2)} €
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
             </section>
+
 
             {/* SECTION Périmètre */}
             <section className="mt-6 space-y-4 rounded-lg border border-border bg-card/40 p-6">

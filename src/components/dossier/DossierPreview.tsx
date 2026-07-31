@@ -29,7 +29,7 @@ type Project = {
   status?: string | null;
   selected_modules: string[] | null;
   selected_products: { product_id?: string; name: string; qty: number; unit_price: number }[] | null;
-  pricing: { lines?: { label: string; qty: number; amount: number }[]; total_ht?: number; monthly?: number } | null;
+  pricing: { lines?: { label: string; qty: number; amount: number }[]; extras?: { id: string; label: string; montant_ht: number; ordre: number }[]; total_ht?: number; monthly?: number } | null;
   context: { contexte?: string; objectif?: string; enjeux?: string; lecture?: string } | null;
   solution: { selection?: string; deploiement?: string; suivi?: string } | null;
   scope: { fourniture?: string; livraison?: string; formation?: string; garantie?: string } | null;
@@ -293,7 +293,7 @@ export function DossierPreview({
   const hasSolution = nonEmpty(sol.selection) || nonEmpty(sol.deploiement) || nonEmpty(sol.suivi);
   const hasScope = nonEmpty(scp.fourniture) || nonEmpty(scp.livraison) || nonEmpty(scp.formation) || nonEmpty(scp.garantie);
   const hasProducts = Array.isArray(project?.selected_products) && (project!.selected_products!.length > 0);
-  const hasPricing = (Array.isArray(prc.lines) && prc.lines.length > 0) || (prc.total_ht ?? 0) > 0 || (prc.monthly ?? 0) > 0;
+  const hasPricing = (Array.isArray(prc.lines) && prc.lines.length > 0) || (Array.isArray(prc.extras) && prc.extras.length > 0) || (prc.total_ht ?? 0) > 0 || (prc.monthly ?? 0) > 0;
   const hasContact = !!brand;
 
   const customPagesCount =
@@ -631,7 +631,9 @@ export function DossierPreview({
   const solution = project?.solution ?? {};
   const scope = project?.scope ?? {};
   const products = project?.selected_products ?? [];
-  const pricing = project?.pricing ?? { lines: [], total_ht: 0, monthly: 0 };
+  const pricing = project?.pricing ?? { lines: [], extras: [], total_ht: 0, monthly: 0 };
+  const pricingExtras = [...(pricing.extras ?? [])].sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0));
+  const pricingExtrasTotal = pricingExtras.reduce((s, e) => s + (Number(e.montant_ht) || 0), 0);
   const isRecurring = project?.offer === "location" || project?.offer === "leasing";
   const contact = brand?.contact ?? {};
   const sites = Array.isArray(contact.sites) ? contact.sites : contact.sites ? [contact.sites] : [];
@@ -980,7 +982,7 @@ export function DossierPreview({
                 pages.push(
                   <PageFrame eyebrow="Investissement" title="Tarifs & budget">
                     <div className="flex h-full flex-col gap-4">
-                      {(pricing.lines ?? []).length > 0 && (
+                      {((pricing.lines ?? []).length > 0 || pricingExtras.length > 0) && (
                         <div className="flex-1 overflow-auto rounded-xl border" style={{ borderColor: "rgba(0,0,0,0.08)", background: "rgba(255,255,255,0.55)" }}>
                           <table className="w-full text-left text-sm">
                             <thead>
@@ -998,17 +1000,32 @@ export function DossierPreview({
                                   <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmtEUR(l.amount)}</td>
                                 </tr>
                               ))}
+                              {pricingExtras.map((e) => (
+                                <tr key={e.id} style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
+                                  <td className="px-4 py-3">{e.label}</td>
+                                  <td className="px-4 py-3 text-center">1</td>
+                                  <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmtEUR(Number(e.montant_ht) || 0)}</td>
+                                </tr>
+                              ))}
                             </tbody>
                           </table>
                         </div>
                       )}
                       <div className="flex items-center justify-end gap-8 rounded-xl px-6 py-4" style={{ background: DARK, color: "white" }}>
-                        {(pricing.total_ht ?? 0) > 0 && (
-                          <div className="text-right">
-                            <div className="text-xs uppercase tracking-widest opacity-70">Total HT</div>
-                            <div className="font-display text-3xl font-bold" style={{ color: LIME }}>{fmtEUR(pricing.total_ht ?? 0)}</div>
-                          </div>
-                        )}
+                        {(() => {
+                          const linesTotal = (pricing.lines ?? []).reduce((s, l) => s + (Number(l.amount) || 0), 0);
+                          const totalHT = Math.max(
+                            Number(pricing.total_ht ?? 0) || 0,
+                            (isRecurring ? 0 : linesTotal) + pricingExtrasTotal,
+                          );
+                          if (totalHT <= 0) return null;
+                          return (
+                            <div className="text-right">
+                              <div className="text-xs uppercase tracking-widest opacity-70">Total HT</div>
+                              <div className="font-display text-3xl font-bold" style={{ color: LIME }}>{fmtEUR(totalHT)}</div>
+                            </div>
+                          );
+                        })()}
                         {isRecurring && (pricing.monthly ?? 0) > 0 && (
                           <div className="text-right">
                             <div className="text-xs uppercase tracking-widest opacity-70">Mensualité</div>

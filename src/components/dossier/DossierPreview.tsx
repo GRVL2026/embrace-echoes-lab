@@ -631,7 +631,9 @@ export function DossierPreview({
   const solution = project?.solution ?? {};
   const scope = project?.scope ?? {};
   const products = project?.selected_products ?? [];
-  const pricing = project?.pricing ?? { lines: [], total_ht: 0, monthly: 0 };
+  const pricing = project?.pricing ?? { lines: [], extras: [], total_ht: 0, monthly: 0 };
+  const pricingExtras = [...(pricing.extras ?? [])].sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0));
+  const pricingExtrasTotal = pricingExtras.reduce((s, e) => s + (Number(e.montant_ht) || 0), 0);
   const isRecurring = project?.offer === "location" || project?.offer === "leasing";
   const contact = brand?.contact ?? {};
   const sites = Array.isArray(contact.sites) ? contact.sites : contact.sites ? [contact.sites] : [];

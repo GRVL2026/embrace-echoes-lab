@@ -112,6 +112,32 @@ Deno.serve(async (req) => {
     const lgmLeadId = pick(payload, ['crmId', 'identityId', 'leadId', 'lead_id', 'id', 'lead.id', 'lead.leadId', 'lead._id']);
     const event = pick(payload, ['type', 'event', 'eventType', 'event_type', 'trigger', 'name']) ?? '';
 
+    // 4) Payloads de test LGM : accusé de réception, aucun effet de bord en base prospects.
+    const testMarkers = [
+      event,
+      pick(payload, ['status', 'lgm_status', 'lead.status']) ?? '',
+      pick(payload, ['audience', 'audienceName', 'lead.audience', 'lead.audienceName']) ?? '',
+      pick(payload, ['linkedin', 'linkedinUrl', 'linkedin_url', 'lead.linkedin', 'lead.linkedinUrl', 'lead.linkedin_url']) ?? '',
+    ].map(norm);
+    const isTest =
+      testMarkers.some((m) => m.includes('test_webhook') || m.includes('test webhook')) ||
+      testMarkers.some((m) => m === 'test' || m.includes('profile-for-test')) ||
+      payload?.test === true;
+
+    if (isTest) {
+      console.warn('lgm-webhook: payload de test ignoré', { event });
+      await admin.from('lgm_webhook_log').insert({
+        payload,
+        event: event || 'test',
+        lgm_lead_id: lgmLeadId,
+        action: 'test:ignore',
+      });
+      return new Response(JSON.stringify({ test: true, matched: false, created: false, message: 'test reçu' }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Log brut d'abord
     const { data: logRow } = await admin
       .from('lgm_webhook_log')
@@ -119,6 +145,7 @@ Deno.serve(async (req) => {
       .select('id')
       .single();
     const logId = logRow?.id;
+
 
     // Retrouver le prospect
     let prospect: any = null;
@@ -186,7 +213,23 @@ Deno.serve(async (req) => {
       const linkedinNew = pick(payload, ['linkedin', 'linkedinUrl', 'linkedin_url', 'lead.linkedin', 'lead.linkedinUrl', 'lead.linkedin_url']);
       const audience = pick(payload, ['audience', 'audienceName', 'lead.audience', 'lead.audienceName']);
 
-      const canCreate = !!(company || (firstName && lastName));
+      // Garde-fou miroir : crmId requis + URL LinkedIn plausible (domaine linkedin.com, pas une valeur factice).
+      const crmId = pick(payload, ['crmId']);
+      const linkedinNorm = norm(linkedinNew);
+      const linkedinOk =
+        !!linkedinNorm &&
+        linkedinNorm.includes('linkedin.com/') &&
+        !linkedinNorm.includes('test') &&
+        !linkedinNorm.includes('example');
+      const canCreate = !!crmId && linkedinOk && !!(company || (firstName && lastName));
+
+      if (!canCreate) {
+        console.warn('lgm-webhook: miroir refusé (crmId ou linkedin_url non plausible)', {
+          hasCrmId: !!crmId,
+          linkedinOk,
+        });
+      }
+
 
       if (canCreate) {
         // Dédoublonnage final avant insert (crmId + email)
@@ -208,12 +251,19 @@ Deno.serve(async (req) => {
           });
         }
 
-        // Segment déduit de l'audience
+        // Segment déduit du nom de l'audience LGM (« Arcade OS – Loisirs / – CHR / – Retail »)
         let segment: string | null = null;
         const an = norm(audience);
         if (an.includes('loisirs')) segment = 'loisirs';
         else if (an.includes('chr')) segment = 'chr';
         else if (an.includes('retail')) segment = 'retail';
+        else {
+          console.warn(
+            `lgm-webhook: AVERTISSEMENT audience LGM inconnue "${audience ?? '(vide)'}" — segment='autre'. ` +
+              `Vérifier que l'import Sales Navigator a été fait dans « Arcade OS – Loisirs », « – CHR » ou « – Retail ».`,
+          );
+        }
+
 
         // Statut initial selon l'événement
         const mapped = mapEventToStatut(event);

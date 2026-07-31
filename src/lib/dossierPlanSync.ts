@@ -28,7 +28,7 @@ export type SelectedProduct = {
   unit_price: number;
 };
 
-export type PricingLine = { label: string; qty: number; amount: number };
+export type PricingLine = { label: string; qty: number; amount: number; kind?: string; id?: string };
 export type Pricing = { lines: PricingLine[]; total_ht: number; monthly: number };
 
 /** Catégories NON plaçables (accessoires, monétique, consommables, etc.). */

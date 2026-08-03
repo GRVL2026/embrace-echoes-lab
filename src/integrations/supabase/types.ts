@@ -2100,6 +2100,7 @@ export type Database = {
           effectif: string | null
           email: string | null
           entreprise: string
+          etat_administratif: string | null
           geocode_attempts: number
           geocode_last_attempt: string | null
           geocode_source: string | null
@@ -2140,6 +2141,7 @@ export type Database = {
           effectif?: string | null
           email?: string | null
           entreprise: string
+          etat_administratif?: string | null
           geocode_attempts?: number
           geocode_last_attempt?: string | null
           geocode_source?: string | null
@@ -2180,6 +2182,7 @@ export type Database = {
           effectif?: string | null
           email?: string | null
           entreprise?: string
+          etat_administratif?: string | null
           geocode_attempts?: number
           geocode_last_attempt?: string | null
           geocode_source?: string | null

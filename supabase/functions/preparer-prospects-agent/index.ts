@@ -1,6 +1,6 @@
 // Agent semi-auto de préparation prospection.
 // - Entrées : signaux (source='signal', statut='nouveau', pret_a_envoyer=false, lgm_lead_id IS NULL).
-// - Pour chacun : enrichissement Pappers si besoin, génération d'une accroche IA (canal='message'),
+// - Pour chacun : enrichissement via API gouv (gratuit) si besoin, génération d'une accroche IA (canal='message'),
 //   passage à pret_a_envoyer=true.
 // - Authentification : x-cron-secret == CRON_SECRET  OU  utilisateur admin/direction (JWT).
 // - verify_jwt = false (voir supabase/config.toml).
@@ -10,7 +10,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { anthropicJson, isAnthropicOverload } from '../_shared/anthropic-fetch.ts';
 import { fetchCatalogSuggestions, renderSuggestionsForPrompt } from '../_shared/catalog-suggestions.ts';
-import { gouvBySiren, gouvSearch, extractEnrichissement } from '../_shared/gouv-entreprise.ts';
+import { gouvBySiren, gouvSearch, extractEnrichissement, pickUnambiguous, sleep, GOUV_RATE_LIMIT_MS } from '../_shared/gouv-entreprise.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -38,20 +38,26 @@ function jsonRes(status: number, body: unknown) {
 }
 
 async function enrichir(admin: any, p: any): Promise<Record<string, unknown>> {
-  // Double-paiement pur : la fonction "detecter-signaux" vient déjà de remplir ces champs.
-  if (p.siren && p.contact_nom) return {};
+  // API gouv gratuite : aucun crédit Pappers consommé.
+  if (p.siren && p.contact_nom && p.siret) return {};
 
   let siren: string | null = p.siren ? String(p.siren).replace(/\D/g, '').slice(0, 9) : null;
   let hit: any = null;
 
   if (siren) {
     hit = await gouvBySiren(siren);
+    if (!hit) throw new Error(`Aucune entreprise trouvée pour le SIREN ${siren} (API gouv)`);
   } else {
     if (!p.entreprise) return {};
     const q = [p.entreprise, p.ville].filter(Boolean).join(' ');
     const results = await gouvSearch(q, 5);
-    if (!results || results.length === 0) return {};
-    hit = results[0];
+    if (results === null) throw new Error('API recherche-entreprises injoignable');
+    if (results.length === 0) throw new Error(`Aucune correspondance pour "${q}"`);
+    const res = pickUnambiguous(results, p.entreprise);
+    if (res.ambiguous) {
+      throw new Error(`Enrichissement impossible : plusieurs correspondances (${res.candidats}) pour "${q}"`);
+    }
+    hit = res.hit;
     siren = String(hit?.siren ?? '').replace(/\D/g, '').slice(0, 9) || null;
   }
   if (!hit || !siren) return {};
@@ -65,13 +71,16 @@ async function enrichir(admin: any, p: any): Promise<Record<string, unknown>> {
     if (cur === null || cur === undefined || cur === '') patch[k] = nv;
   }
   if (!p.siren && enriched.siren) patch.siren = enriched.siren;
+  if (enriched.etat_administratif) patch.etat_administratif = enriched.etat_administratif;
   if (Object.keys(patch).length > 0) {
     const { error } = await admin.from('prospects').update(patch).eq('id', p.id);
     if (error) throw new Error(`Update prospect: ${error.message}`);
     Object.assign(p, patch);
   }
+  await sleep(GOUV_RATE_LIMIT_MS);
   return patch;
 }
+
 
 
 async function genererAccroche(admin: any, p: any): Promise<string> {
@@ -160,8 +169,8 @@ Deno.serve(async (req) => {
           try {
             await enrichir(admin, p);
           } catch (e) {
-            // On continue même si Pappers échoue (crédits, non trouvé…)
-            errors.push({ id: p.id, entreprise: p.entreprise, error: `Pappers: ${(e as Error).message}` });
+            // On continue même si l'API gouv échoue (indisponible, non trouvé, ambiguïté…)
+            errors.push({ id: p.id, entreprise: p.entreprise, error: `Enrichissement: ${(e as Error).message}` });
           }
         }
 

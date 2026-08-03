@@ -1719,7 +1719,7 @@ function LgmSection({
   );
 }
 
-/* -------------------- Enrichissement Pappers -------------------- */
+/* -------------------- Enrichissement entreprise (API gouv) -------------------- */
 
 function fmtEuros(n: number | null | undefined): string {
   if (n == null || Number.isNaN(Number(n))) return "—";
@@ -1741,7 +1741,7 @@ function PappersEnrichSection({
   const run = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("enrichir-prospect-pappers", {
+      const { data, error } = await supabase.functions.invoke("enrichir-prospect", {
         body: { prospect_id: prospect.id },
       });
       if (error) {
@@ -1770,7 +1770,7 @@ function PappersEnrichSection({
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Zap className="h-4 w-4 text-amber-500" />
-          <div className="text-sm font-semibold">Enrichissement Pappers</div>
+          <div className="text-sm font-semibold">Enrichissement entreprise (API gouv)</div>
         </div>
         <Button size="sm" variant={hasAny ? "outline" : "default"} onClick={run} disabled={loading}>
           {loading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
@@ -1828,7 +1828,7 @@ function PappersEnrichSection({
         </div>
       ) : (
         <div className="text-xs text-muted-foreground italic">
-          Récupère automatiquement dirigeant, SIRET, adresse, effectif, CA, activité et coordonnées depuis Pappers.
+          Récupère automatiquement dirigeant, SIRET, adresse, effectif, CA, activité et état administratif depuis l’API publique recherche-entreprises (gratuite).
         </div>
       )}
     </div>

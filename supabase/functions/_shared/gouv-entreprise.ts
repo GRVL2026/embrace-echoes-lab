@@ -3,7 +3,10 @@
 
 const API_BASE = "https://recherche-entreprises.api.gouv.fr/search";
 const UA = "ArcadeOS/1.0 (contact: dev@avranches-automatic.fr)";
-export const GOUV_RATE_LIMIT_MS = 250; // ~4 req/s (limite officielle 7 req/s)
+export const GOUV_RATE_LIMIT_MS = 550; // même espacement que gaia-entreprises (~2 req/s)
+
+export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 
 export async function gouvSearch(q: string, perPage = 5): Promise<any[] | null> {
   const url = `${API_BASE}?q=${encodeURIComponent(q)}&per_page=${perPage}`;
@@ -36,16 +39,38 @@ function joinAddr(parts: (string | null | undefined)[]): string | null {
   return s || null;
 }
 
-/** Premier dirigeant personne physique du hit gouv. */
+const ROLE_PRIORITY = ["president", "gerant", "gérant", "directeur"];
+
+function roleScore(qualite: string): number {
+  const q = qualite.toLowerCase();
+  for (let i = 0; i < ROLE_PRIORITY.length; i++) {
+    if (q.includes(ROLE_PRIORITY[i].normalize("NFD").replace(/[\u0300-\u036f]/g, ""))
+      || q.includes(ROLE_PRIORITY[i])) return i;
+  }
+  return ROLE_PRIORITY.length;
+}
+
+/** Dirigeant personne physique, en privilégiant président / gérant / directeur. Nom = « Prénom NOM ». */
 export function extractDirigeantPP(hit: any): { nom: string | null; role: string | null } {
   const dl = Array.isArray(hit?.dirigeants) ? hit.dirigeants : [];
-  const pp = dl.find((d: any) => {
+  const pps = dl.filter((d: any) => {
     const t = String(d?.type_dirigeant ?? "").toLowerCase();
-    return t === "personne physique" || t.includes("physique");
-  }) ?? dl[0];
+    return t === "" || t === "personne physique" || t.includes("physique");
+  });
+  const pool = pps.length > 0 ? pps : dl;
+  const pp = [...pool].sort(
+    (a: any, b: any) =>
+      roleScore(String(a?.qualite ?? a?.fonction ?? "")) -
+      roleScore(String(b?.qualite ?? b?.fonction ?? "")),
+  )[0];
   if (!pp) return { nom: null, role: null };
-  const prenom = String(pp.prenoms ?? pp.prenom ?? "").trim();
-  const nom = String(pp.nom ?? "").trim();
+  const prenomRaw = String(pp.prenoms ?? pp.prenom ?? "").trim();
+  const prenom = prenomRaw
+    .split(/[\s,]+/)
+    .filter(Boolean)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+    .join(" ");
+  const nom = String(pp.nom ?? "").trim().toUpperCase();
   const full = [prenom, nom].filter(Boolean).join(" ").trim() || null;
   const role = pp.qualite ?? pp.fonction ?? null;
   return { nom: full, role: role ? String(role) : null };
@@ -63,6 +88,16 @@ function extractLatestCA(hit: any): number | null {
   return null;
 }
 
+/** État administratif normalisé : "actif" / "cesse". */
+export function extractEtatAdministratif(hit: any): string | null {
+  const raw = String(hit?.etat_administratif ?? hit?.siege?.etat_administratif ?? "").trim();
+  if (!raw) return null;
+  const c = raw.toUpperCase();
+  if (c === "A" || c.startsWith("ACTIF")) return "actif";
+  if (c === "C" || c.startsWith("CESS")) return "cesse";
+  return raw;
+}
+
 /** Mapping "enrichissement prospect" (mêmes clés que l'ancien wrapper Pappers). */
 export function extractEnrichissement(hit: any) {
   const s = hit?.siege ?? {};
@@ -77,6 +112,7 @@ export function extractEnrichissement(hit: any) {
     effectif: pick<string>(hit?.tranche_effectif_salarie),
     ca_annuel: extractLatestCA(hit),
     activite: pick<string>(hit?.libelle_activite_principale),
+    etat_administratif: extractEtatAdministratif(hit),
     // L'API gouv ne fournit ni téléphone ni site web publics — champs laissés nuls.
     telephone: null,
     site_web: null,
@@ -84,6 +120,26 @@ export function extractEnrichissement(hit: any) {
     contact_role: dir.role,
   };
 }
+
+/**
+ * Recherche par nom (+ ville) avec détection d'ambiguïté.
+ * Renvoie unique:false si plusieurs SIREN plausibles correspondent au nom.
+ */
+export function pickUnambiguous(
+  results: any[],
+  nom: string,
+): { hit: any | null; ambiguous: boolean; candidats: number } {
+  const norm = (v: string) =>
+    v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const target = norm(nom);
+  const exact = results.filter((r) => norm(String(r?.nom_complet ?? r?.nom_raison_sociale ?? "")) === target);
+  const pool = exact.length > 0 ? exact : results;
+  const sirens = new Set(pool.map((r) => String(r?.siren ?? "")));
+  if (pool.length === 0) return { hit: null, ambiguous: false, candidats: 0 };
+  if (sirens.size > 1) return { hit: null, ambiguous: true, candidats: sirens.size };
+  return { hit: pool[0], ambiguous: false, candidats: 1 };
+}
+
 
 /** Mapping bilans (compatible avec le format existant : capitaux_propres/effectif = null). */
 export function extractBilans(hit: any): { comptes_publies: boolean; bilans: any[] } {

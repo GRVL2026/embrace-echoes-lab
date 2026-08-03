@@ -21,11 +21,14 @@ const NAF_MAP: { code: string; segment: Segment; libelle: string }[] = [
   { code: '47.65Z', segment: 'retail',  libelle: 'commerce de détail de jeux et jouets' },
 ];
 
-const MAX_INSERT = 40;
-const PER_PAGE = 20;
-const MAX_PAGES_PER_NAF = 2; // sortie anticipée si page non pleine
+const MAX_INSERT = 300;              // plafond par exécution (hebdomadaire)
+const PER_PAGE = 50;
+const MAX_PAGES_PER_NAF = 8;         // pagination : jusqu'à 400 résultats / NAF
+const HARD_FLOOR_DAYS = 60;          // ne jamais remonter plus de 60 jours
+const OVERLAP_DAYS = 1;              // recouvrement de sécurité
 const API = 'https://api.pappers.fr/v2/recherche';
-const LAST_RUN_KEY = 'signaux_last_run';
+const LAST_RUN_KEY = 'signaux_last_run';                 // fallback global (legacy)
+const lastRunKeyForNaf = (code: string) => `signaux_last_run:${code}`;
 
 function j(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {

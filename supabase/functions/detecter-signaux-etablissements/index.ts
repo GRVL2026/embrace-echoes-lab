@@ -276,12 +276,22 @@ Deno.serve(async (req) => {
           knownPair.add(pairKey);
           if (examples.length < 5) examples.push(nom);
 
-          if (toInsert.length >= MAX_INSERT) break outer;
+          if (toInsert.length >= MAX_INSERT) { capReached = true; break outer; }
         }
         // Page non pleine ⇒ plus rien à lire pour ce NAF
         if (results.length < PER_PAGE) break;
+        if (page === MAX_PAGES_PER_NAF && nafTotal !== null && nafTotal > nafSeen) {
+          const msg = `plafond atteint (pagination ${naf.code}), ${nafTotal - nafSeen} résultats non récupérés`;
+          truncations.push(msg);
+          console.warn(msg);
+        }
       }
-      if (nafHadSuccess) napiOk++;
+      if (nafHadSuccess) { napiOk++; nafOkCodes.push(naf.code); }
+    }
+    if (capReached) {
+      const msg = `plafond atteint (${MAX_INSERT} nouveaux prospects), résultats restants non récupérés — relancer la détection`;
+      truncations.push(msg);
+      console.warn(msg);
     }
 
     if (napiOk === 0 && apiErrors.length > 0 && !quotaHit) {

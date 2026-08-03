@@ -158,18 +158,10 @@ Deno.serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    // Fenêtre incrémentale : max(dernier_run - 1 jour, aujourd'hui - 30 jours)
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
-    const hardFloor = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
-    let cutoff = hardFloor;
-    const lastRun = await loadLastRun(admin);
-    if (lastRun) {
-      const lr = new Date(lastRun + 'T00:00:00Z');
-      lr.setUTCDate(lr.getUTCDate() - 1); // recouvrement d'1 jour
-      if (lr > cutoff) cutoff = lr;
-    }
-    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    // Fallback global (avant la bascule par NAF)
+    const globalLastRun = await loadConfig(admin, LAST_RUN_KEY);
 
     // Prospects déjà connus
     const { data: existing } = await admin
@@ -186,15 +178,24 @@ Deno.serve(async (req) => {
     const toInsert: any[] = [];
     const examples: string[] = [];
     const apiErrors: { naf: string; page: number; status: number; message: string; body?: string }[] = [];
+    const windows: { naf: string; from: string; to: string }[] = [];
+    const truncations: string[] = [];
     let scanned = 0;
     let napiOk = 0;
     let quotaHit = false;
+    let capReached = false;
 
     outer:
     for (const naf of NAF_MAP) {
       let nafHadSuccess = false;
+      const nafLastRun = (await loadConfig(admin, lastRunKeyForNaf(naf.code))) ?? globalLastRun;
+      const cutoffStr = computeCutoff(nafLastRun, now);
+      windows.push({ naf: naf.code, from: cutoffStr, to: today });
+      let nafTotal: number | null = null;
+      let nafSeen = 0;
+
       for (let page = 1; page <= MAX_PAGES_PER_NAF; page++) {
-        if (toInsert.length >= MAX_INSERT) break outer;
+        if (toInsert.length >= MAX_INSERT) { capReached = true; break outer; }
 
         // Réserver 2 crédits Pappers avant l'appel /v2/recherche
         const quota = await reservePappersCredits(admin, 'recherche');

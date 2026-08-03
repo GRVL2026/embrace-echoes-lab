@@ -169,8 +169,8 @@ Deno.serve(async (req) => {
           try {
             await enrichir(admin, p);
           } catch (e) {
-            // On continue même si Pappers échoue (crédits, non trouvé…)
-            errors.push({ id: p.id, entreprise: p.entreprise, error: `Pappers: ${(e as Error).message}` });
+            // On continue même si l'API gouv échoue (indisponible, non trouvé, ambiguïté…)
+            errors.push({ id: p.id, entreprise: p.entreprise, error: `Enrichissement: ${(e as Error).message}` });
           }
         }
 

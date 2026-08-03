@@ -181,6 +181,7 @@ Deno.serve(async (req) => {
     const windows: { naf: string; from: string; to: string }[] = [];
     const truncations: string[] = [];
     const nafOkCodes: string[] = [];
+    const truncatedNafs = new Set<string>();
     let scanned = 0;
     let napiOk = 0;
     let quotaHit = false;
@@ -283,6 +284,7 @@ Deno.serve(async (req) => {
         if (page === MAX_PAGES_PER_NAF && nafTotal !== null && nafTotal > nafSeen) {
           const msg = `plafond atteint (pagination ${naf.code}), ${nafTotal - nafSeen} résultats non récupérés`;
           truncations.push(msg);
+          truncatedNafs.add(naf.code);
           console.warn(msg);
         }
       }
@@ -317,8 +319,15 @@ Deno.serve(async (req) => {
       inserted = ins?.length ?? 0;
     }
 
-    // Marquer le run comme réussi seulement si au moins un NAF a répondu correctement
-    if (napiOk > 0) await saveLastRun(admin, today);
+    // Curseur incrémental : n'avancer QUE pour les NAF entièrement parcourus.
+    // Si un NAF a été tronqué (pagination ou plafond global), on garde l'ancien
+    // curseur pour que la prochaine exécution rattrape la période.
+    if (!capReached) {
+      for (const code of nafOkCodes) {
+        if (truncatedNafs.has(code)) continue;
+        await saveConfig(admin, lastRunKeyForNaf(code), today);
+      }
+    }
 
     const usedNow = await getPappersUsage(admin);
     return j(200, {
@@ -327,8 +336,11 @@ Deno.serve(async (req) => {
       exemples: examples,
       apiErrors,
       napi_ok: napiOk,
-      window_from: cutoffStr,
+      windows,
       window_to: today,
+      truncations,
+      cap_reached: capReached,
+      max_insert: MAX_INSERT,
       pappers_credits_used: usedNow,
       pappers_credits_cap: PAPPERS_MONTHLY_CAP,
       quota_hit: quotaHit,

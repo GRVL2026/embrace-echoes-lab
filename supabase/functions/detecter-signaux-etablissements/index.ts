@@ -180,6 +180,7 @@ Deno.serve(async (req) => {
     const apiErrors: { naf: string; page: number; status: number; message: string; body?: string }[] = [];
     const windows: { naf: string; from: string; to: string }[] = [];
     const truncations: string[] = [];
+    const nafOkCodes: string[] = [];
     let scanned = 0;
     let napiOk = 0;
     let quotaHit = false;

@@ -123,14 +123,30 @@ async function fetchDirigeant(siren: string): Promise<{ nom: string | null; role
   }
 }
 
-async function loadLastRun(admin: any): Promise<string | null> {
-  const { data } = await admin.from('gaia_config').select('value').eq('key', LAST_RUN_KEY).maybeSingle();
+async function loadConfig(admin: any, key: string): Promise<string | null> {
+  const { data } = await admin.from('gaia_config').select('value').eq('key', key).maybeSingle();
   const v = (data as any)?.value;
   if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
   return null;
 }
-async function saveLastRun(admin: any, iso: string) {
-  await admin.from('gaia_config').upsert({ key: LAST_RUN_KEY, value: iso }, { onConflict: 'key' });
+async function saveConfig(admin: any, key: string, iso: string) {
+  await admin.from('gaia_config').upsert({ key, value: iso }, { onConflict: 'key' });
+}
+
+/**
+ * Fenêtre incrémentale : part de la dernière exécution RÉUSSIE (par code NAF),
+ * avec recouvrement d'1 jour et plafond de sécurité à 60 jours.
+ * Si une exécution échoue, la suivante rattrape la période manquée.
+ */
+function computeCutoff(lastRun: string | null, now: Date): string {
+  const floor = new Date(now.getTime() - HARD_FLOOR_DAYS * 24 * 3600 * 1000);
+  let cutoff = floor;
+  if (lastRun) {
+    const lr = new Date(lastRun + 'T00:00:00Z');
+    lr.setUTCDate(lr.getUTCDate() - OVERLAP_DAYS);
+    if (lr > cutoff) cutoff = lr;
+  }
+  return cutoff.toISOString().slice(0, 10);
 }
 
 Deno.serve(async (req) => {

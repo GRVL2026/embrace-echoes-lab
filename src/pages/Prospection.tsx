@@ -1828,7 +1828,7 @@ function PappersEnrichSection({
         </div>
       ) : (
         <div className="text-xs text-muted-foreground italic">
-          Récupère automatiquement dirigeant, SIRET, adresse, effectif, CA, activité et coordonnées depuis Pappers.
+          Récupère automatiquement dirigeant, SIRET, adresse, effectif, CA, activité et état administratif depuis l’API publique recherche-entreprises (gratuite).
         </div>
       )}
     </div>

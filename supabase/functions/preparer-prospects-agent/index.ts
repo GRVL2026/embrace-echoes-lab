@@ -1,6 +1,6 @@
 // Agent semi-auto de préparation prospection.
 // - Entrées : signaux (source='signal', statut='nouveau', pret_a_envoyer=false, lgm_lead_id IS NULL).
-// - Pour chacun : enrichissement Pappers si besoin, génération d'une accroche IA (canal='message'),
+// - Pour chacun : enrichissement via API gouv (gratuit) si besoin, génération d'une accroche IA (canal='message'),
 //   passage à pret_a_envoyer=true.
 // - Authentification : x-cron-secret == CRON_SECRET  OU  utilisateur admin/direction (JWT).
 // - verify_jwt = false (voir supabase/config.toml).

@@ -229,7 +229,9 @@ Deno.serve(async (req) => {
         }
         nafHadSuccess = true;
         const data = res.data;
+        if (typeof data?.total === 'number') nafTotal = data.total;
         const results: any[] = Array.isArray(data.resultats) ? data.resultats : [];
+        nafSeen += results.length;
         if (results.length === 0) break;
 
         for (const r of results) {

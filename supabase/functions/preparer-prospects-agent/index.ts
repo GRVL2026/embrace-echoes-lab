@@ -38,20 +38,26 @@ function jsonRes(status: number, body: unknown) {
 }
 
 async function enrichir(admin: any, p: any): Promise<Record<string, unknown>> {
-  // Double-paiement pur : la fonction "detecter-signaux" vient déjà de remplir ces champs.
-  if (p.siren && p.contact_nom) return {};
+  // API gouv gratuite : aucun crédit Pappers consommé.
+  if (p.siren && p.contact_nom && p.siret) return {};
 
   let siren: string | null = p.siren ? String(p.siren).replace(/\D/g, '').slice(0, 9) : null;
   let hit: any = null;
 
   if (siren) {
     hit = await gouvBySiren(siren);
+    if (!hit) throw new Error(`Aucune entreprise trouvée pour le SIREN ${siren} (API gouv)`);
   } else {
     if (!p.entreprise) return {};
     const q = [p.entreprise, p.ville].filter(Boolean).join(' ');
     const results = await gouvSearch(q, 5);
-    if (!results || results.length === 0) return {};
-    hit = results[0];
+    if (results === null) throw new Error('API recherche-entreprises injoignable');
+    if (results.length === 0) throw new Error(`Aucune correspondance pour "${q}"`);
+    const res = pickUnambiguous(results, p.entreprise);
+    if (res.ambiguous) {
+      throw new Error(`Enrichissement impossible : plusieurs correspondances (${res.candidats}) pour "${q}"`);
+    }
+    hit = res.hit;
     siren = String(hit?.siren ?? '').replace(/\D/g, '').slice(0, 9) || null;
   }
   if (!hit || !siren) return {};
@@ -65,13 +71,16 @@ async function enrichir(admin: any, p: any): Promise<Record<string, unknown>> {
     if (cur === null || cur === undefined || cur === '') patch[k] = nv;
   }
   if (!p.siren && enriched.siren) patch.siren = enriched.siren;
+  if (enriched.etat_administratif) patch.etat_administratif = enriched.etat_administratif;
   if (Object.keys(patch).length > 0) {
     const { error } = await admin.from('prospects').update(patch).eq('id', p.id);
     if (error) throw new Error(`Update prospect: ${error.message}`);
     Object.assign(p, patch);
   }
+  await sleep(GOUV_RATE_LIMIT_MS);
   return patch;
 }
+
 
 
 async function genererAccroche(admin: any, p: any): Promise<string> {

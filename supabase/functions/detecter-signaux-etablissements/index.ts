@@ -21,11 +21,14 @@ const NAF_MAP: { code: string; segment: Segment; libelle: string }[] = [
   { code: '47.65Z', segment: 'retail',  libelle: 'commerce de détail de jeux et jouets' },
 ];
 
-const MAX_INSERT = 40;
-const PER_PAGE = 20;
-const MAX_PAGES_PER_NAF = 2; // sortie anticipée si page non pleine
+const MAX_INSERT = 300;              // plafond par exécution (hebdomadaire)
+const PER_PAGE = 50;
+const MAX_PAGES_PER_NAF = 8;         // pagination : jusqu'à 400 résultats / NAF
+const HARD_FLOOR_DAYS = 60;          // ne jamais remonter plus de 60 jours
+const OVERLAP_DAYS = 1;              // recouvrement de sécurité
 const API = 'https://api.pappers.fr/v2/recherche';
-const LAST_RUN_KEY = 'signaux_last_run';
+const LAST_RUN_KEY = 'signaux_last_run';                 // fallback global (legacy)
+const lastRunKeyForNaf = (code: string) => `signaux_last_run:${code}`;
 
 function j(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -120,14 +123,30 @@ async function fetchDirigeant(siren: string): Promise<{ nom: string | null; role
   }
 }
 
-async function loadLastRun(admin: any): Promise<string | null> {
-  const { data } = await admin.from('gaia_config').select('value').eq('key', LAST_RUN_KEY).maybeSingle();
+async function loadConfig(admin: any, key: string): Promise<string | null> {
+  const { data } = await admin.from('gaia_config').select('value').eq('key', key).maybeSingle();
   const v = (data as any)?.value;
   if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
   return null;
 }
-async function saveLastRun(admin: any, iso: string) {
-  await admin.from('gaia_config').upsert({ key: LAST_RUN_KEY, value: iso }, { onConflict: 'key' });
+async function saveConfig(admin: any, key: string, iso: string) {
+  await admin.from('gaia_config').upsert({ key, value: iso }, { onConflict: 'key' });
+}
+
+/**
+ * Fenêtre incrémentale : part de la dernière exécution RÉUSSIE (par code NAF),
+ * avec recouvrement d'1 jour et plafond de sécurité à 60 jours.
+ * Si une exécution échoue, la suivante rattrape la période manquée.
+ */
+function computeCutoff(lastRun: string | null, now: Date): string {
+  const floor = new Date(now.getTime() - HARD_FLOOR_DAYS * 24 * 3600 * 1000);
+  let cutoff = floor;
+  if (lastRun) {
+    const lr = new Date(lastRun + 'T00:00:00Z');
+    lr.setUTCDate(lr.getUTCDate() - OVERLAP_DAYS);
+    if (lr > cutoff) cutoff = lr;
+  }
+  return cutoff.toISOString().slice(0, 10);
 }
 
 Deno.serve(async (req) => {
@@ -139,18 +158,10 @@ Deno.serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    // Fenêtre incrémentale : max(dernier_run - 1 jour, aujourd'hui - 30 jours)
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
-    const hardFloor = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
-    let cutoff = hardFloor;
-    const lastRun = await loadLastRun(admin);
-    if (lastRun) {
-      const lr = new Date(lastRun + 'T00:00:00Z');
-      lr.setUTCDate(lr.getUTCDate() - 1); // recouvrement d'1 jour
-      if (lr > cutoff) cutoff = lr;
-    }
-    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    // Fallback global (avant la bascule par NAF)
+    const globalLastRun = await loadConfig(admin, LAST_RUN_KEY);
 
     // Prospects déjà connus
     const { data: existing } = await admin
@@ -167,15 +178,26 @@ Deno.serve(async (req) => {
     const toInsert: any[] = [];
     const examples: string[] = [];
     const apiErrors: { naf: string; page: number; status: number; message: string; body?: string }[] = [];
+    const windows: { naf: string; from: string; to: string }[] = [];
+    const truncations: string[] = [];
+    const nafOkCodes: string[] = [];
+    const truncatedNafs = new Set<string>();
     let scanned = 0;
     let napiOk = 0;
     let quotaHit = false;
+    let capReached = false;
 
     outer:
     for (const naf of NAF_MAP) {
       let nafHadSuccess = false;
+      const nafLastRun = (await loadConfig(admin, lastRunKeyForNaf(naf.code))) ?? globalLastRun;
+      const cutoffStr = computeCutoff(nafLastRun, now);
+      windows.push({ naf: naf.code, from: cutoffStr, to: today });
+      let nafTotal: number | null = null;
+      let nafSeen = 0;
+
       for (let page = 1; page <= MAX_PAGES_PER_NAF; page++) {
-        if (toInsert.length >= MAX_INSERT) break outer;
+        if (toInsert.length >= MAX_INSERT) { capReached = true; break outer; }
 
         // Réserver 2 crédits Pappers avant l'appel /v2/recherche
         const quota = await reservePappersCredits(admin, 'recherche');
@@ -208,7 +230,9 @@ Deno.serve(async (req) => {
         }
         nafHadSuccess = true;
         const data = res.data;
+        if (typeof data?.total === 'number') nafTotal = data.total;
         const results: any[] = Array.isArray(data.resultats) ? data.resultats : [];
+        nafSeen += results.length;
         if (results.length === 0) break;
 
         for (const r of results) {
@@ -253,12 +277,23 @@ Deno.serve(async (req) => {
           knownPair.add(pairKey);
           if (examples.length < 5) examples.push(nom);
 
-          if (toInsert.length >= MAX_INSERT) break outer;
+          if (toInsert.length >= MAX_INSERT) { capReached = true; break outer; }
         }
         // Page non pleine ⇒ plus rien à lire pour ce NAF
         if (results.length < PER_PAGE) break;
+        if (page === MAX_PAGES_PER_NAF && nafTotal !== null && nafTotal > nafSeen) {
+          const msg = `plafond atteint (pagination ${naf.code}), ${nafTotal - nafSeen} résultats non récupérés`;
+          truncations.push(msg);
+          truncatedNafs.add(naf.code);
+          console.warn(msg);
+        }
       }
-      if (nafHadSuccess) napiOk++;
+      if (nafHadSuccess) { napiOk++; nafOkCodes.push(naf.code); }
+    }
+    if (capReached) {
+      const msg = `plafond atteint (${MAX_INSERT} nouveaux prospects), résultats restants non récupérés — relancer la détection`;
+      truncations.push(msg);
+      console.warn(msg);
     }
 
     if (napiOk === 0 && apiErrors.length > 0 && !quotaHit) {
@@ -284,8 +319,15 @@ Deno.serve(async (req) => {
       inserted = ins?.length ?? 0;
     }
 
-    // Marquer le run comme réussi seulement si au moins un NAF a répondu correctement
-    if (napiOk > 0) await saveLastRun(admin, today);
+    // Curseur incrémental : n'avancer QUE pour les NAF entièrement parcourus.
+    // Si un NAF a été tronqué (pagination ou plafond global), on garde l'ancien
+    // curseur pour que la prochaine exécution rattrape la période.
+    if (!capReached) {
+      for (const code of nafOkCodes) {
+        if (truncatedNafs.has(code)) continue;
+        await saveConfig(admin, lastRunKeyForNaf(code), today);
+      }
+    }
 
     const usedNow = await getPappersUsage(admin);
     return j(200, {
@@ -294,8 +336,11 @@ Deno.serve(async (req) => {
       exemples: examples,
       apiErrors,
       napi_ok: napiOk,
-      window_from: cutoffStr,
+      windows,
       window_to: today,
+      truncations,
+      cap_reached: capReached,
+      max_insert: MAX_INSERT,
       pappers_credits_used: usedNow,
       pappers_credits_cap: PAPPERS_MONTHLY_CAP,
       quota_hit: quotaHit,

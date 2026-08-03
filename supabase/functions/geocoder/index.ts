@@ -20,6 +20,58 @@ const MICRO_TERRITOIRES = ['LU', 'MT', 'SM', 'HK', 'MO', 'SG', 'GG'];
 const BAN_COUNTRIES = ['FR', 'RE', 'GP', 'MQ', 'GF', 'YT'];
 const NOMINATIM_UA = 'Arcade OS - Avranches Automatic (leopaul@avranchesautomatic.com)';
 
+// --- Contrôle de cohérence code postal <-> coordonnées ---
+// La BAN renvoie parfois un point à l'autre bout du monde (constaté : LE MANS placé en
+// Guadeloupe, MONACO 98000 confondu avec les 988xx de Nouvelle-Calédonie). Un simple cadre
+// « France métropolitaine » ne suffit pas : il rejetterait les DOM-COM, correctement placés.
+// On compare donc le point obtenu à la zone attendue d'après le code postal.
+type Box = [latMin: number, latMax: number, lngMin: number, lngMax: number];
+
+const BOX_METROPOLE: Box = [41.3, 51.2, -5.2, 9.6];
+
+const ZONES_FR: Array<{ nom: string; prefixe: (cp: string) => boolean; box: Box }> = [
+  // ⚠️ 970xx/971xx couvrent la Guadeloupe MAIS AUSSI Saint-Martin (97150, CEDEX 97071) et
+  // Saint-Barthélemy (97133). Les codes 977/978 sont des codes INSEE, pas des codes postaux :
+  // les utiliser ici rejetterait à tort des clients correctement géocodés (cas vérifié en base).
+  // D'où une zone unique, volontairement large, pour les Antilles françaises du Nord.
+  { nom: 'Guadeloupe / Saint-Martin / Saint-Barthélemy', prefixe: cp => cp.startsWith('970') || cp.startsWith('971'), box: [15.8, 18.2, -63.2, -60.9] },
+  { nom: 'Martinique', prefixe: cp => cp.startsWith('972'), box: [14.3, 15.0, -61.3, -60.7] },
+  { nom: 'Guyane', prefixe: cp => cp.startsWith('973'), box: [2.0, 6.0, -55.0, -51.5] },
+  { nom: 'La Réunion', prefixe: cp => cp.startsWith('974'), box: [-21.5, -20.8, 55.1, 55.9] },
+  { nom: 'Saint-Pierre-et-Miquelon', prefixe: cp => cp.startsWith('975'), box: [46.7, 47.2, -56.5, -56.1] },
+  { nom: 'Mayotte', prefixe: cp => cp.startsWith('976'), box: [-13.1, -12.6, 45.0, 45.3] },
+  { nom: 'Monaco', prefixe: cp => cp === '98000', box: [43.7, 43.8, 7.3, 7.5] },
+  { nom: 'Wallis-et-Futuna', prefixe: cp => cp.startsWith('986'), box: [-14.4, -13.2, -178.2, -176.1] },
+  { nom: 'Polynésie française', prefixe: cp => cp.startsWith('987'), box: [-28.0, -7.0, -155.0, -134.0] },
+  { nom: 'Nouvelle-Calédonie', prefixe: cp => cp.startsWith('988'), box: [-22.8, -19.5, 163.5, 168.2] },
+];
+
+function dansBox(lat: number, lng: number, [latMin, latMax, lngMin, lngMax]: Box): boolean {
+  return lat >= latMin && lat <= latMax && lng >= lngMin && lng <= lngMax;
+}
+
+// Coordonnées manifestement inutilisables, quel que soit le pays.
+function coordAberrante(lat: number, lng: number): boolean {
+  if (!isFinite(lat) || !isFinite(lng)) return true;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return true;
+  if (lat === 0 && lng === 0) return true; // « point zéro » au large du golfe de Guinée
+  return false;
+}
+
+// Vérifie qu'un point français tombe bien dans la zone attendue par son code postal.
+// Sans code postal exploitable, on se contente d'exiger une zone française quelconque.
+function coordCoherente(lat: number, lng: number, codePostal: string): { ok: boolean; zone: string } {
+  if (coordAberrante(lat, lng)) return { ok: false, zone: 'coordonnée aberrante' };
+  const cp = (codePostal ?? '').replace(/\D/g, '');
+  if (cp.length >= 5) {
+    const zone = ZONES_FR.find(z => z.prefixe(cp));
+    if (zone) return { ok: dansBox(lat, lng, zone.box), zone: zone.nom };
+    return { ok: dansBox(lat, lng, BOX_METROPOLE), zone: 'France métropolitaine' };
+  }
+  const ok = dansBox(lat, lng, BOX_METROPOLE) || ZONES_FR.some(z => dansBox(lat, lng, z.box));
+  return { ok, zone: 'territoire français (code postal absent)' };
+}
+
 function csvEscape(s: string): string {
   const v = (s ?? '').replace(/"/g, '""');
   return `"${v}"`;
@@ -63,7 +115,7 @@ async function geocodeBatch(rows: Array<{ id: string; adresse: string }>): Promi
     const lat = parseFloat(parts[iLat] || '');
     const lng = parseFloat(parts[iLng] || '');
     const score = parseFloat(parts[iScore] || '0');
-    if (id && isFinite(lat) && isFinite(lng) && score >= MIN_SCORE) {
+    if (id && !coordAberrante(lat, lng) && score >= MIN_SCORE) {
       out.set(id, { lat, lng, score });
     }
   }
@@ -97,7 +149,7 @@ function banFilter(): string {
   return parts.join(',');
 }
 
-async function geocodeClients(): Promise<{ scanned: number; geocoded: number }> {
+async function geocodeClients(): Promise<{ scanned: number; geocoded: number; rejetes_incoherents: number }> {
   const { data, error } = await admin
     .from('gaia_clients')
     .select('customer_id, adresse1, code_postal, ville, pays, geocode_attempts')
@@ -107,16 +159,19 @@ async function geocodeClients(): Promise<{ scanned: number; geocoded: number }> 
   if (error) throw error;
 
   const attempts = new Map<string, number>();
+  const codesPostaux = new Map<string, string>();
   const rows = (data || [])
     .map((r: any) => {
       const parts = [r.adresse1, r.code_postal, r.ville].map((s: any) => (s ?? '').toString().trim()).filter(Boolean);
       const adresse = parts.join(' ');
       attempts.set(String(r.customer_id), Number(r.geocode_attempts) || 0);
+      codesPostaux.set(String(r.customer_id), (r.code_postal ?? '').toString());
       return { id: String(r.customer_id), adresse };
     })
     .filter(r => r.adresse.length >= 5);
 
   let geocoded = 0;
+  let rejetes = 0;
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
     const chunk = rows.slice(i, i + BATCH_SIZE);
     const map = await geocodeBatch(chunk);
@@ -124,14 +179,25 @@ async function geocodeClients(): Promise<{ scanned: number; geocoded: number }> 
     // Update en batch : on itère (pas d'upsert bulk facile ici)
     const updates = chunk.map(r => {
       const v = map.get(r.id);
-      return v
-        ? admin.from('gaia_clients').update({ lat: v.lat, lng: v.lng, geocoded_at: now, geocode_source: 'ban' }).eq('customer_id', r.id)
-        : admin.from('gaia_clients').update({ geocode_attempts: (attempts.get(r.id) ?? 0) + 1, geocode_last_attempt: now }).eq('customer_id', r.id);
+      const echec = () => admin.from('gaia_clients')
+        .update({ geocode_attempts: (attempts.get(r.id) ?? 0) + 1, geocode_last_attempt: now })
+        .eq('customer_id', r.id);
+      if (!v) return echec();
+      // Garde-fou : ne jamais écrire un point incohérent avec le code postal.
+      const { ok, zone } = coordCoherente(v.lat, v.lng, codesPostaux.get(r.id) ?? '');
+      if (!ok) {
+        rejetes++;
+        console.warn(`Coordonnées incohérentes ignorées — client ${r.id} : ${v.lat},${v.lng} hors ${zone} (CP « ${codesPostaux.get(r.id) ?? ''} », adresse « ${r.adresse} »)`);
+        return echec();
+      }
+      geocoded++;
+      return admin.from('gaia_clients')
+        .update({ lat: v.lat, lng: v.lng, geocoded_at: now, geocode_source: 'ban' })
+        .eq('customer_id', r.id);
     });
     await Promise.all(updates);
-    geocoded += map.size;
   }
-  return { scanned: rows.length, geocoded };
+  return { scanned: rows.length, geocoded, rejetes_incoherents: rejetes };
 }
 
 // ---- Branche étrangère : Nominatim, granularité ville, cache geo_cache ----
@@ -325,7 +391,7 @@ async function geocodeClientsEtranger(): Promise<{
   };
 }
 
-async function geocodeProspects(): Promise<{ scanned: number; geocoded: number }> {
+async function geocodeProspects(): Promise<{ scanned: number; geocoded: number; rejetes_incoherents: number }> {
   const { data, error } = await admin
     .from('prospects')
     .select('id, adresse, ville, geocode_attempts')
@@ -343,20 +409,32 @@ async function geocodeProspects(): Promise<{ scanned: number; geocoded: number }
     .filter(r => r.adresse.length >= 5);
 
   let geocoded = 0;
+  let rejetes = 0;
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
     const chunk = rows.slice(i, i + BATCH_SIZE);
     const map = await geocodeBatch(chunk);
     const now = new Date().toISOString();
     const updates = chunk.map(r => {
       const v = map.get(r.id);
-      return v
-        ? admin.from('prospects').update({ lat: v.lat, lng: v.lng, geocoded_at: now, geocode_source: 'ban' }).eq('id', r.id)
-        : admin.from('prospects').update({ geocode_attempts: (attempts.get(r.id) ?? 0) + 1, geocode_last_attempt: now }).eq('id', r.id);
+      const echec = () => admin.from('prospects')
+        .update({ geocode_attempts: (attempts.get(r.id) ?? 0) + 1, geocode_last_attempt: now })
+        .eq('id', r.id);
+      if (!v) return echec();
+      // Les prospects n'ont pas de code postal : on exige au moins un territoire français.
+      const { ok, zone } = coordCoherente(v.lat, v.lng, '');
+      if (!ok) {
+        rejetes++;
+        console.warn(`Coordonnées incohérentes ignorées — prospect ${r.id} : ${v.lat},${v.lng} hors ${zone} (adresse « ${r.adresse} »)`);
+        return echec();
+      }
+      geocoded++;
+      return admin.from('prospects')
+        .update({ lat: v.lat, lng: v.lng, geocoded_at: now, geocode_source: 'ban' })
+        .eq('id', r.id);
     });
     await Promise.all(updates);
-    geocoded += map.size;
   }
-  return { scanned: rows.length, geocoded };
+  return { scanned: rows.length, geocoded, rejetes_incoherents: rejetes };
 }
 
 Deno.serve(async (req) => {

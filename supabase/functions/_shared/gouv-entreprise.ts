@@ -3,7 +3,10 @@
 
 const API_BASE = "https://recherche-entreprises.api.gouv.fr/search";
 const UA = "ArcadeOS/1.0 (contact: dev@avranches-automatic.fr)";
-export const GOUV_RATE_LIMIT_MS = 250; // ~4 req/s (limite officielle 7 req/s)
+export const GOUV_RATE_LIMIT_MS = 550; // même espacement que gaia-entreprises (~2 req/s)
+
+export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 
 export async function gouvSearch(q: string, perPage = 5): Promise<any[] | null> {
   const url = `${API_BASE}?q=${encodeURIComponent(q)}&per_page=${perPage}`;

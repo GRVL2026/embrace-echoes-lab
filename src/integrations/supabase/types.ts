@@ -3060,6 +3060,7 @@ export type Database = {
       }
     }
     Functions: {
+      appliquer_enrichissement_osm: { Args: { _maj: Json }; Returns: number }
       can_access_dashboard: { Args: { _uid?: string }; Returns: boolean }
       can_access_prospection: { Args: { _uid?: string }; Returns: boolean }
       can_access_salle: { Args: { _uid?: string }; Returns: boolean }

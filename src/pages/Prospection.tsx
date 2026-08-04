@@ -781,22 +781,24 @@ function KanbanCard({ prospect, onOpen }: { prospect: Prospect; onOpen: () => vo
     >
       <div className="flex items-start gap-1.5">
         <GripVertical className="h-3.5 w-3.5 text-muted-foreground/50 mt-0.5 flex-shrink-0" />
-        {liSearch && (
-          <a
-            href={liSearch.google}
-            target="_blank"
-            rel="noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            title={`Trouver le profil LinkedIn de ${prospect.contact_nom} (recherche Google)`}
-            className="mt-0.5 flex-shrink-0 text-[#0A66C2] hover:text-[#0A66C2]/80"
-          >
-            <Linkedin className="h-3.5 w-3.5" />
-          </a>
-        )}
         <div className="min-w-0 flex-1">
           <div className="font-semibold text-sm truncate">{prospect.entreprise}</div>
-          <div className="text-[11px] text-muted-foreground truncate">
-            {[prospect.contact_role, prospect.ville].filter(Boolean).join(" · ") || "—"}
+          <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+            <span className="truncate">
+              {[prospect.contact_role, prospect.ville].filter(Boolean).join(" · ") || "—"}
+            </span>
+            {liSearch && (
+              <a
+                href={liSearch.google}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                title={`Chercher le profil LinkedIn de ${prospect.contact_nom}`}
+                className="flex-shrink-0 inline-flex items-center gap-1 rounded border border-[#0A66C2]/40 bg-[#0A66C2]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#0A66C2] hover:bg-[#0A66C2]/20"
+              >
+                <Linkedin className="h-3 w-3" /> Chercher
+              </a>
+            )}
           </div>
           <div className="mt-1.5 flex items-center gap-1 flex-wrap">
             <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", seg.className)}>{seg.label}</Badge>

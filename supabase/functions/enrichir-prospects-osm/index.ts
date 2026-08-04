@@ -30,8 +30,8 @@ const OVERPASS_MIRRORS = [
 // obligatoire, comme pour Nominatim dans la fonction geocoder.
 const OVERPASS_UA = 'Arcade OS - Avranches Automatic (leopaul@avranchesautomatic.com)';
 const DEPS_PAR_APPEL = 4;        // Overpass est lent : peu de départements par invocation
-const DIST_SURE_M = 250;         // en deçà, la proximité suffit
-const DIST_MAX_M = 600;          // au-delà, on n'apparie plus
+const DIST_MAX_M = 1500;         // au-delà, on n'apparie plus (les coordonnées INSEE sont approximatives)
+const SCORE_NOM_MIN = 0.5;       // au moins la moitié des mots du nom le plus court en commun
 const PAUSE_OVERPASS_MS = 1500;  // service mutualisé : rester courtois
 
 type OsmEl = {
@@ -45,20 +45,54 @@ const nb = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
+// Mots qui n'identifient pas un camping : formes juridiques, termes génériques du secteur,
+// articles. Les retirer évite d'apparier « SARL CAMPING LE PRE » avec « CAMPING LES PINS »
+// sur les seuls mots « sarl » et « camping ».
+const MOTS_VIDES = new Set([
+  'sarl', 'sas', 'sasu', 'sa', 'sci', 'eurl', 'snc', 'scea', 'gaec', 'sarlu', 'ste', 'societe',
+  'camping', 'campings', 'caravaning', 'hpa', 'hotellerie', 'plein', 'air', 'village',
+  'vacances', 'residence', 'exploitation', 'loisirs', 'tourisme',
+  'le', 'la', 'les', 'du', 'de', 'des', 'un', 'une', 'au', 'aux', 'sur', 'sous', 'et',
+]);
+
 // Normalisation pour comparer des noms de campings :
 // « Camping Les Dauphins Bleus » et « LES DAUPHINS-BLEUS » doivent se rejoindre.
+// Le suffixe « — COMMUNE » est ajouté par l'import quand l'établissement n'a pas d'enseigne :
+// il n'appartient pas au nom réel et fausserait la comparaison.
 function normNom(s: string): string {
   return (s ?? '')
+    .split(/[—–]/)[0]
     .toLowerCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
-    .replace(/\b(camping|campings|hpa|village|vacances|le|la|les|du|de|des|d|l|au|aux)\b/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
 function jetons(s: string): Set<string> {
-  return new Set(normNom(s).split(' ').filter((t) => t.length >= 3));
+  return new Set(normNom(s).split(' ').filter((t) => t.length >= 3 && !MOTS_VIDES.has(t)));
+}
+
+// Proportion des mots du nom le plus court que l'on retrouve dans l'autre.
+// Plus tolérant qu'un Jaccard : « Camping de l'Océan » et « SARL CAMPING L'OCEAN » se
+// rejoignent bien, alors qu'ils n'ont qu'un mot commun sur des longueurs différentes.
+function scoreNom(a: string, b: string): { score: number; motFort: boolean } {
+  const ja = jetons(a), jb = jetons(b);
+  if (ja.size === 0 || jb.size === 0) return { score: 0, motFort: false };
+  let inter = 0, motFort = false;
+  for (const t of ja) {
+    if (jb.has(t)) { inter++; if (t.length >= 4) motFort = true; }
+  }
+  return { score: inter / Math.min(ja.size, jb.size), motFort };
+}
+
+// Préfixe de code postal d'un département : la Corse (2A/2B) et l'outre-mer (971…)
+// ne suivent pas la règle habituelle « département = deux premiers chiffres ».
+function cpPrefixe(dep: string): string {
+  const d = dep.trim().toUpperCase();
+  if (d === '2A' || d === '2B') return '20';
+  if (d.length === 3) return d;
+  return d.padStart(2, '0');
 }
 
 function distanceM(aLat: number, aLng: number, bLat: number, bLng: number): number {
@@ -176,50 +210,70 @@ Deno.serve(async (req) => {
         .eq('segment', segment)
         .eq('source', 'naf')
         .not('lat', 'is', null)
-        .like('adresse', `%${dep.padStart(2, '0')}___ %`);
+        .like('adresse', `%${cpPrefixe(dep)}___ %`);
       if (error) throw error;
 
-      const parSiret = new Map<string, typeof osm[number]>();
-      for (const o of osm) {
-        const s = o.t['ref:FR:SIRET'];
-        if (s) parSiret.set(s.replace(/\s/g, ''), o);
+      // --- Appariement biunivoque ---------------------------------------------------
+      // Une première version prenait « l'objet OSM le plus proche à moins de 250 m » sans
+      // contrôler le nom ni empêcher les réemplois : sur le littoral vendéen, 8 sociétés
+      // se sont retrouvées rattachées au MÊME camping, donc au même téléphone. Désormais
+      // on note tous les couples plausibles, on les trie, et chaque objet OSM comme chaque
+      // prospect ne peut être retenu qu'une seule fois. Dans le doute, on n'écrit rien.
+      type Couple = { pi: number; oi: number; score: number; d: number; methode: string; nomOsm: string; sn: number };
+      const couples: Couple[] = [];
+      const listeP = prospects ?? [];
+
+      for (let pi = 0; pi < listeP.length; pi++) {
+        const p = listeP[pi];
+        for (let oi = 0; oi < osm.length; oi++) {
+          const o = osm[oi];
+          const d = Math.round(distanceM(Number(p.lat), Number(p.lng), o.lat, o.lon));
+
+          // Le SIRET est une identification certaine : il l'emporte, quelle que soit la distance.
+          const siretOsm = (o.t['ref:FR:SIRET'] ?? '').replace(/\s/g, '');
+          if (p.siret && siretOsm && siretOsm === String(p.siret)) {
+            couples.push({ pi, oi, score: 10_000, d, methode: 'siret', nomOsm: o.t.name ?? '', sn: 1 });
+            continue;
+          }
+
+          if (d > DIST_MAX_M) continue;
+          const { score: sn, motFort } = scoreNom(p.entreprise ?? '', o.t.name ?? '');
+          // Le nom est désormais obligatoire, et doit partager au moins un mot d'au
+          // moins 4 lettres : « mer » ou « sud » ne suffisent pas à identifier un camping.
+          if (!motFort || sn < SCORE_NOM_MIN) continue;
+          couples.push({ pi, oi, score: 1000 * sn - d / 10, d, methode: 'nom+distance', nomOsm: o.t.name ?? '', sn });
+        }
       }
 
+      couples.sort((a, b) => b.score - a.score);
+      const pPris = new Set<number>(), oPris = new Set<number>();
       let apparieDep = 0;
       const maj: { id: string; patch: Record<string, unknown> }[] = [];
 
-      for (const p of prospects ?? []) {
-        let trouve = p.siret ? parSiret.get(String(p.siret)) ?? null : null;
+      for (const c of couples) {
+        if (pPris.has(c.pi) || oPris.has(c.oi)) continue;
+        pPris.add(c.pi); oPris.add(c.oi);
 
-        if (!trouve) {
-          // Proximité : le plus proche sous 250 m, sinon sous 600 m avec un nom compatible.
-          const jp = jetons(p.entreprise ?? '');
-          let meilleur: { o: typeof osm[number]; d: number } | null = null;
-          for (const o of osm) {
-            const d = distanceM(Number(p.lat), Number(p.lng), o.lat, o.lon);
-            if (d > DIST_MAX_M) continue;
-            const nomOk = d <= DIST_SURE_M
-              ? true
-              : [...jetons(o.t.name ?? '')].some((t) => jp.has(t));
-            if (!nomOk) continue;
-            if (!meilleur || d < meilleur.d) meilleur = { o, d };
-          }
-          trouve = meilleur?.o ?? null;
-        }
-        if (!trouve) continue;
-
-        const t = trouve.t;
-        const patch: Record<string, unknown> = { osm_id: trouve.id };
-        const e = etoiles(t);            if (e !== null) { patch.etoiles = e; majEtoiles++; }
-        const cap = capacite(t);         if (cap !== null) { patch.capacite = cap; majCapacite++; }
+        const p = listeP[c.pi];
+        const t = osm[c.oi].t;
+        const patch: Record<string, unknown> = {
+          osm_id: osm[c.oi].id,
+          // Traçabilité : permet de réauditer chaque appariement après coup.
+          osm_match: {
+            nom_osm: c.nomOsm, distance_m: c.d, methode: c.methode,
+            score_nom: Math.round(c.sn * 100) / 100,
+          },
+        };
+        const e = etoiles(t);          if (e !== null) { patch.etoiles = e; majEtoiles++; }
+        const cap = capacite(t);       if (cap !== null) { patch.capacite = cap; majCapacite++; }
         // On ne remplace jamais une donnée déjà présente en base.
-        if (!p.telephone && t.phone)     { patch.telephone = t.phone; majTel++; }
-        if (!p.email && t.email)         { patch.email = t.email; majMail++; }
-        if (!p.site_web && t.website)    { patch.site_web = t.website; majSite++; }
+        if (!p.telephone && t.phone)   { patch.telephone = t.phone; majTel++; }
+        if (!p.email && t.email)       { patch.email = t.email; majMail++; }
+        if (!p.site_web && t.website)  { patch.site_web = t.website; majSite++; }
         // L'enseigne OSM prime : elle nomme le réseau réel (Capfun) là où l'INSEE
         // ne voit qu'une société par camping.
         const enseigne = t.operator || t.brand;
-        if (enseigne && !p.groupe)       { patch.groupe = enseigne; majEnseigne++; }
+        if (enseigne && !p.groupe)     { patch.groupe = enseigne; majEnseigne++; }
 
         apparies++; apparieDep++;
         maj.push({ id: p.id, patch });

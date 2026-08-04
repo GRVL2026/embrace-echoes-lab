@@ -29,7 +29,8 @@ const OVERPASS_MIRRORS = [
 // Overpass refuse par un 406 les clients qui ne s'identifient pas : cette en-tête est
 // obligatoire, comme pour Nominatim dans la fonction geocoder.
 const OVERPASS_UA = 'Arcade OS - Avranches Automatic (leopaul@avranchesautomatic.com)';
-const DEPS_PAR_APPEL = 4;        // Overpass est lent : peu de départements par invocation
+const DEPS_PAR_APPEL = 3;        // Overpass est lent : peu de départements par invocation
+const BUDGET_MS = 110_000;       // les edge functions sont coupées à 150 s : on rend la main avant
 const DIST_MAX_M = 1500;         // au-delà, on n'apparie plus (les coordonnées INSEE sont approximatives)
 const SCORE_NOM_MIN = 0.5;       // au moins la moitié des mots du nom le plus court en commun
 const PAUSE_OVERPASS_MS = 1500;  // service mutualisé : rester courtois
@@ -185,13 +186,23 @@ Deno.serve(async (req) => {
       : String(body.departements ?? '').split(',').map((s) => s.trim()).filter(Boolean);
     if (deps.length === 0) return json({ error: "Paramètre « departements » requis (ex. « 85 »)." }, 400);
 
-    const aTraiter = deps.slice(0, DEPS_PAR_APPEL);
-    const restants = deps.slice(DEPS_PAR_APPEL);
+    // Overpass est lent et sujet aux reprises : c'est le TEMPS qui décide du nombre de
+    // départements traités, pas un compte fixe. Les edge functions sont coupées à 150 s.
+    const debut = Date.now();
+    const aTraiter: string[] = [];
+    const restants: string[] = [];
+    for (const d of deps) {
+      if (aTraiter.length < DEPS_PAR_APPEL) aTraiter.push(d);
+      else restants.push(d);
+    }
     const detail: Record<string, unknown> = {};
     let apparies = 0, majEtoiles = 0, majTel = 0, majMail = 0, majSite = 0, majCapacite = 0, majEnseigne = 0;
 
     for (let i = 0; i < aTraiter.length; i++) {
       const dep = aTraiter[i];
+      // On rend la main avant d'être coupé : les départements non traités repartent
+      // dans « departements_restants » pour l'invocation suivante.
+      if (Date.now() - debut > BUDGET_MS) { restants.unshift(...aTraiter.slice(i)); break; }
       if (i > 0) await new Promise((r) => setTimeout(r, PAUSE_OVERPASS_MS));
 
       const elements = await interrogerOverpass(dep, osmFiltre);

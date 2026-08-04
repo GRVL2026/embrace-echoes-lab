@@ -25,10 +25,26 @@ const CRON_SECRET = Deno.env.get('CRON_SECRET') || '';
 const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
 const API_BASE = 'https://recherche-entreprises.api.gouv.fr/search';
+const API_UA = 'Arcade OS - Avranches Automatic (leopaul@avranchesautomatic.com)';
 const PER_PAGE = 25;              // maximum autorisé par l'API
-const RATE_LIMIT_MS = 160;        // ~6 req/s, sous la limite annoncée de 7
-const PAGES_PAR_APPEL = 70;       // budget global, pour rester sous le timeout des edge functions
+// L'API annonce 7 req/s, mais l'adresse IP de sortie est mutualisée entre locataires
+// Supabase : à ~6 req/s on récoltait des 429. On se cale nettement en dessous.
+const RATE_LIMIT_MS = 400;        // ~2,5 req/s
+const PAGES_PAR_APPEL = 200;      // plafond de sécurité ; c'est le budget de TEMPS qui arrête
+// Les edge functions sont coupées à 150 s. On rend la main avant, avec de quoi reprendre.
+const BUDGET_MS = 110_000;
 const INSERT_BATCH = 500;
+
+// Un 429 ou une indisponibilité passagère ne doit pas faire échouer tout l'import :
+// on réessaie en espaçant, et on ne renonce qu'ensuite.
+async function fetchApi(url: string): Promise<Response> {
+  let res = await fetch(url, { headers: { Accept: 'application/json', 'User-Agent': API_UA } });
+  for (let essai = 0; !res.ok && [429, 502, 503, 504].includes(res.status) && essai < 3; essai++) {
+    await new Promise((r) => setTimeout(r, 2000 * Math.pow(2, essai)));
+    res = await fetch(url, { headers: { Accept: 'application/json', 'User-Agent': API_UA } });
+  }
+  return res;
+}
 
 type Dirigeant = { nom?: string; prenoms?: string; qualite?: string; type_dirigeant?: string };
 type Etab = {
@@ -146,13 +162,15 @@ Deno.serve(async (req) => {
     let reprise: { departement: string | null; page: number } | null = null;
 
     const iDepart = depDepart ? Math.max(0, listeDeps.indexOf(depDepart)) : 0;
+    const debut = Date.now();
+    const tempsEcoule = () => Date.now() - debut > BUDGET_MS;
 
-    for (let di = iDepart; di < listeDeps.length && budget > 0; di++) {
+    for (let di = iDepart; di < listeDeps.length && budget > 0 && !tempsEcoule(); di++) {
       const dep = listeDeps[di];
       let page = di === iDepart ? pageDepart : 1;
       let pagesTotal: number | null = null;
 
-      while (budget > 0) {
+      while (budget > 0 && !tempsEcoule()) {
         const url = new URL(API_BASE);
         url.searchParams.set('activite_principale', naf);
         url.searchParams.set('etat_administratif', 'A');
@@ -160,11 +178,20 @@ Deno.serve(async (req) => {
         url.searchParams.set('page', String(page));
         if (dep) url.searchParams.set('departement', dep);
 
-        const res = await fetch(url.toString());
+        const res = await fetchApi(url.toString());
         if (!res.ok) {
           const corps = await res.text().catch(() => '');
-          return json({ error: `API entreprises ${res.status}`, detail: corps.slice(0, 300),
-                        reprise: { departement: dep, page } }, 502);
+          // On n'abandonne pas ce qui a déjà été collecté : on l'insère avant de rendre la main.
+          if (!dryRun && aInserer.length) {
+            for (let i = 0; i < aInserer.length; i += INSERT_BATCH) {
+              const lot = aInserer.slice(i, i + INSERT_BATCH);
+              const { error: e } = await admin.from('prospects').insert(lot);
+              if (e) throw e;
+              inseres += lot.length;
+            }
+          }
+          return json({ error: `API entreprises ${res.status}`, detail: corps.slice(0, 200),
+                        inseres, reprise: { departement: dep, page } }, 502);
         }
         const data = await res.json();
         pagesTotal ??= nombreOuNull(data.total_pages);
@@ -233,8 +260,14 @@ Deno.serve(async (req) => {
         await new Promise((r) => setTimeout(r, RATE_LIMIT_MS));
       }
 
-      if (budget <= 0 && (pagesTotal === null || page <= pagesTotal)) {
-        reprise = { departement: dep, page };
+      // Arrêt anticipé (temps ou plafond de pages) : on note où reprendre, dans ce
+      // département s'il reste des pages, sinon au département suivant.
+      const departementInacheve = pagesTotal !== null && page <= pagesTotal;
+      if (budget <= 0 || tempsEcoule()) {
+        reprise = departementInacheve
+          ? { departement: dep, page }
+          : (di + 1 < listeDeps.length ? { departement: listeDeps[di + 1], page: 1 } : null);
+        break;
       }
     }
 

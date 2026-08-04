@@ -7,6 +7,27 @@ import {
 } from "lucide-react";
 
 /* -------------------- LinkedIn search helpers -------------------- */
+/** Ouvre un lien externe, avec repli si le navigateur ou l'iframe le refuse.
+ *  L'aperçu de l'éditeur Lovable est un bac à sable : la navigation vers un autre
+ *  domaine y échoue sans erreur visible (page noire). Plutôt que de laisser
+ *  l'utilisateur devant un écran vide, on copie l'adresse et on le dit. */
+function ouvrirLienExterne(url: string, e?: { preventDefault: () => void; stopPropagation: () => void }) {
+  e?.preventDefault();
+  e?.stopPropagation();
+  let ouvert: Window | null = null;
+  try {
+    ouvert = window.open(url, "_blank", "noopener,noreferrer");
+  } catch {
+    ouvert = null;
+  }
+  if (!ouvert) {
+    navigator.clipboard?.writeText(url).then(
+      () => toast.info("Ouverture bloquée par le navigateur — lien copié, colle-le dans un nouvel onglet"),
+      () => toast.error(`Ouverture bloquée. Adresse : ${url}`),
+    );
+  }
+}
+
 function buildLinkedInSearch(p: { contact_nom?: string | null; entreprise?: string | null; ville?: string | null }) {
   // Ne chercher QUE sur le nom du contact. La version précédente concaténait nom +
   // raison sociale + ville : LinkedIn exigeant que TOUS les mots-clés figurent dans le
@@ -795,7 +816,7 @@ function KanbanCard({ prospect, onOpen }: { prospect: Prospect; onOpen: () => vo
                 href={prospect.linkedin_url}
                 target="_blank"
                 rel="noreferrer"
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => ouvrirLienExterne(prospect.linkedin_url!, e)}
                 title={`Voir le profil LinkedIn de ${prospect.contact_nom}`}
                 className="flex-shrink-0 text-[#0A66C2] hover:text-[#0A66C2]/80"
               >
@@ -809,7 +830,7 @@ function KanbanCard({ prospect, onOpen }: { prospect: Prospect; onOpen: () => vo
                   href={liSearch.people}
                   target="_blank"
                   rel="noreferrer"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(e) => ouvrirLienExterne(liSearch.people, e)}
                   title={`Chercher ${prospect.contact_nom} sur LinkedIn`}
                   className="flex-shrink-0 inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground hover:border-foreground/40"
                 >

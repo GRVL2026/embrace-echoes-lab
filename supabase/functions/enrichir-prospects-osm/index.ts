@@ -18,7 +18,14 @@ const CRON_SECRET = Deno.env.get('CRON_SECRET') || '';
 
 const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
-const OVERPASS = 'https://overpass-api.de/api/interpreter';
+// Plusieurs miroirs Overpass : l'instance principale limite fortement le débit (429) vu
+// depuis un hébergeur mutualisé, dont l'adresse IP est partagée avec d'autres locataires.
+// kumi.systems est plus rapide et plus permissif, on le sollicite en premier.
+const OVERPASS_MIRRORS = [
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://overpass-api.de/api/interpreter',
+];
 // Overpass refuse par un 406 les clients qui ne s'identifient pas : cette en-tête est
 // obligatoire, comme pour Nominatim dans la fonction geocoder.
 const OVERPASS_UA = 'Arcade OS - Avranches Automatic (leopaul@avranchesautomatic.com)';
@@ -83,21 +90,35 @@ async function interrogerOverpass(dep: string, osmFiltre: string): Promise<OsmEl
 area["ref:INSEE"="${dep}"]["admin_level"="6"]->.a;
 nwr${osmFiltre}(area.a);
 out center;`;
-  const res = await fetch(OVERPASS, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Accept': 'application/json',
-      'User-Agent': OVERPASS_UA,
-    },
-    body: new URLSearchParams({ data: q }).toString(),
-  });
-  if (!res.ok) {
-    const corps = await res.text().catch(() => '');
-    throw new Error(`Overpass ${res.status} sur le département ${dep} — ${corps.slice(0, 200)}`);
+  // On fait le tour des miroirs, deux passages, avec une attente croissante :
+  // un 429 (débit dépassé) ou un 504 se résorbe généralement en quelques secondes.
+  let dernierEchec = '';
+  for (let essai = 0; essai < OVERPASS_MIRRORS.length * 2; essai++) {
+    const url = OVERPASS_MIRRORS[essai % OVERPASS_MIRRORS.length];
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json',
+          'User-Agent': OVERPASS_UA,
+        },
+        body: new URLSearchParams({ data: q }).toString(),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return (data.elements ?? []) as OsmEl[];
+      }
+      const corps = await res.text().catch(() => '');
+      dernierEchec = `${res.status} sur ${new URL(url).host} — ${corps.slice(0, 120)}`;
+      // Un refus définitif (autre que débit / indisponibilité) ne sera pas levé par une reprise.
+      if (![429, 502, 503, 504].includes(res.status)) break;
+    } catch (err) {
+      dernierEchec = `${new URL(url).host} injoignable — ${String((err as any)?.message || err).slice(0, 120)}`;
+    }
+    await new Promise((r) => setTimeout(r, 2000 * (1 + Math.floor(essai / OVERPASS_MIRRORS.length))));
   }
-  const data = await res.json();
-  return (data.elements ?? []) as OsmEl[];
+  throw new Error(`Overpass indisponible pour le département ${dep} : ${dernierEchec}`);
 }
 
 Deno.serve(async (req) => {

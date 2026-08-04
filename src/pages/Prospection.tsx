@@ -42,7 +42,9 @@ import {
 } from "@/components/ui/alert-dialog";
 
 type Statut = "nouveau" | "contacte" | "connecte" | "repondu" | "rdv" | "devis" | "client" | "perdu";
-type Segment = "loisirs" | "chr" | "retail" | "revendeur" | "autre";
+// « camping » est un segment à part entière : l'hôtellerie de plein air n'est ni du
+// loisir indoor (bowling, parc) ni du CHR — qui désigne Cafés, Hôtels, Restaurants.
+type Segment = "camping" | "loisirs" | "chr" | "retail" | "revendeur" | "autre";
 type Source = "linkedin" | "salon" | "reco" | "site" | "signal" | "autre";
 
 type Prospect = {
@@ -57,6 +59,10 @@ type Prospect = {
   linkedin_url: string | null;
   email: string | null;
   telephone: string | null;
+  etoiles: number | null;
+  capacite: number | null;
+  groupe: string | null;
+  tag: string | null;
   statut: Statut;
   owner_id: string | null;
   montant_estime: number | null;
@@ -125,6 +131,7 @@ const STATUT_COLOR: Record<Statut, string> = {
 };
 
 const SEGMENTS: { key: Segment; label: string; className: string }[] = [
+  { key: "camping", label: "Camping", className: "bg-teal-500/15 text-teal-300 border-teal-500/30" },
   { key: "loisirs", label: "Loisirs", className: "bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30" },
   { key: "chr", label: "CHR", className: "bg-amber-500/15 text-amber-300 border-amber-500/30" },
   { key: "retail", label: "Retail", className: "bg-sky-500/15 text-sky-300 border-sky-500/30" },
@@ -586,9 +593,31 @@ function KanbanColumn({
   );
 }
 
+// Score de priorisation d'un prospect, sur 100. Trois critères lisibles et défendables :
+// le standing (étoiles), la taille de l'affaire (emplacements) et la joignabilité — un
+// camping 5 étoiles de 500 emplacements avec un téléphone vaut mieux qu'un 2 étoiles muet.
+// Volontairement calculé à l'affichage : la formule doit pouvoir évoluer sans migration.
+const POINTS_ETOILES: Record<number, number> = { 5: 40, 4: 32, 3: 20, 2: 10, 1: 5 };
+
+export function scorePriorite(p: { etoiles: number | null; capacite: number | null; telephone: string | null; email: string | null }): number | null {
+  // Sans étoiles ni capacité, un score n'aurait aucun sens : mieux vaut ne rien afficher.
+  if (p.etoiles == null && p.capacite == null) return null;
+  const standing = p.etoiles != null ? (POINTS_ETOILES[p.etoiles] ?? 15) : 15;
+  const taille = p.capacite != null ? Math.min(40, Math.round(p.capacite / 10)) : 0;
+  const joignable = (p.telephone ? 12 : 0) + (p.email ? 8 : 0);
+  return Math.min(100, standing + taille + joignable);
+}
+
+function classeScore(n: number): string {
+  if (n >= 70) return "border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
+  if (n >= 45) return "border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400";
+  return "border-border bg-muted text-muted-foreground";
+}
+
 function KanbanCard({ prospect, onOpen }: { prospect: Prospect; onOpen: () => void }) {
   const seg = segmentMeta(prospect.segment);
   const liSearch = buildLinkedInSearch(prospect);
+  const score = scorePriorite(prospect);
   return (
     <div
       draggable
@@ -617,6 +646,29 @@ function KanbanCard({ prospect, onOpen }: { prospect: Prospect; onOpen: () => vo
           </div>
           <div className="mt-1.5 flex items-center gap-1 flex-wrap">
             <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", seg.className)}>{seg.label}</Badge>
+            {score != null && (
+              <Badge
+                variant="outline"
+                className={cn("text-[10px] h-4 px-1.5 tabular-nums", classeScore(score))}
+                title={`Priorité ${score}/100 — standing, capacité et joignabilité`}
+              >
+                {score}
+              </Badge>
+            )}
+            {prospect.etoiles != null && (
+              <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-border text-muted-foreground">
+                {"★".repeat(prospect.etoiles)}
+              </Badge>
+            )}
+            {prospect.groupe && (
+              <Badge
+                variant="outline"
+                className="text-[10px] h-4 px-1.5 border-border text-muted-foreground max-w-[110px] truncate"
+                title={`Rattaché à ${prospect.groupe}`}
+              >
+                {prospect.groupe}
+              </Badge>
+            )}
             {prospect.source === "signal" && (
               <Badge
                 variant="outline"
@@ -1618,7 +1670,7 @@ function AttributionList({
 
 /* -------------------- LGM (La Growth Machine) -------------------- */
 
-const LGM_SUPPORTED: Segment[] = ["loisirs", "chr", "retail"];
+const LGM_SUPPORTED: Segment[] = ["camping", "loisirs", "chr", "retail"];
 
 function LgmSection({
   prospect, onSent,

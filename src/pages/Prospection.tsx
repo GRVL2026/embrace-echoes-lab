@@ -196,6 +196,7 @@ export default function Prospection() {
   const [segmentFilter, setSegmentFilter] = useState<"all" | Segment>("all");
   const [tagFilter, setTagFilter] = useState<string>("all");
   const [etoilesFilter, setEtoilesFilter] = useState<"all" | "5" | "4" | "3" | "none">("all");
+  const [scoreFilter, setScoreFilter] = useState<"all" | "haute" | "moyenne" | "basse" | "none">("all");
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Ouverture directe d'un prospect via /prospection?prospect=<id> (lien depuis la carte).
@@ -313,8 +314,16 @@ export default function Prospection() {
       const mini = Number(etoilesFilter);
       list = list.filter((p) => (p.etoiles ?? 0) >= mini);
     }
+    if (scoreFilter !== "all") {
+      list = list.filter((p) => {
+        const sc = scorePriorite(p);
+        // « sans score » = fiche non enrichie : ni étoiles ni capacité connues.
+        if (scoreFilter === "none") return sc === null;
+        return sc !== null && niveauScore(sc) === scoreFilter;
+      });
+    }
     return list;
-  }, [prospects, lgmFilter, segmentFilter, tagFilter, etoilesFilter]);
+  }, [prospects, lgmFilter, segmentFilter, tagFilter, etoilesFilter, scoreFilter]);
 
   const byStatut = useMemo(() => {
     const map = new Map<Statut, Prospect[]>();
@@ -435,6 +444,17 @@ export default function Prospection() {
               </SelectContent>
             </Select>
           )}
+
+          <Select value={scoreFilter} onValueChange={(v) => setScoreFilter(v as typeof scoreFilter)}>
+            <SelectTrigger className="h-9 w-[165px] text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Priorité : toutes</SelectItem>
+              <SelectItem value="haute">🟢 Haute (70+)</SelectItem>
+              <SelectItem value="moyenne">🟠 Moyenne (45-69)</SelectItem>
+              <SelectItem value="basse">⚪ Basse (&lt; 45)</SelectItem>
+              <SelectItem value="none">Sans score</SelectItem>
+            </SelectContent>
+          </Select>
 
           <Select value={etoilesFilter} onValueChange={(v) => setEtoilesFilter(v as typeof etoilesFilter)}>
             <SelectTrigger className="h-9 w-[150px] text-xs"><SelectValue /></SelectTrigger>
@@ -666,10 +686,24 @@ export function scorePriorite(p: { etoiles: number | null; capacite: number | nu
   return Math.min(100, standing + taille + joignable);
 }
 
+// Paliers de priorité définis À UN SEUL ENDROIT : le badge de la carte et le filtre du
+// pipeline s'y réfèrent tous les deux, ils ne peuvent donc pas diverger.
+type NiveauScore = "haute" | "moyenne" | "basse";
+
+export function niveauScore(n: number): NiveauScore {
+  if (n >= 70) return "haute";
+  if (n >= 45) return "moyenne";
+  return "basse";
+}
+
+const CLASSE_NIVEAU: Record<NiveauScore, string> = {
+  haute: "border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  moyenne: "border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  basse: "border-border bg-muted text-muted-foreground",
+};
+
 function classeScore(n: number): string {
-  if (n >= 70) return "border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
-  if (n >= 45) return "border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400";
-  return "border-border bg-muted text-muted-foreground";
+  return CLASSE_NIVEAU[niveauScore(n)];
 }
 
 function KanbanCard({ prospect, onOpen }: { prospect: Prospect; onOpen: () => void }) {

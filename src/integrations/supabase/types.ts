@@ -2125,6 +2125,7 @@ export type Database = {
           site_web: string | null
           source: string | null
           statut: string
+          tag: string | null
           telephone: string | null
           updated_at: string
           ville: string | null
@@ -2166,6 +2167,7 @@ export type Database = {
           site_web?: string | null
           source?: string | null
           statut?: string
+          tag?: string | null
           telephone?: string | null
           updated_at?: string
           ville?: string | null
@@ -2207,6 +2209,7 @@ export type Database = {
           site_web?: string | null
           source?: string | null
           statut?: string
+          tag?: string | null
           telephone?: string | null
           updated_at?: string
           ville?: string | null

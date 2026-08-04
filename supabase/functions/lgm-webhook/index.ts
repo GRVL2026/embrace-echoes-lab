@@ -251,17 +251,35 @@ Deno.serve(async (req) => {
           });
         }
 
-        // Segment déduit du nom de l'audience LGM (« Arcade OS – Loisirs / – CHR / – Retail »)
+        // Convention de nommage des audiences LGM : « AA – <Segment> – <Persona> »
+        // Le segment vient du 2e bloc, le TAG (persona/secteur) du 3e. Exemples :
+        //   « AA – Camping – Sud-Ouest »   → segment=camping, tag='Sud-Ouest'
+        //   « AA – CHR – Bar »             → segment=chr,     tag='Bar'
+        // Le tag sert à filtrer le pipeline par cible de prospection.
         let segment: string | null = null;
         const an = norm(audience);
-        if (an.includes('loisirs')) segment = 'loisirs';
-        else if (an.includes('chr')) segment = 'chr';
+        // « camping » est testé en premier : c'est un segment à part entière, à ne pas
+        // confondre avec les loisirs (bowling, parc indoor…) ni avec le CHR
+        // — CHR = Cafés, Hôtels, Restaurants, l'hôtellerie de plein air en est distincte.
+        if (an.includes('camping')) segment = 'camping';
+        else if (an.includes('loisirs')) segment = 'loisirs';
         else if (an.includes('retail')) segment = 'retail';
+        else if (an.includes('chr')) segment = 'chr';
         else {
           console.warn(
             `lgm-webhook: AVERTISSEMENT audience LGM inconnue "${audience ?? '(vide)'}" — segment='autre'. ` +
-              `Vérifier que l'import Sales Navigator a été fait dans « Arcade OS – Loisirs », « – CHR » ou « – Retail ».`,
+              `Nommer les audiences « AA – <Segment> – <Persona> », le segment valant ` +
+              `Camping, Loisirs, CHR ou Retail.`,
           );
+        }
+
+        // Tag = dernier bloc du nom d'audience, s'il apporte une information au-delà du segment.
+        // Séparateurs acceptés : tiret cadratin, demi-cadratin, trait d'union, barre verticale.
+        let tag: string | null = null;
+        if (audience) {
+          const blocs = String(audience).split(/\s*[–—\-|]\s*/).map((s) => s.trim()).filter(Boolean);
+          const dernier = blocs.length >= 3 ? blocs[blocs.length - 1] : null;
+          if (dernier && norm(dernier) !== (segment ?? '')) tag = dernier;
         }
 
 
@@ -280,6 +298,7 @@ Deno.serve(async (req) => {
           linkedin_url: linkedinNew,
           source: 'linkedin',
           segment: segment ?? 'autre',
+          tag,
           statut: initStatut,
           lgm_lead_id: lgmLeadId,
           lgm_audience: audience,

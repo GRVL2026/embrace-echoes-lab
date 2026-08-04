@@ -788,17 +788,34 @@ function KanbanCard({ prospect, onOpen }: { prospect: Prospect; onOpen: () => vo
             <span className="truncate">
               {[prospect.contact_role, prospect.ville].filter(Boolean).join(" · ") || "—"}
             </span>
-            {liSearch && (
+            {prospect.linkedin_url ? (
+              /* Profil connu : le logo devient un accès direct, et vaut confirmation
+                 que le contact a bien été identifié sur LinkedIn. */
               <a
-                href={liSearch.people}
+                href={prospect.linkedin_url}
                 target="_blank"
                 rel="noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                title={`Chercher ${prospect.contact_nom} sur LinkedIn`}
-                className="flex-shrink-0 inline-flex items-center gap-1 rounded border border-[#0A66C2]/40 bg-[#0A66C2]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#0A66C2] hover:bg-[#0A66C2]/20"
+                title={`Voir le profil LinkedIn de ${prospect.contact_nom}`}
+                className="flex-shrink-0 text-[#0A66C2] hover:text-[#0A66C2]/80"
               >
-                <Linkedin className="h-3 w-3" /> Chercher
+                <Linkedin className="h-3.5 w-3.5" />
               </a>
+            ) : (
+              liSearch && (
+                /* Profil inconnu : on propose de le chercher, libellé explicite pour ne pas
+                   confondre l'action avec l'information. */
+                <a
+                  href={liSearch.people}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  title={`Chercher ${prospect.contact_nom} sur LinkedIn`}
+                  className="flex-shrink-0 inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground hover:border-foreground/40"
+                >
+                  <Search className="h-3 w-3" /> Chercher
+                </a>
+              )
             )}
           </div>
           <div className="mt-1.5 flex items-center gap-1 flex-wrap">

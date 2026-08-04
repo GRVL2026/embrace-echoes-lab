@@ -13,7 +13,7 @@ TABLES AUTORISÉES (whitelist stricte — toute autre table est refusée par le 
 - gaia_clients(customer_id text, name text, status text, typologie text, adresse1, adresse2, code_postal text, ville text, pays text, lat numeric, lng numeric)
 - gaia_ventes(code_client text, invoice_date date, qty numeric, pu_rem numeric, montant_ht numeric, code_article text, tran_type text, classe_article text)  -- ventes récentes
 - gaia_historique(code_client text, invoice_date date, qty numeric, pu_rem numeric, montant_ht numeric, code_article text, classe_article text)  -- ventes archivées
-- prospects(id uuid, entreprise text, ville text, statut text, segment text, lat numeric, lng numeric, montant_estime numeric)
+- prospects(id uuid, entreprise text, ville text, statut text, segment text, source text, tag text, groupe text, etoiles smallint, capacite int, contact_nom text, contact_role text, telephone text, email text, site_web text, siren text, siret text, adresse text, effectif text, ca_annuel numeric, activite text, lat numeric, lng numeric, montant_estime numeric)
 - catalogue_erp(code text, description text, famille text, prix_ht numeric)
 - client_actions(code_client text, type text, date timestamptz, auteur_id uuid)
 
@@ -33,6 +33,12 @@ CONVENTIONS DES DONNÉES (TRÈS IMPORTANT) :
          ELSE 'inactif' END
   Les totaux doivent TOUJOURS être calculés par count_sql sur le périmètre demandé, jamais rapprochés de valeurs mémorisées. Le périmètre de référence de la carte est : clients géolocalisés (lat et lng non nuls), catégorisés selon les définitions 12 / 24 mois ci-dessus.
 - Pour tout filtre texte incertain (nom ville, nom client, famille libre…) : utilise ILIKE '%…%' et unaccent si nécessaire, jamais l'égalité stricte.
+- PROSPECTS (à ne pas confondre avec les clients : un prospect n'a NI facture NI chiffre d'affaires ; pour lui ca_12m, ca_total et ca_periode valent 0 ou NULL) :
+    * prospects.segment ∈ {'camping','loisirs','chr','retail','revendeur','autre'}. « camping » est un segment À PART ENTIÈRE — l'hôtellerie de plein air n'est ni du loisir indoor (bowling, parc, salle d'arcade), ni du CHR, qui désigne Cafés, Hôtels, Restaurants.
+    * prospects.source ∈ {'naf' (import sectoriel par code NAF depuis l'INSEE), 'signal' (établissement récemment créé, détecté via Pappers), 'linkedin' (lead remonté depuis La Growth Machine)}.
+    * prospects.groupe = enseigne de rattachement (Capfun, Siblu, Sunêlia, Chadotel…) ou « Réseau <NOM DU DIRIGEANT> » quand le réseau n'est pas déclaré. groupe IS NULL signifie exploitant INDÉPENDANT — c'est la distinction commerciale clé : chez un indépendant le dirigeant décide, sur un site de réseau il faut remonter au siège.
+    * prospects.etoiles = classement officiel de 1 à 5 (NULL si inconnu) ; prospects.capacite = nombre d'emplacements ; prospects.tag = cible de prospection (ex. 'Camping').
+    * Ces trois derniers champs viennent d'OpenStreetMap et ne sont renseignés que pour une partie des fiches : ne présente JAMAIS un décompte filtré sur etoiles ou capacite comme un total du segment.
 
 RÈGLES CRITIQUES :
 1. Retourne UNIQUEMENT du JSON de la forme {"sql": "...", "count_sql": "...", "interpretation": "..."}. Rien d'autre.

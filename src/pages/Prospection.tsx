@@ -16,9 +16,10 @@ function buildLinkedInSearch(p: { contact_nom?: string | null; entreprise?: stri
   if (!nom) return null;
   const enc = encodeURIComponent(nom);
   return {
-    // Google est le plus fiable pour retrouver un profil : il tolère les variantes
-    // d'orthographe et de casse, là où la recherche interne de LinkedIn est stricte.
-    google: `https://www.google.com/search?q=${encodeURIComponent(`site:linkedin.com/in "${nom}"`)}`,
+    // Moteur de secours quand la recherche LinkedIn ne donne rien. DuckDuckGo plutôt que
+    // Google : ce dernier est bloqué sur le poste de Léopaul (ERR_BLOCKED_BY_RESPONSE) et
+    // impose un écran de consentement en Europe.
+    web: `https://duckduckgo.com/?q=${encodeURIComponent(`site:linkedin.com/in "${nom}"`)}`,
     people: `https://www.linkedin.com/search/results/people/?keywords=${enc}`,
     sales: `https://www.linkedin.com/sales/search/people?query=(spellCorrectionEnabled:true,keywords:${enc})`,
   };
@@ -789,11 +790,11 @@ function KanbanCard({ prospect, onOpen }: { prospect: Prospect; onOpen: () => vo
             </span>
             {liSearch && (
               <a
-                href={liSearch.google}
+                href={liSearch.people}
                 target="_blank"
                 rel="noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                title={`Chercher le profil LinkedIn de ${prospect.contact_nom}`}
+                title={`Chercher ${prospect.contact_nom} sur LinkedIn`}
                 className="flex-shrink-0 inline-flex items-center gap-1 rounded border border-[#0A66C2]/40 bg-[#0A66C2]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#0A66C2] hover:bg-[#0A66C2]/20"
               >
                 <Linkedin className="h-3 w-3" /> Chercher
@@ -1038,13 +1039,13 @@ function ProspectSheet({
                   asChild
                   className="bg-[#0A66C2] hover:bg-[#0A66C2]/90 text-white"
                 >
-                  <a href={s.google} target="_blank" rel="noreferrer">
-                    <Linkedin className="h-4 w-4 mr-1.5" /> Trouver le profil
+                  <a href={s.people} target="_blank" rel="noreferrer">
+                    <Linkedin className="h-4 w-4 mr-1.5" /> Trouver sur LinkedIn
                   </a>
                 </Button>
                 <Button type="button" size="sm" variant="outline" asChild className="border-[#0A66C2]/40 text-[#0A66C2] hover:text-[#0A66C2]">
-                  <a href={s.people} target="_blank" rel="noreferrer">
-                    <Linkedin className="h-4 w-4 mr-1.5" /> LinkedIn
+                  <a href={s.web} target="_blank" rel="noreferrer">
+                    <Search className="h-4 w-4 mr-1.5" /> Recherche web
                   </a>
                 </Button>
                 <Button type="button" size="sm" variant="outline" asChild className="border-[#0A66C2]/40 text-[#0A66C2] hover:text-[#0A66C2]">

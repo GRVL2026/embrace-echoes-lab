@@ -120,7 +120,7 @@ function etoiles(t: Record<string, string>): number | null {
   return s !== null && s >= 1 && s <= 5 ? Math.round(s) : null;
 }
 
-async function interrogerOverpass(dep: string, osmFiltre: string): Promise<OsmEl[]> {
+async function interrogerOverpass(dep: string, osmFiltre: string, echeance: number): Promise<OsmEl[]> {
   const q = `[out:json][timeout:120];
 area["ref:INSEE"="${dep}"]["admin_level"="6"]->.a;
 nwr${osmFiltre}(area.a);
@@ -129,6 +129,9 @@ out center;`;
   // un 429 (débit dépassé) ou un 504 se résorbe généralement en quelques secondes.
   let dernierEchec = '';
   for (let essai = 0; essai < OVERPASS_MIRRORS.length * 2; essai++) {
+    // Le temps imparti prime sur l'obstination : mieux vaut rendre la main proprement,
+    // avec un département à reprendre, que d'être coupé net à 150 s.
+    if (Date.now() > echeance) throw new Error(`Temps imparti dépassé avant d'interroger Overpass (dép. ${dep})`);
     const url = OVERPASS_MIRRORS[essai % OVERPASS_MIRRORS.length];
     try {
       const res = await fetch(url, {
@@ -205,7 +208,16 @@ Deno.serve(async (req) => {
       if (Date.now() - debut > BUDGET_MS) { restants.unshift(...aTraiter.slice(i)); break; }
       if (i > 0) await new Promise((r) => setTimeout(r, PAUSE_OVERPASS_MS));
 
-      const elements = await interrogerOverpass(dep, osmFiltre);
+      // Un département qui échoue (Overpass indisponible, temps écoulé) ne doit pas faire
+      // perdre le travail des précédents : on le renvoie dans les restants et on s'arrête.
+      let elements: OsmEl[];
+      try {
+        elements = await interrogerOverpass(dep, osmFiltre, debut + BUDGET_MS);
+      } catch (err) {
+        detail[dep] = { erreur: String((err as any)?.message || err).slice(0, 200) };
+        restants.unshift(...aTraiter.slice(i));
+        break;
+      }
       const osm = elements
         .map((e) => {
           const lat = e.lat ?? e.center?.lat;
@@ -259,7 +271,7 @@ Deno.serve(async (req) => {
       couples.sort((a, b) => b.score - a.score);
       const pPris = new Set<number>(), oPris = new Set<number>();
       let apparieDep = 0;
-      const maj: { id: string; patch: Record<string, unknown> }[] = [];
+      const maj: Record<string, unknown>[] = [];
 
       for (const c of couples) {
         if (pPris.has(c.pi) || oPris.has(c.oi)) continue;
@@ -267,34 +279,37 @@ Deno.serve(async (req) => {
 
         const p = listeP[c.pi];
         const t = osm[c.oi].t;
-        const patch: Record<string, unknown> = {
+        const e = etoiles(t);          if (e !== null) majEtoiles++;
+        const cap = capacite(t);       if (cap !== null) majCapacite++;
+        // On ne remplace jamais une donnée déjà présente en base.
+        const tel  = !p.telephone && t.phone   ? t.phone   : null; if (tel)  majTel++;
+        const mail = !p.email     && t.email   ? t.email   : null; if (mail) majMail++;
+        const site = !p.site_web  && t.website ? t.website : null; if (site) majSite++;
+        // L'enseigne OSM prime : elle nomme le réseau réel (Capfun) là où l'INSEE
+        // ne voit qu'une société par camping.
+        const enseigne = (t.operator || t.brand) && !p.groupe ? (t.operator || t.brand) : null;
+        if (enseigne) majEnseigne++;
+
+        apparies++; apparieDep++;
+        maj.push({
+          id: p.id,
           osm_id: osm[c.oi].id,
           // Traçabilité : permet de réauditer chaque appariement après coup.
           osm_match: {
             nom_osm: c.nomOsm, distance_m: c.d, methode: c.methode,
             score_nom: Math.round(c.sn * 100) / 100,
           },
-        };
-        const e = etoiles(t);          if (e !== null) { patch.etoiles = e; majEtoiles++; }
-        const cap = capacite(t);       if (cap !== null) { patch.capacite = cap; majCapacite++; }
-        // On ne remplace jamais une donnée déjà présente en base.
-        if (!p.telephone && t.phone)   { patch.telephone = t.phone; majTel++; }
-        if (!p.email && t.email)       { patch.email = t.email; majMail++; }
-        if (!p.site_web && t.website)  { patch.site_web = t.website; majSite++; }
-        // L'enseigne OSM prime : elle nomme le réseau réel (Capfun) là où l'INSEE
-        // ne voit qu'une société par camping.
-        const enseigne = t.operator || t.brand;
-        if (enseigne && !p.groupe)     { patch.groupe = enseigne; majEnseigne++; }
-
-        apparies++; apparieDep++;
-        maj.push({ id: p.id, patch });
+          etoiles: e, capacite: cap, telephone: tel, email: mail,
+          site_web: site, groupe: enseigne,
+        });
       }
 
-      if (!dryRun) {
-        for (const m of maj) {
-          const { error: e2 } = await admin.from('prospects').update(m.patch).eq('id', m.id);
-          if (e2) throw e2;
-        }
+      // Une seule écriture pour tout le département : la version précédente envoyait une
+      // requête par camping (161 allers-retours pour la seule Charente-Maritime), ce qui
+      // suffisait à dépasser la limite de 150 s des edge functions.
+      if (!dryRun && maj.length) {
+        const { error: e2 } = await admin.rpc('appliquer_enrichissement_osm', { _maj: maj });
+        if (e2) throw e2;
       }
 
       detail[dep] = {

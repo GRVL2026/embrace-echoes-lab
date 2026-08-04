@@ -2105,6 +2105,7 @@ export type Database = {
           geocode_last_attempt: string | null
           geocode_source: string | null
           geocoded_at: string | null
+          groupe: string | null
           id: string
           lat: number | null
           lgm_audience: string | null
@@ -2147,6 +2148,7 @@ export type Database = {
           geocode_last_attempt?: string | null
           geocode_source?: string | null
           geocoded_at?: string | null
+          groupe?: string | null
           id?: string
           lat?: number | null
           lgm_audience?: string | null
@@ -2189,6 +2191,7 @@ export type Database = {
           geocode_last_attempt?: string | null
           geocode_source?: string | null
           geocoded_at?: string | null
+          groupe?: string | null
           id?: string
           lat?: number | null
           lgm_audience?: string | null

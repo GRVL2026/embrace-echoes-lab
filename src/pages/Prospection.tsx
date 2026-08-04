@@ -191,6 +191,11 @@ export default function Prospection() {
   const [preparing, setPreparing] = useState(false);
   const [bulkSending, setBulkSending] = useState(false);
   const [lgmFilter, setLgmFilter] = useState<"all" | "loisirs" | "chr" | "retail" | "none">("all");
+  // Filtres de travail du pipeline. Le filtre par secteur devient indispensable dès qu'un
+  // segment prend le dessus en volume (1 100 campings noieraient les autres prospects).
+  const [segmentFilter, setSegmentFilter] = useState<"all" | Segment>("all");
+  const [tagFilter, setTagFilter] = useState<string>("all");
+  const [etoilesFilter, setEtoilesFilter] = useState<"all" | "5" | "4" | "3" | "none">("all");
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Ouverture directe d'un prospect via /prospection?prospect=<id> (lien depuis la carte).
@@ -284,12 +289,32 @@ export default function Prospection() {
     return <Navigate to="/" replace />;
   }
 
+  // Cibles réellement présentes en base : la liste s'adapte aux imports, sans être figée.
+  const tagsDisponibles = useMemo(
+    () =>
+      Array.from(new Set(prospects.map((p) => p.tag).filter(Boolean) as string[])).sort((a, b) =>
+        a.localeCompare(b, "fr"),
+      ),
+    [prospects],
+  );
+
   const filteredProspects = useMemo(() => {
-    if (lgmFilter === "all") return prospects;
-    if (lgmFilter === "none") return prospects.filter((p) => !p.lgm_lead_id);
-    const target = `arcade os – ${lgmFilter}`;
-    return prospects.filter((p) => (p.lgm_audience ?? "").toLowerCase().includes(target));
-  }, [prospects, lgmFilter]);
+    let list = prospects;
+    if (lgmFilter === "none") list = list.filter((p) => !p.lgm_lead_id);
+    else if (lgmFilter !== "all") {
+      const target = `arcade os – ${lgmFilter}`;
+      list = list.filter((p) => (p.lgm_audience ?? "").toLowerCase().includes(target));
+    }
+    if (segmentFilter !== "all") list = list.filter((p) => (p.segment ?? "autre") === segmentFilter);
+    if (tagFilter !== "all") list = list.filter((p) => (p.tag ?? "") === tagFilter);
+    if (etoilesFilter === "none") list = list.filter((p) => p.etoiles == null);
+    else if (etoilesFilter !== "all") {
+      // « 4 étoiles » se lit « 4 étoiles ET PLUS » : un 5 étoiles reste une meilleure cible.
+      const mini = Number(etoilesFilter);
+      list = list.filter((p) => (p.etoiles ?? 0) >= mini);
+    }
+    return list;
+  }, [prospects, lgmFilter, segmentFilter, tagFilter, etoilesFilter]);
 
   const byStatut = useMemo(() => {
     const map = new Map<Statut, Prospect[]>();
@@ -389,6 +414,39 @@ export default function Prospection() {
           <p className="text-xs text-muted-foreground truncate">CRM commercial — pipeline & suivi des leads</p>
         </div>
         <div className="hidden md:block">
+          <Select value={segmentFilter} onValueChange={(v) => setSegmentFilter(v as typeof segmentFilter)}>
+            <SelectTrigger className="h-9 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Secteur : tous</SelectItem>
+              {SEGMENTS.map((s) => (
+                <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {tagsDisponibles.length > 0 && (
+            <Select value={tagFilter} onValueChange={setTagFilter}>
+              <SelectTrigger className="h-9 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Cible : toutes</SelectItem>
+                {tagsDisponibles.map((t) => (
+                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          <Select value={etoilesFilter} onValueChange={(v) => setEtoilesFilter(v as typeof etoilesFilter)}>
+            <SelectTrigger className="h-9 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Étoiles : toutes</SelectItem>
+              <SelectItem value="5">5 étoiles</SelectItem>
+              <SelectItem value="4">4 étoiles et plus</SelectItem>
+              <SelectItem value="3">3 étoiles et plus</SelectItem>
+              <SelectItem value="none">Sans classement</SelectItem>
+            </SelectContent>
+          </Select>
+
           <Select value={lgmFilter} onValueChange={(v) => setLgmFilter(v as typeof lgmFilter)}>
             <SelectTrigger className="h-9 w-[180px] text-xs">
               <SelectValue />

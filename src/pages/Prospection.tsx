@@ -3,7 +3,7 @@ import { Navigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Loader2, Plus, Upload, Target, ExternalLink, Trash2, GripVertical, Mail, Phone,
-  Sparkles, Copy, RefreshCw, Save, Link2, Link2Off, Search, TrendingUp, Zap, Send, Linkedin,
+  Sparkles, Copy, RefreshCw, Save, Link2, Link2Off, Search, TrendingUp, Zap, Send, Linkedin, X,
 } from "lucide-react";
 
 /* -------------------- LinkedIn search helpers -------------------- */
@@ -202,6 +202,16 @@ export default function Prospection() {
   const [tagFilter, setTagFilter] = useState<string>("all");
   const [etoilesFilter, setEtoilesFilter] = useState<"all" | "5" | "4" | "3" | "none">("all");
   const [scoreFilter, setScoreFilter] = useState<"all" | "haute" | "moyenne" | "basse" | "none">("all");
+  const [recherche, setRecherche] = useState("");
+
+  const filtresActifs =
+    segmentFilter !== "all" || tagFilter !== "all" || etoilesFilter !== "all" ||
+    scoreFilter !== "all" || lgmFilter !== "all" || recherche.trim() !== "";
+
+  const reinitialiserFiltres = () => {
+    setSegmentFilter("all"); setTagFilter("all");
+    setEtoilesFilter("all"); setScoreFilter("all"); setLgmFilter("all"); setRecherche("");
+  };
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Ouverture directe d'un prospect via /prospection?prospect=<id> (lien depuis la carte).
@@ -319,6 +329,15 @@ export default function Prospection() {
       const mini = Number(etoilesFilter);
       list = list.filter((p) => (p.etoiles ?? 0) >= mini);
     }
+    const q = recherche.trim();
+    if (q) {
+      // Insensible aux accents et à la casse : « chateau » doit trouver « Château ».
+      const sansAccent = (v: string) => v.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const cible = sansAccent(q);
+      list = list.filter((p) =>
+        [p.entreprise, p.contact_nom, p.ville, p.groupe].some((v) => v && sansAccent(v).includes(cible)),
+      );
+    }
     if (scoreFilter !== "all") {
       list = list.filter((p) => {
         const sc = scorePriorite(p);
@@ -328,7 +347,7 @@ export default function Prospection() {
       });
     }
     return list;
-  }, [prospects, lgmFilter, segmentFilter, tagFilter, etoilesFilter, scoreFilter]);
+  }, [prospects, lgmFilter, segmentFilter, tagFilter, etoilesFilter, scoreFilter, recherche]);
 
   const byStatut = useMemo(() => {
     const map = new Map<Statut, Prospect[]>();
@@ -427,7 +446,79 @@ export default function Prospection() {
           <h1 className="font-display text-base sm:text-lg font-semibold truncate">Prospection</h1>
           <p className="text-xs text-muted-foreground truncate">CRM commercial — pipeline & suivi des leads</p>
         </div>
-        <div className="hidden md:block">
+        {canDetecter && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={runDetection}
+            disabled={detecting}
+            className="gap-2"
+            title="Détecter les établissements récemment créés en France (30 jours)"
+          >
+            {detecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+            <span className="hidden sm:inline">{detecting ? "Détection…" : "Détecter les signaux"}</span>
+          </Button>
+        )}
+        {canPreparer && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={runPreparation}
+            disabled={preparing}
+            className="gap-2"
+            title="Enrichir et générer une accroche IA pour les signaux non préparés (agent semi-auto)"
+          >
+            {preparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            <span className="hidden sm:inline">{preparing ? "Préparation…" : "Préparer les nouveaux"}</span>
+          </Button>
+        )}
+        {canEnvoyerLgm && readyToSend.length > 0 && (
+          <Button
+            size="sm"
+            onClick={bulkSendToLgm}
+            disabled={bulkSending}
+            className="gap-2 bg-violet-600 hover:bg-violet-500 text-white"
+            title={`${readyToSend.length} prospect(s) prêt(s) à envoyer vers LGM`}
+          >
+            {bulkSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            <span className="hidden sm:inline">
+              {bulkSending ? "Envoi…" : `Envoyer les ${readyToSend.length} prêts vers LGM`}
+            </span>
+          </Button>
+        )}
+        {canImporterCsv && (
+          <Button size="sm" variant="outline" onClick={() => setImportOpen(true)} className="gap-2">
+            <Upload className="h-4 w-4" /> <span className="hidden sm:inline">Importer CSV</span>
+          </Button>
+        )}
+        <Button size="sm" onClick={() => setAddOpen(true)} className="gap-2">
+          <Plus className="h-4 w-4" /> Ajouter
+        </Button>
+      </header>
+      {/* Barre de filtres sur sa propre ligne. Empilés dans le bandeau, les cinq
+          sélecteurs formaient une colonne étroite qui écrasait le titre et les actions. */}
+      <div className="hidden md:block border-b border-border bg-muted/20 px-4 py-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              value={recherche}
+              onChange={(e) => setRecherche(e.target.value)}
+              placeholder="Société, contact, ville…"
+              className="h-9 w-[220px] pl-8 pr-7 text-xs"
+            />
+            {recherche && (
+              <button
+                type="button"
+                onClick={() => setRecherche("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Effacer la recherche"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
           <Select value={segmentFilter} onValueChange={(v) => setSegmentFilter(v as typeof segmentFilter)}>
             <SelectTrigger className="h-9 w-[150px] text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -484,56 +575,22 @@ export default function Prospection() {
               <SelectItem value="none">Non envoyés</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        {canDetecter && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={runDetection}
-            disabled={detecting}
-            className="gap-2"
-            title="Détecter les établissements récemment créés en France (30 jours)"
-          >
-            {detecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-            <span className="hidden sm:inline">{detecting ? "Détection…" : "Détecter les signaux"}</span>
-          </Button>
-        )}
-        {canPreparer && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={runPreparation}
-            disabled={preparing}
-            className="gap-2"
-            title="Enrichir et générer une accroche IA pour les signaux non préparés (agent semi-auto)"
-          >
-            {preparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            <span className="hidden sm:inline">{preparing ? "Préparation…" : "Préparer les nouveaux"}</span>
-          </Button>
-        )}
-        {canEnvoyerLgm && readyToSend.length > 0 && (
-          <Button
-            size="sm"
-            onClick={bulkSendToLgm}
-            disabled={bulkSending}
-            className="gap-2 bg-violet-600 hover:bg-violet-500 text-white"
-            title={`${readyToSend.length} prospect(s) prêt(s) à envoyer vers LGM`}
-          >
-            {bulkSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            <span className="hidden sm:inline">
-              {bulkSending ? "Envoi…" : `Envoyer les ${readyToSend.length} prêts vers LGM`}
+
+          {filtresActifs && (
+            <Button variant="ghost" size="sm" className="h-9 text-xs gap-1.5" onClick={reinitialiserFiltres}>
+              <X className="h-3.5 w-3.5" /> Réinitialiser
+            </Button>
+          )}
+
+          <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+            <span className="font-semibold text-foreground">
+              {filteredProspects.length.toLocaleString("fr-FR")}
             </span>
-          </Button>
-        )}
-        {canImporterCsv && (
-          <Button size="sm" variant="outline" onClick={() => setImportOpen(true)} className="gap-2">
-            <Upload className="h-4 w-4" /> <span className="hidden sm:inline">Importer CSV</span>
-          </Button>
-        )}
-        <Button size="sm" onClick={() => setAddOpen(true)} className="gap-2">
-          <Plus className="h-4 w-4" /> Ajouter
-        </Button>
-      </header>
+            {filtresActifs ? ` sur ${prospects.length.toLocaleString("fr-FR")} leads` : " leads"}
+          </span>
+        </div>
+      </div>
+
 
       <main className="flex-1 p-4 space-y-4 min-w-0">
         {/* KPIs */}

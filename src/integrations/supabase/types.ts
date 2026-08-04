@@ -2716,6 +2716,30 @@ export type Database = {
         }
         Relationships: []
       }
+      v_cron_jobs: {
+        Row: {
+          active: boolean | null
+          commande: string | null
+          jobid: number | null
+          jobname: string | null
+          schedule: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          commande?: never
+          jobid?: number | null
+          jobname?: string | null
+          schedule?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          commande?: never
+          jobid?: number | null
+          jobname?: string | null
+          schedule?: string | null
+        }
+        Relationships: []
+      }
       v_gaia_article_famille: {
         Row: {
           code: string | null

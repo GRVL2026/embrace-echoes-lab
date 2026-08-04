@@ -2119,6 +2119,7 @@ export type Database = {
           montant_estime: number | null
           notes: string | null
           osm_id: string | null
+          osm_match: Json | null
           owner_id: string | null
           prepare_at: string | null
           pret_a_envoyer: boolean
@@ -2165,6 +2166,7 @@ export type Database = {
           montant_estime?: number | null
           notes?: string | null
           osm_id?: string | null
+          osm_match?: Json | null
           owner_id?: string | null
           prepare_at?: string | null
           pret_a_envoyer?: boolean
@@ -2211,6 +2213,7 @@ export type Database = {
           montant_estime?: number | null
           notes?: string | null
           osm_id?: string | null
+          osm_match?: Json | null
           owner_id?: string | null
           prepare_at?: string | null
           pret_a_envoyer?: boolean

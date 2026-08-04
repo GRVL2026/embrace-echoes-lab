@@ -42,20 +42,46 @@ type ProspectPt = {
   segment: string | null;
 };
 
-type Layer = "actif" | "dormant" | "inactif" | "prospects";
+// Deux univers distincts sur la carte : les clients (par ancienneté de commande) et les
+// prospects (par secteur d'activité). Les mélanger dans une seule liste de couches
+// empêchait de travailler un secteur de prospection sans afficher tout le portefeuille.
+type ClientLayer = "actif" | "dormant" | "inactif";
+type ProspectSeg = "camping" | "loisirs" | "chr" | "retail" | "autre";
 
-const COLORS: Record<Layer, string> = {
+const CLIENT_LAYERS: ClientLayer[] = ["actif", "dormant", "inactif"];
+const PROSPECT_SEGMENTS: ProspectSeg[] = ["camping", "loisirs", "chr", "retail", "autre"];
+
+const COLORS_CLIENT: Record<ClientLayer, string> = {
   actif: "#3b82f6",
   dormant: "#f59e0b",
   inactif: "#94a3b8",
-  prospects: "#10b981",
 };
-const LABELS: Record<Layer, string> = {
-  actif: "Clients actifs",
-  dormant: "Clients dormants",
-  inactif: "Clients inactifs",
-  prospects: "Prospects",
+const COLORS_PROSPECT: Record<ProspectSeg, string> = {
+  camping: "#10b981",
+  loisirs: "#a855f7",
+  chr: "#f43f5e",
+  retail: "#0ea5e9",
+  autre: "#64748b",
 };
+const LABELS_CLIENT: Record<ClientLayer, string> = {
+  actif: "Actifs",
+  dormant: "Dormants",
+  inactif: "Inactifs",
+};
+const LABELS_PROSPECT: Record<ProspectSeg, string> = {
+  camping: "Camping",
+  loisirs: "Loisirs",
+  chr: "CHR",
+  retail: "Retail",
+  autre: "Autres",
+};
+
+// Tout segment inconnu ou absent retombe sur « autre » : un prospect ne doit jamais
+// disparaître de la carte à cause d'un libellé inattendu.
+function segProspect(s: string | null | undefined): ProspectSeg {
+  const v = (s ?? "").toLowerCase().trim();
+  return (PROSPECT_SEGMENTS as string[]).includes(v) ? (v as ProspectSeg) : "autre";
+}
 
 function fmtEUR(n: number): string {
   if (!isFinite(n)) return "—";
@@ -143,7 +169,7 @@ type PopupClient = {
 function popupClientHtml(p: PopupClient, canReactivation: boolean): string {
   const code = escapeHtml(p.code_client);
   const nom = p.nom || "—";
-  const color = p.categorie ? COLORS[p.categorie] : "#64748b";
+  const color = p.categorie ? COLORS_CLIENT[p.categorie as ClientLayer] : "#64748b";
   const statusHtml = companyStatusPopupHtml({
     etat_administratif: p.etat_administratif,
     procedure_collective: p.procedure_collective,
@@ -190,17 +216,19 @@ export default function Carte() {
   const search = new URLSearchParams(useLocation().search);
   const vue = search.get("vue"); // "prospection" | null
 
-  const [layers, setLayers] = useState<Record<Layer, boolean>>(() => ({
+  const [clientLayers, setClientLayers] = useState<Record<ClientLayer, boolean>>({
     actif: true,
     dormant: true,
     inactif: false,
-    prospects: vue === "prospection",
-  }));
+  });
+  const tousSegments = (on: boolean): Record<ProspectSeg, boolean> =>
+    Object.fromEntries(PROSPECT_SEGMENTS.map((s) => [s, on])) as Record<ProspectSeg, boolean>;
+  const [prospectLayers, setProspectLayers] = useState<Record<ProspectSeg, boolean>>(() =>
+    tousSegments(vue === "prospection"),
+  );
 
   useEffect(() => {
-    if (vue === "prospection") {
-      setLayers((s) => ({ ...s, prospects: true }));
-    }
+    if (vue === "prospection") setProspectLayers(tousSegments(true));
   }, [vue]);
 
   const { data, isLoading, error } = useQuery({
@@ -220,11 +248,16 @@ export default function Carte() {
 
   const counts = useMemo(() => {
     const clients = data?.clients ?? [];
+    const prospects = data?.prospects ?? [];
+    const parSegment = Object.fromEntries(
+      PROSPECT_SEGMENTS.map((s) => [s, prospects.filter((p) => segProspect(p.segment) === s).length]),
+    ) as Record<ProspectSeg, number>;
     return {
       actif: clients.filter((c) => c.categorie === "actif").length,
       dormant: clients.filter((c) => c.categorie === "dormant").length,
       inactif: clients.filter((c) => c.categorie === "inactif").length,
-      prospects: data?.prospects.length ?? 0,
+      prospects: prospects.length,
+      parSegment,
     };
   }, [data]);
 
@@ -398,11 +431,11 @@ export default function Carte() {
 
     // Quand un résultat copilote est actif, on ignore les cases à cocher :
     // les points demandés doivent toujours être visibles.
-    if (filterCodes || layers.actif || layers.dormant || layers.inactif) {
+    if (filterCodes || clientLayers.actif || clientLayers.dormant || clientLayers.inactif) {
       for (const c of data.clients) {
-        if (!filterCodes && !layers[c.categorie]) continue;
+        if (!filterCodes && !clientLayers[c.categorie as ClientLayer]) continue;
         if (filterCodes && !filterCodes.has(String(c.code_client ?? "").trim())) continue;
-        const color = COLORS[c.categorie];
+        const color = COLORS_CLIENT[c.categorie as ClientLayer];
         const size = c.categorie === "actif" ? 8 + Math.round(20 * Math.sqrt((c.ca_12m || 0) / maxCa)) : 10;
         const m = L.marker([c.lat, c.lng], { icon: makeDivIcon(color, size, !!filterCodes) });
         m.bindPopup(popupClientHtml(c, canReactivation));
@@ -411,9 +444,11 @@ export default function Carte() {
       }
     }
 
-    if (layers.prospects && !filterCodes) {
+    if (!filterCodes) {
       for (const p of data.prospects) {
-        const m = L.marker([p.lat, p.lng], { icon: makeDivIcon(COLORS.prospects, 12) });
+        const seg = segProspect(p.segment);
+        if (!prospectLayers[seg]) continue;
+        const m = L.marker([p.lat, p.lng], { icon: makeDivIcon(COLORS_PROSPECT[seg], 12) });
         m.bindPopup(popupProspectHtml(p));
         cluster.addLayer(m);
       }
@@ -430,7 +465,7 @@ export default function Carte() {
         if (key) missingClient = true;
         const isClient = !!key;
         const m = L.marker([p.lat, p.lng], {
-          icon: makeDivIcon(isClient ? COLORS.inactif : COLORS.prospects, 12, true),
+          icon: makeDivIcon(isClient ? COLORS_CLIENT.inactif : COLORS_PROSPECT.camping, 12, true),
         });
         m.bindPopup(
           isClient
@@ -478,7 +513,7 @@ export default function Carte() {
       }
     }
 
-  }, [data, layers, copilotResult]);
+  }, [data, clientLayers, prospectLayers, copilotResult]);
 
   const zoomToClient = (c: ClientPt) => {
     setSuggestOpen(false);
@@ -672,7 +707,7 @@ export default function Carte() {
                     </div>
                     <span
                       className="inline-block h-2 w-2 rounded-full shrink-0"
-                      style={{ background: COLORS[c.categorie] }}
+                      style={{ background: COLORS_CLIENT[c.categorie as ClientLayer] }}
                     />
                   </button>
                 ))}
@@ -794,21 +829,64 @@ export default function Carte() {
 
         {/* Filtres */}
         <Card className="absolute top-3 right-3 z-[20] p-3 min-w-[200px] shadow-lg">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Couches</div>
+          {/* Deux blocs : le portefeuille d'un côté, la prospection de l'autre. */}
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Clients
+            </span>
+            <span className="text-[11px] text-muted-foreground tabular-nums">
+              {(counts.actif + counts.dormant + counts.inactif).toLocaleString("fr-FR")}
+            </span>
+          </div>
           <div className="space-y-1.5">
-            {(Object.keys(LABELS) as Layer[]).map((k) => (
+            {CLIENT_LAYERS.map((k) => (
               <label key={k} className="flex items-center gap-2 text-sm cursor-pointer">
                 <Checkbox
-                  checked={layers[k]}
-                  onCheckedChange={(v) => setLayers((s) => ({ ...s, [k]: !!v }))}
+                  checked={clientLayers[k]}
+                  onCheckedChange={(v) => setClientLayers((s) => ({ ...s, [k]: !!v }))}
                 />
                 <span
                   className="inline-block h-2.5 w-2.5 rounded-full"
-                  style={{ background: COLORS[k] }}
+                  style={{ background: COLORS_CLIENT[k] }}
                 />
-                <span className="flex-1">{LABELS[k]}</span>
+                <span className="flex-1">{LABELS_CLIENT[k]}</span>
                 <span className="text-xs text-muted-foreground tabular-nums">
                   {counts[k].toLocaleString("fr-FR")}
+                </span>
+              </label>
+            ))}
+          </div>
+
+          <div className="mt-3 pt-3 border-t border-border/60 flex items-center justify-between mb-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Prospects
+            </span>
+            <button
+              type="button"
+              className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2"
+              onClick={() =>
+                setProspectLayers((s) =>
+                  tousSegments(!PROSPECT_SEGMENTS.every((k) => s[k])),
+                )
+              }
+            >
+              {PROSPECT_SEGMENTS.every((k) => prospectLayers[k]) ? "Aucun" : "Tous"}
+            </button>
+          </div>
+          <div className="space-y-1.5">
+            {PROSPECT_SEGMENTS.filter((k) => counts.parSegment[k] > 0).map((k) => (
+              <label key={k} className="flex items-center gap-2 text-sm cursor-pointer">
+                <Checkbox
+                  checked={prospectLayers[k]}
+                  onCheckedChange={(v) => setProspectLayers((s) => ({ ...s, [k]: !!v }))}
+                />
+                <span
+                  className="inline-block h-2.5 w-2.5 rounded-sm"
+                  style={{ background: COLORS_PROSPECT[k] }}
+                />
+                <span className="flex-1">{LABELS_PROSPECT[k]}</span>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {counts.parSegment[k].toLocaleString("fr-FR")}
                 </span>
               </label>
             ))}

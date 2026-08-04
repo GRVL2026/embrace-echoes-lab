@@ -121,7 +121,9 @@ function etoiles(t: Record<string, string>): number | null {
 }
 
 async function interrogerOverpass(dep: string, osmFiltre: string, echeance: number): Promise<OsmEl[]> {
-  const q = `[out:json][timeout:120];
+  // 45 s : au-delà, on préfère rendre la main et reprendre le département au prochain
+  // appel plutôt que de risquer la coupure à 150 s de l'edge function.
+  const q = `[out:json][timeout:45];
 area["ref:INSEE"="${dep}"]["admin_level"="6"]->.a;
 nwr${osmFiltre}(area.a);
 out center;`;
@@ -134,6 +136,9 @@ out center;`;
     if (Date.now() > echeance) throw new Error(`Temps imparti dépassé avant d'interroger Overpass (dép. ${dep})`);
     const url = OVERPASS_MIRRORS[essai % OVERPASS_MIRRORS.length];
     try {
+      // SANS CECI, fetch attend indéfiniment : c'est ce qui faisait dépasser les 150 s
+      // malgré le contrôle de temps, celui-ci n'intervenant qu'ENTRE deux tentatives.
+      const restant = Math.max(5_000, Math.min(50_000, echeance - Date.now()));
       const res = await fetch(url, {
         method: 'POST',
         headers: {
@@ -142,6 +147,7 @@ out center;`;
           'User-Agent': OVERPASS_UA,
         },
         body: new URLSearchParams({ data: q }).toString(),
+        signal: AbortSignal.timeout(restant),
       });
       if (res.ok) {
         const data = await res.json();

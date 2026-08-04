@@ -19,6 +19,9 @@ const CRON_SECRET = Deno.env.get('CRON_SECRET') || '';
 const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
 const OVERPASS = 'https://overpass-api.de/api/interpreter';
+// Overpass refuse par un 406 les clients qui ne s'identifient pas : cette en-tête est
+// obligatoire, comme pour Nominatim dans la fonction geocoder.
+const OVERPASS_UA = 'Arcade OS - Avranches Automatic (leopaul@avranchesautomatic.com)';
 const DEPS_PAR_APPEL = 4;        // Overpass est lent : peu de départements par invocation
 const DIST_SURE_M = 250;         // en deçà, la proximité suffit
 const DIST_MAX_M = 600;          // au-delà, on n'apparie plus
@@ -82,9 +85,17 @@ nwr${osmFiltre}(area.a);
 out center;`;
   const res = await fetch(OVERPASS, {
     method: 'POST',
-    body: new URLSearchParams({ data: q }),
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': 'application/json',
+      'User-Agent': OVERPASS_UA,
+    },
+    body: new URLSearchParams({ data: q }).toString(),
   });
-  if (!res.ok) throw new Error(`Overpass ${res.status} sur le département ${dep}`);
+  if (!res.ok) {
+    const corps = await res.text().catch(() => '');
+    throw new Error(`Overpass ${res.status} sur le département ${dep} — ${corps.slice(0, 200)}`);
+  }
   const data = await res.json();
   return (data.elements ?? []) as OsmEl[];
 }

@@ -2093,6 +2093,7 @@ export type Database = {
           activite: string | null
           adresse: string | null
           ca_annuel: number | null
+          capacite: number | null
           code_client: string | null
           contact_nom: string | null
           contact_role: string | null
@@ -2101,6 +2102,7 @@ export type Database = {
           email: string | null
           entreprise: string
           etat_administratif: string | null
+          etoiles: number | null
           geocode_attempts: number
           geocode_last_attempt: string | null
           geocode_source: string | null
@@ -2116,6 +2118,7 @@ export type Database = {
           lng: number | null
           montant_estime: number | null
           notes: string | null
+          osm_id: string | null
           owner_id: string | null
           prepare_at: string | null
           pret_a_envoyer: boolean
@@ -2136,6 +2139,7 @@ export type Database = {
           activite?: string | null
           adresse?: string | null
           ca_annuel?: number | null
+          capacite?: number | null
           code_client?: string | null
           contact_nom?: string | null
           contact_role?: string | null
@@ -2144,6 +2148,7 @@ export type Database = {
           email?: string | null
           entreprise: string
           etat_administratif?: string | null
+          etoiles?: number | null
           geocode_attempts?: number
           geocode_last_attempt?: string | null
           geocode_source?: string | null
@@ -2159,6 +2164,7 @@ export type Database = {
           lng?: number | null
           montant_estime?: number | null
           notes?: string | null
+          osm_id?: string | null
           owner_id?: string | null
           prepare_at?: string | null
           pret_a_envoyer?: boolean
@@ -2179,6 +2185,7 @@ export type Database = {
           activite?: string | null
           adresse?: string | null
           ca_annuel?: number | null
+          capacite?: number | null
           code_client?: string | null
           contact_nom?: string | null
           contact_role?: string | null
@@ -2187,6 +2194,7 @@ export type Database = {
           email?: string | null
           entreprise?: string
           etat_administratif?: string | null
+          etoiles?: number | null
           geocode_attempts?: number
           geocode_last_attempt?: string | null
           geocode_source?: string | null
@@ -2202,6 +2210,7 @@ export type Database = {
           lng?: number | null
           montant_estime?: number | null
           notes?: string | null
+          osm_id?: string | null
           owner_id?: string | null
           prepare_at?: string | null
           pret_a_envoyer?: boolean
@@ -3049,6 +3058,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      consolider_prospects_naf: { Args: never; Returns: Json }
       dispatch_notification: {
         Args: {
           _corps?: string

@@ -8,12 +8,17 @@ import {
 
 /* -------------------- LinkedIn search helpers -------------------- */
 function buildLinkedInSearch(p: { contact_nom?: string | null; entreprise?: string | null; ville?: string | null }) {
-  const nom = (p.contact_nom ?? "").replace(/,/g, " ").replace(/\s+/g, " ").trim();
+  // Ne chercher QUE sur le nom du contact. La version précédente concaténait nom +
+  // raison sociale + ville : LinkedIn exigeant que TOUS les mots-clés figurent dans le
+  // profil, une recherche comme « Aymeric DRUJON D'ASTROS FLOWER EXPLOITATION CAMPINGS
+  // BALMA » ne pouvait rien renvoyer — aucun profil ne reprend la raison sociale entière.
+  const nom = (p.contact_nom ?? "").replace(/[(),]/g, " ").replace(/\s+/g, " ").trim();
   if (!nom) return null;
-  const parts = [nom, p.entreprise ?? "", p.ville ?? ""].map((s) => (s ?? "").trim()).filter(Boolean);
-  const kw = parts.join(" ");
-  const enc = encodeURIComponent(kw);
+  const enc = encodeURIComponent(nom);
   return {
+    // Google est le plus fiable pour retrouver un profil : il tolère les variantes
+    // d'orthographe et de casse, là où la recherche interne de LinkedIn est stricte.
+    google: `https://www.google.com/search?q=${encodeURIComponent(`site:linkedin.com/in "${nom}"`)}`,
     people: `https://www.linkedin.com/search/results/people/?keywords=${enc}`,
     sales: `https://www.linkedin.com/sales/search/people?query=(spellCorrectionEnabled:true,keywords:${enc})`,
   };
@@ -721,11 +726,11 @@ function KanbanCard({ prospect, onOpen }: { prospect: Prospect; onOpen: () => vo
         <GripVertical className="h-3.5 w-3.5 text-muted-foreground/50 mt-0.5 flex-shrink-0" />
         {liSearch && (
           <a
-            href={liSearch.people}
+            href={liSearch.google}
             target="_blank"
             rel="noreferrer"
             onClick={(e) => e.stopPropagation()}
-            title={`Trouver ${prospect.contact_nom} sur LinkedIn`}
+            title={`Trouver le profil LinkedIn de ${prospect.contact_nom} (recherche Google)`}
             className="mt-0.5 flex-shrink-0 text-[#0A66C2] hover:text-[#0A66C2]/80"
           >
             <Linkedin className="h-3.5 w-3.5" />
@@ -974,8 +979,13 @@ function ProspectSheet({
                   asChild
                   className="bg-[#0A66C2] hover:bg-[#0A66C2]/90 text-white"
                 >
+                  <a href={s.google} target="_blank" rel="noreferrer">
+                    <Linkedin className="h-4 w-4 mr-1.5" /> Trouver le profil
+                  </a>
+                </Button>
+                <Button type="button" size="sm" variant="outline" asChild className="border-[#0A66C2]/40 text-[#0A66C2] hover:text-[#0A66C2]">
                   <a href={s.people} target="_blank" rel="noreferrer">
-                    <Linkedin className="h-4 w-4 mr-1.5" /> Trouver sur LinkedIn
+                    <Linkedin className="h-4 w-4 mr-1.5" /> LinkedIn
                   </a>
                 </Button>
                 <Button type="button" size="sm" variant="outline" asChild className="border-[#0A66C2]/40 text-[#0A66C2] hover:text-[#0A66C2]">

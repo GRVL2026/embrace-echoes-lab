@@ -1375,13 +1375,32 @@ function MonthlySalesSection() {
     return PIE_PALETTE[i % PIE_PALETTE.length];
   };
 
-  // Familles principales = part_pct (au mois N) >= 1 %. Même set pour les 2 camemberts.
+  // Familles principales : au moins 1 % du CA du mois N **OU** du mois N-1.
+  // Ne se baser que sur N écrasait tout le camembert N-1 dans « Autres » dès que le mois en
+  // cours était peu avancé (constaté début août : 98,8 % du CA de N-1 en « Autres »).
+  // Le set reste commun aux deux camemberts pour garder des couleurs cohérentes.
+  const MAX_PARTS = 10;
+  const partOf = (v: unknown, total: number) => (total > 0 ? (Number(v || 0) / total) * 100 : 0);
   const mainSet = new Set(
     familles
-      .filter((f) => Number(f.part_pct ?? 0) >= 1 && Number(f.ca_mois || 0) > 0)
-
-      .map((f) => f.famille || "—"),
+      .map((f) => ({
+        nom: f.famille || "—",
+        poids: Math.max(partOf(f.ca_mois, totalN), partOf(f.ca_mois_n1, totalN1)),
+      }))
+      .filter((f) => f.poids >= 1)
+      .sort((a, b) => b.poids - a.poids)
+      .slice(0, MAX_PARTS)
+      .map((f) => f.nom),
   );
+
+  // Familles regroupées dans « Autres » : indispensable pour pouvoir les détailler au clic.
+  const othersMembers = familles
+    .filter((f) => !mainSet.has(f.famille || "—"))
+    .map((f) => ({
+      famille: f.famille || "—",
+      ca_mois: Number(f.ca_mois || 0),
+      ca_mois_n1: Number(f.ca_mois_n1 || 0),
+    }));
 
   const buildPie = (key: "ca_mois" | "ca_mois_n1") => {
     const main = familles
@@ -1409,7 +1428,7 @@ function MonthlySalesSection() {
     "(sans famille)": "Articles sans famille renseignée dans l'ERP (ex. abonnements)",
     "MAGASIN": "Ventes boutique (hors jeux)",
     "Occasion": "Jeux d'occasion",
-    [OTHERS_LABEL]: "Familles inférieures à 3 % du CA du mois (détail dans le tableau)",
+    [OTHERS_LABEL]: "Familles pesant moins de 1 % du CA, aussi bien ce mois-ci que l'an dernier — cliquez pour voir le détail",
   };
 
   const pieTooltip = (total: number) => ({ active, payload }: any) => {
@@ -1509,7 +1528,9 @@ function MonthlySalesSection() {
         labelN={labelMois(dNow)}
         labelN1={labelMois(dN1)}
         monthStr={monthStr}
+        monthStrN1={monthKey(dN1)}
         othersLabel={OTHERS_LABEL}
+        othersMembers={othersMembers}
       />
     </div>
   );
@@ -1539,28 +1560,36 @@ function FamillePieBlock(props: {
   labelN: string;
   labelN1: string;
   monthStr: string;
+  monthStrN1: string;
   othersLabel: string;
+  othersMembers: { famille: string; ca_mois: number; ca_mois_n1: number }[];
 }) {
-  const { familles, loading, totalN, totalN1, pieN, pieN1, familyColor, FAMILY_HELP, pieTooltip, labelN, labelN1, monthStr, othersLabel } = props;
-  const [selectedFam, setSelectedFam] = useState<string | null>(null);
+  const { familles, loading, totalN, totalN1, pieN, pieN1, familyColor, FAMILY_HELP, pieTooltip, labelN, labelN1, monthStr, monthStrN1, othersLabel, othersMembers } = props;
+  // On mémorise AUSSI la période cliquée : sans elle, un clic sur le camembert N-1
+  // affichait le détail du mois N (bug constaté : clic sur août 2025 → détail août 2026).
+  const [selected, setSelected] = useState<{ fam: string; period: "N" | "N1" } | null>(null);
   const [showAll, setShowAll] = useState(false);
 
-  const onSliceClick = (fam: string) => {
+  const selectedFam = selected?.fam ?? null;
+  const isOthers = selectedFam === othersLabel;
+  const selPeriod = selected?.period ?? "N";
+  const selMonthStr = selPeriod === "N" ? monthStr : monthStrN1;
+  const selLabel = selPeriod === "N" ? labelN : labelN1;
+
+  const onSliceClick = (fam: string, period: "N" | "N1") => {
     if (!fam) return;
-    if (fam === othersLabel) {
-      setShowAll(true);
-      setSelectedFam(null);
-      return;
-    }
-    setSelectedFam((cur) => (cur === fam ? null : fam));
+    setSelected((cur) => (cur && cur.fam === fam && cur.period === period ? null : { fam, period }));
+    if (fam === othersLabel) setShowAll(true);
   };
 
+  // « Autres » est un agrégat synthétique, il n'existe pas comme famille en base :
+  // interroger la RPC avec ce nom ne renvoyait jamais rien. On liste donc ses composantes.
   const detailQ = useQuery({
-    enabled: !!selectedFam,
-    queryKey: ["dash-fam-detail", monthStr, selectedFam],
+    enabled: !!selectedFam && !isOthers,
+    queryKey: ["dash-fam-detail", selMonthStr, selectedFam],
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc("get_ventes_famille_detail", {
-        _month: monthStr,
+        _month: selMonthStr,
         _famille: selectedFam,
       });
       if (error) throw error;
@@ -1568,7 +1597,14 @@ function FamillePieBlock(props: {
     },
   });
 
-  const renderPie = (title: string, data: PieDatum[], total: number) => (
+  // Composantes de « Autres » pour la période cliquée, triées par CA décroissant.
+  const othersRows = othersMembers
+    .map((m) => ({ famille: m.famille, ca: selPeriod === "N" ? m.ca_mois : m.ca_mois_n1 }))
+    .filter((m) => m.ca > 0)
+    .sort((a, b) => b.ca - a.ca);
+  const othersTotal = othersRows.reduce((s, r) => s + r.ca, 0);
+
+  const renderPie = (title: string, data: PieDatum[], total: number, period: "N" | "N1") => (
     <div className="flex flex-col items-center">
       <div className="mb-1 text-sm font-medium capitalize">{title}</div>
       {data.length === 0 ? (
@@ -1586,11 +1622,12 @@ function FamillePieBlock(props: {
                 paddingAngle={2}
                 stroke="none"
                 isAnimationActive={false}
-                onClick={(d: any) => onSliceClick(d?.name)}
+                onClick={(d: any) => onSliceClick(d?.name, period)}
               >
                 {data.map((d, i) => {
-                  const dim = selectedFam && d.name !== selectedFam;
-                  const highlight = selectedFam && d.name === selectedFam;
+                  const active = selected?.period === period && d.name === selected.fam;
+                  const dim = selected?.period === period && !active;
+                  const highlight = active;
                   return (
                     <Cell
                       key={i}
@@ -1635,23 +1672,64 @@ function FamillePieBlock(props: {
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {renderPie(labelN, pieN, totalN)}
-            {renderPie(labelN1, pieN1, totalN1)}
+            {renderPie(labelN, pieN, totalN, "N")}
+            {renderPie(labelN1, pieN1, totalN1, "N1")}
           </div>
 
-          <Sheet open={!!selectedFam} onOpenChange={(o) => !o && setSelectedFam(null)}>
+          <Sheet open={!!selectedFam} onOpenChange={(o) => !o && setSelected(null)}>
             <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto">
               <SheetHeader>
                 <SheetTitle className="font-display inline-flex items-center gap-2 capitalize">
                   {selectedFam && (
                     <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: familyColor(selectedFam) }} />
                   )}
-                  Détail — {selectedFam} · <span className="capitalize">{labelN}</span>
+                  Détail — {selectedFam} · <span className="capitalize">{selLabel}</span>
                 </SheetTitle>
-                <SheetDescription>Articles vendus ce mois, triés par CA décroissant.</SheetDescription>
+                <SheetDescription>
+                  {isOthers
+                    ? "Familles regroupées dans « Autres », triées par CA décroissant."
+                    : "Articles vendus ce mois, triés par CA décroissant."}
+                </SheetDescription>
               </SheetHeader>
               <div className="mt-4">
-                {detailQ.isLoading ? (
+                {isOthers ? (
+                  othersRows.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">Aucune vente sur ce mois.</div>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-xs uppercase tracking-wider text-muted-foreground">
+                          <th className="py-2 pr-2 text-left font-medium">Famille</th>
+                          <th className="py-2 px-2 text-right font-medium">CA</th>
+                          <th className="py-2 pl-2 text-right font-medium">Part</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {othersRows.map((r) => (
+                          <tr
+                            key={r.famille}
+                            className="border-t border-border/50 cursor-pointer hover:bg-muted/40"
+                            onClick={() => setSelected({ fam: r.famille, period: selPeriod })}
+                            title="Voir les articles de cette famille"
+                          >
+                            <td className="py-2 pr-2">{r.famille}</td>
+                            <td className="py-2 px-2 text-right tabular-nums">{eur(r.ca)}</td>
+                            <td className="py-2 pl-2 text-right tabular-nums text-muted-foreground">
+                              {othersTotal > 0 ? ((r.ca / othersTotal) * 100).toFixed(1) : "0.0"} %
+                            </td>
+                          </tr>
+                        ))}
+                        <tr className="border-t border-border">
+                          <td className="py-2 pr-2 text-xs uppercase tracking-wider text-muted-foreground">
+                            Total {othersLabel}
+                          </td>
+                          <td className="py-2 px-2 text-right font-semibold tabular-nums">{eur(othersTotal)}</td>
+                          <td />
+                        </tr>
+                      </tbody>
+                    </table>
+                  )
+                ) : detailQ.isLoading ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
                   </div>
@@ -1727,7 +1805,7 @@ function FamillePieBlock(props: {
                     <tr
                       key={famName + i}
                       className={"border-t border-border/50 cursor-pointer hover:bg-card/60 " + (isSel ? "bg-card/70" : "")}
-                      onClick={() => setSelectedFam(isSel ? null : famName)}
+                      onClick={() => setSelected(isSel ? null : { fam: famName, period: "N" })}
                     >
                       <td className="py-1.5 pr-2">
                         <div className="flex items-center gap-2">

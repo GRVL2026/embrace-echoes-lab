@@ -172,7 +172,24 @@ Deno.serve(async (req) => {
     // --- 1. Collecte -------------------------------------------------------------
     const parTitre = new Map<string, Brut>();
     const echecs: string[] = [];
-    for (const lieu of LIEUX) {
+
+    // Articles fournis par l'appelant : Google Actualités refuse les adresses IP des
+    // centres de données (Supabase comme Cloudflare), mais répond normalement depuis une
+    // connexion ordinaire. La collecte peut donc être faite en amont et postée ici, la
+    // fonction gardant son vrai rôle : trier, interpréter, rapprocher, stocker.
+    // La source devient ainsi interchangeable — un service de collecte hébergé prendrait
+    // le relais sans qu'une ligne de ce qui suit ne change.
+    const fournis: any[] = Array.isArray(body.articles) ? body.articles : [];
+    for (const a of fournis) {
+      const titre = String(a?.titre ?? '').trim();
+      const lien = String(a?.url ?? '').trim();
+      const publie = String(a?.publie ?? '').slice(0, 10);
+      if (!titre || !lien || !/^\d{4}-\d{2}-\d{2}$/.test(publie)) continue;  // pas de date, pas de signal
+      if (BRUIT.test(titre) || parTitre.has(titre)) continue;
+      parTitre.set(titre, { titre, url: lien, source: String(a?.source ?? '(source inconnue)'), publie });
+    }
+
+    for (const lieu of fournis.length ? [] : LIEUX) {
       if (Date.now() - debut > BUDGET_MS) break;
       try {
         for (const b of await interrogerGoogleNews(lieu, depuis)) {
@@ -286,6 +303,7 @@ Deno.serve(async (req) => {
 
     return json({
       ok: true, dry_run: dryRun, fenetre_jours: jours, depuis,
+      mode: fournis.length ? 'articles fournis' : 'collecte directe',
       candidats: candidats.length,
       echecs_collecte: echecs.length ? echecs.slice(0, 3) : undefined,
       nouveaux: nouveaux.length,

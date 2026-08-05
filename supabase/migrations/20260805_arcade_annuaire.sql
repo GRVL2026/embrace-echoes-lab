@@ -1,0 +1,153 @@
+-- Annuaire des salles d'arcade : socle d'intégration et de croisement.
+--
+-- L'objectif n'est pas d'ajouter une source de plus, mais d'ENRICHIR les fiches
+-- existantes. D'où deux principes tenus dès la première ligne :
+--   1. une fiche par établissement, reconnaissable par une empreinte stable ;
+--   2. la source est cumulable, jamais un silo — un lieu trouvé par l'annuaire ET
+--      par la presse ET par l'import NAF doit rester UNE fiche, mieux renseignée.
+--
+-- Sans ces deux règles, chaque nouvelle source dupliquerait au lieu d'enrichir.
+
+-- ── Empreinte de rapprochement ───────────────────────────────────────────────
+-- Nom normalisé + ville : accents, ponctuation, casse et espaces disparaissent,
+-- « Bowling de l'Océan » et « BOWLING DE L OCEAN » se rejoignent. Immuable, donc
+-- utilisable en colonne générée et en index.
+create or replace function public.empreinte_etablissement(nom text, lieu text)
+returns text
+language sql
+immutable
+as $$
+  select regexp_replace(
+           lower(translate(coalesce(nom, ''),
+                 'àâäáãåçéèêëíìîïñóòôöõúùûüýÿ', 'aaaaaaceeeeiiiinooooouuuuyy')),
+           '[^a-z0-9]+', '', 'g')
+      || '|' ||
+         regexp_replace(
+           lower(translate(coalesce(lieu, ''),
+                 'àâäáãåçéèêëíìîïñóòôöõúùûüýÿ', 'aaaaaaceeeeiiiinooooouuuuyy')),
+           '[^a-z0-9]+', '', 'g');
+$$;
+
+-- ── Règles 1 et 2 appliquées aux prospects ───────────────────────────────────
+alter table public.prospects
+  add column if not exists code_postal text,
+  add column if not exists sources text[] not null default '{}';
+
+-- Colonne générée : l'empreinte ne peut pas se désynchroniser du nom.
+alter table public.prospects
+  add column if not exists empreinte text
+  generated always as (public.empreinte_etablissement(entreprise, ville)) stored;
+
+create index if not exists idx_prospects_empreinte on public.prospects (empreinte);
+
+-- La source unique existante devient le premier élément de la liste.
+update public.prospects
+   set sources = array[source]
+ where source is not null and sources = '{}';
+
+-- ── Catalogue des machines recensées par l'annuaire ──────────────────────────
+-- 887 jeux et 189 flippers. Le rapprochement avec le catalogue Avranches
+-- Automatic est porté ICI, une fois par modèle, et non salle par salle : un
+-- arbitrage validé vaut pour les huit cents salles d'un coup.
+create table if not exists public.arcade_machines (
+  slug              text primary key,
+  nom               text not null,
+  categorie         text,          -- 'jeu' | 'flipper'
+  type_jeu          text,          -- Course, Rail Shooter, Simulation, Jeux forains…
+  editeur           text,
+  annee             smallint,
+  nb_joueurs        smallint,
+  fiche_url         text,
+  -- Rapprochement catalogue. « marque » signifie : modèle absent du catalogue mais
+  -- éditeur que nous distribuons — donc dans notre périmètre commercial.
+  code_article      text,
+  famille_aa        text,
+  correspondance    text check (correspondance in ('exacte', 'marque', 'aucune', 'a_confirmer')),
+  correspondance_par text check (correspondance_par in ('auto', 'humain')),
+  vu_le             timestamptz not null default now()
+);
+
+create index if not exists idx_arcade_machines_corresp on public.arcade_machines (correspondance);
+create index if not exists idx_arcade_machines_editeur on public.arcade_machines (editeur);
+
+-- ── Les salles ───────────────────────────────────────────────────────────────
+create table if not exists public.arcade_salles (
+  id            uuid primary key default gen_random_uuid(),
+  slug          text unique not null,
+  fiche_url     text not null,
+  nom           text,
+  adresse       text,
+  code_postal   text,
+  ville         text,
+  departement   text,
+  region        text,
+  site_web      text,
+  facebook      text,
+  instagram     text,
+  lat           numeric,
+  lng           numeric,
+  geocode_at    timestamptz,
+  -- Rapprochement avec l'existant. Jamais automatique quand il est douteux :
+  -- « a_confirmer » attend un arbitrage humain plutôt que de fusionner à tort.
+  empreinte     text generated always as (public.empreinte_etablissement(nom, ville)) stored,
+  prospect_id   uuid references public.prospects(id) on delete set null,
+  code_client   text,
+  rapprochement text check (rapprochement in ('client', 'prospect', 'a_confirmer', 'aucun')),
+  -- Horodatage de lecture de la fiche : NULL = à lire. Renseigné même en cas
+  -- d'échec définitif, pour ne pas boucler indéfiniment sur les mêmes pages.
+  fiche_lue_at  timestamptz,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+
+create index if not exists idx_arcade_salles_empreinte on public.arcade_salles (empreinte);
+create index if not exists idx_arcade_salles_a_lire on public.arcade_salles (fiche_lue_at) where fiche_lue_at is null;
+create index if not exists idx_arcade_salles_dept on public.arcade_salles (departement);
+
+-- ── Le parc : qui possède quoi ───────────────────────────────────────────────
+-- C'est cette table qui fait toute la valeur. Sans elle on a un annuaire ; avec
+-- elle on peut demander « les salles de Bretagne à plus de six machines et sans
+-- aucun flipper ».
+create table if not exists public.arcade_parc (
+  salle_id     uuid not null references public.arcade_salles(id) on delete cascade,
+  machine_slug text not null references public.arcade_machines(slug) on delete cascade,
+  vu_le        timestamptz not null default now(),
+  primary key (salle_id, machine_slug)
+);
+
+create index if not exists idx_arcade_parc_machine on public.arcade_parc (machine_slug);
+
+-- ── Sécurité ─────────────────────────────────────────────────────────────────
+-- Même modèle que les prospects : accès par can_access_prospection(), plus une
+-- politique dédiée au rôle de lecture du copilote. Le GRANT seul ne suffit pas,
+-- la policy est indispensable.
+alter table public.arcade_machines enable row level security;
+alter table public.arcade_salles   enable row level security;
+alter table public.arcade_parc     enable row level security;
+
+do $$
+begin
+  if not exists (select 1 from pg_policies where tablename = 'arcade_machines' and policyname = 'arcade_machines_prospection') then
+    create policy "arcade_machines_prospection" on public.arcade_machines
+      for all to authenticated using (can_access_prospection()) with check (can_access_prospection());
+  end if;
+  if not exists (select 1 from pg_policies where tablename = 'arcade_salles' and policyname = 'arcade_salles_prospection') then
+    create policy "arcade_salles_prospection" on public.arcade_salles
+      for all to authenticated using (can_access_prospection()) with check (can_access_prospection());
+  end if;
+  if not exists (select 1 from pg_policies where tablename = 'arcade_parc' and policyname = 'arcade_parc_prospection') then
+    create policy "arcade_parc_prospection" on public.arcade_parc
+      for all to authenticated using (can_access_prospection()) with check (can_access_prospection());
+  end if;
+  if not exists (select 1 from pg_policies where tablename = 'arcade_machines' and policyname = 'copilot_readonly_select') then
+    create policy "copilot_readonly_select" on public.arcade_machines for select to copilot_readonly using (true);
+  end if;
+  if not exists (select 1 from pg_policies where tablename = 'arcade_salles' and policyname = 'copilot_readonly_select') then
+    create policy "copilot_readonly_select" on public.arcade_salles for select to copilot_readonly using (true);
+  end if;
+  if not exists (select 1 from pg_policies where tablename = 'arcade_parc' and policyname = 'copilot_readonly_select') then
+    create policy "copilot_readonly_select" on public.arcade_parc for select to copilot_readonly using (true);
+  end if;
+end $$;
+
+grant select on public.arcade_machines, public.arcade_salles, public.arcade_parc to copilot_readonly;

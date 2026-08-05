@@ -9,7 +9,9 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { ChartTooltipContent } from "@/components/ui/chart";
+// L'infobulle autonome, et non celle de ui/chart : cette dernière appelle useChart()
+// et LÈVE une exception hors d'un ChartContainer — la page devenait un écran noir.
+import { ChartTooltipContent } from "@/components/admin/chartTooltip";
 import {
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList,

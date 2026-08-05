@@ -97,7 +97,10 @@ sql = SELECT s.nom, s.ville, s.departement, s.type_lieu, s.lat AS lat, s.lng AS 
 count_sql = SELECT COUNT(*)::bigint AS total FROM arcade_parc a JOIN arcade_salles s ON s.id = a.salle_id JOIN arcade_machines m ON m.slug = a.machine_slug WHERE s.ferme = false AND replace(lower(m.nom),' ','') LIKE '%monsterkart%'
 
 EXEMPLE — « les bowlings sans aucun flipper » :
-sql = SELECT s.nom, s.ville, s.departement, s.lat AS lat, s.lng AS lng, COUNT(a.machine_slug) AS machines FROM arcade_salles s JOIN arcade_parc a ON a.salle_id = s.id JOIN arcade_machines m ON m.slug = a.machine_slug WHERE s.ferme = false AND s.type_lieu = 'bowling' AND s.lat IS NOT NULL GROUP BY s.id, s.nom, s.ville, s.departement, s.lat, s.lng HAVING COUNT(*) FILTER (WHERE m.categorie = 'flipper') = 0 ORDER BY machines DESC LIMIT 500`;
+sql = SELECT s.nom, s.ville, s.departement, s.lat AS lat, s.lng AS lng, COUNT(a.machine_slug) AS machines FROM arcade_salles s JOIN arcade_parc a ON a.salle_id = s.id JOIN arcade_machines m ON m.slug = a.machine_slug WHERE s.ferme = false AND s.type_lieu = 'bowling' AND s.lat IS NOT NULL GROUP BY s.id, s.nom, s.ville, s.departement, s.lat, s.lng HAVING COUNT(*) FILTER (WHERE m.categorie = 'flipper') = 0 ORDER BY machines DESC LIMIT 500
+count_sql = SELECT COUNT(*)::bigint AS total FROM (SELECT s.id FROM arcade_salles s JOIN arcade_parc a ON a.salle_id = s.id JOIN arcade_machines m ON m.slug = a.machine_slug WHERE s.ferme = false AND s.type_lieu = 'bowling' GROUP BY s.id HAVING COUNT(*) FILTER (WHERE m.categorie = 'flipper') = 0) t
+
+RAPPEL FINAL : count_sql accompagne TOUJOURS sql, sans exception. Une réponse sans count_sql est inexploitable et sera rejetée.`;
 
 // Sécurité : plus AUCUNE analyse du SQL côté edge function (les whitelists par
 // regex produisaient des faux positifs : CTE ou colonne pris pour une table).

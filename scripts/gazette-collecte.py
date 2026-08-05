@@ -82,13 +82,90 @@ def collecter(jours: int) -> list[dict]:
     return articles
 
 
-def envoyer(articles: list[dict]) -> dict:
+# ── Résolution des liens et lecture des articles ─────────────────────────────────
+# Google Actualités ne livre qu'un lien chiffré que le navigateur refuse d'ouvrir
+# (« news.google.com est bloqué ») : sa page de redirection est en JavaScript, et aucune
+# variante d'URL ne la contourne. En revanche le titre exact, cherché sur le web, ramène
+# l'article en un coup. Cette recherche se fait ici, depuis la même connexion ordinaire
+# qui nous donne déjà accès à la presse.
+
+def resoudre(titre: str, source: str | None) -> str | None:
+    """Retrouve l'adresse réelle d'un article à partir de son titre exact."""
+    for requete in (f'"{titre}"', titre):
+        url = "https://html.duckduckgo.com/html/?q=" + urllib.parse.quote(requete)
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": UA})
+            page = urllib.request.urlopen(req, timeout=20, context=CTX).read().decode("utf-8", "ignore")
+        except Exception:
+            return None
+        liens = []
+        for m in re.findall(r'class="result__a"[^>]*href="([^"]+)"', page):
+            if "uddg=" in m:
+                extrait = re.search(r"uddg=([^&]+)", m)
+                if not extrait:
+                    continue
+                m = urllib.parse.unquote(extrait.group(1))
+            m = html.unescape(m)
+            if "duckduckgo.com" not in m:
+                liens.append(m)
+        if not liens:
+            time.sleep(2)
+            continue
+        # Le journal indiqué par Google départage : sur un sujet repris par plusieurs
+        # titres, on veut l'article qu'on a effectivement lu et daté.
+        if source:
+            racine = re.sub(r"^www\.|\.(fr|com|be)$", "", source.lower()).split(".")[0]
+            for l in liens:
+                if racine and racine in l.lower():
+                    return l
+        return liens[0]
+    return None
+
+
+def lire(url: str) -> str:
+    """Texte lisible d'un article. Un paywall laisse passer les premiers paragraphes,
+    et c'est justement là que le journaliste cite le gérant."""
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept-Language": "fr-FR,fr;q=0.9"})
+        brut = urllib.request.urlopen(req, timeout=20, context=CTX).read(900_000).decode("utf-8", "ignore")
+    except Exception:
+        return ""
+    brut = re.sub(r"(?is)<(script|style|nav|footer|aside)[^>]*>.*?</\1>", " ", brut)
+    paras = re.findall(r"(?is)<(?:p|h1|h2|blockquote)[^>]*>(.*?)</(?:p|h1|h2|blockquote)>", brut)
+    texte = " ".join(html.unescape(re.sub(r"<[^>]+>", " ", x)) for x in paras)
+    return re.sub(r"\s+", " ", texte).strip()[:9000]
+
+
+def enrichir() -> None:
+    """Résout les liens et fait lire les articles pour en tirer le dirigeant."""
+    total = 0
+    for tour in range(1, 21):
+        rep = appeler({"action": "a_enrichir", "limite": 12})
+        lot = rep.get("a_enrichir") or []
+        if not lot:
+            print(f"  enrichissement terminé ({total} articles traités)")
+            return
+        charges = []
+        for sig in lot:
+            titre, source = sig.get("titre", ""), sig.get("source")
+            vraie = resoudre(titre, source) if "news.google.com" in (sig.get("url") or "") else sig.get("url")
+            texte = lire(vraie) if vraie else ""
+            charges.append({"id": sig["id"], "url": vraie, "texte": texte})
+            time.sleep(1.5)          # rester courtois avec le moteur de recherche
+        r = appeler({"enrichis": charges})
+        total += r.get("traites", 0)
+        print(f"  lecture {tour} : {r.get('traites', 0)} traités, "
+              f"{r.get('lus', 0)} lisibles, {r.get('avec_contact', 0)} dirigeants trouvés "
+              f"(reste {rep.get('restants', '?')})")
+
+
+def appeler(charge: dict) -> dict:
     if not os.path.exists(SECRET):
         sys.exit(f"Secret introuvable : {SECRET}\n"
                  f"Créez-le avec la valeur de CRON_SECRET, puis : chmod 600 {SECRET}")
     with open(SECRET) as f:
         secret = f.read().strip()
-    corps = json.dumps({"articles": articles}).encode()
+    corps = json.dumps(charge).encode()
     req = urllib.request.Request(FONCTION, data=corps, headers={
         "Content-Type": "application/json",
         "x-cron-secret": secret,
@@ -108,7 +185,14 @@ def main() -> None:
     ap.add_argument("--jours", type=int, default=2,
                     help="fenêtre en jours (2 par défaut : le recouvrement absorbe le retard d'indexation)")
     ap.add_argument("--test", action="store_true", help="afficher sans envoyer")
+    ap.add_argument("--enrichir-seulement", action="store_true",
+                    help="ne rien collecter : résoudre les liens et lire les articles déjà en base")
     a = ap.parse_args()
+
+    if a.enrichir_seulement:
+        print("Résolution des liens et lecture des articles…")
+        enrichir()
+        return
 
     print(f"Relevé sur {a.jours} jour(s)…")
     articles = collecter(a.jours)
@@ -123,12 +207,15 @@ def main() -> None:
 
     # L'edge function plafonne son tri par lot : on relance tant qu'il reste à traiter.
     for passe in range(1, 11):
-        rep = envoyer(articles)
+        rep = appeler({"articles": articles})
         print(f"  passe {passe} : {rep.get('retenus', 0)} retenus, "
               f"{rep.get('ecartes', 0)} écartés, {rep.get('restants_a_traiter', 0)} restants")
         if not rep.get("restants_a_traiter"):
             break
         time.sleep(2)
+
+    print("Résolution des liens et lecture des articles…")
+    enrichir()
     print("Terminé.")
 
 

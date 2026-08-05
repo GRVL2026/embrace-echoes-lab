@@ -114,6 +114,17 @@ async function resoudreUrl(url: string): Promise<string> {
   }
 }
 
+const EXTRACTION = `Tu lis des articles de presse locale française. Pour CHAQUE article, identifie LA PERSONNE QUI EXPLOITE OU REPREND l'établissement dont parle l'article : gérant, gérante, propriétaire, directeur, directrice, repreneur, exploitant, fondateur.
+
+Réponds UNIQUEMENT par un tableau JSON, un objet par article, dans l'ordre des articles :
+[{"i": 0, "nom": "Prénom Nom", "role": "fonction telle qu'écrite dans l'article", "citation": "extrait exact de l'article, 40 à 220 caractères, d'où vient ce nom"}]
+
+RÈGLES ABSOLUES
+- N'INVENTE RIEN. Si l'article ne nomme personne qui exploite le lieu, réponds {"i": <n>, "nom": null, "role": null, "citation": null}.
+- N'inclus PAS un journaliste, un maire ou un élu, un client interrogé, un architecte, un porte-parole : uniquement la personne qui tient ou reprend l'établissement.
+- La citation doit être un passage COPIÉ MOT POUR MOT de l'article : c'est la preuve que le nom en vient. Si tu ne peux pas la copier exactement, mets null au nom aussi.
+- Un objet par article, même vide, dans l'ordre. Rien d'autre que le tableau JSON.`;
+
 const PROMPT = `Tu tries des titres de presse pour Avranches Automatic, distributeur français de JEUX D'ARCADE, FLIPPERS, BILLARDS, BABY-FOOT, GRUES et DISTRIBUTEURS AUTOMATIQUES. Ses clients sont des lieux de loisirs : bowlings, parcs indoor, campings, bars, hôtels, centres commerciaux.
 
 Pour CHAQUE titre, décide s'il signale une OPPORTUNITÉ COMMERCIALE RÉELLE, c'est-à-dire un établissement de loisirs qui va devoir s'équiper :
@@ -163,6 +174,79 @@ Deno.serve(async (req) => {
   const debut = Date.now();
   try {
     const body = await req.json().catch(() => ({}));
+
+    // ─── Mode ENRICHISSEMENT ────────────────────────────────────────────────────
+    // Google Actualités ne livre plus qu'un lien chiffré, illisible dans un navigateur
+    // (« news.google.com est bloqué »), et qu'aucune astuce d'URL ne dénoue : la page de
+    // redirection est en JavaScript. La vraie adresse se retrouve en cherchant le titre
+    // exact sur le web, ce que fait le collecteur depuis le Mac — la même connexion
+    // résidentielle qui lui permet déjà d'atteindre la presse. La fonction reçoit ici le
+    // texte de l'article et n'a plus qu'à en extraire la personne à appeler.
+    if (body.action === 'a_enrichir') {
+      const { data, error } = await admin
+        .from('gazette_signaux')
+        .select('id, titre, source, url, publie_le')
+        .neq('statut', 'ignore')
+        .is('article_lu_at', null)
+        .order('publie_le', { ascending: false })
+        .limit(Math.min(60, Math.max(1, Number(body.limite ?? 25))));
+      if (error) throw error;
+      const { count } = await admin.from('gazette_signaux')
+        .select('id', { count: 'exact', head: true })
+        .neq('statut', 'ignore').is('article_lu_at', null);
+      return json({ ok: true, a_enrichir: data ?? [], restants: count ?? 0 });
+    }
+
+    if (Array.isArray(body.enrichis)) {
+      const lot = body.enrichis
+        .filter((e: any) => e?.id)
+        .slice(0, 12) as { id: string; url?: string; texte?: string }[];
+      if (lot.length === 0) return json({ ok: true, traites: 0 });
+
+      const lisibles = lot.filter((e) => (e.texte ?? '').trim().length > 400);
+      let extraits: any[] = [];
+      if (lisibles.length) {
+        const corpus = lisibles
+          .map((e, i) => `### ARTICLE ${i}\n${(e.texte ?? '').slice(0, 7000)}`)
+          .join('\n\n');
+        const { texte: rep } = await anthropicJson({
+          apiKey: ANTHROPIC_KEY, model: MODEL, maxTokens: 2000,
+          system: EXTRACTION,
+          messages: [{ role: 'user', content: corpus }],
+        });
+        const d = (rep ?? '').indexOf('[');
+        if (d >= 0) {
+          const f = rep.lastIndexOf(']');
+          try { extraits = JSON.parse(f > d ? rep.slice(d, f + 1) : rep.slice(d) + ']'); }
+          catch { extraits = []; }   // une extraction ratée ne doit pas perdre les URLs résolues
+        }
+      }
+      const parIndex = new Map<number, any>();
+      for (const x of extraits) if (Number.isInteger(Number(x?.i))) parIndex.set(Number(x.i), x);
+
+      let avecContact = 0;
+      for (const e of lot) {
+        const k = lisibles.indexOf(e);
+        const x = k >= 0 ? parIndex.get(k) : null;
+        const nom = typeof x?.nom === 'string' && x.nom.trim() ? x.nom.trim() : null;
+        // Toujours horodater, même sans contact trouvé : un article illisible qui reste
+        // « à lire » revient à chaque passage et bloque la file — la file d'enrichissement
+        // OSM s'était figée exactement ainsi sur un département.
+        const maj: Record<string, unknown> = { article_lu_at: new Date().toISOString() };
+        if (e.url && /^https?:\/\//.test(e.url) && !e.url.includes('news.google.com')) maj.url = e.url;
+        if (nom) {
+          maj.contact_nom = nom;
+          maj.contact_role = typeof x.role === 'string' && x.role.trim() ? x.role.trim() : null;
+          maj.contact_citation = typeof x.citation === 'string' && x.citation.trim() ? x.citation.trim() : null;
+          maj.contact_origine = 'article';
+          avecContact++;
+        }
+        const { error: eMaj } = await admin.from('gazette_signaux').update(maj).eq('id', e.id);
+        if (eMaj) throw eMaj;
+      }
+      return json({ ok: true, traites: lot.length, lus: lisibles.length, avec_contact: avecContact });
+    }
+
     // 2 jours par défaut : le recouvrement absorbe le retard d'indexation, un article publié
     // en fin de journée n'étant souvent référencé que le lendemain.
     const jours = Math.min(60, Math.max(1, Number(body.jours ?? 2)));

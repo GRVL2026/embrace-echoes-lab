@@ -327,6 +327,19 @@ export default function Carte() {
     for (const r of resumesParc ?? []) if (r.code_client) m.set(r.code_client, r);
     return m;
   }, [resumesParc]);
+  // Les points renvoyés par le copilote ne portent pas d'identifiant de fiche : la
+  // requête générée ne renvoie que de quoi placer un marqueur. On les rattache par leur
+  // POSITION, arrondie à dix mètres — les deux jeux de données viennent de la même
+  // colonne, la coïncidence est exacte. Sans ce rattachement, cliquer un résultat de
+  // recherche ne donnait qu'un nom et une ville, sans parc ni brief.
+  const prospectParPosition = useMemo(() => {
+    const m = new Map<string, { id: string; nom: string | null; ville: string | null; statut: string | null; segment: string | null }>();
+    for (const p of data?.prospects ?? []) {
+      m.set(`${p.lat.toFixed(4)}:${p.lng.toFixed(4)}`, p as any);
+    }
+    return m;
+  }, [data]);
+
   const parcParProspect = useMemo(() => {
     const m = new Map<string, ResumeParc>();
     for (const r of resumesParc ?? []) if (r.prospect_id) m.set(r.prospect_id, r);
@@ -641,15 +654,19 @@ export default function Carte() {
         const m = L.marker([p.lat, p.lng], {
           icon: makeDivIcon(isClient ? COLORS_CLIENT.inactif : COLORS_PROSPECT.camping, 12, true),
         });
+        const fiche = isClient ? null : prospectParPosition.get(`${p.lat.toFixed(4)}:${p.lng.toFixed(4)}`);
         m.bindPopup(
           isClient
             ? popupClientHtml(
                 { code_client: key as string, nom: p.nom, ville: p.ville },
                 canReactivation,
-              )
-            : `<div style="font-family:system-ui,sans-serif;min-width:180px">
+              ) + parcHtml(parcParClient.get(key as string))
+            : fiche
+              ? popupProspectHtml(fiche) + parcHtml(parcParProspect.get(fiche.id))
+              : `<div style="font-family:system-ui,sans-serif;min-width:180px">
             <div style="font-weight:600;margin-bottom:4px">${escapeHtml(p.nom || "—")}</div>
             <div style="color:#64748b;font-size:12px">${escapeHtml(p.ville || "")}</div>
+            <div style="margin-top:6px;font-size:11px;color:#94a3b8">Fiche non retrouvée — ce point vient d'une requête et n'a pas pu être rattaché.</div>
           </div>`,
         );
         cluster.addLayer(m);
@@ -687,7 +704,7 @@ export default function Carte() {
       }
     }
 
-  }, [data, clientLayers, prospectLayers, copilotResult, doutes, voirDoutes, parcParClient, parcParProspect]);
+  }, [data, clientLayers, prospectLayers, copilotResult, doutes, voirDoutes, parcParClient, parcParProspect, prospectParPosition]);
 
   /** Trancher un rapprochement douteux. Deux issues seulement, et toutes deux sont des
    *  décisions : c'est le même établissement, ou c'en est un autre qu'il faut qualifier.

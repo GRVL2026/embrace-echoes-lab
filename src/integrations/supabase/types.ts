@@ -1545,6 +1545,77 @@ export type Database = {
         }
         Relationships: []
       }
+      gazette_signaux: {
+        Row: {
+          code_client: string | null
+          commune: string | null
+          created_at: string | null
+          departement: string | null
+          etablissement: string | null
+          evenement: string | null
+          id: string
+          interpretation: string | null
+          prospect_id: string | null
+          publie_le: string
+          region: string | null
+          source: string | null
+          statut: string | null
+          titre: string
+          type_lieu: string | null
+          urgence: string | null
+          url: string
+          url_google: string | null
+        }
+        Insert: {
+          code_client?: string | null
+          commune?: string | null
+          created_at?: string | null
+          departement?: string | null
+          etablissement?: string | null
+          evenement?: string | null
+          id?: string
+          interpretation?: string | null
+          prospect_id?: string | null
+          publie_le: string
+          region?: string | null
+          source?: string | null
+          statut?: string | null
+          titre: string
+          type_lieu?: string | null
+          urgence?: string | null
+          url: string
+          url_google?: string | null
+        }
+        Update: {
+          code_client?: string | null
+          commune?: string | null
+          created_at?: string | null
+          departement?: string | null
+          etablissement?: string | null
+          evenement?: string | null
+          id?: string
+          interpretation?: string | null
+          prospect_id?: string | null
+          publie_le?: string
+          region?: string | null
+          source?: string | null
+          statut?: string | null
+          titre?: string
+          type_lieu?: string | null
+          urgence?: string | null
+          url?: string
+          url_google?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gazette_signaux_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "prospects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       geo_cache: {
         Row: {
           created_at: string

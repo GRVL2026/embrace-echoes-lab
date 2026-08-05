@@ -30,10 +30,14 @@ const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 // Seuils. Cent mètres, c'est la précision d'un géocodage à l'adresse : au-delà on
 // n'est plus sûr, en deçà c'est le même bâtiment. Quatre cents mètres reste plausible
 // dans une zone commerciale, mais demande un œil humain.
-const D_SUR = 120;
-const D_DOUTE = 400;
-const SIM_SUR = 0.60;
-const SIM_DOUTE = 0.40;
+// Distance et nom se corroborent : un nom franc autorise une adresse approximative,
+// une adresse exacte n'autorise PAS n'importe quel nom. « Magic Games » et « Games
+// Over » à treize mètres restent deux enseignes, pas une.
+const D_MAX = 600;          // au-delà, ce n'est plus le même établissement
+const D_PROCHE = 150;
+const SIM_FRANC = 0.50;     // le nom suffit à confirmer, même à quelques rues
+const SIM_APPUI = 0.35;     // le nom appuie une adresse déjà proche
+const SIM_DOUTE = 0.30;
 
 // ── Outils ────────────────────────────────────────────────────────────────────
 const sansAccent = (s: string) =>
@@ -41,6 +45,24 @@ const sansAccent = (s: string) =>
 
 function cle(s: string | null | undefined): string {
   return sansAccent((s ?? '').toLowerCase()).replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+// Le type d'établissement et les articles ne distinguent rien : « Camping Le Ranch des
+// Volcans » et « LE RANCH DES VOLCANS » désignent le même lieu, mais le mot « camping »
+// à lui seul faisait chuter la similarité de 90 % à 67 % — assez pour rater le
+// rapprochement. On compare ce qui identifie, pas ce qui catégorise.
+const MOTS_VIDES = new Set([
+  'camping', 'bowling', 'hotel', 'restaurant', 'bar', 'laser', 'game', 'games',
+  'club', 'parc', 'park', 'centre', 'complexe', 'salle', 'village', 'vacances',
+  'domaine', 'residence', 'sarl', 'sas', 'sasu', 'sa', 'eurl', 'scea', 'ste', 'societe',
+  'le', 'la', 'les', 'l', 'de', 'du', 'des', 'd', 'et', 'aux', 'au', 'a',
+]);
+
+function cleIdentifiante(s: string | null | undefined): string {
+  const mots = cle(s).split(' ').filter((m) => m && !MOTS_VIDES.has(m));
+  // Si tout a été retiré — « Le Camping » — on retombe sur le nom complet plutôt que
+  // de comparer deux chaînes vides, qui se ressembleraient parfaitement.
+  return mots.length ? mots.join(' ') : cle(s);
 }
 
 /** Similarité par trigrammes, même principe que pg_trgm : proportion de trigrammes
@@ -111,12 +133,11 @@ function rapprocher(
   if (salle.lat !== null && salle.lng !== null) {
     for (const c of voisins(grille, salle.lat, salle.lng)) {
       const d = metres(salle.lat, salle.lng, c.lat!, c.lng!);
-      if (d > D_DOUTE) continue;
+      if (d > D_MAX) continue;
       const sim = similarite(salle.cle, c.cle);
-      // Un nom qui concorde resserre la certitude ; un nom qui diverge ne l'annule
-      // pas — deux enseignes différentes peuvent partager une adresse.
-      const niveau: 'sur' | 'doute' = d <= D_SUR && sim >= 0.25 ? 'sur' : 'doute';
-      const score = 1000 - d + sim * 200;
+      const niveau: 'sur' | 'doute' =
+        (sim >= SIM_FRANC && d <= D_MAX) || (sim >= SIM_APPUI && d <= D_PROCHE) ? 'sur' : 'doute';
+      const score = sim * 600 + Math.max(0, 600 - d);
       if (!meilleur || score > meilleur.score) {
         meilleur = { cible: c, niveau, motif: `${Math.round(d)} m, nom ${Math.round(sim * 100)} %`, score };
       }
@@ -129,7 +150,7 @@ function rapprocher(
     for (const c of parCp.get(salle.cp) ?? []) {
       const sim = similarite(salle.cle, c.cle);
       if (sim < SIM_DOUTE) continue;
-      const niveau: 'sur' | 'doute' = sim >= SIM_SUR ? 'sur' : 'doute';
+      const niveau: 'sur' | 'doute' = sim >= 0.65 ? 'sur' : 'doute';
       const score = sim * 1000;
       if (!meilleur || (niveau === 'sur' && meilleur.niveau === 'doute') || score > meilleur.score) {
         meilleur = { cible: c, niveau, motif: `même code postal, nom ${Math.round(sim * 100)} %`, score };
@@ -210,7 +231,7 @@ Deno.serve(async (req) => {
     const prospects = await tout('prospects', 'id, entreprise, ville, code_postal, lat, lng, sources');
 
     const versCible = (r: any, idc: string, nomc: string): Cible => ({
-      id: String(r[idc]), nom: String(r[nomc] ?? ''), cle: cle(r[nomc]),
+      id: String(r[idc]), nom: String(r[nomc] ?? ''), cle: cleIdentifiante(r[nomc]),
       lat: r.lat === null ? null : Number(r.lat), lng: r.lng === null ? null : Number(r.lng),
       cp: r.code_postal ?? null,
     });
@@ -234,7 +255,7 @@ Deno.serve(async (req) => {
 
     for (const s of salles) {
       const sc = {
-        nom: s.nom, cle: cle(s.nom),
+        nom: s.nom, cle: cleIdentifiante(s.nom),
         lat: s.lat === null ? null : Number(s.lat),
         lng: s.lng === null ? null : Number(s.lng),
         cp: s.code_postal ?? null,
@@ -287,15 +308,30 @@ Deno.serve(async (req) => {
     for (const m of machines) {
       const k = cle(m.nom);
       let corr: string = 'aucune', code: string | null = null, famille: string | null = null, note = '';
+      const flipper = m.categorie === 'flipper';
 
-      const pShop = produits.find((p) => p.cle === k)
-        ?? produits.find((p) => p.cle && (p.cle.startsWith(k + ' ') || k.startsWith(p.cle + ' ')));
+      // Un nom de deux ou trois caractères — « DX », résidu d'extraction — ne désigne
+      // aucune machine et se rapprocherait de n'importe quoi.
+      if (k.length < 4) {
+        cm.aucune++;
+        majMachines.push({ slug: m.slug, nom: m.nom, code_article: null, famille_aa: null,
+          correspondance: 'aucune', correspondance_par: 'auto' });
+        continue;
+      }
+
+      // La contrainte de catégorie vaut AUSSI côté Shopify. Sans elle, « Jurassic Park
+      // Arcade » — rail shooter de Raw Thrills — se rapprochait du flipper Stern du
+      // même nom. Même faute que le Taxi de Williams contre la grue Taxi Crane, entrée
+      // par une autre porte.
+      const memeCategorie = (p: Produit) =>
+        flipper ? /flipper/i.test(p.type ?? '') || /flipper/i.test(p.titre)
+                : !/flipper/i.test(p.type ?? '') && !/^flipper\b/i.test(p.titre);
+      const eligibles = produits.filter(memeCategorie);
+      const pShop = eligibles.find((p) => p.cle === k)
+        ?? eligibles.find((p) => p.cle && (p.cle.startsWith(k + ' ') || k.startsWith(p.cle + ' ')));
       if (pShop) {
         corr = 'exacte'; note = `Shopify : ${pShop.titre}`;
       } else {
-        // Contrainte de catégorie : un flipper ne peut se rapprocher que d'un flipper.
-        // Sans elle, le flipper « Taxi » se rapprochait de la grue « Taxi Crane ».
-        const flipper = m.categorie === 'flipper';
         const candidats = erpCles.filter((e) =>
           flipper ? /^FL/i.test(e.code) || e.famille === 'Flippers'
                   : !/^FL/i.test(e.code) && e.famille !== 'Flippers');

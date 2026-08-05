@@ -377,7 +377,7 @@ Deno.serve(async (req) => {
     // Les établissements fermés sont écartés du rapprochement : les rattacher à un
     // client ou un prospect polluerait des fiches actives avec un parc qui n'existe plus.
     const salles = (await tout('arcade_salles',
-      'id, slug, nom, ville, code_postal, lat, lng, prospect_id, code_client, ferme'))
+      'id, slug, nom, ville, code_postal, lat, lng, prospect_id, code_client, ferme, arbitre_le'))
       .filter((s: any) => !s.ferme);
     const clients = await tout('gaia_clients', 'customer_id, name, code_postal, lat, lng');
     const prospects = await tout('prospects', 'id, entreprise, ville, code_postal, lat, lng, sources');
@@ -407,6 +407,9 @@ Deno.serve(async (req) => {
     const exemples: string[] = [];
 
     for (const s of salles) {
+      // Un arbitrage humain fait autorité : le repasser à la moulinette effacerait la
+      // décision, et le même doute reviendrait à chaque exécution.
+      if ((s as any).arbitre_le) continue;
       const sc = {
         nom: s.nom, cle: cleIdentifiante(s.nom), cleBrute: cle(s.nom),
         lat: s.lat === null ? null : Number(s.lat),
@@ -420,11 +423,13 @@ Deno.serve(async (req) => {
       // est une certitude, la piste ne l'est pas.
       let ligne: any = { slug: s.slug, fiche_url: `https://www.annuaire-arcade.fr/salle-arcade/${s.slug}/` };
       if (vc?.niveau === 'sur') {
-        ligne = { ...ligne, code_client: vc.cible.id, prospect_id: null, rapprochement: 'client' };
+        ligne = { ...ligne, code_client: vc.cible.id, prospect_id: null, rapprochement: 'client',
+          candidat_type: null, candidat_id: null, candidat_nom: null, candidat_motif: null };
         compte.client++;
         if (exemples.length < 12) exemples.push(`CLIENT · ${s.nom} → ${vc.cible.nom} (${vc.motif})`);
       } else if (vp?.niveau === 'sur') {
-        ligne = { ...ligne, prospect_id: vp.cible.id, code_client: null, rapprochement: 'prospect' };
+        ligne = { ...ligne, prospect_id: vp.cible.id, code_client: null, rapprochement: 'prospect',
+          candidat_type: null, candidat_id: null, candidat_nom: null, candidat_motif: null };
         compte.prospect++;
         if (exemples.length < 12) exemples.push(`PROSPECT · ${s.nom} → ${vp.cible.nom} (${vp.motif})`);
       } else if (vc || vp) {
@@ -437,16 +442,24 @@ Deno.serve(async (req) => {
           ? Number(v.motif.match(/nom (\d+) %/)![1]) >= 20 || /^([0-5]?\d) m,/.test(v.motif)
           : true;
         if (!plausible) {
-          ligne = { ...ligne, rapprochement: 'aucun', prospect_id: null, code_client: null };
+          ligne = { ...ligne, rapprochement: 'aucun', prospect_id: null, code_client: null,
+          candidat_type: null, candidat_id: null, candidat_nom: null, candidat_motif: null };
           compte.aucun++;
           majSalles.push(ligne);
           continue;
         }
-        ligne = { ...ligne, rapprochement: 'a_confirmer' };
+        // Le candidat est conservé avec son motif : un « à confirmer » qui ne dit pas
+        // à QUOI ne se tranche pas, et l'écran d'arbitrage serait inutilisable.
+        ligne = {
+          ...ligne, rapprochement: 'a_confirmer',
+          candidat_type: v === vc ? 'client' : 'prospect',
+          candidat_id: v.cible.id, candidat_nom: v.cible.nom, candidat_motif: v.motif,
+        };
         compte.a_confirmer++;
         if (exemples.length < 12) exemples.push(`À CONFIRMER · ${s.nom} → ${v.cible.nom} (${v.motif})`);
       } else {
-        ligne = { ...ligne, rapprochement: 'aucun', prospect_id: null, code_client: null };
+        ligne = { ...ligne, rapprochement: 'aucun', prospect_id: null, code_client: null,
+          candidat_type: null, candidat_id: null, candidat_nom: null, candidat_motif: null };
         compte.aucun++;
       }
       majSalles.push(ligne);

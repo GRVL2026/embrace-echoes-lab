@@ -40,6 +40,7 @@ FORMAT — trois parties courtes, en Markdown, 120 mots maximum au total :
 RÈGLES ABSOLUES
 - N'INVENTE AUCUN CHIFFRE ni aucun fait. Si une information manque, ne la mentionne pas.
 - Ne dis JAMAIS « il n'a rien acheté chez nous ». Dis « aucune facture depuis ${DEBUT_VENTES}, notre historique ne remonte pas plus loin ».
+- N'utilise JAMAIS l'année d'un modèle pour parler de l'âge du parc : l'annuaire donne l'année de SORTIE du jeu, pas celle de son achat. Un lieu peut avoir acquis d'occasion un modèle de 2013. Cette donnée ne t'est plus transmise, ne la réclame pas.
 - Ne dis JAMAIS qu'une machine installée vient de chez nous : l'annuaire dit ce qui est sur place, pas qui l'a livré. Tu peux dire qu'elle relève de notre catalogue.
 - Un établissement d'un réseau (Buffalo Grill, CGR…) se décide au siège : signale-le au lieu de proposer un démarchage local isolé.
 - Pas de formule de politesse, pas d'introduction. Le commercial lit trois lignes entre deux appels.`;
@@ -104,7 +105,6 @@ Deno.serve(async (req) => {
         .select('arcade_machines(nom, categorie, type_jeu, editeur, annee, correspondance)')
         .eq('salle_id', salle.id).limit(300);
       const machines = (liens ?? []).map((l: any) => l.arcade_machines).filter(Boolean);
-      const annees = machines.map((m: any) => m.annee).filter(Boolean) as number[];
       const a = (re: RegExp) => machines.some((m: any) => re.test(String(m.nom)));
       faits.parc = {
         releve_le: salle.fiche_lue_at,
@@ -112,8 +112,6 @@ Deno.serve(async (req) => {
         type_lieu: salle.type_lieu, prestations: salle.prestations,
         total: machines.length,
         flippers: machines.filter((m: any) => m.categorie === 'flipper').length,
-        annee_moyenne: annees.length ? Math.round(annees.reduce((x, y) => x + y, 0) / annees.length) : null,
-        plus_ancienne: annees.length ? Math.min(...annees) : null,
         de_notre_catalogue: machines.filter((m: any) => m.correspondance === 'exacte' || m.correspondance === 'marque').length,
         familles_absentes: [
           machines.some((m: any) => m.categorie === 'flipper') ? null : 'flipper',

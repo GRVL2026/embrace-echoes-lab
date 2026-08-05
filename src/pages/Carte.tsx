@@ -208,8 +208,7 @@ function parcHtml(r: ResumeParc | undefined): string {
   const manque = r.nb_flippers === 0 ? " · aucun flipper" : "";
   return `<div style="margin-top:8px;padding-top:6px;border-top:1px solid #e2e8f0">
     <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#64748b">Parc relevé sur place</div>
-    <div style="margin-top:2px;font-size:13px"><b>${r.nb_machines}</b> machine${r.nb_machines > 1 ? "s" : ""}${
-      r.annee_moyenne ? ` · parc ${r.annee_moyenne}` : ""}${manque}</div>
+    <div style="margin-top:2px;font-size:13px"><b>${r.nb_machines}</b> machine${r.nb_machines > 1 ? "s" : ""}${manque}</div>
     <div style="margin-top:4px;height:5px;border-radius:9999px;background:#e2e8f0;overflow:hidden">
       <div style="height:100%;width:${pct}%;background:#9B5CFF"></div>
     </div>

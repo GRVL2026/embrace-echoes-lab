@@ -46,7 +46,6 @@ type Lien = { salle_id: string; machine_slug: string };
 type Detail =
   | { genre: "type"; valeur: string }
   | { genre: "fabricant"; valeur: string }
-  | { genre: "age"; valeur: string; min: number; max: number }
   | { genre: "modele"; modele: Modele };
 
 const COULEURS = ["#9B5CFF", "#ADFF00", "#5CC8FF", "#FF6B9D", "#FFB800", "#7CE0FF",
@@ -63,15 +62,11 @@ const TYPES: Record<string, string> = {
 };
 const emoji = (t: string | null) => TYPES[(t ?? "").toLowerCase()] ?? "📍";
 
-// Tranches d'âge du parc. Dix ans est la frontière qui compte : au-delà, une machine
-// n'attire plus, et son exploitant le sait avant nous.
-const TRANCHES = [
-  { label: "2022 et après", min: 2022, max: 9999, ton: "#34D399" },
-  { label: "2016 → 2021", min: 2016, max: 2021, ton: "#ADFF00" },
-  { label: "2010 → 2015", min: 2010, max: 2015, ton: "#FFB800" },
-  { label: "2000 → 2009", min: 2000, max: 2009, ton: "#FF6B9D" },
-  { label: "avant 2000", min: 0, max: 1999, ton: "#9B5CFF" },
-];
+// L'année n'est plus exploitée : l'annuaire donne l'année de SORTIE du modèle, pas
+// celle de son achat. Présentée comme l'âge d'un parc, elle induisait en erreur — un
+// lieu qui renouvelle chaque année et un lieu figé depuis dix ans obtenaient la même
+// moyenne. La donnée reste en base, elle n'a simplement rien à faire dans un écran
+// d'aide à la décision.
 
 export default function ParcArcade() {
   const { isAdmin, isDirection, isLoading } = useAuth();
@@ -154,17 +149,6 @@ export default function ParcArcade() {
       .sort((a, b) => b.valeur - a.valeur).slice(0, 12);
   }, [modeles]);
 
-  const agesData = useMemo(() => {
-    const compte = new Map<string, number>();
-    for (const l of liens ?? []) {
-      const an = parModele.get(l.machine_slug)?.annee;
-      if (!an) continue;
-      const t = TRANCHES.find((x) => an >= x.min && an <= x.max);
-      if (t) compte.set(t.label, (compte.get(t.label) ?? 0) + 1);
-    }
-    return TRANCHES.map((t) => ({ nom: t.label, valeur: compte.get(t.label) ?? 0, ton: t.ton }));
-  }, [liens, parModele]);
-
   const modelesTop = useMemo(() => {
     const q = recherche.trim().toLowerCase();
     return (modeles ?? [])
@@ -183,7 +167,6 @@ export default function ParcArcade() {
     const slugsRetenus = new Set(
       (modeles ?? []).filter((m) => {
         if (detail.genre === "fabricant") return m.editeur === detail.valeur;
-        if (detail.genre === "age") return m.annee != null && m.annee >= detail.min && m.annee <= detail.max;
         return m.slug === detail.modele.slug;
       }).map((m) => m.slug),
     );
@@ -204,12 +187,10 @@ export default function ParcArcade() {
   const pret = !!salles && !!modeles && !!liens;
   const totalMachines = (salles ?? []).reduce((n, s) => n + s.nb_machines, 0);
   const sansFlipper = (salles ?? []).filter((s) => s.nb_machines > 0 && s.nb_flippers === 0).length;
-  const parcAncien = (salles ?? []).filter((s) => s.parc_annee_moyenne != null && s.parc_annee_moyenne < 2016).length;
 
   const titreDetail = !detail ? ""
     : detail.genre === "modele" ? detail.modele.nom
     : detail.genre === "fabricant" ? detail.valeur
-    : detail.genre === "age" ? `Parc ${detail.valeur}`
     : detail.valeur;
 
   return (
@@ -239,7 +220,7 @@ export default function ParcArcade() {
         )}
 
         {/* Trois chiffres qui sont trois occasions, pas trois totaux. */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <Card className="p-3">
             <div className="text-2xl font-semibold tabular-nums">{totalMachines.toLocaleString("fr-FR")}</div>
             <div className="text-[11px] text-muted-foreground">machines installées dans {(salles ?? []).length} lieux</div>
@@ -248,11 +229,6 @@ export default function ParcArcade() {
             className="rounded-lg border border-border p-3 text-left transition-colors hover:border-primary/40">
             <div className="text-2xl font-semibold tabular-nums text-emerald-500">{sansFlipper}</div>
             <div className="text-[11px] text-muted-foreground">lieux équipés <strong>sans aucun flipper</strong></div>
-          </button>
-          <button type="button" onClick={() => setDetail({ genre: "age", valeur: "2010 → 2015", min: 0, max: 2015 })}
-            className="rounded-lg border border-border p-3 text-left transition-colors hover:border-primary/40">
-            <div className="text-2xl font-semibold tabular-nums text-amber-500">{parcAncien}</div>
-            <div className="text-[11px] text-muted-foreground">lieux dont le parc date d'<strong>avant 2016</strong></div>
           </button>
         </div>
 
@@ -327,43 +303,6 @@ export default function ParcArcade() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </Card>
-        </section>
-
-        {/* ── Question 3 ─────────────────────────────────────────────────────── */}
-        <section className="space-y-2">
-          <h2 className="font-display text-base font-semibold">Quel âge a le parc&nbsp;?</h2>
-          <p className="text-xs text-muted-foreground">
-            Une machine de plus de dix ans n'attire plus, et son exploitant le sait avant toi.
-            Clique une tranche pour voir les lieux concernés.
-          </p>
-          <Card className="p-3">
-            <div style={{ width: "100%", height: 200 }}>
-              <ResponsiveContainer>
-                <BarChart data={agesData} margin={{ left: 4, right: 4, top: 16, bottom: 4 }}>
-                  <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="2 4" />
-                  <XAxis dataKey="nom" tickLine={false} axisLine={false}
-                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                  <YAxis hide />
-                  <Tooltip cursor={{ fill: "hsl(var(--muted)/0.4)" }}
-                    content={<ChartTooltipContent hideLabel
-                      formatter={(v: any, _n: any, it: any) => [`${v} machines`, it?.payload?.nom]} />} />
-                  <Bar dataKey="valeur" radius={[4, 4, 0, 0]} cursor="pointer"
-                    onClick={(d: any) => {
-                      const p = d?.payload ?? d;
-                      const t = TRANCHES.find((x) => x.label === p?.nom);
-                      if (t) setDetail({ genre: "age", valeur: t.label, min: t.min, max: t.max });
-                    }}>
-                    {agesData.map((a, i) => <Cell key={i} fill={a.ton} />)}
-                    <LabelList dataKey="valeur" position="top"
-                      style={{ fontSize: 11, fill: "hsl(var(--foreground))" }} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              Seules les machines dont l'année est connue sont comptées.
-            </p>
           </Card>
         </section>
 

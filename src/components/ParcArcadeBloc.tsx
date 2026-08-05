@@ -29,12 +29,12 @@ type Salle = {
   prestations: string[] | null; fiche_url: string; fiche_lue_at: string | null;
 };
 
-const TRANCHES = [
-  { label: "2022+", min: 2022, ton: "bg-emerald-500" },
-  { label: "2016-21", min: 2016, ton: "bg-lime-500" },
-  { label: "2010-15", min: 2010, ton: "bg-amber-500" },
-  { label: "< 2010", min: 0, ton: "bg-rose-500" },
-];
+// L'ANNÉE N'EST PAS AFFICHÉE, et c'est délibéré. L'annuaire donne l'année de SORTIE du
+// modèle, pas celle de son achat par le lieu : « Mario Kart GP DX 2013 » n'indique pas
+// qu'il a été acheté en 2013. Présentée comme l'âge d'un parc, l'information induisait
+// en erreur ; quatorze machines sur trente-six n'en ont d'ailleurs aucune, billard et
+// baby-foot n'étant pas des modèles datés. Elle reste en base pour qui saura quoi en
+// faire, mais elle n'a pas sa place dans une aide à la décision.
 
 /** Familles que nous vendons, pour dire ce qui manque sur place. Une catégorie absente
  *  est un argument d'appel plus direct qu'un parc vieillissant : elle se constate. */
@@ -85,16 +85,9 @@ export function ParcArcadeBloc({
 
   const stats = useMemo(() => {
     const m = data?.machines ?? [];
-    const annees = m.map((x) => x.annee).filter((a): a is number => !!a);
-    const parTranche = TRANCHES.map((t, i) => ({
-      ...t,
-      n: annees.filter((a) => a >= t.min && (i === 0 || a < TRANCHES[i - 1].min)).length,
-    }));
     return {
       total: m.length,
       catalogue: m.filter((x) => x.correspondance === "exacte" || x.correspondance === "marque").length,
-      annee: annees.length ? Math.round(annees.reduce((a, b) => a + b, 0) / annees.length) : null,
-      parTranche,
       absentes: FAMILLES.filter((f) => !m.some(f.test)).map((f) => f.label),
       parType: [...m.reduce((acc, x) => {
         const k = x.categorie === "flipper" ? "flipper" : (x.type_jeu ?? "autre");
@@ -114,7 +107,6 @@ export function ParcArcadeBloc({
   if (!data?.salle) return null;
 
   const { salle } = data;
-  const avecAnnee = stats.parTranche.reduce((n, t) => n + t.n, 0);
 
   // Une seule ligne quand le bloc principal existe déjà : l'écart entre ce qu'on a
   // facturé et ce qui est sur place se lit alors sans quitter des yeux le camembert.
@@ -129,7 +121,6 @@ export function ParcArcadeBloc({
         {stats.catalogue > 0 && (
           <span className="text-primary">· {stats.catalogue} de notre périmètre</span>
         )}
-        {stats.annee && <span>· parc {stats.annee}</span>}
         {stats.absentes.length > 0 && (
           <span className="text-emerald-600 dark:text-emerald-400">
             · aucun {stats.absentes.slice(0, 2).join(", aucun ")}
@@ -150,11 +141,6 @@ export function ParcArcadeBloc({
 
       {/* Trois faits, et rien de plus au premier regard. */}
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        {stats.annee && (
-          <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
-            parc {stats.annee} en moyenne
-          </Badge>
-        )}
         {stats.catalogue > 0 && (
           <Badge variant="outline" className="h-5 px-1.5 text-[10px] border-primary/40 text-primary">
             {stats.catalogue} de notre périmètre
@@ -166,26 +152,6 @@ export function ParcArcadeBloc({
           </Badge>
         )}
       </div>
-
-      {/* L'âge du parc en une barre : on voit d'un coup si le renouvellement est le sujet. */}
-      {avecAnnee > 0 && (
-        <div className="mt-2.5">
-          <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted">
-            {stats.parTranche.map((t) => t.n > 0 && (
-              <div key={t.label} className={cn("h-full", t.ton)}
-                style={{ width: `${(t.n / avecAnnee) * 100}%` }}
-                title={`${t.n} machine${t.n > 1 ? "s" : ""} ${t.label}`} />
-            ))}
-          </div>
-          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
-            {stats.parTranche.filter((t) => t.n > 0).map((t) => (
-              <span key={t.label} className="inline-flex items-center gap-1">
-                <span className={cn("h-1.5 w-1.5 rounded-full", t.ton)} />{t.label} · {t.n}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
 
       <Collapsible open={ouvert} onOpenChange={setOuvert}>
         <CollapsibleTrigger asChild>

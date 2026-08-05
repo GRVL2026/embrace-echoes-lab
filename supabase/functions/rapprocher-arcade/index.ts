@@ -43,7 +43,11 @@ const sansAccent = (s: string) =>
   s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 function cle(s: string | null | undefined): string {
-  return sansAccent((s ?? '').toLowerCase()).replace(/[^a-z0-9]+/g, ' ').trim();
+  // Les fiches clients portent un suffixe de commune — « L'OUSTALET — CHATEL ». Il
+  // désigne le lieu, pas l'établissement, et faisait chuter la similarité au point de
+  // rétrograder de vrais rapprochements situés à quelques dizaines de mètres.
+  const sansCommune = (s ?? '').split(/\s+[—–]\s+/)[0];
+  return sansAccent(sansCommune.toLowerCase()).replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
 // Le type d'établissement et les articles ne distinguent rien : « Camping Le Ranch des
@@ -290,6 +294,19 @@ Deno.serve(async (req) => {
         if (exemples.length < 12) exemples.push(`PROSPECT · ${s.nom} → ${vp.cible.nom} (${vp.motif})`);
       } else if (vc || vp) {
         const v = (vc?.score ?? 0) >= (vp?.score ?? 0) ? vc! : vp!;
+        // Un candidat dont le nom ne ressemble à rien et qui n'est pas dans le même
+        // bâtiment n'est pas « à confirmer » : c'est un voisin. L'y laisser ferait
+        // arbitrer à la main des rapprochements que personne ne peut trancher, et la
+        // file perdrait sa crédibilité au dixième cas.
+        const plausible = /nom (\d+) %/.test(v.motif)
+          ? Number(v.motif.match(/nom (\d+) %/)![1]) >= 20 || /^([0-5]?\d) m,/.test(v.motif)
+          : true;
+        if (!plausible) {
+          ligne = { ...ligne, rapprochement: 'aucun', prospect_id: null, code_client: null };
+          compte.aucun++;
+          majSalles.push(ligne);
+          continue;
+        }
         ligne = { ...ligne, rapprochement: 'a_confirmer' };
         compte.a_confirmer++;
         if (exemples.length < 12) exemples.push(`À CONFIRMER · ${s.nom} → ${v.cible.nom} (${v.motif})`);

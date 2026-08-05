@@ -148,10 +148,10 @@ export const SPACES: Space[] = [
         // quotidien de la prospection, la reconquête ne servait plus.
         key: "prospection.gazette",
         label: "Gazette",
-        to: "/admin/veille",
+        to: "/gazette",
         icon: NewspaperIcon,
         show: (c) => c.isAdmin || c.isDirection,
-        match: startsWith("/admin/veille"),
+        match: startsWith("/gazette"),
       },
       {
         key: "prospection.carte",

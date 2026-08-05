@@ -28,6 +28,52 @@ const PAUSE_MS = 1000;
 
 const dormir = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Les 25 prestations de l'annuaire. Une salle en porte souvent plusieurs — un bowling
+// avec bar et laser game — d'où le tableau conservé en entier. Mais le copilote a besoin
+// d'UN type principal pour répondre « les campings de Bretagne » sans ambiguïté : d'où
+// cet ordre, du plus spécifique au plus générique. « Salle d'arcade » ferme la marche,
+// c'est le type par défaut de l'annuaire et il ne distingue rien.
+const PRESTATIONS: { code: string; libelle: string }[] = [
+  { code: 'camping', libelle: 'camping' },
+  { code: 'bowling', libelle: 'bowling' },
+  { code: 'parc-dattraction', libelle: "parc d'attraction" },
+  { code: 'laser-game', libelle: 'laser game' },
+  { code: 'karting', libelle: 'karting' },
+  { code: 'trampoline', libelle: 'trampoline' },
+  { code: 'escape-game', libelle: 'escape game' },
+  { code: 'realite-virtuelle', libelle: 'réalité virtuelle' },
+  { code: 'casino', libelle: 'casino' },
+  { code: 'cinema', libelle: 'cinéma' },
+  { code: 'discotheque', libelle: 'discothèque' },
+  { code: 'karaoke', libelle: 'karaoké' },
+  { code: 'sport', libelle: 'complexe sportif' },
+  { code: 'musee', libelle: 'musée' },
+  { code: 'hotel', libelle: 'hôtel' },
+  { code: 'restaurant', libelle: 'restaurant' },
+  { code: 'cafe', libelle: 'café ludique' },
+  { code: 'bar', libelle: 'bar' },
+  { code: 'magasin-de-jeux-video', libelle: 'magasin' },
+  { code: 'aire-dautoroute', libelle: "aire d'autoroute" },
+  { code: 'aeroport', libelle: 'aéroport' },
+  { code: 'quiz-box', libelle: 'quiz box' },
+  { code: 'privatisation', libelle: 'privatisation' },
+  { code: 'salle-de-jeux', libelle: 'aire de jeux' },
+  { code: 'salle-darcade', libelle: "salle d'arcade" },
+];
+
+const CARTE = `${RACINE}/la-carte-de-france-des-salles-arcade/`;
+
+/** Marqueurs d'une carte : identifiant de la salle, nom et position. */
+function marqueurs(html: string): Map<string, { nom: string; lat: number; lng: number }> {
+  const out = new Map<string, { nom: string; lat: number; lng: number }>();
+  for (const m of html.matchAll(
+    /L\.marker\(\[([-\d.]+),\s*([-\d.]+)\][\s\S]{0,400}?salle-arcade\\?\/([a-z0-9-]+)\\?\/[^>]*>([^<]{1,120})</g)) {
+    const [, lat, lng, slug, nom] = m;
+    if (!out.has(slug)) out.set(slug, { nom: decode(nom), lat: Number(lat), lng: Number(lng) });
+  }
+  return out;
+}
+
 function decode(s: string): string {
   return s
     .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
@@ -150,6 +196,55 @@ Deno.serve(async (req) => {
       return json({ ok: true, trouvees: urls.length, en_base: count ?? 0 });
     }
 
+    // ── Carte : type de lieu et coordonnées, en 26 requêtes ───────────────────
+    // La page carte porte, pour CHAQUE salle, sa position et ses prestations — ces
+    // dernières via un filtre en paramètre d'URL. Vingt-six requêtes suffisent donc à
+    // classer et géolocaliser les 819 salles, là où un géocodage adresse par adresse
+    // aurait demandé autant d'appels à un service externe pour un résultat moins sûr.
+    if (body.action === 'carte') {
+      const base = marqueurs(await page(CARTE));
+      if (base.size === 0) return json({ error: 'Aucun marqueur sur la carte' }, 502);
+
+      const parSalle = new Map<string, string[]>();
+      const comptes: Record<string, number> = {};
+      for (const p of PRESTATIONS) {
+        if (Date.now() - debut > BUDGET_MS) break;
+        const filtres = marqueurs(await page(`${CARTE}?typeEtablissement=${p.code}`));
+        comptes[p.libelle] = filtres.size;
+        for (const slug of filtres.keys()) {
+          const l = parSalle.get(slug) ?? [];
+          l.push(p.libelle);
+          parSalle.set(slug, l);
+        }
+        await dormir(PAUSE_MS);
+      }
+
+      const lignes = [...base.entries()].map(([slug, m]) => {
+        const prestations = parSalle.get(slug) ?? [];
+        // Le type principal est le premier de la liste de priorité que la salle porte.
+        const principal = PRESTATIONS.find((p) => prestations.includes(p.libelle))?.libelle ?? null;
+        return {
+          slug,
+          fiche_url: `${RACINE}/salle-arcade/${slug}/`,
+          nom: m.nom,
+          lat: m.lat, lng: m.lng, geocode_at: new Date().toISOString(),
+          type_lieu: principal,
+          prestations,
+          updated_at: new Date().toISOString(),
+        };
+      });
+      for (let i = 0; i < lignes.length; i += 200) {
+        const { error } = await admin.from('arcade_salles')
+          .upsert(lignes.slice(i, i + 200), { onConflict: 'slug' });
+        if (error) throw error;
+      }
+      return json({
+        ok: true, salles: lignes.length,
+        classees: lignes.filter((l) => l.type_lieu).length,
+        par_prestation: comptes,
+      });
+    }
+
     // ── Lecture des fiches ─────────────────────────────────────────────────────
     const limite = Math.min(30, Math.max(1, Number(body.limite ?? PAR_PASSAGE)));
     const { data: aLire, error: eSel } = await admin
@@ -169,7 +264,10 @@ Deno.serve(async (req) => {
         const f = extraire(await page(salle.fiche_url), salle.slug);
 
         const { error: eMaj } = await admin.from('arcade_salles').update({
-          nom: f.nom, adresse: f.adresse, code_postal: f.code_postal, ville: f.ville,
+          // Le nom de la carte fait foi quand il existe : celui du titre de page est
+          // parfois tronqué ou suffixé.
+          ...(salle.nom ? {} : { nom: f.nom }),
+          adresse: f.adresse, code_postal: f.code_postal, ville: f.ville,
           departement: f.departement, region: f.region,
           site_web: f.site_web, facebook: f.facebook, instagram: f.instagram,
           fiche_lue_at: new Date().toISOString(), updated_at: new Date().toISOString(),

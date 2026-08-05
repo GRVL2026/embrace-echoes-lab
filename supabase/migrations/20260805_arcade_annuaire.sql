@@ -151,3 +151,17 @@ begin
 end $$;
 
 grant select on public.arcade_machines, public.arcade_salles, public.arcade_parc to copilot_readonly;
+
+-- ── Type de lieu ─────────────────────────────────────────────────────────────
+-- Les 819 adresses ne sont pas 819 « salles d'arcade » : ce sont des bowlings, des
+-- campings, des cinémas, des casinos. Sans cette distinction, le copilote de la carte
+-- ne peut répondre ni « les campings de Bretagne » ni « les bowlings sans flipper ».
+--
+-- Une salle porte souvent PLUSIEURS prestations — bowling avec bar et laser game — d'où
+-- le tableau conservé en entier, et un type principal dérivé du plus spécifique.
+alter table public.arcade_salles
+  add column if not exists type_lieu   text,
+  add column if not exists prestations text[] not null default '{}';
+
+create index if not exists idx_arcade_salles_type on public.arcade_salles (type_lieu);
+create index if not exists idx_arcade_salles_prestations on public.arcade_salles using gin (prestations);

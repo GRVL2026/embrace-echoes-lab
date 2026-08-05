@@ -127,11 +127,13 @@ export type Database = {
           lat: number | null
           lng: number | null
           nom: string | null
+          prestations: string[]
           prospect_id: string | null
           rapprochement: string | null
           region: string | null
           site_web: string | null
           slug: string
+          type_lieu: string | null
           updated_at: string
           ville: string | null
         }
@@ -151,11 +153,13 @@ export type Database = {
           lat?: number | null
           lng?: number | null
           nom?: string | null
+          prestations?: string[]
           prospect_id?: string | null
           rapprochement?: string | null
           region?: string | null
           site_web?: string | null
           slug: string
+          type_lieu?: string | null
           updated_at?: string
           ville?: string | null
         }
@@ -175,11 +179,13 @@ export type Database = {
           lat?: number | null
           lng?: number | null
           nom?: string | null
+          prestations?: string[]
           prospect_id?: string | null
           rapprochement?: string | null
           region?: string | null
           site_web?: string | null
           slug?: string
+          type_lieu?: string | null
           updated_at?: string
           ville?: string | null
         }
@@ -3666,6 +3672,8 @@ export type Database = {
           typologie: string
         }[]
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       unaccent: { Args: { "": string }; Returns: string }
     }
     Enums: {

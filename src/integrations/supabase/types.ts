@@ -1057,6 +1057,39 @@ export type Database = {
         }
         Relationships: []
       }
+      fiche_briefs: {
+        Row: {
+          cible_id: string
+          cible_type: string
+          contenu: string
+          empreinte: string | null
+          faits: Json | null
+          genere_le: string
+          genere_par: string | null
+          id: string
+        }
+        Insert: {
+          cible_id: string
+          cible_type: string
+          contenu: string
+          empreinte?: string | null
+          faits?: Json | null
+          genere_le?: string
+          genere_par?: string | null
+          id?: string
+        }
+        Update: {
+          cible_id?: string
+          cible_type?: string
+          contenu?: string
+          empreinte?: string | null
+          faits?: Json | null
+          genere_le?: string
+          genere_par?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
       gaia_achats: {
         Row: {
           bateau: string | null

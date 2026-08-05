@@ -59,9 +59,17 @@ function xmlDecode(s: string): string {
     .replace(/&#39;/g, "'").replace(/&apos;/g, "'").replace(/&amp;/g, '&');
 }
 
+// Google Actualités refuse les adresses IP des centres de données : depuis Supabase, il
+// répond 503 avec sa page « Sorry… », alors que la même requête aboutit depuis un poste
+// ordinaire. On passe donc par un relais Cloudflare Worker, dont l'adresse de sortie est
+// acceptée. Le relais est optionnel : sans lui, on tente l'appel direct, qui fonctionnera
+// si l'hébergeur change d'adresse ou si Google assouplit son filtrage.
+const PROXY = (Deno.env.get('GAZETTE_PROXY_URL') || '').replace(/\/$/, '');
+
 async function interrogerGoogleNews(requete: string, depuis: string): Promise<Brut[]> {
   const q = encodeURIComponent(`${requete} ${EVENEMENTS} after:${depuis}`);
-  const url = `https://news.google.com/rss/search?q=${q}&hl=fr&gl=FR&ceid=FR:fr`;
+  const direct = `https://news.google.com/rss/search?q=${q}&hl=fr&gl=FR&ceid=FR:fr`;
+  const url = PROXY ? `${PROXY}/news?q=${q}` : direct;
   const res = await fetch(url, {
     headers: { 'User-Agent': UA, 'Accept': 'application/rss+xml, application/xml, text/xml' },
     signal: AbortSignal.timeout(20_000),
@@ -176,7 +184,11 @@ Deno.serve(async (req) => {
       }
     }
     if (parTitre.size === 0 && echecs.length) {
-      return json({ error: 'Aucune collecte possible', echecs: echecs.slice(0, 4) }, 502);
+      return json({
+        error: 'Aucune collecte possible',
+        relais: PROXY ? 'utilisé' : 'non configuré (secret GAZETTE_PROXY_URL absent)',
+        echecs: echecs.slice(0, 4),
+      }, 502);
     }
     const candidats = [...parTitre.values()].sort((a, b) => b.publie.localeCompare(a.publie));
 

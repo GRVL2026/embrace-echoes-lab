@@ -246,6 +246,41 @@ Deno.serve(async (req) => {
     let rawText = '';
     let parseError: string | null = null;
 
+    // ── Recherche par nom : aucun modèle n'intervient ─────────────────────────
+    // « speedpark », « bowling de dieppe » : trois mots sans verbe ni chiffre, c'est un
+    // nom d'établissement. Faire interpréter ça par une IA n'apporte rien et introduit
+    // un point de rupture — elle a répondu « je n'ai pas compris » à « speedpark », ce
+    // qu'aucun LIKE n'aurait fait. La requête est donc construite directement.
+    //
+    // La comparaison ignore accents, casse et espaces : personne ne connaît
+    // l'orthographe exacte d'une enseigne au moment de la chercher.
+    const motsOutils = /\b(top|combien|liste|montre|quels?|quelles?|clients?|prospects?|ca|chiffre|euros?|k€|dormants?|actifs?|inactifs?|plus|moins|entre|depuis|avec|sans|par|dans|sur|meilleurs?|derniers?)\b/i;
+    const estNomPropre = question.length <= 40
+      && !/\d/.test(question)
+      && question.split(/\s+/).length <= 4
+      && !motsOutils.test(question);
+
+    if (estNomPropre) {
+      const cle = question.toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]/g, '');
+      if (cle.length >= 3) {
+        const motif = `'%${cle.replace(/'/g, "''")}%'`;
+        const nettoie = (col: string) =>
+          `regexp_replace(lower(translate(${col}, 'àâäáãåçéèêëíìîïñóòôöõúùûüýÿ', 'aaaaaaceeeeiiiinooooouuuuyy')), '[^a-z0-9]', '', 'g')`;
+        sql = `SELECT c.name AS nom, c.ville AS ville, c.lat AS lat, c.lng AS lng, c.customer_id AS code_client, 'client' AS categorie `
+            + `FROM gaia_clients c WHERE c.lat IS NOT NULL AND ${nettoie('c.name')} LIKE ${motif} `
+            + `UNION ALL `
+            + `SELECT p.entreprise AS nom, p.ville AS ville, p.lat AS lat, p.lng AS lng, NULL AS code_client, 'prospect' AS categorie `
+            + `FROM prospects p WHERE p.lat IS NOT NULL AND ${nettoie('p.entreprise')} LIKE ${motif} LIMIT 500`;
+        countSql = `SELECT (`
+            + `(SELECT COUNT(*) FROM gaia_clients c WHERE c.lat IS NOT NULL AND ${nettoie('c.name')} LIKE ${motif}) + `
+            + `(SELECT COUNT(*) FROM prospects p WHERE p.lat IS NOT NULL AND ${nettoie('p.entreprise')} LIKE ${motif})`
+            + `)::bigint AS total`;
+        interpretation = `Recherche de « ${question} » parmi les clients et les prospects géolocalisés.`;
+      }
+    }
+
     const tryInterpret = async (): Promise<boolean> => {
       const data = await callAnthropicWithRetry(apiKey, question);
       const textBlock = Array.isArray(data?.content)
@@ -271,7 +306,8 @@ Deno.serve(async (req) => {
     };
 
     try {
-      let ok = await tryInterpret();
+      // Une recherche par nom a déjà sa requête : on saute l'interprétation.
+      let ok = !!sql || await tryInterpret();
       if (!ok) {
         console.warn('[carte-copilot] interprétation échouée, nouvel essai', { parseError });
         ok = await tryInterpret();

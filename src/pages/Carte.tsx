@@ -319,12 +319,26 @@ export default function Carte() {
   const [asking, setAsking] = useState(false);
   const [copilotResult, setCopilotResult] = useState<CopilotResult | null>(null);
 
+  // Les suggestions cherchent dans les clients ET les prospects. Ne proposer que les
+  // clients était trompeur : la base compte 8 700 prospects contre 3 000 clients, et
+  // taper « speedpark » ne renvoyait qu'une holding à Dijon alors que dix-sept
+  // établissements du même réseau sont recensés.
+  //
+  // La comparaison ignore accents, casse ET espaces : « speed park », « speedpark » et
+  // « Speed-Park » désignent le même endroit, et personne ne connaît l'orthographe
+  // exacte d'une enseigne au moment de la chercher.
   const suggestions = useMemo(() => {
     if (!data || query.trim().length < 2) return [];
-    const q = normalize(query.trim());
-    return data.clients
-      .filter((c) => c.nom && normalize(c.nom).includes(q))
-      .slice(0, 8);
+    const q = normalize(query.trim()).replace(/[^a-z0-9]/g, "");
+    if (q.length < 2) return [];
+    const cle = (v: string | null | undefined) => normalize(v ?? "").replace(/[^a-z0-9]/g, "");
+    const desClients = data.clients
+      .filter((c) => c.nom && cle(c.nom).includes(q))
+      .map((c) => ({ genre: "client" as const, item: c }));
+    const desProspects = (data.prospects ?? [])
+      .filter((p: any) => p.nom && cle(p.nom).includes(q))
+      .map((p: any) => ({ genre: "prospect" as const, item: p }));
+    return [...desClients, ...desProspects].slice(0, 10);
   }, [data, query]);
 
   // --- Leaflet init ---
@@ -623,6 +637,13 @@ export default function Carte() {
     }
   }
 
+  /** Centrer sur un point sans code client — un prospect n'en a pas. */
+  const zoomToPoint = (lat: number, lng: number, nom?: string | null) => {
+    setSuggestOpen(false);
+    if (nom) setQuery(nom);
+    mapRef.current?.setView([lat, lng], 15, { animate: true });
+  };
+
   const zoomToClient = (c: ClientPt) => {
     setSuggestOpen(false);
     setQuery(c.nom || "");
@@ -801,21 +822,32 @@ export default function Carte() {
             )}
             {suggestOpen && suggestions.length > 0 && (
               <div className="absolute left-0 right-0 top-full mt-1 rounded-md border bg-popover shadow-lg overflow-hidden">
-                {suggestions.map((c) => (
+                {suggestions.map((s, i) => (
                   <button
-                    key={c.code_client}
-                    onMouseDown={(e) => { e.preventDefault(); zoomToClient(c); }}
+                    key={s.genre === "client" ? (s.item as ClientPt).code_client : `p-${i}`}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      if (s.genre === "client") zoomToClient(s.item as ClientPt);
+                      else zoomToPoint((s.item as any).lat, (s.item as any).lng, (s.item as any).nom);
+                    }}
                     className="w-full text-left px-3 py-2 hover:bg-accent flex items-center justify-between gap-2 text-sm"
                   >
                     <div className="min-w-0">
-                      <div className="truncate font-medium">{c.nom}</div>
+                      <div className="truncate font-medium">{(s.item as any).nom}</div>
                       <div className="text-xs text-muted-foreground truncate">
-                        {c.ville || "—"} · {fmtEUR(c.ca_12m || 0)} 12m
+                        {(s.item as any).ville || "—"}
+                        {s.genre === "client"
+                          ? ` · ${fmtEUR((s.item as ClientPt).ca_12m || 0)} 12m`
+                          : ` · prospect${(s.item as any).segment ? ` ${(s.item as any).segment}` : ""}`}
                       </div>
                     </div>
                     <span
                       className="inline-block h-2 w-2 rounded-full shrink-0"
-                      style={{ background: COLORS_CLIENT[c.categorie as ClientLayer] }}
+                      style={{
+                        background: s.genre === "client"
+                          ? COLORS_CLIENT[(s.item as ClientPt).categorie as ClientLayer]
+                          : COLORS_PROSPECT[segProspect((s.item as any).segment)],
+                      }}
                     />
                   </button>
                 ))}

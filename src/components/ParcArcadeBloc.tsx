@@ -46,8 +46,12 @@ const FAMILLES = [
 ];
 
 export function ParcArcadeBloc({
-  prospectId, codeClient, salleId,
-}: { prospectId?: string | null; codeClient?: string | null; salleId?: string | null }) {
+  prospectId, codeClient, salleId, compact = false,
+}: {
+  prospectId?: string | null; codeClient?: string | null; salleId?: string | null;
+  /** Mode ligne unique, pour cohabiter avec un bloc qui porte déjà le même titre. */
+  compact?: boolean;
+}) {
   const [ouvert, setOuvert] = useState(false);
 
   const { data, isFetching } = useQuery({
@@ -111,6 +115,29 @@ export function ParcArcadeBloc({
 
   const { salle } = data;
   const avecAnnee = stats.parTranche.reduce((n, t) => n + t.n, 0);
+
+  // Une seule ligne quand le bloc principal existe déjà : l'écart entre ce qu'on a
+  // facturé et ce qui est sur place se lit alors sans quitter des yeux le camembert.
+  if (compact) {
+    return (
+      <p className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted-foreground">
+        <Gamepad2 className="h-3.5 w-3.5 flex-shrink-0" style={{ color: "hsl(var(--space-prospection))" }} />
+        <span>
+          <strong className="text-foreground tabular-nums">{stats.total}</strong> relevée
+          {stats.total > 1 ? "s" : ""} sur place par l'annuaire
+        </span>
+        {stats.catalogue > 0 && (
+          <span className="text-primary">· {stats.catalogue} de notre périmètre</span>
+        )}
+        {stats.annee && <span>· parc {stats.annee}</span>}
+        {stats.absentes.length > 0 && (
+          <span className="text-emerald-600 dark:text-emerald-400">
+            · aucun {stats.absentes.slice(0, 2).join(", aucun ")}
+          </span>
+        )}
+      </p>
+    );
+  }
 
   return (
     <div className="rounded-lg border border-border bg-muted/20 p-3">

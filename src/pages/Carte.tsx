@@ -188,6 +188,31 @@ type PopupClient = {
 };
 
 /** Gabarit unique du popup client (utilisé par la couche clients ET la branche de secours). */
+type ResumeParc = {
+  salle_id: string; code_client: string | null; prospect_id: string | null;
+  nom: string | null; type_lieu: string | null;
+  nb_machines: number; nb_flippers: number; nb_catalogue: number; annee_moyenne: number | null;
+};
+
+/** Le parc dans la bulle, pour éviter d'avoir à ouvrir la fiche. La part de notre
+ *  catalogue est le chiffre qui décide de l'appel : elle dit ce qui se joue chez ce
+ *  lieu, indépendamment de savoir qui le lui a vendu — ce que l'annuaire ignore. */
+function parcHtml(r: ResumeParc | undefined): string {
+  if (!r || !r.nb_machines) return "";
+  const pct = Math.round((r.nb_catalogue / r.nb_machines) * 100);
+  const manque = r.nb_flippers === 0 ? " · aucun flipper" : "";
+  return `<div style="margin-top:8px;padding-top:6px;border-top:1px solid #e2e8f0">
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#64748b">Parc relevé sur place</div>
+    <div style="margin-top:2px;font-size:13px"><b>${r.nb_machines}</b> machine${r.nb_machines > 1 ? "s" : ""}${
+      r.annee_moyenne ? ` · parc ${r.annee_moyenne}` : ""}${manque}</div>
+    <div style="margin-top:4px;height:5px;border-radius:9999px;background:#e2e8f0;overflow:hidden">
+      <div style="height:100%;width:${pct}%;background:#9B5CFF"></div>
+    </div>
+    <div style="margin-top:3px;font-size:11px;color:#64748b"><b style="color:#9B5CFF">${pct} %</b> relèvent de notre catalogue (${r.nb_catalogue}/${r.nb_machines})</div>
+    <div style="margin-top:3px;font-size:10px;color:#94a3b8">Source annuaire — présent sur place, pas nécessairement vendu par nous.</div>
+  </div>`;
+}
+
 function popupClientHtml(p: PopupClient, canReactivation: boolean): string {
   const code = escapeHtml(p.code_client);
   const nom = p.nom || "—";
@@ -271,6 +296,34 @@ export default function Carte() {
 
   // Les lieux à arbitrer, et les segments RÉELLEMENT présents en base : proposer une
   // liste figée aurait fini par diverger des données le jour où un segment est ajouté.
+  const { data: resumesParc } = useQuery({
+    queryKey: ["arcade-parc-resume"],
+    staleTime: 300_000,
+    queryFn: async () => {
+      const acc: ResumeParc[] = [];
+      for (let de = 0; ; de += 1000) {
+        const { data, error } = await supabase
+          .from("v_arcade_parc_resume" as any).select("*").range(de, de + 999);
+        if (error) throw error;
+        acc.push(...((data ?? []) as unknown as ResumeParc[]));
+        if (!data || data.length < 1000) break;
+      }
+      return acc;
+    },
+  });
+
+  // Deux index : un lieu est rattaché soit à un client, soit à un prospect.
+  const parcParClient = useMemo(() => {
+    const m = new Map<string, ResumeParc>();
+    for (const r of resumesParc ?? []) if (r.code_client) m.set(r.code_client, r);
+    return m;
+  }, [resumesParc]);
+  const parcParProspect = useMemo(() => {
+    const m = new Map<string, ResumeParc>();
+    for (const r of resumesParc ?? []) if (r.prospect_id) m.set(r.prospect_id, r);
+    return m;
+  }, [resumesParc]);
+
   const { data: doutes, refetch: rechargerDoutes } = useQuery({
     queryKey: ["arcade-a-confirmer"],
     staleTime: 120_000,
@@ -398,7 +451,11 @@ export default function Carte() {
         btn.onclick = () => {
           const nom = btn.getAttribute("data-fiche-client") || "";
           if (!nom) return;
-          navigateRef.current(`/admin/gaia/client/${encodeURIComponent(nom)}`);
+          // On transmet la provenance : sans elle, le bouton de retour de la fiche
+          // ramenait au tableau de bord et non à la carte qu'on venait de quitter.
+          navigateRef.current(`/admin/gaia/client/${encodeURIComponent(nom)}`, {
+            state: { from: "/carte" },
+          });
         };
       });
       el.querySelectorAll<HTMLButtonElement>("button[data-fiche-prospect]").forEach((btn) => {
@@ -518,7 +575,7 @@ export default function Carte() {
         const color = COLORS_CLIENT[c.categorie as ClientLayer];
         const size = c.categorie === "actif" ? 8 + Math.round(20 * Math.sqrt((c.ca_12m || 0) / maxCa)) : 10;
         const m = L.marker([c.lat, c.lng], { icon: makeDivIcon(color, size, !!filterCodes) });
-        m.bindPopup(popupClientHtml(c, canReactivation));
+        m.bindPopup(popupClientHtml(c, canReactivation) + parcHtml(parcParClient.get(c.code_client)));
         cluster.addLayer(m);
         markerByCodeRef.current.set(String(c.code_client ?? "").trim(), m);
       }
@@ -529,7 +586,7 @@ export default function Carte() {
         const seg = segProspect(p.segment);
         if (!prospectLayers[seg]) continue;
         const m = L.marker([p.lat, p.lng], { icon: makeDivIcon(COLORS_PROSPECT[seg], 12) });
-        m.bindPopup(popupProspectHtml(p));
+        m.bindPopup(popupProspectHtml(p) + parcHtml(parcParProspect.get(p.id)));
         cluster.addLayer(m);
       }
     }
@@ -605,7 +662,7 @@ export default function Carte() {
       }
     }
 
-  }, [data, clientLayers, prospectLayers, copilotResult, doutes, voirDoutes]);
+  }, [data, clientLayers, prospectLayers, copilotResult, doutes, voirDoutes, parcParClient, parcParProspect]);
 
   /** Trancher un rapprochement douteux. Deux issues seulement, et toutes deux sont des
    *  décisions : c'est le même établissement, ou c'en est un autre qu'il faut qualifier.

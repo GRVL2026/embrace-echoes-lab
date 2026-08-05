@@ -227,3 +227,27 @@ alter table public.arcade_salles
 
 create index if not exists idx_arcade_salles_a_arbitrer
   on public.arcade_salles (rapprochement) where rapprochement = 'a_confirmer';
+
+-- ── Résumé du parc, par lieu ─────────────────────────────────────────────────
+-- La bulle de la carte doit dire en trois chiffres ce qu'un lieu a chez lui, sans
+-- charger dix mille lignes dans le navigateur. La part de notre catalogue est le
+-- chiffre le plus parlant : elle mesure ce qui se joue chez ce lieu, indépendamment
+-- de savoir qui le lui a vendu.
+create or replace view public.v_arcade_parc_resume
+with (security_invoker = true) as
+  select s.id                as salle_id,
+         s.code_client,
+         s.prospect_id,
+         s.nom,
+         s.type_lieu,
+         count(p.machine_slug)::int                                                   as nb_machines,
+         count(*) filter (where m.categorie = 'flipper')::int                          as nb_flippers,
+         count(*) filter (where m.correspondance in ('exacte', 'marque'))::int         as nb_catalogue,
+         round(avg(m.annee))::int                                                      as annee_moyenne
+    from public.arcade_salles s
+    join public.arcade_parc p on p.salle_id = s.id
+    join public.arcade_machines m on m.slug = p.machine_slug
+   where s.ferme = false
+   group by s.id, s.code_client, s.prospect_id, s.nom, s.type_lieu;
+
+grant select on public.v_arcade_parc_resume to copilot_readonly;

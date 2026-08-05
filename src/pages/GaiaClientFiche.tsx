@@ -97,7 +97,9 @@ export default function GaiaClientFiche() {
   const location = useLocation();
   const fromState = (location.state as { from?: string } | null)?.from;
   const backTo = fromState ?? "/admin/gaia";
-  const backLabel = fromState?.startsWith("/clients") ? "Retour aux clients" : "Retour au dashboard";
+  const backLabel = fromState?.startsWith("/clients") ? "Retour aux clients"
+    : fromState === "/carte" ? "Retour à la carte"
+    : "Retour au dashboard";
   const handleBack = () => {
     if (fromState) navigate(fromState);
     else navigate("/admin/gaia");
@@ -478,9 +480,8 @@ export default function GaiaClientFiche() {
         {/* Le parc installé relevé sur place, distinct de ce que nous lui avons
             facturé : c'est la comparaison des deux qui fait l'argument commercial. */}
         {(fiche?.codes ?? []).length > 0 && (
-          <div className="mb-6 space-y-3">
+          <div className="mb-6">
             <BriefFiche codeClient={(fiche?.codes ?? [])[0]} />
-            <ParcArcadeBloc codeClient={(fiche?.codes ?? [])[0]} />
           </div>
         )}
 
@@ -828,6 +829,11 @@ export default function GaiaClientFiche() {
                 </h3>
                 <Badge variant="outline">{parcTotal} machine{parcTotal > 1 ? "s" : ""}</Badge>
               </div>
+              {/* Ce bloc compte ce que NOUS avons facturé. L'annuaire, lui, dit ce qui
+                  est physiquement sur place — souvent davantage. L'écart entre les deux
+                  est l'argument commercial, à condition de ne pas confondre les deux
+                  notions : d'où cette ligne unique plutôt qu'un second bloc homonyme. */}
+              <ParcArcadeBloc codeClient={(fiche?.codes ?? [])[0]} compact />
               {parcByFamille.length === 0 ? (
                 <div className="rounded border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
                   Aucune machine référencée pour ce client.

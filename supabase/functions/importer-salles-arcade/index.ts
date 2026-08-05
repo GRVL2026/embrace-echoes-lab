@@ -80,6 +80,16 @@ function decode(s: string): string {
     .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
     .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"')
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#039;|&apos;/g, "'")
+    // Les entités NOMMÉES sont fréquentes dans les noms d'enseignes — « Bowling
+    // L&rsquo;Elan ». Non décodées, elles polluent tout rapprochement par le nom :
+    // « rsquo » devient un mot à part entière et fait chuter la similarité de 100 à 33 %.
+    .replace(/&(rsquo|lsquo|#8217|#8216);/g, "'")
+    .replace(/&(rdquo|ldquo|#8220|#8221);/g, '"')
+    .replace(/&(ndash|mdash|#8211|#8212);/g, '-')
+    .replace(/&(eacute|egrave|ecirc);/g, 'é').replace(/&(agrave|acirc);/g, 'à')
+    .replace(/&(ccedil);/g, 'ç').replace(/&(ocirc|ouml);/g, 'ô')
+    .replace(/&(ugrave|ucirc);/g, 'ù').replace(/&(icirc|iuml);/g, 'î')
+    .replace(/&hellip;/g, '…').replace(/&[a-z]{2,8};/gi, ' ')
     .replace(/\s+/g, ' ').trim();
 }
 

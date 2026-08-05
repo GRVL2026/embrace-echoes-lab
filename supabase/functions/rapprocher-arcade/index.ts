@@ -35,7 +35,6 @@ const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 // Over » à treize mètres restent deux enseignes, pas une.
 const D_MAX = 600;          // au-delà, ce n'est plus le même établissement
 const D_PROCHE = 150;
-const SIM_FRANC = 0.50;     // le nom suffit à confirmer, même à quelques rues
 const SIM_APPUI = 0.35;     // le nom appuie une adresse déjà proche
 const SIM_DOUTE = 0.30;
 
@@ -91,9 +90,23 @@ function metres(lat1: number, lng1: number, lat2: number, lng2: number): number 
 }
 
 type Cible = {
-  id: string; nom: string; cle: string;
+  id: string; nom: string; cle: string; cleBrute: string;
   lat: number | null; lng: number | null; cp: string | null;
 };
+
+/** Similarité de deux établissements. On compare à la fois les noms ENTIERS et les
+ *  noms réduits à ce qui identifie ; le second rattrape « Camping Le Ranch des Volcans »
+ *  contre « LE RANCH DES VOLCANS », le premier empêche « Magic Games » de se confondre
+ *  avec « Magic Parc » au prétexte qu'il reste « magic » des deux côtés.
+ *
+ *  Un nom réduit à un seul mot ne suffit jamais à conclure seul : il faut alors que les
+ *  noms entiers se ressemblent aussi. */
+function accord(a: { cle: string; cleBrute: string }, b: { cle: string; cleBrute: string }) {
+  const ident = similarite(a.cle, b.cle);
+  const entier = similarite(a.cleBrute, b.cleBrute);
+  const substantiel = a.cle.includes(' ') && b.cle.includes(' ');
+  return { valeur: Math.max(ident, entier), franc: ident >= 0.5 && (substantiel || entier >= 0.5) };
+}
 
 /** Index par centième de degré : chercher le voisin le plus proche sans parcourir
  *  dix mille lignes pour chacune des neuf cents salles. */
@@ -134,9 +147,9 @@ function rapprocher(
     for (const c of voisins(grille, salle.lat, salle.lng)) {
       const d = metres(salle.lat, salle.lng, c.lat!, c.lng!);
       if (d > D_MAX) continue;
-      const sim = similarite(salle.cle, c.cle);
+      const { valeur: sim, franc } = accord(salle, c);
       const niveau: 'sur' | 'doute' =
-        (sim >= SIM_FRANC && d <= D_MAX) || (sim >= SIM_APPUI && d <= D_PROCHE) ? 'sur' : 'doute';
+        (franc && d <= D_MAX) || (franc && sim >= SIM_APPUI && d <= D_PROCHE) ? 'sur' : 'doute';
       const score = sim * 600 + Math.max(0, 600 - d);
       if (!meilleur || score > meilleur.score) {
         meilleur = { cible: c, niveau, motif: `${Math.round(d)} m, nom ${Math.round(sim * 100)} %`, score };
@@ -148,9 +161,9 @@ function rapprocher(
   // À défaut, le code postal et le nom.
   if (salle.cp) {
     for (const c of parCp.get(salle.cp) ?? []) {
-      const sim = similarite(salle.cle, c.cle);
+      const { valeur: sim, franc } = accord(salle, c);
       if (sim < SIM_DOUTE) continue;
-      const niveau: 'sur' | 'doute' = sim >= 0.65 ? 'sur' : 'doute';
+      const niveau: 'sur' | 'doute' = franc && sim >= 0.65 ? 'sur' : 'doute';
       const score = sim * 1000;
       if (!meilleur || (niveau === 'sur' && meilleur.niveau === 'doute') || score > meilleur.score) {
         meilleur = { cible: c, niveau, motif: `même code postal, nom ${Math.round(sim * 100)} %`, score };
@@ -231,7 +244,8 @@ Deno.serve(async (req) => {
     const prospects = await tout('prospects', 'id, entreprise, ville, code_postal, lat, lng, sources');
 
     const versCible = (r: any, idc: string, nomc: string): Cible => ({
-      id: String(r[idc]), nom: String(r[nomc] ?? ''), cle: cleIdentifiante(r[nomc]),
+      id: String(r[idc]), nom: String(r[nomc] ?? ''),
+      cle: cleIdentifiante(r[nomc]), cleBrute: cle(r[nomc]),
       lat: r.lat === null ? null : Number(r.lat), lng: r.lng === null ? null : Number(r.lng),
       cp: r.code_postal ?? null,
     });
@@ -255,7 +269,7 @@ Deno.serve(async (req) => {
 
     for (const s of salles) {
       const sc = {
-        nom: s.nom, cle: cleIdentifiante(s.nom),
+        nom: s.nom, cle: cleIdentifiante(s.nom), cleBrute: cle(s.nom),
         lat: s.lat === null ? null : Number(s.lat),
         lng: s.lng === null ? null : Number(s.lng),
         cp: s.code_postal ?? null,

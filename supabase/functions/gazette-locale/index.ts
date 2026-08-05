@@ -184,6 +184,20 @@ Deno.serve(async (req) => {
     const retenus: any[] = JSON.parse(brut.slice(debutTab, finTab + 1));
 
     // --- 3. Enregistrement --------------------------------------------------------
+    // Résolution des liens en PARALLÈLE et sous contrainte de temps : enchaînée, elle
+    // pouvait à elle seule dépasser la limite de 150 s sur une trentaine de signaux.
+    // Un lien non résolu reste utilisable — il passe simplement par Google.
+    const urls = new Map<string, string>();
+    if (!dryRun) {
+      const aResoudre = retenus.map((r: any) => nouveaux[Number(r.i)]?.url).filter(Boolean) as string[];
+      for (let i = 0; i < aResoudre.length; i += 8) {
+        if (Date.now() - debut > BUDGET_MS) break;
+        const lot = aResoudre.slice(i, i + 8);
+        const res = await Promise.all(lot.map((u) => resoudreUrl(u)));
+        lot.forEach((u, k) => urls.set(u, res[k]));
+      }
+    }
+
     const lignes = [];
     for (const r of retenus) {
       const src = nouveaux[Number(r.i)];
@@ -192,7 +206,7 @@ Deno.serve(async (req) => {
         publie_le: src.publie,
         source: src.source,
         titre: src.titre,
-        url: dryRun ? src.url : await resoudreUrl(src.url),
+        url: urls.get(src.url) ?? src.url,
         url_google: src.url,
         commune: r.commune ?? null,
         departement: r.departement ?? null,

@@ -3,6 +3,7 @@ import { useLocation, Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { cn } from "@/lib/utils";
 import { ClientActionsDialog } from "@/components/reactivation/ClientActionsDialog";
 import { companyStatusPopupHtml } from "@/components/reactivation/CompanyStatusBadge";
 import {

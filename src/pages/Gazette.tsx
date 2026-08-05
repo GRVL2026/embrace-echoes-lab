@@ -11,8 +11,15 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle,
+} from "@/components/ui/sheet";
 import {
   Newspaper, Loader2, ExternalLink, Plus, X, MapPin, Clock, Building2, RefreshCw,
+  Search, Quote, UserRound, Save, Sparkles,
 } from "lucide-react";
 
 type Signal = {
@@ -31,6 +38,12 @@ type Signal = {
   urgence: string | null;
   statut: string;
   prospect_id: string | null;
+  // Le dirigeant cité dans l'article. La citation est conservée avec le nom : c'est
+  // elle qui prouve que le nom vient bien de l'article et n'a pas été inventé.
+  contact_nom: string | null;
+  contact_role: string | null;
+  contact_citation: string | null;
+  contact_origine: string | null;
 };
 
 // Le territoire de Léopaul passe devant : à volume égal, un signal normand vaut
@@ -103,7 +116,18 @@ export default function Gazette() {
   const qc = useQueryClient();
   const [filtreUrgence, setFiltreUrgence] = useState<"all" | "haute" | "moyenne" | "basse">("all");
   const [filtreZone, setFiltreZone] = useState<"all" | "prioritaires">("all");
+  const [recherche, setRecherche] = useState("");
   const [enCours, setEnCours] = useState<string | null>(null);
+  // Le signal ouvert dans le panneau de détail, et le brouillon du dirigeant saisi à
+  // la main. Le brouillon vit à côté du signal : on ne réécrit la base qu'à la
+  // validation, pas à chaque frappe.
+  const [ouvert, setOuvert] = useState<Signal | null>(null);
+  const [brouillon, setBrouillon] = useState<{ nom: string; role: string }>({ nom: "", role: "" });
+
+  function ouvrir(s: Signal) {
+    setOuvert(s);
+    setBrouillon({ nom: s.contact_nom ?? "", role: s.contact_role ?? "" });
+  }
 
   const autorise = isAdmin || isDirection;
 
@@ -129,6 +153,17 @@ export default function Gazette() {
     if (filtreZone === "prioritaires") {
       liste = liste.filter((s) => REGIONS_PRIORITAIRES.includes(s.region ?? ""));
     }
+    // Recherche libre : on cherche un article aussi bien par sa commune que par le nom
+    // de l'établissement, du journal ou du dirigeant — on ne se souvient jamais du même
+    // fragment d'un article qu'on a lu la veille.
+    const q = recherche.trim().toLowerCase();
+    if (q) {
+      liste = liste.filter((s) =>
+        [s.titre, s.commune, s.departement, s.region, s.etablissement,
+         s.source, s.interpretation, s.contact_nom]
+          .some((v) => (v ?? "").toLowerCase().includes(q)),
+      );
+    }
     // La chronologie prime : on lit un journal, du plus frais au plus ancien. À
     // l'intérieur d'une même journée, le territoire puis l'urgence départagent.
     const tries = [...liste].sort((a, b) => {
@@ -145,7 +180,7 @@ export default function Gazette() {
       else parJour.push({ jour: sig.publie_le, items: [sig] });
     }
     return { tries, parJour };
-  }, [data, filtreUrgence, filtreZone]);
+  }, [data, filtreUrgence, filtreZone, recherche]);
 
   async function creerProspect(s: Signal) {
     setEnCours(s.id);
@@ -163,6 +198,10 @@ export default function Gazette() {
           // L'article est la matière de l'accroche : sans lui, le commercial perd le
           // prétexte de son appel. On le conserve donc dans la fiche.
           signal: `${s.evenement ?? "signal presse"} — ${s.titre}`,
+          // Le dirigeant repéré dans l'article part avec la fiche : sans lui, le
+          // commercial rappelle un standard et recommence l'enquête à zéro.
+          contact_nom: s.contact_nom,
+          contact_role: s.contact_role,
           notes: [s.interpretation, `Source : ${s.source ?? "presse"} (${s.publie_le})`, s.url]
             .filter(Boolean).join("\n\n"),
         })
@@ -174,9 +213,34 @@ export default function Gazette() {
         .eq("id", s.id);
 
       toast.success("Prospect créé", { description: nom });
+      setOuvert(null);   // le signal est traité : le panneau n'a plus rien à montrer
       qc.invalidateQueries({ queryKey: ["gazette-signaux"] });
     } catch (e) {
       toast.error("Création impossible", { description: (e as Error).message });
+    } finally {
+      setEnCours(null);
+    }
+  }
+
+  async function enregistrerContact(s: Signal) {
+    const nom = brouillon.nom.trim();
+    const role = brouillon.role.trim();
+    setEnCours(s.id);
+    try {
+      const { error } = await supabase.from("gazette_signaux" as any)
+        .update({
+          contact_nom: nom || null,
+          contact_role: role || null,
+          contact_origine: nom || role ? "manuel" : null,
+        })
+        .eq("id", s.id);
+      if (error) throw error;
+      toast.success(nom ? `Dirigeant enregistré : ${nom}` : "Dirigeant effacé");
+      setOuvert({ ...s, contact_nom: nom || null, contact_role: role || null,
+                  contact_origine: nom || role ? "manuel" : null });
+      qc.invalidateQueries({ queryKey: ["gazette-signaux"] });
+    } catch (e) {
+      toast.error("Enregistrement impossible", { description: (e as Error).message });
     } finally {
       setEnCours(null);
     }
@@ -220,6 +284,21 @@ export default function Gazette() {
 
       <div className="border-b border-border bg-muted/20 px-4 py-2">
         <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-[260px]">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={recherche}
+              onChange={(e) => setRecherche(e.target.value)}
+              placeholder="Chercher : commune, enseigne, journal…"
+              className="h-9 pl-8 pr-8 text-xs"
+            />
+            {recherche && (
+              <button type="button" onClick={() => setRecherche("")} title="Effacer"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
           <Select value={filtreZone} onValueChange={(v) => setFiltreZone(v as typeof filtreZone)}>
             <SelectTrigger className="h-9 w-[210px] text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -284,7 +363,13 @@ export default function Gazette() {
                       s.urgence === "haute" ? "bg-emerald-500"
                         : s.urgence === "moyenne" ? "bg-amber-500" : "bg-border")} />
 
-                    <div className="flex gap-3 p-3 pl-4">
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => ouvrir(s)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ouvrir(s); } }}
+                      className="flex gap-3 p-3 pl-4 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    >
                       {/* Pastille calendrier : la date se lit d'un coup d'œil. */}
                       <div className="flex-shrink-0 w-12 text-center">
                         <div className="text-xl font-semibold leading-none tabular-nums">{d.getDate()}</div>
@@ -308,7 +393,11 @@ export default function Gazette() {
                                 .filter(Boolean).join(" · ")}
                             </span>
                           )}
-                          <span className="ml-auto text-[11px] italic text-muted-foreground">{s.source}</span>
+                          {/* Le journal fait partie du signal : « Ouest-France » et un blog
+                              d'annonces ne se lisent pas avec le même crédit. */}
+                          <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-medium text-foreground/75">
+                            <Newspaper className="h-3 w-3" />{s.source ?? "source inconnue"}
+                          </span>
                         </div>
 
                         <h3 className="text-sm font-semibold leading-snug">
@@ -319,25 +408,36 @@ export default function Gazette() {
                           <p className="mt-1 text-[13px] text-muted-foreground leading-relaxed">{s.interpretation}</p>
                         )}
 
-                        <div className="mt-2 flex items-center gap-1">
+                        {s.contact_nom && (
+                          <p className="mt-1.5 inline-flex items-center gap-1.5 text-[12px]">
+                            <UserRound className="h-3.5 w-3.5 text-primary" />
+                            <span className="font-medium">{s.contact_nom}</span>
+                            {s.contact_role && <span className="text-muted-foreground">· {s.contact_role}</span>}
+                          </p>
+                        )}
+
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
                           {converti ? (
                             <span className="text-[11px] font-medium text-primary">Prospect créé ✓</span>
                           ) : (
                             <Button size="sm" className="h-7 gap-1.5 text-xs" disabled={enCours === s.id}
-                              onClick={() => creerProspect(s)}>
+                              onClick={(e) => { e.stopPropagation(); creerProspect(s); }}>
                               {enCours === s.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
                               Créer le prospect
                             </Button>
                           )}
-                          {/* Actions secondaires en retrait : vingt fois trois boutons fatiguent l'œil. */}
-                          <Button size="sm" variant="ghost" asChild
-                            className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" title="Lire l'article">
-                            <a href={s.url} target="_blank" rel="noreferrer"><ExternalLink className="h-3.5 w-3.5" /></a>
+                          {/* L'article est la matière première du signal : son accès reste un
+                              bouton nommé, pas une icône à deviner. */}
+                          <Button size="sm" variant="outline" asChild className="h-7 gap-1.5 text-xs">
+                            <a href={s.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+                              <ExternalLink className="h-3 w-3" />Lire l'article
+                            </a>
                           </Button>
                           {!converti && (
                             <Button size="sm" variant="ghost" title="Ignorer ce signal"
                               className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-                              disabled={enCours === s.id} onClick={() => ignorer(s)}>
+                              disabled={enCours === s.id}
+                              onClick={(e) => { e.stopPropagation(); ignorer(s); }}>
                               <X className="h-3.5 w-3.5" />
                             </Button>
                           )}
@@ -351,6 +451,148 @@ export default function Gazette() {
           ))
         )}
       </main>
+
+      {/* Panneau de détail : l'article, ce qu'on en comprend, et la personne à appeler.
+          La feuille couvre l'écran sur mobile — d'où la marge de sécurité en haut, sans
+          laquelle le titre passe sous l'heure et la batterie du téléphone. */}
+      <Sheet open={!!ouvert} onOpenChange={(o) => { if (!o) setOuvert(null); }}>
+        <SheetContent
+          side="right"
+          className="w-full sm:max-w-md overflow-y-auto"
+          style={{ paddingTop: "calc(1.5rem + var(--safe-top))" }}
+        >
+          {ouvert && (
+            <>
+              <SheetHeader className="space-y-2 text-left">
+                <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5">
+                    <Clock className="h-3 w-3" />
+                    {new Date(ouvert.publie_le + "T12:00:00").toLocaleDateString("fr-FR",
+                      { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                  </span>
+                  <span className="inline-flex items-center gap-1 font-medium text-foreground/75">
+                    <Newspaper className="h-3 w-3" />{ouvert.source ?? "source inconnue"}
+                  </span>
+                </div>
+                <SheetTitle className="text-base leading-snug">
+                  {titrePropre(ouvert.titre, ouvert.source)}
+                </SheetTitle>
+              </SheetHeader>
+
+              <div className="mt-4 space-y-4">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px] gap-1", typeMeta(ouvert.type_lieu).teinte)}>
+                    <span aria-hidden>{typeMeta(ouvert.type_lieu).icone}</span>
+                    {ouvert.type_lieu ?? "lieu de loisirs"}
+                  </Badge>
+                  {ouvert.evenement && (
+                    <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                      {EVENEMENTS[ouvert.evenement] ?? ouvert.evenement}
+                    </Badge>
+                  )}
+                  {(ouvert.commune || ouvert.region) && (
+                    <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                      <MapPin className="h-3 w-3" />
+                      {[ouvert.region, ouvert.commune && `${ouvert.commune}${ouvert.departement ? ` (${ouvert.departement})` : ""}`]
+                        .filter(Boolean).join(" · ")}
+                    </span>
+                  )}
+                </div>
+
+                {ouvert.etablissement && (
+                  <p className="inline-flex items-center gap-1.5 text-sm font-medium">
+                    <Building2 className="h-4 w-4 text-muted-foreground" />{ouvert.etablissement}
+                  </p>
+                )}
+
+                <Button asChild className="w-full gap-2">
+                  <a href={ouvert.url} target="_blank" rel="noreferrer">
+                    <ExternalLink className="h-4 w-4" />
+                    Lire l'article{ouvert.source ? ` sur ${ouvert.source}` : ""}
+                  </a>
+                </Button>
+
+                {ouvert.interpretation && (
+                  <p className="rounded-md bg-muted/40 p-3 text-[13px] leading-relaxed text-muted-foreground">
+                    {ouvert.interpretation}
+                  </p>
+                )}
+
+                <Separator />
+
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <UserRound className="h-4 w-4 text-primary" />
+                    <h3 className="text-sm font-semibold">Dirigeant</h3>
+                    {ouvert.contact_origine === "article" && (
+                      <Badge variant="outline" className="h-5 gap-1 px-1.5 text-[10px] border-primary/40 text-primary">
+                        <Sparkles className="h-3 w-3" />trouvé dans l'article
+                      </Badge>
+                    )}
+                  </div>
+
+                  {/* La citation d'origine reste sous les yeux : c'est elle qui permet de
+                      vérifier d'un regard que le nom vient de l'article. */}
+                  {ouvert.contact_citation && (
+                    <blockquote className="flex gap-2 rounded-md border-l-2 border-primary/40 bg-muted/30 p-3 text-[13px] italic leading-relaxed">
+                      <Quote className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                      <span>{ouvert.contact_citation}</span>
+                    </blockquote>
+                  )}
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="gz-nom" className="text-xs">Nom</Label>
+                    <Input id="gz-nom" value={brouillon.nom} placeholder="Prénom et nom"
+                      onChange={(e) => setBrouillon((b) => ({ ...b, nom: e.target.value }))} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="gz-role" className="text-xs">Fonction</Label>
+                    <Input id="gz-role" value={brouillon.role} placeholder="Gérant, directrice, repreneur…"
+                      onChange={(e) => setBrouillon((b) => ({ ...b, role: e.target.value }))} />
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    className="w-full gap-2"
+                    disabled={enCours === ouvert.id
+                      || (brouillon.nom.trim() === (ouvert.contact_nom ?? "")
+                          && brouillon.role.trim() === (ouvert.contact_role ?? ""))}
+                    onClick={() => enregistrerContact(ouvert)}
+                  >
+                    {enCours === ouvert.id
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <Save className="h-4 w-4" />}
+                    Enregistrer le dirigeant
+                  </Button>
+                </div>
+
+                <Separator />
+
+                <div className="flex flex-col gap-2 pb-6">
+                  {ouvert.statut === "converti" ? (
+                    <p className="text-sm font-medium text-primary">Prospect déjà créé ✓</p>
+                  ) : (
+                    <Button className="w-full gap-2" disabled={enCours === ouvert.id}
+                      onClick={() => creerProspect(ouvert)}>
+                      {enCours === ouvert.id
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <Plus className="h-4 w-4" />}
+                      Créer le prospect
+                    </Button>
+                  )}
+                  {ouvert.statut !== "converti" && (
+                    <Button variant="ghost" className="w-full gap-2 text-muted-foreground"
+                      disabled={enCours === ouvert.id}
+                      onClick={() => { ignorer(ouvert); setOuvert(null); }}>
+                      <X className="h-4 w-4" />Ignorer ce signal
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

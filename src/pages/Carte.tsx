@@ -15,6 +15,10 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { ParcArcadeBloc } from "@/components/ParcArcadeBloc";
+import { BriefFiche } from "@/components/BriefFiche";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -233,6 +237,7 @@ function popupClientHtml(p: PopupClient, canReactivation: boolean): string {
     ${p.categorie ? `<div style="font-size:11px;color:${color};margin-top:4px;text-transform:uppercase">${p.categorie}</div>` : ""}
     <div class="rea-slot" data-code="${code}" style="margin-top:8px;padding-top:6px;border-top:1px solid #e2e8f0;font-size:11px;color:#64748b">Chargement…</div>
     ${canReactivation ? `<div style="display:flex;gap:6px;margin-top:6px"><button data-rea-action="action" data-code="${code}" style="flex:1;padding:5px 8px;background:#9B5CFF;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-weight:500">+ Action</button><button data-rea-action="statut" data-code="${code}" style="flex:1;padding:5px 8px;background:#334155;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-weight:500">Statut</button></div>` : ""}
+    <button data-brief-client="${escapeHtml(p.code_client)}" style="margin-top:6px;width:100%;padding:5px 8px;background:#9B5CFF;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-weight:600">✦ Générer le brief</button>
     <button data-fiche-client="${escapeHtml(p.nom || "")}" style="margin-top:6px;width:100%;padding:5px 8px;background:transparent;color:#9B5CFF;border:1px solid #9B5CFF;border-radius:4px;font-size:11px;cursor:pointer;font-weight:500">Ouvrir la fiche client →</button>
   </div>`;
 }
@@ -246,7 +251,8 @@ function popupProspectHtml(p: { id: string; nom: string | null; ville: string | 
     <div style="margin-top:6px;font-size:12px">Statut : <b>${escapeHtml(p.statut || "—")}</b></div>
     <div style="font-size:12px">Segment : ${escapeHtml(p.segment || "—")}</div>
     <div class="prospect-slot" data-id="${id}" style="margin-top:8px;padding-top:6px;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b">Chargement…</div>
-    <button data-fiche-prospect="${id}" style="margin-top:6px;width:100%;padding:5px 8px;background:transparent;color:#9B5CFF;border:1px solid #9B5CFF;border-radius:4px;font-size:11px;cursor:pointer;font-weight:500">Ouvrir dans Prospection →</button>
+    <button data-brief-prospect="${id}" style="margin-top:6px;width:100%;padding:5px 8px;background:#9B5CFF;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-weight:600">✦ Générer le brief</button>
+    <button data-fiche-prospect="${id}" style="margin-top:4px;width:100%;padding:5px 8px;background:transparent;color:#9B5CFF;border:1px solid #9B5CFF;border-radius:4px;font-size:11px;cursor:pointer;font-weight:500">Ouvrir dans Prospection →</button>
   </div>`;
 }
 
@@ -259,6 +265,9 @@ export default function Carte() {
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;
   const queryClient = useQueryClient();
+  const [briefCible, setBriefCible] = useState<
+    { genre: "client" | "prospect"; id: string; nom: string | null } | null
+  >(null);
   const [reaCode, setReaCode] = useState<string | null>(null);
   const [reaTab, setReaTab] = useState<"action" | "statut">("action");
   const search = new URLSearchParams(useLocation().search);
@@ -459,6 +468,22 @@ export default function Carte() {
           });
         };
       });
+      // Le brief s'ouvre en fenêtre, sans quitter la carte : c'est le geste naturel
+      // quand on hésite entre plusieurs points voisins — on lit, on ferme, on passe au
+      // suivant. Ouvrir une fiche pour ça ferait perdre le contexte géographique.
+      el.querySelectorAll<HTMLButtonElement>("button[data-brief-prospect]").forEach((btn) => {
+        btn.onclick = () => {
+          const id = btn.getAttribute("data-brief-prospect") || "";
+          if (id) setBriefCible({ genre: "prospect", id, nom: null });
+        };
+      });
+      el.querySelectorAll<HTMLButtonElement>("button[data-brief-client]").forEach((btn) => {
+        btn.onclick = () => {
+          const code = btn.getAttribute("data-brief-client") || "";
+          if (code) setBriefCible({ genre: "client", id: code, nom: null });
+        };
+      });
+
       el.querySelectorAll<HTMLButtonElement>("button[data-fiche-prospect]").forEach((btn) => {
         btn.onclick = () => {
           const id = btn.getAttribute("data-fiche-prospect") || "";
@@ -1236,6 +1261,29 @@ export default function Carte() {
           </div>
         )}
       </div>
+
+      {/* Brief et parc dans une fenêtre : on reste sur la carte. */}
+      <Dialog open={!!briefCible} onOpenChange={(o) => { if (!o) setBriefCible(null); }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base">
+              {briefCible?.genre === "client" ? "Brief client" : "Brief prospect"}
+            </DialogTitle>
+          </DialogHeader>
+          {briefCible && (
+            <div className="space-y-3">
+              <BriefFiche
+                prospectId={briefCible.genre === "prospect" ? briefCible.id : null}
+                codeClient={briefCible.genre === "client" ? briefCible.id : null}
+              />
+              <ParcArcadeBloc
+                prospectId={briefCible.genre === "prospect" ? briefCible.id : null}
+                codeClient={briefCible.genre === "client" ? briefCible.id : null}
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <ClientActionsDialog
         code={reaCode}

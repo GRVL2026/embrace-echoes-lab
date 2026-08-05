@@ -93,8 +93,16 @@ function decode(s: string): string {
     .replace(/\s+/g, ' ').trim();
 }
 
+/** Une page disparue du site mais restée au plan : l'échec est définitif, et la
+ *  distinguer d'un incident réseau évite que la file la reprenne indéfiniment. */
+class PageDisparue extends Error {}
+
 async function page(url: string): Promise<string> {
   const res = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(30_000) });
+  if (res.status === 404 || res.status === 410) {
+    res.body?.cancel();
+    throw new PageDisparue(`HTTP ${res.status} sur ${url}`);
+  }
   if (!res.ok) {
     // Toujours lire ou annuler le corps : une réponse abandonnée en l'état retient sa
     // mémoire, et c'est ce qui avait fait sauter la limite de la gazette.
@@ -306,9 +314,15 @@ Deno.serve(async (req) => {
         lues++;
         if (details.length < 5) details.push(`${f.nom ?? salle.slug} · ${f.ville ?? '?'} · ${f.machines.length} machines`);
       } catch (e) {
-        // Une fiche qui échoue N'EST PAS marquée lue : elle repassera au tour suivant.
-        // C'est l'inverse du choix fait pour la gazette, et volontairement : ici
-        // l'échec est presque toujours un incident réseau, pas une page introuvable.
+        // Un incident réseau ne condamne pas la fiche : elle repassera. Une page
+        // DISPARUE, elle, est horodatée — sinon la file la reprend à chaque tour et ne
+        // se vide jamais. C'est la nuance que l'enrichissement OSM avait déjà coûtée ce
+        // matin : horodater les échecs, mais seulement ceux qui sont définitifs.
+        if (e instanceof PageDisparue) {
+          await admin.from('arcade_salles')
+            .update({ fiche_lue_at: new Date().toISOString(), rapprochement: 'aucun' })
+            .eq('id', salle.id);
+        }
         echecs++;
         if (details.length < 8) details.push(`échec ${salle.slug} : ${(e as Error).message.slice(0, 80)}`);
       }

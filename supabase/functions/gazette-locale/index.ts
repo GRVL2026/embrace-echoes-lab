@@ -214,12 +214,18 @@ Deno.serve(async (req) => {
     // des articles bien au-delà de la période demandée : filtrer par date laissait les
     // plus anciens éternellement « inconnus », et la fonction retraitait sans fin les
     // mêmes 35 titres — dix passes pour 35 lignes enregistrées.
+    // On lit TOUS les titres déjà enregistrés, page par page. Filtrer par « in » sur les
+    // titres soumis échouait silencieusement : ils contiennent virgules, guillemets et
+    // parenthèses, que ce type de filtre supporte mal — la fonction retraitait alors
+    // indéfiniment les mêmes trente-cinq titres. La table reste modeste (quelques
+    // milliers de lignes par an), la lire entièrement est sans conséquence.
     const connus = new Set<string>();
-    const titresSoumis = candidats.map((c) => c.titre);
-    for (let i = 0; i < titresSoumis.length; i += 200) {
-      const { data: vus } = await admin
-        .from('gazette_signaux').select('titre').in('titre', titresSoumis.slice(i, i + 200));
+    for (let from = 0; ; from += 1000) {
+      const { data: vus, error: eVus } = await admin
+        .from('gazette_signaux').select('titre').range(from, from + 999);
+      if (eVus) throw eVus;                       // ne jamais avaler : c'est ce qui a coûté deux tours
       for (const r of vus ?? []) connus.add((r as any).titre);
+      if (!vus || vus.length < 1000) break;
     }
     const tousNouveaux = candidats.filter((c) => !connus.has(c.titre));
     const nouveaux = tousNouveaux.slice(0, MAX_PAR_APPEL);

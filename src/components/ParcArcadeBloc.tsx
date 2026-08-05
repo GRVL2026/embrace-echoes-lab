@@ -46,18 +46,23 @@ const FAMILLES = [
 ];
 
 export function ParcArcadeBloc({
-  prospectId, codeClient, compact = false,
-}: { prospectId?: string | null; codeClient?: string | null; compact?: boolean }) {
+  prospectId, codeClient, salleId,
+}: { prospectId?: string | null; codeClient?: string | null; salleId?: string | null }) {
   const [ouvert, setOuvert] = useState(false);
 
   const { data, isFetching } = useQuery({
-    queryKey: ["parc-arcade", prospectId ?? "", codeClient ?? ""],
-    enabled: !!(prospectId || codeClient),
+    queryKey: ["parc-arcade", prospectId ?? "", codeClient ?? "", salleId ?? ""],
+    enabled: !!(prospectId || codeClient || salleId),
     staleTime: 300_000,
     queryFn: async () => {
       let q = supabase.from("arcade_salles" as any)
         .select("id, nom, ville, type_lieu, prestations, fiche_url, fiche_lue_at");
-      q = prospectId ? q.eq("prospect_id", prospectId) : q.eq("code_client", codeClient!);
+      // Trois entrées possibles : par la fiche prospect, par le compte client, ou
+      // directement par la salle — ce dernier cas servant à l'arbitrage, où le lieu
+      // n'est encore rattaché à rien.
+      q = salleId ? q.eq("id", salleId)
+        : prospectId ? q.eq("prospect_id", prospectId)
+        : q.eq("code_client", codeClient!);
       const { data: salles, error } = await q.limit(4);
       if (error) throw error;
       if (!salles?.length) return { salle: null as Salle | null, machines: [] as Machine[] };
@@ -94,7 +99,7 @@ export function ParcArcadeBloc({
     };
   }, [data]);
 
-  if (!prospectId && !codeClient) return null;
+  if (!prospectId && !codeClient && !salleId) return null;
   if (isFetching && !data) {
     return (
       <div className="flex items-center gap-2 text-xs text-muted-foreground">

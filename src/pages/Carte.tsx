@@ -5,7 +5,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { ClientActionsDialog } from "@/components/reactivation/ClientActionsDialog";
 import { companyStatusPopupHtml } from "@/components/reactivation/CompanyStatusBadge";
-import { Loader2, MapPin, ArrowLeft, Search, Sparkles, X, RotateCcw } from "lucide-react";
+import { Loader2, MapPin, ArrowLeft, Search, Sparkles, X, RotateCcw, HelpCircle, Check, Gamepad2 } from "lucide-react";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { ParcArcadeBloc } from "@/components/ParcArcadeBloc";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -82,6 +87,20 @@ function segProspect(s: string | null | undefined): ProspectSeg {
   const v = (s ?? "").toLowerCase().trim();
   return (PROSPECT_SEGMENTS as string[]).includes(v) ? (v as ProspectSeg) : "autre";
 }
+
+// Les lieux de l'annuaire arcade dont le rapprochement n'a pas pu être tranché
+// automatiquement. Ils forment une TROISIÈME couche, distincte des clients et des
+// prospects : ce ne sont encore ni l'un ni l'autre, et les fondre dans l'une des deux
+// reviendrait à décider à la place de l'utilisateur.
+type SalleDoute = {
+  id: string; nom: string | null; ville: string | null; code_postal: string | null;
+  departement: string | null; region: string | null; type_lieu: string | null;
+  lat: number; lng: number; fiche_url: string;
+  candidat_type: string | null; candidat_id: string | null;
+  candidat_nom: string | null; candidat_motif: string | null;
+};
+
+const COULEUR_DOUTE = "#eab308";
 
 function fmtEUR(n: number): string {
   if (!isFinite(n)) return "—";
@@ -223,6 +242,10 @@ export default function Carte() {
   });
   const tousSegments = (on: boolean): Record<ProspectSeg, boolean> =>
     Object.fromEntries(PROSPECT_SEGMENTS.map((s) => [s, on])) as Record<ProspectSeg, boolean>;
+  const [voirDoutes, setVoirDoutes] = useState(true);
+  const [arbitrage, setArbitrage] = useState<SalleDoute | null>(null);
+  const [segmentChoisi, setSegmentChoisi] = useState<string>("");
+  const [enCoursArbitrage, setEnCoursArbitrage] = useState(false);
   const [prospectLayers, setProspectLayers] = useState<Record<ProspectSeg, boolean>>(() =>
     tousSegments(vue === "prospection"),
   );
@@ -230,6 +253,34 @@ export default function Carte() {
   useEffect(() => {
     if (vue === "prospection") setProspectLayers(tousSegments(true));
   }, [vue]);
+
+  // Les lieux à arbitrer, et les segments RÉELLEMENT présents en base : proposer une
+  // liste figée aurait fini par diverger des données le jour où un segment est ajouté.
+  const { data: doutes, refetch: rechargerDoutes } = useQuery({
+    queryKey: ["arcade-a-confirmer"],
+    staleTime: 120_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("arcade_salles" as any)
+        .select("id, nom, ville, code_postal, departement, region, type_lieu, lat, lng, fiche_url, candidat_type, candidat_id, candidat_nom, candidat_motif")
+        .eq("rapprochement", "a_confirmer").eq("ferme", false)
+        .not("lat", "is", null).limit(400);
+      if (error) throw error;
+      return (data ?? []) as unknown as SalleDoute[];
+    },
+  });
+
+  const { data: segmentsEnBase } = useQuery({
+    queryKey: ["segments-prospects"],
+    staleTime: 600_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("prospects").select("segment").limit(10000);
+      if (error) throw error;
+      const vus = new Set<string>();
+      for (const r of data ?? []) if ((r as any).segment) vus.add(String((r as any).segment));
+      return [...vus].sort();
+    },
+  });
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["map-points"],
@@ -454,6 +505,18 @@ export default function Carte() {
       }
     }
 
+    // Les lieux à arbitrer, en jaune et légèrement plus gros : ils demandent une
+    // action, là où clients et prospects ne demandent qu'à être consultés.
+    if (!filterCodes && voirDoutes) {
+      for (const d of doutes ?? []) {
+        const m = L.marker([d.lat, d.lng], { icon: makeDivIcon(COULEUR_DOUTE, 15) });
+        // Un panneau React plutôt qu'une bulle Leaflet : l'arbitrage demande une liste
+        // déroulante et deux boutons, que du HTML injecté ne sait pas porter.
+        m.on("click", () => { setArbitrage(d); setSegmentChoisi(""); });
+        cluster.addLayer(m);
+      }
+    }
+
     // Points renvoyés par le copilote absents du jeu de données de la carte
     // (prospects, clients géocodés après le chargement de get_map_points…).
     const extraPts: [number, number][] = [];
@@ -513,7 +576,52 @@ export default function Carte() {
       }
     }
 
-  }, [data, clientLayers, prospectLayers, copilotResult]);
+  }, [data, clientLayers, prospectLayers, copilotResult, doutes, voirDoutes]);
+
+  /** Trancher un rapprochement douteux. Deux issues seulement, et toutes deux sont des
+   *  décisions : c'est le même établissement, ou c'en est un autre qu'il faut qualifier.
+   *  L'horodatage de l'arbitrage protège la décision — le rapprochement automatique
+   *  saute désormais les salles tranchées, sinon le doute reviendrait à chaque passage. */
+  async function arbitrer(salle: SalleDoute, issue: "confirmer" | "separer") {
+    setEnCoursArbitrage(true);
+    try {
+      if (issue === "confirmer") {
+        const maj: Record<string, unknown> = {
+          rapprochement: salle.candidat_type === "client" ? "client" : "prospect",
+          arbitre_le: new Date().toISOString(),
+          candidat_type: null, candidat_id: null, candidat_nom: null, candidat_motif: null,
+        };
+        if (salle.candidat_type === "client") maj.code_client = salle.candidat_id;
+        else maj.prospect_id = salle.candidat_id;
+        const { error } = await supabase.from("arcade_salles" as any).update(maj).eq("id", salle.id);
+        if (error) throw error;
+        toast({ title: "Rapprochement confirmé", description: salle.candidat_nom ?? "" });
+      } else {
+        const { data: cree, error } = await supabase.from("prospects").insert({
+          entreprise: salle.nom, ville: salle.ville, code_postal: salle.code_postal,
+          lat: salle.lat, lng: salle.lng, segment: segmentChoisi, tag: salle.type_lieu,
+          source: "annuaire-arcade", sources: ["annuaire-arcade"], statut: "nouveau",
+          signal: "Déjà équipé — issu de l'annuaire arcade, qualifié à la main",
+          notes: salle.fiche_url,
+        } as any).select("id").single();
+        if (error) throw error;
+        const { error: e2 } = await supabase.from("arcade_salles" as any).update({
+          prospect_id: (cree as any).id, rapprochement: "prospect",
+          arbitre_le: new Date().toISOString(),
+          candidat_type: null, candidat_id: null, candidat_nom: null, candidat_motif: null,
+        }).eq("id", salle.id);
+        if (e2) throw e2;
+        toast({ title: "Prospect créé", description: `${salle.nom} · ${segmentChoisi}` });
+      }
+      setArbitrage(null);
+      rechargerDoutes();
+      queryClient.invalidateQueries({ queryKey: ["map-points"] });
+    } catch (e) {
+      toast({ title: "Arbitrage impossible", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setEnCoursArbitrage(false);
+    }
+  }
 
   const zoomToClient = (c: ClientPt) => {
     setSuggestOpen(false);
@@ -891,7 +999,93 @@ export default function Carte() {
               </label>
             ))}
           </div>
+
+          {(doutes ?? []).length > 0 && (
+            <>
+              <div className="my-2 border-t border-border/60" />
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <Checkbox checked={voirDoutes} onCheckedChange={(v) => setVoirDoutes(!!v)} />
+                <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: COULEUR_DOUTE }} />
+                <span className="flex-1">À confirmer</span>
+                <span className="text-xs text-muted-foreground tabular-nums">{(doutes ?? []).length}</span>
+              </label>
+              <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+                Lieux de l'annuaire arcade qu'un rapprochement automatique n'a pas su trancher.
+              </p>
+            </>
+          )}
         </Card>
+
+        {/* Arbitrage : confirmer le rapprochement proposé, ou qualifier le lieu comme
+            un prospect à part entière. Les deux issues sont des décisions, pas des
+            abandons — « aucun » n'existe pas ici. */}
+        <Sheet open={!!arbitrage} onOpenChange={(o) => { if (!o) setArbitrage(null); }}>
+          <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto"
+            style={{ paddingTop: "calc(1.5rem + var(--safe-top))" }}>
+            {arbitrage && (
+              <>
+                <SheetHeader className="text-left">
+                  <SheetTitle className="text-base flex items-start gap-2">
+                    <HelpCircle className="h-4 w-4 mt-1 flex-shrink-0" style={{ color: COULEUR_DOUTE }} />
+                    <span>{arbitrage.nom ?? "Lieu sans nom"}</span>
+                  </SheetTitle>
+                  <p className="text-xs text-muted-foreground">
+                    {[arbitrage.ville, arbitrage.departement, arbitrage.region].filter(Boolean).join(" · ")}
+                    {arbitrage.type_lieu ? ` · ${arbitrage.type_lieu}` : ""}
+                  </p>
+                </SheetHeader>
+
+                <div className="mt-4 space-y-4 pb-8">
+                  <div className="rounded-lg border border-border p-3">
+                    <p className="text-xs text-muted-foreground">Rapprochement proposé</p>
+                    <p className="mt-1 text-sm font-semibold">{arbitrage.candidat_nom ?? "—"}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                        {arbitrage.candidat_type === "client" ? "client Cegid" : "prospect existant"}
+                      </Badge>
+                      {arbitrage.candidat_motif && (
+                        <span className="text-[11px] text-muted-foreground">{arbitrage.candidat_motif}</span>
+                      )}
+                    </div>
+                    <Button className="mt-2 w-full gap-2" disabled={enCoursArbitrage}
+                      onClick={() => arbitrer(arbitrage, "confirmer")}>
+                      <Check className="h-4 w-4" />C'est le même établissement
+                    </Button>
+                  </div>
+
+                  <ParcArcadeBloc salleId={arbitrage.id} />
+
+                  <div className="rounded-lg border border-border p-3 space-y-2">
+                    <p className="text-xs text-muted-foreground">
+                      Sinon, c'est un lieu distinct : qualifie-le et il devient un prospect.
+                    </p>
+                    <Select value={segmentChoisi} onValueChange={setSegmentChoisi}>
+                      <SelectTrigger className="h-9 text-xs">
+                        <SelectValue placeholder="Choisir un secteur…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(segmentsEnBase ?? []).map((sg) => (
+                          <SelectItem key={sg} value={sg} className="capitalize">{sg}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button variant="outline" className="w-full gap-2"
+                      disabled={!segmentChoisi || enCoursArbitrage}
+                      onClick={() => arbitrer(arbitrage, "separer")}>
+                      <Gamepad2 className="h-4 w-4" />Créer un prospect distinct
+                    </Button>
+                  </div>
+
+                  <Button variant="ghost" asChild className="w-full gap-2 text-muted-foreground">
+                    <a href={arbitrage.fiche_url} target="_blank" rel="noreferrer">
+                      Voir la fiche de l'annuaire
+                    </a>
+                  </Button>
+                </div>
+              </>
+            )}
+          </SheetContent>
+        </Sheet>
 
         {error && (
           <div className="absolute bottom-3 left-3 z-[20] rounded bg-destructive/10 text-destructive text-xs px-3 py-2">

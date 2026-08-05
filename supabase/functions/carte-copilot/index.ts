@@ -16,6 +16,17 @@ TABLES AUTORISÉES (whitelist stricte — toute autre table est refusée par le 
 - prospects(id uuid, entreprise text, ville text, statut text, segment text, source text, tag text, groupe text, etoiles smallint, capacite int, contact_nom text, contact_role text, telephone text, email text, site_web text, siren text, siret text, adresse text, effectif text, ca_annuel numeric, activite text, lat numeric, lng numeric, montant_estime numeric)
 - catalogue_erp(code text, description text, famille text, prix_ht numeric)
 - client_actions(code_client text, type text, date timestamptz, auteur_id uuid)
+- arcade_salles(id uuid, slug text, nom text, adresse text, code_postal text, ville text, departement text, region text, type_lieu text, prestations text[], site_web text, facebook text, lat numeric, lng numeric, ferme boolean, prospect_id uuid, code_client text, rapprochement text, candidat_nom text, fiche_url text)  -- lieux recensés par l'annuaire arcade
+- arcade_machines(slug text, nom text, categorie text, type_jeu text, editeur text, annee smallint, code_article text, famille_aa text, correspondance text)  -- catalogue des modèles
+- arcade_parc(salle_id uuid, machine_slug text)  -- QUI POSSÈDE QUOI : une ligne par machine présente dans une salle
+
+L'ANNUAIRE ARCADE — comment s'en servir, et ce qu'il ne dit pas :
+- arcade_salles recense 900 lieux de loisirs français DÉJÀ ÉQUIPÉS en machines. Ce ne sont pas des clients : c'est un annuaire tiers. Filtre TOUJOURS sur ferme = false, sinon tu comptes des établissements définitivement fermés.
+- arcade_salles.type_lieu ∈ {'bowling','camping','restaurant','cinéma','salle d'arcade','laser game','aire de jeux','bar','réalité virtuelle','hôtel','parc d'attraction','magasin','karting','café ludique','escape game','karaoké','musée','aéroport','complexe sportif','trampoline','aire d'autoroute','discothèque','privatisation','quiz box'}. prestations[] contient TOUTES les activités du lieu, type_lieu n'en retient que la principale : « les lieux qui ont un bowling » se traduit par 'bowling' = ANY(prestations), « les bowlings » par type_lieu = 'bowling'.
+- arcade_salles.rapprochement ∈ {'client','prospect','a_confirmer','aucun'} : le lieu a été rattaché à un client Cegid (code_client), à un prospect (prospect_id), attend un arbitrage, ou n'a aucune correspondance.
+- arcade_parc dit ce qui est INSTALLÉ SUR PLACE, JAMAIS ce que nous avons vendu. Ne dis jamais « ce client a acheté ces machines chez nous » : seul gaia_ventes le prouve, et il ne remonte qu'au 02/12/2024.
+- arcade_machines.correspondance : 'exacte' = référence à notre catalogue, 'marque' = fabricant que nous distribuons sans le modèle exact, 'aucune' = hors périmètre. C'est la mesure du parc concurrent.
+- CHERCHER UN MODÈLE PAR SON NOM : l'orthographe de la question ne correspond jamais exactement — « monsterkart », « monster kart », « Monster Kart Twin ». Utilise TOUJOURS un ILIKE tolérant sur arcade_machines.nom en retirant les espaces : replace(lower(m.nom),' ','') LIKE '%monsterkart%'.
 
 TU N'AS PAS ACCÈS aux tables profiles, user_roles, allowed_emails, invitations, notifications, gaia_commandes, gaia_achats, gaia_stock, aux schémas auth/storage/vault/pg_catalog/information_schema, ni aux vues v_gaia_* / mv_gaia_*. Toute requête qui les cite sera rejetée : NE LES MENTIONNE JAMAIS.
 
@@ -35,7 +46,7 @@ CONVENTIONS DES DONNÉES (TRÈS IMPORTANT) :
 - Pour tout filtre texte incertain (nom ville, nom client, famille libre…) : utilise ILIKE '%…%' et unaccent si nécessaire, jamais l'égalité stricte.
 - PROSPECTS (à ne pas confondre avec les clients : un prospect n'a NI facture NI chiffre d'affaires ; pour lui ca_12m, ca_total et ca_periode valent 0 ou NULL) :
     * prospects.segment ∈ {'camping','loisirs','chr','retail','revendeur','autre'}. « camping » est un segment À PART ENTIÈRE — l'hôtellerie de plein air n'est ni du loisir indoor (bowling, parc, salle d'arcade), ni du CHR, qui désigne Cafés, Hôtels, Restaurants.
-    * prospects.source ∈ {'naf' (import sectoriel par code NAF depuis l'INSEE), 'signal' (établissement récemment créé, détecté via Pappers), 'linkedin' (lead remonté depuis La Growth Machine)}.
+    * prospects.source ∈ {'naf' (import sectoriel par code NAF depuis l'INSEE), 'signal' (établissement récemment créé, détecté via Pappers), 'linkedin' (lead remonté depuis La Growth Machine), 'presse' (signal de la Gazette), 'annuaire-arcade' (lieu déjà équipé, recensé par l'annuaire arcade — 771 fiches, les plus qualifiées du fichier puisque ce sont des acheteurs avérés)}. prospects.sources est un TABLEAU cumulant toutes les origines : 'annuaire-arcade' = ANY(sources) est plus fiable que source = 'annuaire-arcade'.
     * prospects.groupe = enseigne de rattachement (Capfun, Siblu, Sunêlia, Chadotel…) ou « Réseau <NOM DU DIRIGEANT> » quand le réseau n'est pas déclaré. groupe IS NULL signifie exploitant INDÉPENDANT — c'est la distinction commerciale clé : chez un indépendant le dirigeant décide, sur un site de réseau il faut remonter au siège.
     * prospects.etoiles = classement officiel de 1 à 5 (NULL si inconnu) ; prospects.capacite = nombre d'emplacements ; prospects.tag = cible de prospection (ex. 'Camping').
     * Ces trois derniers champs viennent d'OpenStreetMap et ne sont renseignés que pour une partie des fiches : ne présente JAMAIS un décompte filtré sur etoiles ou capacite comme un total du segment.
@@ -50,6 +61,9 @@ RÈGLES CRITIQUES :
 2. La requête DOIT commencer par SELECT ou WITH. Aucune écriture. Aucun ; multiple. Aucun schéma préfixé sauf public.
 3. CONTRAT DE COLONNES — STRICT. "sql" renvoie TOUJOURS ces colonnes, avec ces alias EXACTS :
    code_client, nom, ville, lat, lng, ca_12m, ca_total, ca_periode, derniere_commande, categorie
+   - CHERCHER UN ÉTABLISSEMENT PAR SON NOM (« speed park », « bowling de Dieppe », « camping les Pins ») : cherche dans gaia_clients ET dans prospects, réunis par UNION ALL. Ne te limite JAMAIS aux clients : la base compte 8 700 prospects contre 3 000 clients, et un lieu cherché par son enseigne est le plus souvent un prospect. Distingue-les par une colonne "categorie" valant 'client' ou 'prospect'.
+     Exemple pour « speed park » :
+     sql = SELECT c.name AS nom, c.ville, c.lat, c.lng, 'client' AS categorie FROM gaia_clients c WHERE c.lat IS NOT NULL AND replace(lower(c.name),' ','') LIKE '%speedpark%' UNION ALL SELECT p.entreprise AS nom, p.ville, p.lat, p.lng, 'prospect' AS categorie FROM prospects p WHERE p.lat IS NOT NULL AND replace(lower(p.entreprise),' ','') LIKE '%speedpark%' LIMIT 500
    - Les coordonnées DOIVENT s'appeler "lat" et "lng" (jamais latitude/longitude/lon) : SELECT c.lat AS lat, c.lng AS lng, c.name AS nom, c.ville AS ville.
    - ca_12m = somme montant_ht sur les 12 derniers mois (gaia_ventes UNION gaia_historique)
    - ca_total = somme montant_ht sur toutes années (union des 2 tables)
@@ -76,7 +90,14 @@ EXEMPLE — top 10 clients en France en 2026 (période demandée → tri sur ca_
 sql = WITH v AS (SELECT code_client, invoice_date, montant_ht FROM gaia_ventes UNION ALL SELECT code_client, invoice_date, montant_ht FROM gaia_historique), agg AS (SELECT code_client, SUM(montant_ht) FILTER (WHERE invoice_date >= CURRENT_DATE - interval '12 months') AS ca_12m, SUM(montant_ht) AS ca_total, SUM(montant_ht) FILTER (WHERE EXTRACT(year FROM invoice_date) = 2026) AS ca_periode, MAX(invoice_date) AS derniere_commande FROM v GROUP BY code_client) SELECT c.customer_id AS code_client, c.name AS nom, c.ville AS ville, c.lat AS lat, c.lng AS lng, COALESCE(a.ca_12m,0) AS ca_12m, COALESCE(a.ca_total,0) AS ca_total, COALESCE(a.ca_periode,0) AS ca_periode, a.derniere_commande, CASE WHEN a.derniere_commande >= CURRENT_DATE - interval '12 months' THEN 'actif' WHEN a.derniere_commande >= CURRENT_DATE - interval '24 months' THEN 'dormant' ELSE 'inactif' END AS categorie FROM gaia_clients c JOIN agg a ON a.code_client = c.customer_id WHERE c.lat IS NOT NULL AND c.lng IS NOT NULL AND c.pays = 'FR' AND COALESCE(a.ca_periode,0) > 0 ORDER BY a.ca_periode DESC NULLS LAST LIMIT 10
 
 EXEMPLE — "combien de clients dormants ?" :
-count_sql = WITH v AS (SELECT code_client, invoice_date FROM gaia_ventes UNION ALL SELECT code_client, invoice_date FROM gaia_historique), agg AS (SELECT code_client, MAX(invoice_date) AS derniere_commande FROM v GROUP BY code_client) SELECT COUNT(*)::bigint AS total FROM gaia_clients c JOIN agg a ON a.code_client = c.customer_id WHERE c.lat IS NOT NULL AND c.lng IS NOT NULL AND a.derniere_commande < CURRENT_DATE - interval '12 months' AND a.derniere_commande >= CURRENT_DATE - interval '24 months'`;
+count_sql = WITH v AS (SELECT code_client, invoice_date FROM gaia_ventes UNION ALL SELECT code_client, invoice_date FROM gaia_historique), agg AS (SELECT code_client, MAX(invoice_date) AS derniere_commande FROM v GROUP BY code_client) SELECT COUNT(*)::bigint AS total FROM gaia_clients c JOIN agg a ON a.code_client = c.customer_id WHERE c.lat IS NOT NULL AND c.lng IS NOT NULL AND a.derniere_commande < CURRENT_DATE - interval '12 months' AND a.derniere_commande >= CURRENT_DATE - interval '24 months'
+
+EXEMPLE — « liste-moi tous les sites avec un Monster Kart » :
+sql = SELECT s.nom, s.ville, s.departement, s.type_lieu, s.lat AS lat, s.lng AS lng, m.nom AS machine, m.annee, m.editeur FROM arcade_parc a JOIN arcade_salles s ON s.id = a.salle_id JOIN arcade_machines m ON m.slug = a.machine_slug WHERE s.ferme = false AND s.lat IS NOT NULL AND replace(lower(m.nom),' ','') LIKE '%monsterkart%' ORDER BY s.departement LIMIT 500
+count_sql = SELECT COUNT(*)::bigint AS total FROM arcade_parc a JOIN arcade_salles s ON s.id = a.salle_id JOIN arcade_machines m ON m.slug = a.machine_slug WHERE s.ferme = false AND replace(lower(m.nom),' ','') LIKE '%monsterkart%'
+
+EXEMPLE — « les bowlings sans aucun flipper » :
+sql = SELECT s.nom, s.ville, s.departement, s.lat AS lat, s.lng AS lng, COUNT(a.machine_slug) AS machines FROM arcade_salles s JOIN arcade_parc a ON a.salle_id = s.id JOIN arcade_machines m ON m.slug = a.machine_slug WHERE s.ferme = false AND s.type_lieu = 'bowling' AND s.lat IS NOT NULL GROUP BY s.id, s.nom, s.ville, s.departement, s.lat, s.lng HAVING COUNT(*) FILTER (WHERE m.categorie = 'flipper') = 0 ORDER BY machines DESC LIMIT 500`;
 
 // Sécurité : plus AUCUNE analyse du SQL côté edge function (les whitelists par
 // regex produisaient des faux positifs : CTE ou colonne pris pour une table).

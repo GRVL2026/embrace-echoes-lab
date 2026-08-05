@@ -29,6 +29,170 @@ export type Database = {
         }
         Relationships: []
       }
+      arcade_machines: {
+        Row: {
+          annee: number | null
+          categorie: string | null
+          code_article: string | null
+          correspondance: string | null
+          correspondance_par: string | null
+          editeur: string | null
+          famille_aa: string | null
+          fiche_url: string | null
+          nb_joueurs: number | null
+          nom: string
+          slug: string
+          type_jeu: string | null
+          vu_le: string
+        }
+        Insert: {
+          annee?: number | null
+          categorie?: string | null
+          code_article?: string | null
+          correspondance?: string | null
+          correspondance_par?: string | null
+          editeur?: string | null
+          famille_aa?: string | null
+          fiche_url?: string | null
+          nb_joueurs?: number | null
+          nom: string
+          slug: string
+          type_jeu?: string | null
+          vu_le?: string
+        }
+        Update: {
+          annee?: number | null
+          categorie?: string | null
+          code_article?: string | null
+          correspondance?: string | null
+          correspondance_par?: string | null
+          editeur?: string | null
+          famille_aa?: string | null
+          fiche_url?: string | null
+          nb_joueurs?: number | null
+          nom?: string
+          slug?: string
+          type_jeu?: string | null
+          vu_le?: string
+        }
+        Relationships: []
+      }
+      arcade_parc: {
+        Row: {
+          machine_slug: string
+          salle_id: string
+          vu_le: string
+        }
+        Insert: {
+          machine_slug: string
+          salle_id: string
+          vu_le?: string
+        }
+        Update: {
+          machine_slug?: string
+          salle_id?: string
+          vu_le?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arcade_parc_machine_slug_fkey"
+            columns: ["machine_slug"]
+            isOneToOne: false
+            referencedRelation: "arcade_machines"
+            referencedColumns: ["slug"]
+          },
+          {
+            foreignKeyName: "arcade_parc_salle_id_fkey"
+            columns: ["salle_id"]
+            isOneToOne: false
+            referencedRelation: "arcade_salles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      arcade_salles: {
+        Row: {
+          adresse: string | null
+          code_client: string | null
+          code_postal: string | null
+          created_at: string
+          departement: string | null
+          empreinte: string | null
+          facebook: string | null
+          fiche_lue_at: string | null
+          fiche_url: string
+          geocode_at: string | null
+          id: string
+          instagram: string | null
+          lat: number | null
+          lng: number | null
+          nom: string | null
+          prospect_id: string | null
+          rapprochement: string | null
+          region: string | null
+          site_web: string | null
+          slug: string
+          updated_at: string
+          ville: string | null
+        }
+        Insert: {
+          adresse?: string | null
+          code_client?: string | null
+          code_postal?: string | null
+          created_at?: string
+          departement?: string | null
+          empreinte?: string | null
+          facebook?: string | null
+          fiche_lue_at?: string | null
+          fiche_url: string
+          geocode_at?: string | null
+          id?: string
+          instagram?: string | null
+          lat?: number | null
+          lng?: number | null
+          nom?: string | null
+          prospect_id?: string | null
+          rapprochement?: string | null
+          region?: string | null
+          site_web?: string | null
+          slug: string
+          updated_at?: string
+          ville?: string | null
+        }
+        Update: {
+          adresse?: string | null
+          code_client?: string | null
+          code_postal?: string | null
+          created_at?: string
+          departement?: string | null
+          empreinte?: string | null
+          facebook?: string | null
+          fiche_lue_at?: string | null
+          fiche_url?: string
+          geocode_at?: string | null
+          id?: string
+          instagram?: string | null
+          lat?: number | null
+          lng?: number | null
+          nom?: string | null
+          prospect_id?: string | null
+          rapprochement?: string | null
+          region?: string | null
+          site_web?: string | null
+          slug?: string
+          updated_at?: string
+          ville?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arcade_salles_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "prospects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brand_modules: {
         Row: {
           brand_id: string
@@ -2181,12 +2345,14 @@ export type Database = {
           ca_annuel: number | null
           capacite: number | null
           code_client: string | null
+          code_postal: string | null
           contact_nom: string | null
           contact_role: string | null
           created_at: string
           effectif: string | null
           email: string | null
           email_tente_at: string | null
+          empreinte: string | null
           entreprise: string
           etat_administratif: string | null
           etoiles: number | null
@@ -2217,6 +2383,7 @@ export type Database = {
           siret: string | null
           site_web: string | null
           source: string | null
+          sources: string[]
           statut: string
           tag: string | null
           telephone: string | null
@@ -2230,12 +2397,14 @@ export type Database = {
           ca_annuel?: number | null
           capacite?: number | null
           code_client?: string | null
+          code_postal?: string | null
           contact_nom?: string | null
           contact_role?: string | null
           created_at?: string
           effectif?: string | null
           email?: string | null
           email_tente_at?: string | null
+          empreinte?: string | null
           entreprise: string
           etat_administratif?: string | null
           etoiles?: number | null
@@ -2266,6 +2435,7 @@ export type Database = {
           siret?: string | null
           site_web?: string | null
           source?: string | null
+          sources?: string[]
           statut?: string
           tag?: string | null
           telephone?: string | null
@@ -2279,12 +2449,14 @@ export type Database = {
           ca_annuel?: number | null
           capacite?: number | null
           code_client?: string | null
+          code_postal?: string | null
           contact_nom?: string | null
           contact_role?: string | null
           created_at?: string
           effectif?: string | null
           email?: string | null
           email_tente_at?: string | null
+          empreinte?: string | null
           entreprise?: string
           etat_administratif?: string | null
           etoiles?: number | null
@@ -2315,6 +2487,7 @@ export type Database = {
           siret?: string | null
           site_web?: string | null
           source?: string | null
+          sources?: string[]
           statut?: string
           tag?: string | null
           telephone?: string | null
@@ -3190,6 +3363,10 @@ export type Database = {
           _type_cle: string
         }
         Returns: number
+      }
+      empreinte_etablissement: {
+        Args: { lieu: string; nom: string }
+        Returns: string
       }
       ensure_notification_prefs: { Args: { _uid: string }; Returns: undefined }
       gaia_query: { Args: { sql_query: string }; Returns: Json }

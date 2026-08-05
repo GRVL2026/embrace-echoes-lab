@@ -377,6 +377,18 @@ export default function Carte() {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Les points renvoyés par le copilote ne portent pas d'identifiant de fiche : on les
+  // rattache par leur POSITION arrondie, les deux jeux de données venant de la même
+  // colonne. Sans ce rattachement, cliquer un résultat ne donnait ni parc ni brief.
+  const prospectParPosition = useMemo(() => {
+    const m = new Map<string, { id: string; nom: string | null; ville: string | null; statut: string | null; segment: string | null }>();
+    for (const p of data?.prospects ?? []) {
+      m.set(`${p.lat.toFixed(4)}:${p.lng.toFixed(4)}`, p as any);
+    }
+    return m;
+  }, [data]);
+
+
   const counts = useMemo(() => {
     const clients = data?.clients ?? [];
     const prospects = data?.prospects ?? [];

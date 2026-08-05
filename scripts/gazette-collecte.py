@@ -157,11 +157,21 @@ def lire(url: str) -> str:
     return re.sub(r"\s+", " ", texte).strip()[:9000]
 
 
-def enrichir() -> None:
+# Plafond quotidien. Trois commerciaux ne qualifient pas cinquante fiches par jour :
+# au-delà, on ne produit pas du travail mais un stock. Et une rafale fait couper l'accès
+# par les services interrogés. Le rattrapage s'étale donc sur plusieurs jours, sans que
+# personne n'attende rien.
+PLAFOND_QUOTIDIEN = 25
+
+
+def enrichir(plafond: int = PLAFOND_QUOTIDIEN) -> None:
     """Résout les liens et fait lire les articles pour en tirer le dirigeant."""
     total = 0
     for tour in range(1, 21):
-        rep = appeler({"action": "a_enrichir", "limite": 12})
+        if total >= plafond:
+            print(f"  plafond du jour atteint ({total} articles) — la suite demain")
+            return
+        rep = appeler({"action": "a_enrichir", "limite": min(12, plafond - total)})
         lot = rep.get("a_enrichir") or []
         if not lot:
             print(f"  enrichissement terminé ({total} articles traités)")
@@ -222,11 +232,13 @@ def main() -> None:
     ap.add_argument("--test", action="store_true", help="afficher sans envoyer")
     ap.add_argument("--enrichir-seulement", action="store_true",
                     help="ne rien collecter : résoudre les liens et lire les articles déjà en base")
+    ap.add_argument("--plafond", type=int, default=PLAFOND_QUOTIDIEN,
+                    help=f"articles enrichis par exécution ({PLAFOND_QUOTIDIEN} par défaut)")
     a = ap.parse_args()
 
     if a.enrichir_seulement:
         print("Résolution des liens et lecture des articles…")
-        enrichir()
+        enrichir(a.plafond)
         return
 
     print(f"Relevé sur {a.jours} jour(s)…")
@@ -250,7 +262,7 @@ def main() -> None:
         time.sleep(2)
 
     print("Résolution des liens et lecture des articles…")
-    enrichir()
+    enrichir(a.plafond)
     print("Terminé.")
 
 

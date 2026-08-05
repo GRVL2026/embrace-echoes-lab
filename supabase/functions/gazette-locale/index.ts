@@ -183,18 +183,26 @@ Deno.serve(async (req) => {
     // résidentielle qui lui permet déjà d'atteindre la presse. La fonction reçoit ici le
     // texte de l'article et n'a plus qu'à en extraire la personne à appeler.
     if (body.action === 'a_enrichir') {
+      // Ordre de service : le territoire d'abord, la fraîcheur ensuite. Quand on ne
+      // traite qu'une vingtaine d'articles par jour, ceux de Normandie, Bretagne et
+      // Île-de-France doivent passer avant un signal du Var — on peut s'y déplacer.
       const { data, error } = await admin
         .from('gazette_signaux')
-        .select('id, titre, source, url, publie_le')
+        .select('id, titre, source, url, publie_le, region')
         .neq('statut', 'ignore')
         .is('article_lu_at', null)
         .order('publie_le', { ascending: false })
-        .limit(Math.min(60, Math.max(1, Number(body.limite ?? 25))));
+        .limit(400);
       if (error) throw error;
+      const PRIO = new Set(['Normandie', 'Bretagne', 'Île-de-France', 'Ile-de-France']);
+      const tries = [...(data ?? [])].sort((x: any, y: any) => {
+        const px = PRIO.has(x.region ?? '') ? 0 : 1, py = PRIO.has(y.region ?? '') ? 0 : 1;
+        return px !== py ? px - py : String(y.publie_le).localeCompare(String(x.publie_le));
+      }).slice(0, Math.min(60, Math.max(1, Number(body.limite ?? 25))));
       const { count } = await admin.from('gazette_signaux')
         .select('id', { count: 'exact', head: true })
         .neq('statut', 'ignore').is('article_lu_at', null);
-      return json({ ok: true, a_enrichir: data ?? [], restants: count ?? 0 });
+      return json({ ok: true, a_enrichir: tries, restants: count ?? 0 });
     }
 
     if (Array.isArray(body.enrichis)) {

@@ -210,9 +210,17 @@ Deno.serve(async (req) => {
     const candidats = [...parTitre.values()].sort((a, b) => b.publie.localeCompare(a.publie));
 
     // Déjà connus : inutile de les repayer à l'IA ni de les redemander à l'utilisateur.
-    const { data: dejaVus } = await admin
-      .from('gazette_signaux').select('titre').gte('publie_le', depuis);
-    const connus = new Set((dejaVus ?? []).map((r: any) => r.titre));
+    // On interroge sur les TITRES soumis, jamais sur une fenêtre de dates. Google renvoie
+    // des articles bien au-delà de la période demandée : filtrer par date laissait les
+    // plus anciens éternellement « inconnus », et la fonction retraitait sans fin les
+    // mêmes 35 titres — dix passes pour 35 lignes enregistrées.
+    const connus = new Set<string>();
+    const titresSoumis = candidats.map((c) => c.titre);
+    for (let i = 0; i < titresSoumis.length; i += 200) {
+      const { data: vus } = await admin
+        .from('gazette_signaux').select('titre').in('titre', titresSoumis.slice(i, i + 200));
+      for (const r of vus ?? []) connus.add((r as any).titre);
+    }
     const tousNouveaux = candidats.filter((c) => !connus.has(c.titre));
     const nouveaux = tousNouveaux.slice(0, MAX_PAR_APPEL);
     const restants = tousNouveaux.length - nouveaux.length;

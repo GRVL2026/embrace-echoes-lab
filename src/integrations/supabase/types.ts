@@ -119,6 +119,13 @@ export type Database = {
             foreignKeyName: "arcade_parc_salle_id_fkey"
             columns: ["salle_id"]
             isOneToOne: false
+            referencedRelation: "v_arcade_parc_resume"
+            referencedColumns: ["salle_id"]
+          },
+          {
+            foreignKeyName: "arcade_parc_salle_id_fkey"
+            columns: ["salle_id"]
+            isOneToOne: false
             referencedRelation: "v_arcade_salles_parc"
             referencedColumns: ["id"]
           },
@@ -3072,6 +3079,28 @@ export type Database = {
           type_jeu: string | null
         }
         Relationships: []
+      }
+      v_arcade_parc_resume: {
+        Row: {
+          annee_moyenne: number | null
+          code_client: string | null
+          nb_catalogue: number | null
+          nb_flippers: number | null
+          nb_machines: number | null
+          nom: string | null
+          prospect_id: string | null
+          salle_id: string | null
+          type_lieu: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arcade_salles_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "prospects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       v_arcade_salles_parc: {
         Row: {

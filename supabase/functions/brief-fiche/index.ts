@@ -148,8 +148,6 @@ Deno.serve(async (req) => {
         ].filter(Boolean),
         principaux_fabricants: [...new Set(machines.map((m: any) => m.editeur).filter(Boolean))].slice(0, 5),
       };
-    }
-
       // CE QU'IL A ET QUE NOUS NE VENDONS PAS, par genre — et ce que nous proposons
       // dans ces mêmes genres. C'est le croisement qui transforme un constat en offre :
       // un lieu équipé de huit tirs qu'aucun de nos fournisseurs ne fabrique est un lieu
@@ -166,7 +164,6 @@ Deno.serve(async (req) => {
           .sort((x, y) => y[1].length - x[1].length)
           .slice(0, 6)
           .map(([genre, noms]) => ({ genre, nombre: noms.length, exemples: noms.slice(0, 4) }));
-
         const familles = [...new Set([...parGenre.keys()]
           .map((g) => GENRE_VERS_FAMILLE[g.toLowerCase()]).filter(Boolean))];
         if (familles.length) {
@@ -186,7 +183,7 @@ Deno.serve(async (req) => {
             .map(([famille, refs]) => ({ famille, references: refs }));
         }
       }
-
+    }
     // Les signaux de presse rattachés, s'il y en a.
     if (prospectId) {
       const { data: g } = await admin.from('gazette_signaux')

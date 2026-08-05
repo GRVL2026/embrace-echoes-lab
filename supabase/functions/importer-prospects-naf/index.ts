@@ -54,10 +54,21 @@ type Etab = {
   tranche_effectif_salarie?: string | null; etat_administratif?: string;
 };
 
+// ⚠️ Number("") et Number(null) valent 0, et 0 est un nombre fini : sans ce filtre, une
+// coordonnée absente devenait 0, plaçant la fiche au « point zéro » au large du golfe de
+// Guinée. 346 campings s'y étaient retrouvés.
 const nombreOuNull = (v: unknown): number | null => {
+  if (v === null || v === undefined || v === '') return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
+
+// Un couple de coordonnées n'est retenu que s'il désigne un lieu plausible.
+function coordValide(lat: number | null, lng: number | null): boolean {
+  if (lat === null || lng === null) return false;
+  if (lat === 0 && lng === 0) return false;
+  return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+}
 
 // « AXEL MICHEL CHRISTO » + « PENIN » → « Axel PENIN » (un seul prénom, plus lisible)
 function nomDirigeant(d: Dirigeant): string | null {
@@ -248,9 +259,10 @@ Deno.serve(async (req) => {
                 ? `Import NAF ${naf} — site du groupe ${societe} (${nbEtabs} établissements)`
                 : `Import NAF ${naf} — exploitant indépendant`,
               statut: 'nouveau',
-              lat, lng,
-              geocoded_at: lat !== null && lng !== null ? new Date().toISOString() : null,
-              geocode_source: lat !== null && lng !== null ? 'insee' : null,
+              lat: coordValide(lat, lng) ? lat : null,
+              lng: coordValide(lat, lng) ? lng : null,
+              geocoded_at: coordValide(lat, lng) ? new Date().toISOString() : null,
+              geocode_source: coordValide(lat, lng) ? 'insee' : null,
             });
           }
         }

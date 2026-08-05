@@ -76,6 +76,11 @@ function marqueurs(html: string): Map<string, { nom: string; lat: number; lng: n
 
 function decode(s: string): string {
   return s
+    // Les bulles de la carte sont écrites DANS une chaîne JavaScript : les accents y
+    // arrivent sous forme d'échappements \u00e9 que l'extraction laissait tels quels.
+    // « Ch\u00e2lons Bowling » ne pouvait alors se rapprocher de « CHALONS BOWLING ».
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/\\([\\/'"])/g, '$1')
     .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
     .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
     .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"')

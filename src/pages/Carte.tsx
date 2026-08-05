@@ -327,18 +327,8 @@ export default function Carte() {
     for (const r of resumesParc ?? []) if (r.code_client) m.set(r.code_client, r);
     return m;
   }, [resumesParc]);
-  // Les points renvoyés par le copilote ne portent pas d'identifiant de fiche : la
-  // requête générée ne renvoie que de quoi placer un marqueur. On les rattache par leur
-  // POSITION, arrondie à dix mètres — les deux jeux de données viennent de la même
-  // colonne, la coïncidence est exacte. Sans ce rattachement, cliquer un résultat de
-  // recherche ne donnait qu'un nom et une ville, sans parc ni brief.
-  const prospectParPosition = useMemo(() => {
-    const m = new Map<string, { id: string; nom: string | null; ville: string | null; statut: string | null; segment: string | null }>();
-    for (const p of data?.prospects ?? []) {
-      m.set(`${p.lat.toFixed(4)}:${p.lng.toFixed(4)}`, p as any);
-    }
-    return m;
-  }, [data]);
+
+
 
   const parcParProspect = useMemo(() => {
     const m = new Map<string, ResumeParc>();

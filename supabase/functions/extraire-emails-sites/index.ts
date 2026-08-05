@@ -79,6 +79,32 @@ function meilleurEmail(html: string, site: string): string | null {
   return candidats.sort((a, b) => note(b) - note(a))[0];
 }
 
+// Le téléphone est sur la même page que l'email : le prendre au passage ne coûte rien.
+// Les liens tel: priment — ils sont posés pour être composés, donc fiables.
+const RE_TEL = /(?:\+33|0)\s?[1-9](?:[\s.\-]?\d{2}){4}/g;
+
+/** Ramène un numéro français à la forme lisible « 02 51 58 83 86 ». */
+function normaliserTel(brut: string): string | null {
+  let n = (brut ?? '').replace(/[^\d+]/g, '');
+  if (n.startsWith('+33')) n = '0' + n.slice(3);
+  else if (n.startsWith('0033')) n = '0' + n.slice(4);
+  if (!/^0[1-9]\d{8}$/.test(n)) return null;
+  // 08 = numéros surtaxés, 09 = box internet : sans intérêt pour joindre un gérant.
+  if (n.startsWith('08')) return null;
+  return n.replace(/(\d{2})(?=\d)/g, '$1 ').trim();
+}
+
+function meilleurTel(html: string): string | null {
+  const candidats: string[] = [];
+  for (const m of html.matchAll(/href=["']tel:([^"']+)/gi)) candidats.push(m[1]);
+  for (const m of html.matchAll(RE_TEL)) candidats.push(m[0]);
+  for (const c of candidats) {
+    const t = normaliserTel(c);
+    if (t) return t;
+  }
+  return null;
+}
+
 async function lirePage(url: string): Promise<string | null> {
   try {
     const res = await fetch(url, {
@@ -96,15 +122,17 @@ async function lirePage(url: string): Promise<string | null> {
   }
 }
 
-async function chercherEmail(site: string): Promise<{ email: string | null; page: string | null }> {
+async function chercherContacts(site: string): Promise<{ email: string | null; tel: string | null }> {
+  let tel: string | null = null;
   for (const chemin of CHEMINS) {
-    const url = site + chemin;
-    const html = await lirePage(url);
+    const html = await lirePage(site + chemin);
     if (!html) continue;
+    tel ??= meilleurTel(html);
     const email = meilleurEmail(html, site);
-    if (email) return { email, page: chemin || '/' };
+    // On continue à parcourir les pages tant qu'il manque l'un des deux.
+    if (email) return { email, tel: tel ?? meilleurTel(html) };
   }
-  return { email: null, page: null };
+  return { email: null, tel };
 }
 
 Deno.serve(async (req) => {
@@ -149,8 +177,8 @@ Deno.serve(async (req) => {
       .map((p) => ({ ...p, url: normaliserUrl(p.site_web as string) }))
       .filter((p) => p.url);
 
-    let trouves = 0, sansEmail = 0, injoignables = 0;
-    const maj: { id: string; email: string | null }[] = [];
+    let trouves = 0, sansEmail = 0, injoignables = 0, telsTrouves = 0;
+    const maj: { id: string; email: string | null; tel: string | null }[] = [];
 
     // File d'attente à parallélisme borné : plus rapide qu'en série, sans matraquer
     // les hébergeurs, qui sont souvent modestes pour ce type de sites.
@@ -158,9 +186,10 @@ Deno.serve(async (req) => {
     const travailleur = async () => {
       while (curseur < liste.length && Date.now() - debut < BUDGET_MS) {
         const p = liste[curseur++];
-        const { email } = await chercherEmail(p.url!);
-        if (email) { trouves++; maj.push({ id: p.id, email }); }
-        else { sansEmail++; maj.push({ id: p.id, email: null }); }
+        const { email, tel } = await chercherContacts(p.url!);
+        if (email) trouves++; else sansEmail++;
+        if (tel) telsTrouves++;
+        maj.push({ id: p.id, email, tel });
       }
     };
     await Promise.all(Array.from({ length: Math.min(PARALLELE, liste.length) }, travailleur));
@@ -173,7 +202,12 @@ Deno.serve(async (req) => {
         // muets seraient revisités à chaque passage et bloqueraient la progression.
         const patch: Record<string, unknown> = { email_tente_at: maintenant };
         if (m.email) patch.email = m.email;
-        const { error: e2 } = await admin.from('prospects').update(patch).eq('id', m.id);
+        // Le téléphone d'OpenStreetMap, quand il existe, a été renseigné par un humain :
+        // on ne l'écrase pas avec celui déniché sur le site.
+        if (m.tel) patch.telephone = m.tel;
+        let req = admin.from('prospects').update(patch).eq('id', m.id);
+        if (m.tel) req = req.is('telephone', null);
+        const { error: e2 } = await req;
         if (e2) throw e2;
       }
     }
@@ -188,6 +222,7 @@ Deno.serve(async (req) => {
       ok: true, dry_run: dryRun, segment,
       sites_visites: liste.length,
       emails_trouves: trouves,
+      telephones_trouves: telsTrouves,
       sites_sans_email: sansEmail,
       urls_invalides: injoignables,
       taux: liste.length ? `${Math.round((100 * trouves) / liste.length)} %` : '—',

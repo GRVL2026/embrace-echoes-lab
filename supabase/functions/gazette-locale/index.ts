@@ -30,7 +30,7 @@ const BUDGET_MS = 110_000;
 // Nombre de titres soumis à l'IA en un appel. Au-delà, la requête s'éternise et la
 // plateforme tue la fonction (502 constaté sur un relevé de 30 jours). Le reliquat est
 // traité au passage suivant : rien n'est perdu, tout est simplement étalé.
-const MAX_PAR_APPEL = 120;
+const MAX_PAR_APPEL = 60;
 
 // Types de lieux susceptibles d'acheter des jeux d'arcade, flippers, billards ou grues.
 const LIEUX = [
@@ -94,7 +94,13 @@ async function resoudreUrl(url: string): Promise<string> {
       headers: { 'User-Agent': UA },
       signal: AbortSignal.timeout(8_000),
     });
-    return res.url && !res.url.includes('news.google.com') ? res.url : url;
+    const finale = res.url && !res.url.includes('news.google.com') ? res.url : url;
+    // ⚠️ Indispensable : sans annulation, le corps de la page est mis en mémoire tampon.
+    // Des articles de presse à plusieurs mégaoctets, téléchargés en parallèle, ont suffi
+    // à faire dépasser la limite mémoire de la fonction (WORKER_RESOURCE_LIMIT). Seule
+    // l'adresse de redirection nous intéresse, jamais le contenu.
+    try { await res.body?.cancel(); } catch { /* corps déjà consommé ou absent */ }
+    return finale;
   } catch {
     return url;
   }
@@ -209,9 +215,9 @@ Deno.serve(async (req) => {
     const urls = new Map<string, string>();
     if (!dryRun) {
       const aResoudre = retenus.map((r: any) => nouveaux[Number(r.i)]?.url).filter(Boolean) as string[];
-      for (let i = 0; i < aResoudre.length; i += 8) {
+      for (let i = 0; i < aResoudre.length; i += 4) {
         if (Date.now() - debut > BUDGET_MS) break;
-        const lot = aResoudre.slice(i, i + 8);
+        const lot = aResoudre.slice(i, i + 4);
         const res = await Promise.all(lot.map((u) => resoudreUrl(u)));
         lot.forEach((u, k) => urls.set(u, res[k]));
       }

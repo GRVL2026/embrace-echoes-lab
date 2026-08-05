@@ -212,3 +212,18 @@ update public.arcade_salles
  where nom ~* '(fermeture|ferm[ée]e? d[ée]finitiv|d[ée]finitivement ferm)';
 
 create index if not exists idx_arcade_salles_ouvertes on public.arcade_salles (ferme) where ferme = false;
+
+-- ── Le candidat proposé, pour rendre l'arbitrage possible ────────────────────
+-- « À confirmer » sans dire À QUOI ne se tranche pas : il faut le nom du candidat,
+-- son identité et le motif du rapprochement — distance, similarité — pour décider
+-- d'un coup d'œil.
+alter table public.arcade_salles
+  add column if not exists candidat_type  text check (candidat_type in ('client', 'prospect')),
+  add column if not exists candidat_id    text,
+  add column if not exists candidat_nom   text,
+  add column if not exists candidat_motif text,
+  add column if not exists arbitre_le     timestamptz,
+  add column if not exists arbitre_par    uuid;
+
+create index if not exists idx_arcade_salles_a_arbitrer
+  on public.arcade_salles (rapprochement) where rapprochement = 'a_confirmer';

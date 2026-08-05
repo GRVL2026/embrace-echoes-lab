@@ -209,6 +209,22 @@ async function catalogueShopify(): Promise<Produit[]> {
   return out;
 }
 
+// Correspondance des types de l'annuaire vers les segments de prospection déjà en
+// usage. Un lieu n'a qu'un segment : c'est le type PRINCIPAL qui décide, la liste
+// complète des prestations restant disponible dans arcade_salles.
+const SEGMENT: Record<string, string> = {
+  camping: 'camping',
+  bowling: 'loisirs', 'laser game': 'loisirs', "parc d'attraction": 'loisirs',
+  'aire de jeux': 'loisirs', trampoline: 'loisirs', 'escape game': 'loisirs',
+  'realite virtuelle': 'loisirs', 'réalité virtuelle': 'loisirs', karting: 'loisirs',
+  'salle d\'arcade': 'loisirs', 'complexe sportif': 'loisirs', 'quiz box': 'loisirs',
+  cinema: 'loisirs', 'cinéma': 'loisirs', casino: 'loisirs', discotheque: 'loisirs',
+  'discothèque': 'loisirs', karaoke: 'loisirs', 'karaoké': 'loisirs',
+  musee: 'loisirs', 'musée': 'loisirs',
+  bar: 'chr', restaurant: 'chr', hotel: 'chr', 'hôtel': 'chr', 'café ludique': 'chr',
+  'cafe ludique': 'chr',
+};
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   const json = (b: unknown, s = 200) =>
@@ -228,6 +244,97 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
     const ecrire = body.action === 'appliquer';
+
+    // ── Création des prospects manquants ──────────────────────────────────────
+    // Les lieux sans correspondance sont la matière la plus précieuse du lot : des
+    // établissements équipés, ouverts, qui achètent ailleurs et que rien ne recensait.
+    // Les créer comme prospects les fait apparaître d'un coup sur la carte, dans
+    // Prospection et pour le copilote, sans plomberie supplémentaire — c'est ce que la
+    // règle des sources cumulables devait permettre.
+    if (body.action === 'creer-prospects' || body.action === 'creer-prospects-analyse') {
+      const vraiment = body.action === 'creer-prospects';
+      const aCreer: any[] = [];
+      for (let de = 0; ; de += 1000) {
+        const { data, error } = await admin.from('arcade_salles')
+          .select('id, slug, nom, adresse, code_postal, ville, departement, region, type_lieu, prestations, lat, lng, site_web, facebook, fiche_url')
+          .eq('ferme', false).eq('rapprochement', 'aucun').is('prospect_id', null)
+          .not('nom', 'is', null).range(de, de + 999);
+        if (error) throw error;
+        aCreer.push(...(data ?? []));
+        if (!data || data.length < 1000) break;
+      }
+
+      // Le parc de chaque lieu, pour renseigner le signal d'entrée en relation.
+      const parc = new Map<string, { n: number; flip: number; annees: number[] }>();
+      for (let de = 0; ; de += 1000) {
+        const { data, error } = await admin.from('arcade_parc')
+          .select('salle_id, arcade_machines(categorie, annee)').range(de, de + 999);
+        if (error) throw error;
+        for (const l of data ?? []) {
+          const e = parc.get((l as any).salle_id) ?? { n: 0, flip: 0, annees: [] };
+          e.n++;
+          const m = (l as any).arcade_machines;
+          if (m?.categorie === 'flipper') e.flip++;
+          if (m?.annee) e.annees.push(m.annee);
+          parc.set((l as any).salle_id, e);
+        }
+        if (!data || data.length < 1000) break;
+      }
+
+      const lignes = aCreer.map((s: any) => {
+        const p = parc.get(s.id) ?? { n: 0, flip: 0, annees: [] };
+        const moy = p.annees.length
+          ? Math.round(p.annees.reduce((a, b) => a + b, 0) / p.annees.length) : null;
+        const morceaux = [
+          `${p.n} machine${p.n > 1 ? 's' : ''} recensée${p.n > 1 ? 's' : ''}`,
+          p.flip ? `dont ${p.flip} flipper${p.flip > 1 ? 's' : ''}` : 'aucun flipper',
+          moy ? `parc ${moy} en moyenne` : null,
+        ].filter(Boolean);
+        return {
+          entreprise: s.nom,
+          adresse: s.adresse, code_postal: s.code_postal, ville: s.ville,
+          lat: s.lat, lng: s.lng,
+          segment: SEGMENT[(s.type_lieu ?? '').toLowerCase()] ?? 'loisirs',
+          tag: s.type_lieu, site_web: s.site_web,
+          source: 'annuaire-arcade', sources: ['annuaire-arcade'],
+          statut: 'nouveau',
+          // Le signal EST l'argument d'appel : un lieu déjà équipé n'a pas à être
+          // convaincu du principe, seulement du fournisseur.
+          signal: `Déjà équipé — ${morceaux.join(', ')}`,
+          notes: [`Type : ${s.type_lieu ?? 'non classé'}`,
+                  (s.prestations ?? []).length ? `Prestations : ${(s.prestations ?? []).join(', ')}` : null,
+                  s.facebook, s.fiche_url].filter(Boolean).join('\n'),
+          _salle: s.id,
+        };
+      });
+
+      if (!vraiment) {
+        const parSegment: Record<string, number> = {};
+        for (const l of lignes) parSegment[l.segment] = (parSegment[l.segment] ?? 0) + 1;
+        return json({
+          ok: true, mode: 'analyse — rien créé', a_creer: lignes.length, par_segment: parSegment,
+          exemples: lignes.slice(0, 8).map((l) => `${l.entreprise} · ${l.ville ?? '?'} · ${l.segment} · ${l.signal}`),
+        });
+      }
+
+      let crees = 0;
+      for (let i = 0; i < lignes.length; i += 100) {
+        const lot = lignes.slice(i, i + 100);
+        const { data, error } = await admin.from('prospects')
+          .insert(lot.map(({ _salle, ...reste }) => reste)).select('id');
+        if (error) throw error;
+        // Chaque salle garde le lien vers la fiche créée : sans lui, la mise à jour du
+        // parc de demain ne saurait pas quelle fiche enrichir.
+        for (let k = 0; k < (data ?? []).length; k++) {
+          const { error: e2 } = await admin.from('arcade_salles')
+            .update({ prospect_id: (data as any[])[k].id, rapprochement: 'prospect' })
+            .eq('id', lot[k]._salle);
+          if (e2) throw e2;
+        }
+        crees += (data ?? []).length;
+      }
+      return json({ ok: true, mode: 'créé', prospects_crees: crees });
+    }
 
     const tout = async (table: string, colonnes: string, filtre?: (q: any) => any) => {
       const acc: any[] = [];

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { CopiloteMarkdown } from "@/components/admin/CopiloteMarkdown";
 import { supabase } from "@/integrations/supabase/client";
+import { ParcArcadeBloc } from "@/components/ParcArcadeBloc";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserMenu } from "@/components/UserMenu";
 import { MobileNav } from "@/components/MobileNav";
@@ -181,6 +182,7 @@ export default function GaiaClientFiche() {
       }
 
       return {
+        codes,
         ca: caRows,
         marge: margeRows,
         parc: parcRows,
@@ -471,6 +473,14 @@ export default function GaiaClientFiche() {
             </div>
           </div>
         </div>
+
+        {/* Le parc installé relevé sur place, distinct de ce que nous lui avons
+            facturé : c'est la comparaison des deux qui fait l'argument commercial. */}
+        {(fiche?.codes ?? []).length > 0 && (
+          <div className="mb-6">
+            <ParcArcadeBloc codeClient={(fiche?.codes ?? [])[0]} />
+          </div>
+        )}
 
         {/* Section ENTREPRISE — direction/admin uniquement */}
         {isDirection && entreprise && (

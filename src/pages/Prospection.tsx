@@ -49,6 +49,7 @@ function buildLinkedInSearch(p: { contact_nom?: string | null; entreprise?: stri
 }
 
 import { supabase } from "@/integrations/supabase/client";
+import { ParcArcadeBloc } from "@/components/ParcArcadeBloc";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -1019,6 +1020,12 @@ function ProspectSheet({
           <SheetTitle className="truncate">{form.entreprise || "Prospect"}</SheetTitle>
           <SheetDescription>Détail, historique et actions</SheetDescription>
         </SheetHeader>
+
+        {/* Le parc installé arrive AVANT le formulaire : c'est ce qui décide de la
+            teneur de l'appel, pas la saisie des coordonnées. */}
+        <div className="mt-4">
+          <ParcArcadeBloc prospectId={prospect?.id} />
+        </div>
 
         <div className="mt-4 space-y-3">
           <Field label="Entreprise *">

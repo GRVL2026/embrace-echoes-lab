@@ -11,16 +11,17 @@ const SYNTH_MODEL = "claude-opus-4-8";
 const COLLECT_MODEL = "claude-sonnet-5";
 
 // Étapes séquentielles auto-relancées
-type Step = "collecte_a" | "collecte_b" | "collecte_c" | "collecte_d" | "synthese";
-const STEP_ORDER: Step[] = ["collecte_a", "collecte_b", "collecte_c", "collecte_d", "synthese"];
+type Step = "collecte_a" | "collecte_b" | "collecte_c" | "collecte_d" | "collecte_e" | "synthese";
+const STEP_ORDER: Step[] = ["collecte_a", "collecte_b", "collecte_c", "collecte_d", "collecte_e", "synthese"];
 const STEP_PROGRESS: Record<Step, number> = {
-  collecte_a: 20, collecte_b: 35, collecte_c: 50, collecte_d: 60, synthese: 70,
+  collecte_a: 18, collecte_b: 30, collecte_c: 42, collecte_d: 54, collecte_e: 66, synthese: 78,
 };
 const STEP_LABEL: Record<Step, string> = {
   collecte_a: "A · Baromètre Stern & flipper",
   collecte_b: "B · Watchlist France",
   collecte_c: "C · Marché arcade & FEC",
   collecte_d: "D · TCG & e-commerce",
+  collecte_e: "E · Presse locale — signaux d'affaires",
   synthese: "Synthèse",
 };
 
@@ -284,12 +285,34 @@ function collectorPrompt(step: Step, ctx: any): string {
   switch (step) {
     case "collecte_a":
       return `PÉRIMÈTRE : Baromètre Stern & flipper (${wnd}).
-Cherche sur le web (Pinball News, This Week in Pinball, Kaneda's Blog, Pinside, Stern officiel, réseaux sociaux Stern, presse spécialisée) :
+Cherche sur le web (Pinball News, This Week in Pinball, Kaneda's Blog, Pinside, Stern officiel, presse spécialisée) :
 (a) NOUVEAUX TITRES Stern : rumeurs, teasers, licences, annonces officielles.
 (b) ACCUEIL DES SORTIES RÉCENTES : ressenti communautaire (qualité, prix, hype, critiques) sur Pinside + pages fans FR.
 (c) TENDANCES MARCHÉ FLIPPER : Jersey Jack, American Pinball, Chicago Gaming, Spooky, Multimorphic, prix occasion, nouveaux acteurs.
 (d) POLITIQUE COMMERCIALE STERN : vente directe, marges revendeurs, exclusivités, prix imposés, conditions aux importateurs européens.
 Rends des notes brutes datées avec URLs. Distingue rumeur/annonce/sorti et enthousiaste/mitigé/négatif/neutre.`;
+    case "collecte_e":
+      return `PÉRIMÈTRE : presse locale française — SIGNAUX D'AFFAIRES pour un vendeur de jeux d'arcade, flippers, billards et distributeurs (${wnd}).
+
+OBJECTIF : repérer des lieux de loisirs qui viennent de bouger. Un établissement qui ouvre doit s'équiper ; un établissement repris veut se démarquer ; un établissement qui s'agrandit a un budget voté. Ce sont les trois moments où l'on achète.
+
+CROISE ces deux vocabulaires dans tes recherches :
+- LIEUX : bowling, parc de loisirs indoor, salle d'arcade, trampoline park, laser game, escape game, bar à jeux, camping, village vacances, base de loisirs, complexe familial, karting.
+- ÉVÉNEMENTS : ouvre / ouverture prochaine, repris / repreneur / nouveau gérant / nouveau propriétaire, rachète, rénove / travaux / réaménagement, agrandit / extension, investit, s'installe, réouverture après travaux.
+
+SOURCES : titres de presse quotidienne régionale (Ouest-France, actu.fr, La Manche Libre, Tendance Ouest, La Voix du Nord, Sud Ouest, Le Dauphiné, La Montagne, L'Est Républicain, La Gazette…), presse économique locale (journaux d'annonces légales, CCI), sites de mairies et d'offices de tourisme. Le TITRE et le résumé suffisent : n'essaie pas d'ouvrir les articles payants.
+
+PRIORITÉ GÉOGRAPHIQUE : d'abord la Normandie (50, 14, 61, 27, 76) et les départements limitrophes (35, 53, 72), puis le reste de la France.
+
+FORMAT — une ligne par signal, et RIEN d'autre :
+[DATE AAAA-MM-JJ] | [COMMUNE (dép.)] | [TYPE DE LIEU] | [ÉVÉNEMENT] | [NOM DE L'ÉTABLISSEMENT si connu] | [titre exact de l'article] | [URL]
+
+RÈGLES ABSOLUES :
+- La DATE DE PARUTION est obligatoire. Sans date vérifiable, le signal est ÉCARTÉ : un vendeur ne rappelle pas sur une information de l'an dernier.
+- Écarte tout ce qui dépasse 7 jours.
+- N'invente jamais une date, un nom d'établissement ou une URL. En cas de doute, omets la ligne.
+- Écarte les ouvertures de simples commerces (boulangerie, coiffeur…) : seuls les lieux de LOISIRS comptent.
+- Classe par date décroissante, la plus fraîche en tête.`;
     case "collecte_b":
       return `PÉRIMÈTRE : Watchlist France (${wnd}).
 Cherche des actualités RÉCENTES pour les comptes suivants.
@@ -372,7 +395,9 @@ async function runStep(sb: any, job: any): Promise<void> {
 
   // === SYNTHÈSE ===
   await touch({ etape: "synthèse (opus)", progress: STEP_PROGRESS.synthese });
-  const paquets = STEP_ORDER.slice(0, 4).map((s) => {
+  // Toutes les étapes de collecte, sans en oublier : figer un nombre ici a déjà
+  // failli faire disparaître la gazette locale de la synthèse.
+  const paquets = STEP_ORDER.filter((s) => s !== "synthese").map((s) => {
     const n = notesAcc[s] ?? {};
     return {
       label: n.label ?? STEP_LABEL[s],
@@ -402,7 +427,7 @@ async function runStep(sb: any, job: any): Promise<void> {
 
   const synthPrompt = `Période : ${ctx.periode}.
 
-Voici les 4 paquets de notes brutes. Synthétise via l'outil build_veille (5 sections : nouveautes, concurrents, evenements, tendances, barometre_stern).
+Voici les paquets de notes brutes. Synthétise via l'outil build_veille.
 
 RÈGLES TAGGING WATCHLIST — préfixe chaque titre concerné par la catégorie entre crochets. Catégories : fabricants, concurrents, reseau_revendeurs, flipper, communaute_flipper, exploitants, tcg, presse, contentieux.
 
@@ -414,6 +439,15 @@ ${ctx.wlP2}
 
 WATCHLIST P3 :
 ${ctx.wlP3}
+
+SECTION « GAZETTE LOCALE » — à placer dans evenements, EN TÊTE du rapport.
+Elle rassemble les signaux d'affaires du paquet E : lieux de loisirs qui ouvrent, changent de mains, se rénovent ou s'agrandissent. Pour chacun :
+- la DATE DE PARUTION en clair (« paru le 3 août »), jamais approximative ;
+- la commune et le département ;
+- ce qui s'est passé, en une phrase ;
+- POURQUOI C'EST UNE OPPORTUNITÉ pour Avranches Automatic, en une phrase concrète (ce qu'on peut lui vendre, et à quel moment le contacter) ;
+- le lien vers l'article.
+Classe du plus récent au plus ancien. Un signal de moins de 48 h est en importance « haute » : c'est là qu'un appel a le plus de chances d'arriver avant les concurrents. Écarte tout signal sans date.
 
 SECTION barometre_stern OBLIGATOIRE — pour chaque titre Stern : statut_stern, tonalite (+ pourquoi en 1 phrase), implication_aa (lecture commerciale pour AA). Tout signal politique commerciale Stern ou mouvement B2C d'un revendeur AA en importance "haute".
 

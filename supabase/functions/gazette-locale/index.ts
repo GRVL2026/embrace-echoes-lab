@@ -30,7 +30,7 @@ const BUDGET_MS = 110_000;
 // Nombre de titres soumis à l'IA en un appel. Au-delà, la requête s'éternise et la
 // plateforme tue la fonction (502 constaté sur un relevé de 30 jours). Le reliquat est
 // traité au passage suivant : rien n'est perdu, tout est simplement étalé.
-const MAX_PAR_APPEL = 60;
+const MAX_PAR_APPEL = 35;
 
 // Types de lieux susceptibles d'acheter des jeux d'arcade, flippers, billards ou grues.
 const LIEUX = [
@@ -225,7 +225,7 @@ Deno.serve(async (req) => {
     const liste = nouveaux.map((c, i) => `${i}. [${c.publie}] (${c.source}) ${c.titre}`).join('\n');
     const rep = await anthropicJson(ANTHROPIC_KEY, {
       model: MODEL,
-      max_tokens: 8000,
+      max_tokens: 16000,
       system: PROMPT,
       messages: [{ role: 'user', content: `Titres à trier :\n\n${liste}` }],
     });
@@ -242,11 +242,29 @@ Deno.serve(async (req) => {
       }, 502);
     }
     const brut = texte.replace(/^```(?:json)?/gm, '').replace(/```$/gm, '').trim();
-    const debutTab = brut.indexOf('['), finTab = brut.lastIndexOf(']');
-    if (debutTab < 0 || finTab < 0) {
-      return json({ error: 'Réponse IA inexploitable', extrait: brut.slice(0, 300) }, 502);
+    const debutTab = brut.indexOf('[');
+    if (debutTab < 0) {
+      return json({ error: 'Réponse IA sans tableau JSON', extrait: brut.slice(0, 300) }, 502);
     }
-    const retenus: any[] = JSON.parse(brut.slice(debutTab, finTab + 1));
+    // Une réponse tronquée au plafond de jetons reste exploitable : on referme le tableau
+    // après le dernier objet COMPLET plutôt que de tout jeter. Perdre le dernier signal
+    // d'un lot vaut mieux que perdre le lot entier — c'est ce qui se produisait.
+    let corps = brut.slice(debutTab);
+    const finTab = corps.lastIndexOf(']');
+    let retenus: any[] = [];
+    try {
+      retenus = JSON.parse(finTab >= 0 ? corps.slice(0, finTab + 1) : corps);
+    } catch {
+      const dernierObjet = corps.lastIndexOf('}');
+      if (dernierObjet < 0) {
+        return json({ error: 'Réponse IA inexploitable', extrait: brut.slice(0, 300) }, 502);
+      }
+      try {
+        retenus = JSON.parse(corps.slice(0, dernierObjet + 1) + ']');
+      } catch {
+        return json({ error: 'Réponse IA illisible même tronquée', extrait: brut.slice(0, 300) }, 502);
+      }
+    }
 
     // --- 3. Enregistrement --------------------------------------------------------
     // Résolution des liens en PARALLÈLE et sous contrainte de temps : enchaînée, elle

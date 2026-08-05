@@ -5,7 +5,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { ClientActionsDialog } from "@/components/reactivation/ClientActionsDialog";
 import { companyStatusPopupHtml } from "@/components/reactivation/CompanyStatusBadge";
-import { Loader2, MapPin, ArrowLeft, Search, Sparkles, X, RotateCcw, HelpCircle, Check, Gamepad2 } from "lucide-react";
+import {
+  Loader2, MapPin, ArrowLeft, Search, Sparkles, X, RotateCcw, HelpCircle, Check, Gamepad2,
+  ChevronDown, ChevronLeft, ChevronRight,
+} from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -242,6 +245,18 @@ export default function Carte() {
   });
   const tousSegments = (on: boolean): Record<ProspectSeg, boolean> =>
     Object.fromEntries(PROSPECT_SEGMENTS.map((s) => [s, on])) as Record<ProspectSeg, boolean>;
+  const [detailCopilot, setDetailCopilot] = useState(false);
+  // Le tiroir se souvient de son état : on le replie une fois, pas à chaque visite.
+  // Fermé d'office sur petit écran, où il couvrirait la moitié de la carte.
+  const [tiroirOuvert, setTiroirOuvert] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const memo = window.localStorage.getItem("carte.tiroir");
+    if (memo !== null) return memo === "1";
+    return window.innerWidth >= 1024;
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem("carte.tiroir", tiroirOuvert ? "1" : "0"); } catch { /* stockage indisponible */ }
+  }, [tiroirOuvert]);
   const [voirDoutes, setVoirDoutes] = useState(true);
   const [arbitrage, setArbitrage] = useState<SalleDoute | null>(null);
   const [segmentChoisi, setSegmentChoisi] = useState<string>("");
@@ -921,58 +936,92 @@ export default function Carte() {
       <div className="relative flex-1 isolate">
         <div ref={mapEl} className="absolute inset-0 z-0" style={{ isolation: "isolate" }} />
 
-        {/* Résultat copilote */}
+        {/* Résultat du copilote — un bandeau d'une ligne, pas un pavé.
+            L'interprétation peut faire dix lignes et masquait tout le nord-ouest de la
+            carte, c'est-à-dire le territoire. Elle se déplie à la demande : on la lit
+            une fois pour vérifier que la question a été comprise, jamais deux. */}
         {copilotResult && (
-          <Card className="absolute top-3 left-3 right-3 sm:right-auto z-[30] p-3 sm:max-w-sm max-h-[70vh] overflow-y-auto overscroll-contain shadow-lg border-primary/40">
-            <div className="flex items-start gap-2">
-              <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <div className="flex-1 min-w-0">
+          <Card className="absolute top-3 left-3 right-3 sm:right-auto z-[30] sm:max-w-md shadow-lg border-primary/40 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setDetailCopilot((v) => !v)}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/40"
+            >
+              <Sparkles className="h-4 w-4 shrink-0 text-primary" />
+              <span className="text-sm font-semibold tabular-nums">
+                {(copilotResult.total ?? copilotResult.count).toLocaleString("fr-FR")}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                résultat{(copilotResult.total ?? copilotResult.count) > 1 ? "s" : ""}
+                {copilotResult.ca_total > 0 && ` · ${fmtEUR(copilotResult.ca_total)}`}
+                {copilotResult.total != null && copilotResult.total > copilotResult.count &&
+                  ` · ${copilotResult.count.toLocaleString("fr-FR")} affichés`}
+              </span>
+              <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                detailCopilot && "rotate-180")} />
+            </button>
+
+            {detailCopilot && (
+              <div className="max-h-[45vh] overflow-y-auto overscroll-contain border-t border-border px-3 py-2">
                 <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Question interprétée</div>
-                <div className="text-sm font-medium mb-2">{copilotResult.interpretation}</div>
-                <div className="flex gap-4 text-sm">
-                  <div>
-                    <div className="text-[11px] text-muted-foreground">Résultats</div>
-                    <div className="font-semibold tabular-nums">
-                      {(copilotResult.total ?? copilotResult.count).toLocaleString("fr-FR")}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-[11px] text-muted-foreground">CA cumulé</div>
-                    <div className="font-semibold tabular-nums">{fmtEUR(copilotResult.ca_total)}</div>
-                  </div>
-                </div>
-                <div className="mt-1.5 text-[11px] text-muted-foreground">
-                  {copilotResult.total != null && copilotResult.total > copilotResult.count
-                    ? `${copilotResult.total.toLocaleString("fr-FR")} au total (${copilotResult.count.toLocaleString("fr-FR")} affichés sur la carte)`
-                    : `${copilotResult.count.toLocaleString("fr-FR")} résultat${copilotResult.count > 1 ? "s" : ""}, dont ${copilotResult.geoCount.toLocaleString("fr-FR")} géolocalisé${copilotResult.geoCount > 1 ? "s" : ""}`}
-                  {copilotResult.total != null &&
-                    copilotResult.total > copilotResult.count &&
-                    copilotResult.geoCount < copilotResult.count &&
-                    ` — ${copilotResult.geoCount.toLocaleString("fr-FR")} géolocalisés`}
-                </div>
+                <p className="mt-0.5 text-[13px] leading-relaxed">{copilotResult.interpretation}</p>
                 {copilotResult.invalidCount > 0 && (
-                  <div className="mt-1 text-[11px] text-amber-500">
+                  <p className="mt-1.5 text-[11px] text-amber-500">
                     ⚠ {copilotResult.invalidCount.toLocaleString("fr-FR")} client
                     {copilotResult.invalidCount > 1 ? "s" : ""} pas encore géolocalisé
                     {copilotResult.invalidCount > 1 ? "s" : ""} (géocodage en cours)
-                  </div>
+                  </p>
                 )}
-
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={resetCopilot}
-                  className="mt-2 h-7 text-xs"
-                >
-                  <RotateCcw className="h-3 w-3 mr-1" /> Réinitialiser
-                </Button>
               </div>
+            )}
+
+            <div className="border-t border-border px-2 py-1.5">
+              <Button size="sm" variant="ghost" onClick={resetCopilot} className="h-6 w-full gap-1 text-[11px]">
+                <RotateCcw className="h-3 w-3" /> Réinitialiser
+              </Button>
             </div>
           </Card>
         )}
 
-        {/* Filtres */}
-        <Card className="absolute top-3 right-3 z-[20] p-3 min-w-[200px] shadow-lg">
+        {/* Filtres — en tiroir. Une fois les couches réglées, la légende ne sert plus
+            qu'à consulter des totaux : elle n'a pas à occuper quatre cents pixels de
+            hauteur en permanence. L'onglet garde les compteurs essentiels sous les yeux. */}
+        {!tiroirOuvert && (
+          <button
+            type="button"
+            onClick={() => setTiroirOuvert(true)}
+            title="Afficher les couches"
+            className="absolute top-3 right-3 z-[20] flex flex-col items-end gap-0.5 rounded-lg border border-border bg-background/95 px-2.5 py-2 shadow-lg backdrop-blur hover:border-foreground/40"
+          >
+            <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Couches <ChevronLeft className="h-3.5 w-3.5" />
+            </span>
+            <span className="text-[11px] tabular-nums text-muted-foreground">
+              {(counts.actif + counts.dormant + counts.inactif).toLocaleString("fr-FR")} clients
+            </span>
+            <span className="text-[11px] tabular-nums text-muted-foreground">
+              {counts.prospects.toLocaleString("fr-FR")} prospects
+            </span>
+            {(doutes ?? []).length > 0 && (
+              <span className="text-[11px] tabular-nums" style={{ color: COULEUR_DOUTE }}>
+                {(doutes ?? []).length} à confirmer
+              </span>
+            )}
+          </button>
+        )}
+
+        <Card className={cn(
+          "absolute top-3 right-3 z-[20] p-3 min-w-[200px] max-h-[calc(100%-1.5rem)] overflow-y-auto shadow-lg transition-transform duration-200",
+          !tiroirOuvert && "pointer-events-none translate-x-[calc(100%+1rem)] opacity-0",
+        )}>
+          <button
+            type="button"
+            onClick={() => setTiroirOuvert(false)}
+            title="Replier"
+            className="absolute right-1.5 top-1.5 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
           {/* Deux blocs : le portefeuille d'un côté, la prospection de l'autre. */}
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">

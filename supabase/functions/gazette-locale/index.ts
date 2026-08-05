@@ -230,6 +230,17 @@ Deno.serve(async (req) => {
       messages: [{ role: 'user', content: `Titres à trier :\n\n${liste}` }],
     });
     const texte: string = (rep?.content ?? []).find((b: any) => b.type === 'text')?.text ?? '';
+    if (!texte) {
+      // Sans le corps réel de la réponse, « inexploitable » ne dit rien : modèle refusé,
+      // clé invalide, quota, ou format inattendu se ressemblent tous vus d'ici.
+      return json({
+        error: 'Aucun texte renvoyé par le modèle',
+        modele: MODEL,
+        stop_reason: rep?.stop_reason ?? null,
+        reponse_brute: JSON.stringify(rep ?? {}).slice(0, 500),
+        titres_envoyes: nouveaux.length,
+      }, 502);
+    }
     const brut = texte.replace(/^```(?:json)?/gm, '').replace(/```$/gm, '').trim();
     const debutTab = brut.indexOf('['), finTab = brut.lastIndexOf(']');
     if (debutTab < 0 || finTab < 0) {

@@ -93,8 +93,14 @@ def envoyer(articles: list[dict]) -> dict:
         "Content-Type": "application/json",
         "x-cron-secret": secret,
     })
-    with urllib.request.urlopen(req, timeout=180, context=CTX) as r:
-        return json.loads(r.read().decode())
+    try:
+        with urllib.request.urlopen(req, timeout=180, context=CTX) as r:
+            return json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        # Ne jamais masquer le motif : une erreur sans son corps de réponse coûte un
+        # aller-retour de diagnostic à chaque fois.
+        detail = e.read().decode("utf-8", "ignore")[:600]
+        sys.exit(f"La fonction a répondu {e.code} :\n{detail}")
 
 
 def main() -> None:

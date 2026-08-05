@@ -6,7 +6,7 @@ import { anthropicJson } from '../_shared/anthropic-fetch.ts';
 //
 // DEUX COUCHES, ET LA SÉPARATION EST LE CŒUR DU SUJET.
 //
-// Les FAITS sont calculés en base : parc installé, âge des machines, familles absentes,
+// Les FAITS sont calculés en base : parc installé, familles absentes,
 // facturation, signaux de presse. Exacts, instantanés, gratuits. Ils constituent
 // l'essentiel de la valeur et ne passent jamais par un modèle.
 //
@@ -34,7 +34,7 @@ Tu reçois des FAITS vérifiés. Tu n'as le droit d'utiliser QUE ces faits.
 
 FORMAT — trois parties courtes, en Markdown, 120 mots maximum au total :
 1. Une phrase qui situe l'établissement et son parc.
-2. Ce qui saute aux yeux : famille absente, parc vieillissant, baisse d'activité, signal de presse. Deux constats au plus, les plus actionnables.
+2. Ce qui saute aux yeux : famille absente, baisse d'activité, signal de presse. Deux constats au plus, les plus actionnables.
 3. **À faire** : une à trois actions concrètes, à l'impératif, chacune sur une ligne.
 
 RÈGLES ABSOLUES

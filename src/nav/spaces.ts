@@ -25,6 +25,7 @@ import {
   Map as MapIcon,
   RotateCcw as RotateCcwIcon,
   type LucideIcon,
+  Newspaper as NewspaperIcon,
 } from "lucide-react";
 
 export type SpaceKey =
@@ -143,12 +144,14 @@ export const SPACES: Space[] = [
         match: startsWith("/prospection"),
       },
       {
-        key: "prospection.reconquete",
-        label: "À relancer",
-        to: "/reconquete",
-        icon: RotateCcwIcon,
-        show: (c) => c.canReactivation,
-        match: startsWith("/reconquete"),
+        // Remplace « À relancer » : la gazette de presse locale est le point d'entrée
+        // quotidien de la prospection, la reconquête ne servait plus.
+        key: "prospection.gazette",
+        label: "Gazette",
+        to: "/admin/veille",
+        icon: NewspaperIcon,
+        show: (c) => c.isAdmin || c.isDirection,
+        match: startsWith("/admin/veille"),
       },
       {
         key: "prospection.carte",

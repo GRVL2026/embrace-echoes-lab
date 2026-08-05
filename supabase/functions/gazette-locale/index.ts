@@ -27,6 +27,10 @@ const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
 const UA = 'Mozilla/5.0 (compatible; ArcadeOS/1.0; +https://avranchesautomatic.com)';
 const BUDGET_MS = 110_000;
+// Nombre de titres soumis à l'IA en un appel. Au-delà, la requête s'éternise et la
+// plateforme tue la fonction (502 constaté sur un relevé de 30 jours). Le reliquat est
+// traité au passage suivant : rien n'est perdu, tout est simplement étalé.
+const MAX_PAR_APPEL = 120;
 
 // Types de lieux susceptibles d'acheter des jeux d'arcade, flippers, billards ou grues.
 const LIEUX = [
@@ -161,10 +165,12 @@ Deno.serve(async (req) => {
     const { data: dejaVus } = await admin
       .from('gazette_signaux').select('titre').gte('publie_le', depuis);
     const connus = new Set((dejaVus ?? []).map((r: any) => r.titre));
-    const nouveaux = candidats.filter((c) => !connus.has(c.titre));
+    const tousNouveaux = candidats.filter((c) => !connus.has(c.titre));
+    const nouveaux = tousNouveaux.slice(0, MAX_PAR_APPEL);
+    const restants = tousNouveaux.length - nouveaux.length;
 
     if (nouveaux.length === 0) {
-      return json({ ok: true, candidats: candidats.length, nouveaux: 0, retenus: 0, termine: true });
+      return json({ ok: true, candidats: candidats.length, nouveaux: 0, retenus: 0, restants_a_traiter: 0, termine: true });
     }
 
     // --- 2. Tri et interprétation par l'IA ---------------------------------------
@@ -220,7 +226,23 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Les titres ÉCARTÉS sont eux aussi enregistrés, en statut « ignore ». Sans cette
+    // trace, ils seraient resoumis à l'IA à chaque passage — coût inutile et progression
+    // impossible : la gazette tournerait indéfiniment sur les mêmes titres.
+    const indexRetenus = new Set(retenus.map((r: any) => Number(r.i)));
+    const ecartes = nouveaux
+      .map((n, i) => ({ n, i }))
+      .filter(({ i }) => !indexRetenus.has(i))
+      .map(({ n }) => ({
+        publie_le: n.publie, source: n.source, titre: n.titre,
+        url: n.url, url_google: n.url, statut: 'ignore',
+      }));
+
     let inseres = 0;
+    if (!dryRun && ecartes.length) {
+      await admin.from('gazette_signaux')
+        .upsert(ecartes, { onConflict: 'titre', ignoreDuplicates: true });
+    }
     if (!dryRun && lignes.length) {
       // onConflict sur l'URL : une même actualité reprise par plusieurs médias ne crée
       // qu'un signal, et un second passage dans la journée n'en duplique aucun.
@@ -235,6 +257,8 @@ Deno.serve(async (req) => {
       ok: true, dry_run: dryRun, fenetre_jours: jours, depuis,
       candidats: candidats.length,
       nouveaux: nouveaux.length,
+      restants_a_traiter: restants,
+      ecartes: ecartes.length,
       retenus: lignes.length,
       inseres,
       taux_retenu: nouveaux.length ? `${Math.round((100 * lignes.length) / nouveaux.length)} %` : '—',

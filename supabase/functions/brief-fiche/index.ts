@@ -29,6 +29,23 @@ const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 // parle d'absence d'achat doit porter cette date, sinon elle ment par omission.
 const DEBUT_VENTES = '2024-12-02';
 
+// Du genre de l'annuaire vers nos familles de catalogue. C'est ce qui permet de passer
+// de « il lui manque un flipper » à « ses huit rail shooters sont tous hors de notre
+// catalogue, voici les nôtres ». Les genres sans équivalent chez nous — combat 2D,
+// beat'em up, plateforme, les bornes rétro en général — sont volontairement absents :
+// proposer un produit qu'on ne vend pas décrédibilise tout le reste du brief.
+const GENRE_VERS_FAMILLE: Record<string, string> = {
+  'rail shooter': 'Tirs', 'rail shooter vr': 'Tirs', 'shoot em up': 'Tirs',
+  'shoot': 'Tirs', 'run and gun': 'Tirs', 'action': 'Tirs',
+  'course auto': 'Conduites', 'course': 'Conduites', 'course moto': 'Conduites',
+  'course jet ski / bateaux': 'Conduites', 'combat motorisé': 'Conduites',
+  'simulateur de mouvement': 'Conduites', 'simulateur de mouvement vr': 'Conduites',
+  'simulateur de vol': 'Conduites', 'motion gaming': 'Conduites',
+  'pour enfant': 'Enfant',
+  'rythme': "Jeux d'adresse", 'danse': "Jeux d'adresse", 'basket': "Jeux d'adresse",
+  'labyrinthe': "Jeux d'adresse", 'puzzle': "Jeux d'adresse", 'sport': "Jeux d'adresse",
+};
+
 const PROMPT = `Tu écris le brief qu'un commercial d'Avranches Automatic lit avant d'appeler un établissement. Avranches Automatic distribue des flippers (revendeur officiel Stern), jeux d'arcade, billards, baby-foot, grues et distributeurs automatiques.
 
 Tu reçois des FAITS vérifiés. Tu n'as le droit d'utiliser QUE ces faits.
@@ -36,9 +53,10 @@ Tu reçois des FAITS vérifiés. Tu n'as le droit d'utiliser QUE ces faits.
 FORMAT — trois parties courtes, en Markdown, 120 mots maximum au total :
 1. Une phrase qui situe l'établissement et son parc.
 2. Ce qui saute aux yeux : famille absente, baisse d'activité, signal de presse. Deux constats au plus, les plus actionnables.
-3. **À faire** : une à trois actions concrètes, à l'impératif, chacune sur une ligne.
+3. **À faire** : une à trois actions concrètes, à l'impératif, chacune sur une ligne. Quand « hors_catalogue_par_genre » existe, au moins une action doit proposer NOMMÉMENT une ou deux références de « notre_offre_dans_ces_genres » correspondant au genre le plus représenté. Un lieu qui possède huit jeux de tir qu'aucun de nos fournisseurs ne fabrique est un lieu qui aime les jeux de tir : c'est le meilleur angle possible, bien plus fort qu'une famille absente.
 
 RÈGLES ABSOLUES
+- Ne propose QUE des références figurant dans « notre_offre_dans_ces_genres ». N'invente jamais un nom de produit : un commercial qui cite une référence inexistante devant un client perd la partie sur-le-champ.
 - N'INVENTE AUCUN CHIFFRE ni aucun fait. Si une information manque, ne la mentionne pas.
 - Ne dis JAMAIS « il n'a rien acheté chez nous ». Dis « aucune facture depuis ${DEBUT_VENTES}, notre historique ne remonte pas plus loin ».
 - N'utilise JAMAIS l'année d'un modèle pour parler de l'âge du parc : l'annuaire donne l'année de SORTIE du jeu, pas celle de son achat. Un lieu peut avoir acquis d'occasion un modèle de 2013. Cette donnée ne t'est plus transmise, ne la réclame pas.
@@ -131,6 +149,43 @@ Deno.serve(async (req) => {
         principaux_fabricants: [...new Set(machines.map((m: any) => m.editeur).filter(Boolean))].slice(0, 5),
       };
     }
+
+      // CE QU'IL A ET QUE NOUS NE VENDONS PAS, par genre — et ce que nous proposons
+      // dans ces mêmes genres. C'est le croisement qui transforme un constat en offre :
+      // un lieu équipé de huit tirs qu'aucun de nos fournisseurs ne fabrique est un lieu
+      // qui aime les tirs, donc un candidat pour les nôtres.
+      const horsCatalogue = machines.filter((m: any) => m.correspondance === 'aucune' && m.type_jeu);
+      const parGenre = new Map<string, string[]>();
+      for (const m of horsCatalogue) {
+        const g = String(m.type_jeu);
+        const l = parGenre.get(g);
+        if (l) l.push(m.nom); else parGenre.set(g, [m.nom]);
+      }
+      if (parGenre.size) {
+        (faits.parc as any).hors_catalogue_par_genre = [...parGenre.entries()]
+          .sort((x, y) => y[1].length - x[1].length)
+          .slice(0, 6)
+          .map(([genre, noms]) => ({ genre, nombre: noms.length, exemples: noms.slice(0, 4) }));
+
+        const familles = [...new Set([...parGenre.keys()]
+          .map((g) => GENRE_VERS_FAMILLE[g.toLowerCase()]).filter(Boolean))];
+        if (familles.length) {
+          // Les références neuves seulement : proposer de l'occasion à un lieu qu'on ne
+          // connaît pas encore n'est pas le bon premier pas.
+          const { data: offre } = await admin.from('catalogue_erp')
+            .select('description, famille, prix_ht').in('famille', familles).limit(400);
+          const parFamille = new Map<string, string[]>();
+          for (const o of offre ?? []) {
+            const nom = String((o as any).description)
+              .replace(/^(JV|FL|BA|BI|JB|JF)[A-Z0-9]{0,3}\s*-\s*/i, '').trim();
+            const f = String((o as any).famille);
+            const l = parFamille.get(f);
+            if (l) { if (l.length < 12) l.push(nom); } else parFamille.set(f, [nom]);
+          }
+          faits.notre_offre_dans_ces_genres = [...parFamille.entries()]
+            .map(([famille, refs]) => ({ famille, references: refs }));
+        }
+      }
 
     // Les signaux de presse rattachés, s'il y en a.
     if (prospectId) {

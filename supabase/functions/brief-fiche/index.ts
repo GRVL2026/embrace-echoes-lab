@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
 
     if (prospectId) {
       const { data: p, error } = await admin.from('prospects')
-        .select('entreprise, ville, code_postal, departement, segment, tag, groupe, statut, contact_nom, contact_role, signal, sources, etoiles, capacite, effectif, ca_annuel, site_web')
+        .select('entreprise, ville, code_postal, segment, tag, groupe, statut, contact_nom, contact_role, signal, sources, etoiles, capacite, effectif, ca_annuel, site_web')
         .eq('id', prospectId).maybeSingle();
       if (error) throw error;
       if (!p) return json({ error: 'Prospect introuvable' }, 404);

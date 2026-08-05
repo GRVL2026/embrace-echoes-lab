@@ -158,9 +158,26 @@ function extraire(html: string, slug: string) {
     const lire = (etiquette: string, valeur: string) =>
       plat.match(new RegExp(`\\|\\s*${etiquette}\\s*\\|\\s*(${valeur})\\s*\\|`, 'i'))?.[1]?.trim() ?? null;
     const annee = Number(lire('Ann[ée]e', '\\d{4}') ?? '');
+    // Le nom du jeu et sa version figurent sur DEUX lignes distinctes de la fiche :
+    // « Bikers Madness » puis « DX ». Ne lire que la ligne qui précède « Genre » ne
+    // ramenait donc que le suffixe — dix-huit machines s'appelaient « DX » en base.
+    // L'identifiant de la fiche, lui, porte le titre complet : il fait autorité, et le
+    // suffixe s'y ajoute quand il n'y figure pas déjà. DX vaut Deluxe, SD vaut Standard :
+    // ce sont des versions différentes du même jeu, pas des détails d'affichage.
+    const depuisSlug = s.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    const brut = plat.match(/\|\s*([^|]{2,70}?)\s*\|\s*Genre\s*\|/i)?.[1]?.trim() ?? null;
+    // Les sigles restent en capitales — DX, SD, HD — mais un mot garde sa casse
+    // normale : « Outrun UPRIGHT » se lit mal, « Outrun Upright » se lit.
+    const suffixe = brut && /^(dx|sd|std|hd|upright|deluxe|cocktail|\d+\s*p(l|layers?)?)$/i.test(brut)
+      ? (brut.length <= 3 ? brut.toUpperCase() : brut[0].toUpperCase() + brut.slice(1).toLowerCase())
+      : null;
+    const nomComplet = suffixe
+      ? (new RegExp(`\\b${suffixe}$`, 'i').test(depuisSlug) ? depuisSlug : `${depuisSlug} ${suffixe}`)
+      : (brut && brut.length > depuisSlug.length / 2 ? brut : depuisSlug);
+
     const trouve: Machine = {
       slug: s, categorie,
-      nom: plat.match(/\|\s*([^|]{2,70}?)\s*\|\s*Genre\s*\|/i)?.[1]?.trim() ?? null,
+      nom: nomComplet,
       genre: lire('Genre', '[^|]{2,50}?'),
       annee: Number.isFinite(annee) && annee > 1950 && annee < 2100 ? annee : null,
       editeur: lire('Editeur', '[^|]{2,50}?'),
@@ -169,7 +186,7 @@ function extraire(html: string, slug: string) {
     // version la mieux renseignée, les huit cents autres pages complèteront le reste.
     const ancien = machines.get(s);
     const richesse = (m: Machine | undefined) =>
-      m ? [m.nom, m.genre, m.annee, m.editeur].filter((v) => v !== null).length : -1;
+      m ? [m.genre, m.annee, m.editeur].filter((v) => v !== null).length : -1;
     if (richesse(trouve) > richesse(ancien)) machines.set(s, trouve);
   }
 

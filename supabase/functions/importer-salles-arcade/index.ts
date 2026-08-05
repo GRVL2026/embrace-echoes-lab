@@ -253,6 +253,10 @@ Deno.serve(async (req) => {
           lat: m.lat, lng: m.lng, geocode_at: new Date().toISOString(),
           type_lieu: principal,
           prestations,
+          // L'annuaire signale les fermetures dans le nom même du lieu. Le détecter à
+          // l'import évite de faire appeler un rideau baissé, et de compter dans le
+          // parc installé des machines qui n'existent plus.
+          ferme: /(fermeture|ferm[ée]e? d[ée]finitiv|d[ée]finitivement ferm)/i.test(m.nom),
           updated_at: new Date().toISOString(),
         };
       });

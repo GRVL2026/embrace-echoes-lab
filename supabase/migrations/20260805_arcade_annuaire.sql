@@ -198,3 +198,17 @@ with (security_invoker = true) as
    group by s.id;
 
 grant select on public.v_arcade_modeles, public.v_arcade_salles_parc to copilot_readonly;
+
+-- ── Établissements fermés ────────────────────────────────────────────────────
+-- L'annuaire signale les fermetures dans le nom du lieu — « Bowling Alma Loisirs
+-- Rennes Fermeture definitive ». Trente-sept lieux sont concernés. Les laisser dans
+-- le lot reviendrait à faire appeler des rideaux baissés, et à compter dans le parc
+-- installé des machines qui n'existent plus.
+alter table public.arcade_salles
+  add column if not exists ferme boolean not null default false;
+
+update public.arcade_salles
+   set ferme = true
+ where nom ~* '(fermeture|ferm[ée]e? d[ée]finitiv|d[ée]finitivement ferm)';
+
+create index if not exists idx_arcade_salles_ouvertes on public.arcade_salles (ferme) where ferme = false;

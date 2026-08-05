@@ -243,7 +243,11 @@ Deno.serve(async (req) => {
     };
 
     // ── Chargement ────────────────────────────────────────────────────────────
-    const salles = await tout('arcade_salles', 'id, slug, nom, ville, code_postal, lat, lng, prospect_id, code_client');
+    // Les établissements fermés sont écartés du rapprochement : les rattacher à un
+    // client ou un prospect polluerait des fiches actives avec un parc qui n'existe plus.
+    const salles = (await tout('arcade_salles',
+      'id, slug, nom, ville, code_postal, lat, lng, prospect_id, code_client, ferme'))
+      .filter((s: any) => !s.ferme);
     const clients = await tout('gaia_clients', 'customer_id, name, code_postal, lat, lng');
     const prospects = await tout('prospects', 'id, entreprise, ville, code_postal, lat, lng, sources');
 

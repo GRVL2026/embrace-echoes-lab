@@ -17,6 +17,10 @@ Usage :
     python3 gazette-collecte.py --test     # affiche sans envoyer
 """
 
+# Le Mac tourne sous Python 3.9 : sans cet import, « str | None » lève une TypeError au
+# chargement du fichier, avant même la première ligne de code exécutée.
+from __future__ import annotations
+
 import argparse, datetime, html, json, os, re, ssl, sys, time
 import urllib.parse, urllib.request
 

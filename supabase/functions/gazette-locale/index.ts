@@ -209,11 +209,15 @@ Deno.serve(async (req) => {
         const corpus = lisibles
           .map((e, i) => `### ARTICLE ${i}\n${(e.texte ?? '').slice(0, 7000)}`)
           .join('\n\n');
-        const { texte: rep } = await anthropicJson({
-          apiKey: ANTHROPIC_KEY, model: MODEL, maxTokens: 2000,
+        // Deux arguments positionnels, comme le tri plus bas : passer un objet unique
+        // envoyait « [object Object] » en guise de clé, et l'API répondait 401.
+        const repIA = await anthropicJson(ANTHROPIC_KEY, {
+          model: MODEL,
+          max_tokens: 3000,
           system: EXTRACTION,
           messages: [{ role: 'user', content: corpus }],
         });
+        const rep: string = (repIA?.content ?? []).find((b: any) => b.type === 'text')?.text ?? '';
         const d = (rep ?? '').indexOf('[');
         if (d >= 0) {
           const f = rep.lastIndexOf(']');

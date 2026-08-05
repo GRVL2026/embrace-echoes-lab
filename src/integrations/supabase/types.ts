@@ -127,6 +127,12 @@ export type Database = {
       arcade_salles: {
         Row: {
           adresse: string | null
+          arbitre_le: string | null
+          arbitre_par: string | null
+          candidat_id: string | null
+          candidat_motif: string | null
+          candidat_nom: string | null
+          candidat_type: string | null
           code_client: string | null
           code_postal: string | null
           created_at: string
@@ -154,6 +160,12 @@ export type Database = {
         }
         Insert: {
           adresse?: string | null
+          arbitre_le?: string | null
+          arbitre_par?: string | null
+          candidat_id?: string | null
+          candidat_motif?: string | null
+          candidat_nom?: string | null
+          candidat_type?: string | null
           code_client?: string | null
           code_postal?: string | null
           created_at?: string
@@ -181,6 +193,12 @@ export type Database = {
         }
         Update: {
           adresse?: string | null
+          arbitre_le?: string | null
+          arbitre_par?: string | null
+          candidat_id?: string | null
+          candidat_motif?: string | null
+          candidat_nom?: string | null
+          candidat_type?: string | null
           code_client?: string | null
           code_postal?: string | null
           created_at?: string

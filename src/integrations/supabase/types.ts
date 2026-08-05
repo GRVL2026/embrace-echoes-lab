@@ -133,6 +133,7 @@ export type Database = {
           departement: string | null
           empreinte: string | null
           facebook: string | null
+          ferme: boolean
           fiche_lue_at: string | null
           fiche_url: string
           geocode_at: string | null
@@ -159,6 +160,7 @@ export type Database = {
           departement?: string | null
           empreinte?: string | null
           facebook?: string | null
+          ferme?: boolean
           fiche_lue_at?: string | null
           fiche_url: string
           geocode_at?: string | null
@@ -185,6 +187,7 @@ export type Database = {
           departement?: string | null
           empreinte?: string | null
           facebook?: string | null
+          ferme?: boolean
           fiche_lue_at?: string | null
           fiche_url?: string
           geocode_at?: string | null

@@ -228,7 +228,7 @@ Deno.serve(async (req) => {
       const parIndex = new Map<number, any>();
       for (const x of extraits) if (Number.isInteger(Number(x?.i))) parIndex.set(Number(x.i), x);
 
-      let avecContact = 0;
+      let avecContact = 0, resolus = 0;
       for (const e of lot) {
         const k = lisibles.indexOf(e);
         const x = k >= 0 ? parIndex.get(k) : null;
@@ -237,7 +237,7 @@ Deno.serve(async (req) => {
         // « à lire » revient à chaque passage et bloque la file — la file d'enrichissement
         // OSM s'était figée exactement ainsi sur un département.
         const maj: Record<string, unknown> = { article_lu_at: new Date().toISOString() };
-        if (e.url && /^https?:\/\//.test(e.url) && !e.url.includes('news.google.com')) maj.url = e.url;
+        if (e.url && /^https?:\/\//.test(e.url) && !e.url.includes('news.google.com')) { maj.url = e.url; resolus++; }
         if (nom) {
           maj.contact_nom = nom;
           maj.contact_role = typeof x.role === 'string' && x.role.trim() ? x.role.trim() : null;
@@ -248,7 +248,11 @@ Deno.serve(async (req) => {
         const { error: eMaj } = await admin.from('gazette_signaux').update(maj).eq('id', e.id);
         if (eMaj) throw eMaj;
       }
-      return json({ ok: true, traites: lot.length, lus: lisibles.length, avec_contact: avecContact });
+      // L'appelant n'envoie QUE les articles qu'il a réellement pu chercher : ceux
+      // laissés de côté par un moteur saturé ne passent pas ici, et gardent donc leur
+      // article_lu_at à NULL. Marquer un échec temporaire comme définitif avait effacé
+      // 136 articles d'un coup.
+      return json({ ok: true, traites: lot.length, resolus, lus: lisibles.length, avec_contact: avecContact });
     }
 
     // 2 jours par défaut : le recouvrement absorbe le retard d'indexation, un article publié

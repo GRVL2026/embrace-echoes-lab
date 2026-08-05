@@ -93,6 +93,19 @@ def collecter(jours: int) -> list[dict]:
 # l'article en un coup. Cette recherche se fait ici, depuis la même connexion ordinaire
 # qui nous donne déjà accès à la presse.
 
+class MoteurSature(Exception):
+    """Le moteur de recherche refuse de répondre. C'est temporaire : il faut s'arrêter
+    proprement, surtout PAS marquer les articles comme traités."""
+
+
+# Le moteur tolère un usage modeste mais coupe l'accès sur une rafale : 136 requêtes
+# enchaînées lui ont suffi. Le besoin quotidien réel est d'une vingtaine d'articles ;
+# à cette cadence, neuf secondes d'écart passent inaperçues et rien ne casse. Un
+# rattrapage de plusieurs centaines d'articles prend une heure — c'est le prix, et il
+# se paie une seule fois.
+PAUSE_RECHERCHE = 9.0
+
+
 def resoudre(titre: str, source: str | None) -> str | None:
     """Retrouve l'adresse réelle d'un article à partir de son titre exact."""
     for requete in (f'"{titre}"', titre):
@@ -100,6 +113,10 @@ def resoudre(titre: str, source: str | None) -> str | None:
         try:
             req = urllib.request.Request(url, headers={"User-Agent": UA})
             page = urllib.request.urlopen(req, timeout=20, context=CTX).read().decode("utf-8", "ignore")
+        except urllib.error.HTTPError as e:
+            if e.code in (403, 429):
+                raise MoteurSature(f"HTTP {e.code}")
+            return None
         except Exception:
             return None
         liens = []
@@ -113,7 +130,7 @@ def resoudre(titre: str, source: str | None) -> str | None:
             if "duckduckgo.com" not in m:
                 liens.append(m)
         if not liens:
-            time.sleep(2)
+            time.sleep(PAUSE_RECHERCHE)
             continue
         # Le journal indiqué par Google départage : sur un sujet repris par plusieurs
         # titres, on veut l'article qu'on a effectivement lu et daté.
@@ -149,18 +166,32 @@ def enrichir() -> None:
         if not lot:
             print(f"  enrichissement terminé ({total} articles traités)")
             return
-        charges = []
+        charges, sature = [], False
         for sig in lot:
-            titre, source = sig.get("titre", ""), sig.get("source")
-            vraie = resoudre(titre, source) if "news.google.com" in (sig.get("url") or "") else sig.get("url")
+            deja = sig.get("url") or ""
+            try:
+                vraie = deja if deja and "news.google.com" not in deja else resoudre(sig.get("titre", ""), sig.get("source"))
+            except MoteurSature as e:
+                # On s'arrête là. Les articles non traités gardent article_lu_at à NULL
+                # et repasseront demain : un blocage d'une heure ne doit pas les
+                # condamner pour toujours.
+                print(f"  moteur de recherche saturé ({e}) — arrêt propre, "
+                      f"{len(charges)} articles envoyés, le reste sera repris plus tard")
+                sature = True
+                break
             texte = lire(vraie) if vraie else ""
             charges.append({"id": sig["id"], "url": vraie, "texte": texte})
-            time.sleep(1.5)          # rester courtois avec le moteur de recherche
+            if deja and "news.google.com" in deja:
+                time.sleep(PAUSE_RECHERCHE)     # seule la recherche a besoin d'être espacée
+        if not charges:
+            return
         r = appeler({"enrichis": charges})
         total += r.get("traites", 0)
         print(f"  lecture {tour} : {r.get('traites', 0)} traités, "
-              f"{r.get('lus', 0)} lisibles, {r.get('avec_contact', 0)} dirigeants trouvés "
-              f"(reste {rep.get('restants', '?')})")
+              f"{r.get('resolus', 0)} liens résolus, {r.get('lus', 0)} lisibles, "
+              f"{r.get('avec_contact', 0)} dirigeants (reste {rep.get('restants', '?')})")
+        if sature:
+            return
 
 
 def appeler(charge: dict) -> dict:

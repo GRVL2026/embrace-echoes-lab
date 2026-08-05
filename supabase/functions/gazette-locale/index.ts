@@ -33,6 +33,10 @@ const LIEUX = [
   'bowling', '"parc de loisirs"', '"laser game"', '"complexe de loisirs"',
   '"trampoline park"', '"salle de jeux"', '"escape game"', '"bar à jeux"',
   '"salle d\'arcade"', 'camping', '"village vacances"', '"parc aquatique"',
+  // Plaines de jeux couvertes : gros consommateurs de grues et de bornes.
+  // ⚠️ Ne PAS chercher « plaine de jeux » : en français de France l'expression désigne un
+  // terrain de sport (« le FC X de retour sur la pelouse »). C'est un belgicisme.
+  '"parc de jeux indoor"', '"parc de jeux" enfants',
 ];
 
 // Ce qui trahit un investissement imminent.
@@ -42,7 +46,7 @@ const EVENEMENTS =
   'rénovation OR agrandit OR agrandissement OR investit OR "va ouvrir" OR "ouvrira")';
 
 // Écarté avant même d'appeler l'IA : inutile de lui faire lire du bruit évident.
-const BRUIT = /championnat|victoire|grand prix|pilote|kartcom|résultats?\b|festival|concert|journées du patrimoine|pokémon|nintendo|playstation|météo|curistes?|élection/i;
+const BRUIT = /championnat|victoire|grand prix|pilote|kartcom|résultats?\b|festival|concert|journées du patrimoine|pokémon|nintendo|playstation|météo|curistes?|élection|pelouse|football|match|tournoi/i;
 
 type Brut = { titre: string; url: string; source: string; publie: string };
 

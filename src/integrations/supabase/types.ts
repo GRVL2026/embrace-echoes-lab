@@ -1547,8 +1547,13 @@ export type Database = {
       }
       gazette_signaux: {
         Row: {
+          article_lu_at: string | null
           code_client: string | null
           commune: string | null
+          contact_citation: string | null
+          contact_nom: string | null
+          contact_origine: string | null
+          contact_role: string | null
           created_at: string | null
           departement: string | null
           etablissement: string | null
@@ -1567,8 +1572,13 @@ export type Database = {
           url_google: string | null
         }
         Insert: {
+          article_lu_at?: string | null
           code_client?: string | null
           commune?: string | null
+          contact_citation?: string | null
+          contact_nom?: string | null
+          contact_origine?: string | null
+          contact_role?: string | null
           created_at?: string | null
           departement?: string | null
           etablissement?: string | null
@@ -1587,8 +1597,13 @@ export type Database = {
           url_google?: string | null
         }
         Update: {
+          article_lu_at?: string | null
           code_client?: string | null
           commune?: string | null
+          contact_citation?: string | null
+          contact_nom?: string | null
+          contact_origine?: string | null
+          contact_role?: string | null
           created_at?: string | null
           departement?: string | null
           etablissement?: string | null

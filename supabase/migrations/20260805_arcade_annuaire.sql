@@ -165,3 +165,36 @@ alter table public.arcade_salles
 
 create index if not exists idx_arcade_salles_type on public.arcade_salles (type_lieu);
 create index if not exists idx_arcade_salles_prestations on public.arcade_salles using gin (prestations);
+
+-- ── Vues d'agrégation ────────────────────────────────────────────────────────
+-- Le client ne sait pas grouper : ces vues portent les regroupements dont l'écran
+-- « Parc installé » a besoin, et le copilote les interroge avec le même vocabulaire.
+-- security_invoker : la vue s'exécute avec les droits de l'appelant, donc la RLS des
+-- tables sous-jacentes continue de s'appliquer — sans quoi la vue serait une porte
+-- dérobée autour des politiques qu'on vient d'écrire.
+
+create or replace view public.v_arcade_modeles
+with (security_invoker = true) as
+  select m.slug, m.nom, m.categorie, m.type_jeu, m.editeur, m.annee,
+         m.code_article, m.famille_aa, m.correspondance,
+         count(p.salle_id)::int as salles
+    from public.arcade_machines m
+    left join public.arcade_parc p on p.machine_slug = m.slug
+   group by m.slug, m.nom, m.categorie, m.type_jeu, m.editeur, m.annee,
+            m.code_article, m.famille_aa, m.correspondance;
+
+create or replace view public.v_arcade_salles_parc
+with (security_invoker = true) as
+  select s.id, s.slug, s.nom, s.ville, s.code_postal, s.departement, s.region,
+         s.type_lieu, s.prestations, s.lat, s.lng, s.site_web, s.facebook,
+         s.fiche_url, s.fiche_lue_at, s.prospect_id, s.code_client, s.rapprochement,
+         count(p.machine_slug)::int as nb_machines,
+         min(mm.annee)                as parc_annee_min,
+         round(avg(mm.annee))::int    as parc_annee_moyenne,
+         count(*) filter (where mm.categorie = 'flipper')::int as nb_flippers
+    from public.arcade_salles s
+    left join public.arcade_parc p on p.salle_id = s.id
+    left join public.arcade_machines mm on mm.slug = p.machine_slug
+   group by s.id;
+
+grant select on public.v_arcade_modeles, public.v_arcade_salles_parc to copilot_readonly;

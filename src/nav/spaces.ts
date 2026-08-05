@@ -26,6 +26,7 @@ import {
   RotateCcw as RotateCcwIcon,
   type LucideIcon,
   Newspaper as NewspaperIcon,
+  Gamepad2 as Gamepad2Icon,
 } from "lucide-react";
 
 export type SpaceKey =
@@ -152,6 +153,16 @@ export const SPACES: Space[] = [
         icon: NewspaperIcon,
         show: (c) => c.isAdmin || c.isDirection,
         match: startsWith("/gazette"),
+      },
+      {
+        // Le parc réellement installé chez les 893 lieux recensés : à qui parler de
+        // quoi côté vente, et quels modèles manquent au catalogue côté achat.
+        key: "prospection.parc",
+        label: "Parc installé",
+        to: "/parc-arcade",
+        icon: Gamepad2Icon,
+        show: (c) => c.isAdmin || c.isDirection,
+        match: startsWith("/parc-arcade"),
       },
       {
         key: "prospection.carte",

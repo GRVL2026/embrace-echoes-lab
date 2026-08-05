@@ -233,8 +233,17 @@ Deno.serve(async (req) => {
         elements = await interrogerOverpass(dep, osmFiltre, debut + BUDGET_MS);
       } catch (err) {
         detail[dep] = { erreur: String((err as any)?.message || err).slice(0, 200) };
-        restants.unshift(...aTraiter.slice(i));
-        break;
+        // On marque quand même le département comme tenté. Sans cela, un département
+        // qu'Overpass refuse durablement serait resélectionné à chaque exécution et
+        // bloquerait la file indéfiniment — constaté sur le Pas-de-Calais.
+        // Les départements en échec restent identifiables : leur taux d'appariement est nul.
+        if (!dryRun) {
+          await admin.from('prospects')
+            .update({ osm_tente_at: new Date().toISOString() })
+            .eq('segment', segment).eq('source', 'naf')
+            .like('adresse', `%${cpPrefixe(dep)}___ %`);
+        }
+        continue;
       }
       const osm = elements
         .map((e) => {

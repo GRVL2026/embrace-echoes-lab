@@ -62,9 +62,13 @@ function xmlDecode(s: string): string {
 async function interrogerGoogleNews(requete: string, depuis: string): Promise<Brut[]> {
   const q = encodeURIComponent(`${requete} ${EVENEMENTS} after:${depuis}`);
   const url = `https://news.google.com/rss/search?q=${q}&hl=fr&gl=FR&ceid=FR:fr`;
-  const res = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(20_000) });
-  if (!res.ok) return [];
+  const res = await fetch(url, {
+    headers: { 'User-Agent': UA, 'Accept': 'application/rss+xml, application/xml, text/xml' },
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!res.ok) throw new Error(`Google Actualités ${res.status} — ${(await res.text().catch(() => '')).slice(0, 120)}`);
   const xml = await res.text();
+  if (!xml.includes('<item>')) throw new Error(`Flux sans article (${xml.length} octets) — ${xml.slice(0, 120)}`);
 
   const out: Brut[] = [];
   for (const bloc of xml.split('<item>').slice(1)) {
@@ -153,11 +157,20 @@ Deno.serve(async (req) => {
 
     // --- 1. Collecte -------------------------------------------------------------
     const parTitre = new Map<string, Brut>();
+    const echecs: string[] = [];
     for (const lieu of LIEUX) {
       if (Date.now() - debut > BUDGET_MS) break;
-      for (const b of await interrogerGoogleNews(lieu, depuis).catch(() => [])) {
-        if (!BRUIT.test(b.titre) && !parTitre.has(b.titre)) parTitre.set(b.titre, b);
+      try {
+        for (const b of await interrogerGoogleNews(lieu, depuis)) {
+          if (!BRUIT.test(b.titre) && !parTitre.has(b.titre)) parTitre.set(b.titre, b);
+        }
+      } catch (e) {
+        // Ne JAMAIS avaler l'erreur : une collecte vide sans motif est indiagnosticable.
+        echecs.push(`${lieu} : ${String((e as any)?.message || e).slice(0, 160)}`);
       }
+    }
+    if (parTitre.size === 0 && echecs.length) {
+      return json({ error: 'Aucune collecte possible', echecs: echecs.slice(0, 4) }, 502);
     }
     const candidats = [...parTitre.values()].sort((a, b) => b.publie.localeCompare(a.publie));
 
@@ -256,6 +269,7 @@ Deno.serve(async (req) => {
     return json({
       ok: true, dry_run: dryRun, fenetre_jours: jours, depuis,
       candidats: candidats.length,
+      echecs_collecte: echecs.length ? echecs.slice(0, 3) : undefined,
       nouveaux: nouveaux.length,
       restants_a_traiter: restants,
       ecartes: ecartes.length,

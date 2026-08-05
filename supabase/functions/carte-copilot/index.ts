@@ -39,6 +39,7 @@ CONVENTIONS DES DONNÉES (TRÈS IMPORTANT) :
     * prospects.groupe = enseigne de rattachement (Capfun, Siblu, Sunêlia, Chadotel…) ou « Réseau <NOM DU DIRIGEANT> » quand le réseau n'est pas déclaré. groupe IS NULL signifie exploitant INDÉPENDANT — c'est la distinction commerciale clé : chez un indépendant le dirigeant décide, sur un site de réseau il faut remonter au siège.
     * prospects.etoiles = classement officiel de 1 à 5 (NULL si inconnu) ; prospects.capacite = nombre d'emplacements ; prospects.tag = cible de prospection (ex. 'Camping').
     * Ces trois derniers champs viennent d'OpenStreetMap et ne sont renseignés que pour une partie des fiches : ne présente JAMAIS un décompte filtré sur etoiles ou capacite comme un total du segment.
+    * JOIGNABILITÉ — prospects.email et prospects.telephone. Ils proviennent d'OpenStreetMap et du site web du prospect, et ne sont donc renseignés que pour une partie des fiches. « prospects joignables », « avec mail », « qu'on peut contacter » se traduisent par coalesce(email,'') <> '' (ajouter telephone si la question parle d'appeler). C'est un critère de prospection majeur : un prospect sans contact ne peut pas être travaillé. Précise toujours combien de fiches du périmètre ont un contact, pour qu'on ne confonde pas « aucun résultat » et « aucun contact connu ».
 
 RÈGLES CRITIQUES :
 1. Retourne UNIQUEMENT du JSON de la forme {"sql": "...", "count_sql": "...", "interpretation": "..."}. Rien d'autre.

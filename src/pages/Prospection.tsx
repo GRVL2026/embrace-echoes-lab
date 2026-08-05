@@ -225,14 +225,16 @@ export default function Prospection() {
   const [etoilesFilter, setEtoilesFilter] = useState<"all" | "5" | "4" | "3" | "none">("all");
   const [scoreFilter, setScoreFilter] = useState<"all" | "haute" | "moyenne" | "basse" | "none">("all");
   const [recherche, setRecherche] = useState("");
+  const [contactFilter, setContactFilter] = useState<"all" | "email" | "tel" | "aucun">("all");
 
   const filtresActifs =
     segmentFilter !== "all" || tagFilter !== "all" || etoilesFilter !== "all" ||
-    scoreFilter !== "all" || lgmFilter !== "all" || recherche.trim() !== "";
+    scoreFilter !== "all" || lgmFilter !== "all" || contactFilter !== "all" || recherche.trim() !== "";
 
   const reinitialiserFiltres = () => {
     setSegmentFilter("all"); setTagFilter("all");
-    setEtoilesFilter("all"); setScoreFilter("all"); setLgmFilter("all"); setRecherche("");
+    setEtoilesFilter("all"); setScoreFilter("all"); setLgmFilter("all");
+    setContactFilter("all"); setRecherche("");
   };
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -360,6 +362,9 @@ export default function Prospection() {
         [p.entreprise, p.contact_nom, p.ville, p.groupe].some((v) => v && sansAccent(v).includes(cible)),
       );
     }
+    if (contactFilter === "email") list = list.filter((p) => !!p.email);
+    else if (contactFilter === "tel") list = list.filter((p) => !!p.telephone);
+    else if (contactFilter === "aucun") list = list.filter((p) => !p.email && !p.telephone);
     if (scoreFilter !== "all") {
       list = list.filter((p) => {
         const sc = scorePriorite(p);
@@ -369,7 +374,7 @@ export default function Prospection() {
       });
     }
     return list;
-  }, [prospects, lgmFilter, segmentFilter, tagFilter, etoilesFilter, scoreFilter, recherche]);
+  }, [prospects, lgmFilter, segmentFilter, tagFilter, etoilesFilter, scoreFilter, contactFilter, recherche]);
 
   const byStatut = useMemo(() => {
     const map = new Map<Statut, Prospect[]>();
@@ -562,6 +567,16 @@ export default function Prospection() {
               </SelectContent>
             </Select>
           )}
+
+          <Select value={contactFilter} onValueChange={(v) => setContactFilter(v as typeof contactFilter)}>
+            <SelectTrigger className="h-9 w-[160px] text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Contact : tous</SelectItem>
+              <SelectItem value="email">✉️ Avec e-mail</SelectItem>
+              <SelectItem value="tel">📞 Avec téléphone</SelectItem>
+              <SelectItem value="aucun">Sans contact</SelectItem>
+            </SelectContent>
+          </Select>
 
           <Select value={scoreFilter} onValueChange={(v) => setScoreFilter(v as typeof scoreFilter)}>
             <SelectTrigger className="h-9 w-[165px] text-xs"><SelectValue /></SelectTrigger>
@@ -848,6 +863,17 @@ function KanbanCard({ prospect, onOpen }: { prospect: Prospect; onOpen: () => vo
                 title={`Priorité ${score}/100 — standing, capacité et joignabilité`}
               >
                 {score}
+              </Badge>
+            )}
+            {(prospect.email || prospect.telephone) && (
+              /* Joignabilité : c'est ce qui décide si un commercial peut agir tout de suite. */
+              <Badge
+                variant="outline"
+                className="text-[10px] h-4 px-1.5 gap-1 border-sky-500/50 bg-sky-500/10 text-sky-600 dark:text-sky-400"
+                title={[prospect.email, prospect.telephone].filter(Boolean).join(" · ")}
+              >
+                {prospect.email && <Mail className="h-2.5 w-2.5" />}
+                {prospect.telephone && <Phone className="h-2.5 w-2.5" />}
               </Badge>
             )}
             {prospect.etoiles != null && (

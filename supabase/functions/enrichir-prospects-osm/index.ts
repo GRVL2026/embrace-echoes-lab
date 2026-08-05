@@ -29,7 +29,7 @@ const OVERPASS_MIRRORS = [
 // Overpass refuse par un 406 les clients qui ne s'identifient pas : cette en-tête est
 // obligatoire, comme pour Nominatim dans la fonction geocoder.
 const OVERPASS_UA = 'Arcade OS - Avranches Automatic (leopaul@avranchesautomatic.com)';
-const DEPS_PAR_APPEL = 3;        // Overpass est lent : peu de départements par invocation
+const DEPS_PAR_APPEL = 1;        // Overpass est lent : peu de départements par invocation
 const BUDGET_MS = 110_000;       // les edge functions sont coupées à 150 s : on rend la main avant
 const DIST_MAX_M = 1500;         // au-delà, on n'apparie plus (les coordonnées INSEE sont approximatives)
 const SCORE_NOM_MIN = 0.5;       // au moins la moitié des mots du nom le plus court en commun
@@ -130,7 +130,7 @@ out center;`;
   // On fait le tour des miroirs, deux passages, avec une attente croissante :
   // un 429 (débit dépassé) ou un 504 se résorbe généralement en quelques secondes.
   let dernierEchec = '';
-  for (let essai = 0; essai < OVERPASS_MIRRORS.length * 2; essai++) {
+  for (let essai = 0; essai < OVERPASS_MIRRORS.length; essai++) {
     // Le temps imparti prime sur l'obstination : mieux vaut rendre la main proprement,
     // avec un département à reprendre, que d'être coupé net à 150 s.
     if (Date.now() > echeance) throw new Error(`Temps imparti dépassé avant d'interroger Overpass (dép. ${dep})`);
@@ -138,7 +138,9 @@ out center;`;
     try {
       // SANS CECI, fetch attend indéfiniment : c'est ce qui faisait dépasser les 150 s
       // malgré le contrôle de temps, celui-ci n'intervenant qu'ENTRE deux tentatives.
-      const restant = Math.max(5_000, Math.min(50_000, echeance - Date.now()));
+      // 25 s au plus par tentative : à 50 s, deux miroirs muets suffisaient à épuiser
+      // le budget avant même d'avoir interrogé le troisième.
+      const restant = Math.max(5_000, Math.min(25_000, echeance - Date.now()));
       const res = await fetch(url, {
         method: 'POST',
         headers: {
@@ -190,10 +192,20 @@ Deno.serve(async (req) => {
     const segment = String(body.segment ?? 'camping').trim();
     const osmFiltre = String(body.osm_filtre ?? '["tourism"="camp_site"]').trim();
     const dryRun = body.dry_run === true;
-    const deps: string[] = Array.isArray(body.departements)
+    let deps: string[] = Array.isArray(body.departements)
       ? body.departements.map((d: unknown) => String(d).trim()).filter(Boolean)
       : String(body.departements ?? '').split(',').map((s) => s.trim()).filter(Boolean);
-    if (deps.length === 0) return json({ error: "Paramètre « departements » requis (ex. « 85 »)." }, 400);
+
+    // Sans liste explicite, la fonction choisit elle-même le département le plus utile :
+    // celui qui compte le plus de fiches non encore appariées. C'est ce qui permet à une
+    // tâche planifiée de dérouler la France entière sans qu'on lui dise quoi faire, et de
+    // s'arrêter d'elle-même quand il ne reste rien.
+    if (deps.length === 0) {
+      const { data, error } = await admin.rpc('prochain_departement_a_enrichir', { _segment: segment });
+      if (error) throw error;
+      if (!data) return json({ ok: true, termine: true, note: 'plus aucun département à enrichir' });
+      deps = [String(data)];
+    }
 
     // Overpass est lent et sujet aux reprises : c'est le TEMPS qui décide du nombre de
     // départements traités, pas un compte fixe. Les edge functions sont coupées à 150 s.
@@ -316,6 +328,18 @@ Deno.serve(async (req) => {
       if (!dryRun && maj.length) {
         const { error: e2 } = await admin.rpc('appliquer_enrichissement_osm', { _maj: maj });
         if (e2) throw e2;
+      }
+
+      // Marquer TOUT le département comme tenté, appariés ou non. Sans cela, un
+      // département où rien ne correspond serait resélectionné indéfiniment par la
+      // tâche planifiée, qui tournerait en boucle sur le même sans jamais avancer.
+      if (!dryRun) {
+        const { error: e3 } = await admin
+          .from('prospects')
+          .update({ osm_tente_at: new Date().toISOString() })
+          .eq('segment', segment).eq('source', 'naf')
+          .like('adresse', `%${cpPrefixe(dep)}___ %`);
+        if (e3) throw e3;
       }
 
       detail[dep] = {

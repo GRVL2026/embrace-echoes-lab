@@ -102,10 +102,24 @@ export type Database = {
             referencedColumns: ["slug"]
           },
           {
+            foreignKeyName: "arcade_parc_machine_slug_fkey"
+            columns: ["machine_slug"]
+            isOneToOne: false
+            referencedRelation: "v_arcade_modeles"
+            referencedColumns: ["slug"]
+          },
+          {
             foreignKeyName: "arcade_parc_salle_id_fkey"
             columns: ["salle_id"]
             isOneToOne: false
             referencedRelation: "arcade_salles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arcade_parc_salle_id_fkey"
+            columns: ["salle_id"]
+            isOneToOne: false
+            referencedRelation: "v_arcade_salles_parc"
             referencedColumns: ["id"]
           },
         ]
@@ -2989,6 +3003,56 @@ export type Database = {
           mois: string | null
         }
         Relationships: []
+      }
+      v_arcade_modeles: {
+        Row: {
+          annee: number | null
+          categorie: string | null
+          code_article: string | null
+          correspondance: string | null
+          editeur: string | null
+          famille_aa: string | null
+          nom: string | null
+          salles: number | null
+          slug: string | null
+          type_jeu: string | null
+        }
+        Relationships: []
+      }
+      v_arcade_salles_parc: {
+        Row: {
+          code_client: string | null
+          code_postal: string | null
+          departement: string | null
+          facebook: string | null
+          fiche_lue_at: string | null
+          fiche_url: string | null
+          id: string | null
+          lat: number | null
+          lng: number | null
+          nb_flippers: number | null
+          nb_machines: number | null
+          nom: string | null
+          parc_annee_min: number | null
+          parc_annee_moyenne: number | null
+          prestations: string[] | null
+          prospect_id: string | null
+          rapprochement: string | null
+          region: string | null
+          site_web: string | null
+          slug: string | null
+          type_lieu: string | null
+          ville: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arcade_salles_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "prospects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       v_cron_jobs: {
         Row: {

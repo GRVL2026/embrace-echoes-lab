@@ -1,0 +1,230 @@
+import { createClient } from 'npm:@supabase/supabase-js@2';
+import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+import { anthropicJson } from '../_shared/anthropic-fetch.ts';
+
+// Gazette locale — repère dans la presse les établissements de loisirs qui viennent de
+// bouger, et en fait des opportunités commerciales.
+//
+// Un lieu qui OUVRE doit s'équiper, un lieu REPRIS veut se démarquer, un lieu qui
+// S'AGRANDIT a un budget voté : ce sont les trois moments où l'on achète des jeux.
+//
+// SOURCE : le flux RSS de Google Actualités. Choix déterminant — la quasi-totalité de la
+// presse quotidienne régionale (Ouest-France, actu.fr, La Manche Libre, Sud Ouest, La Voix
+// du Nord, Le Télégramme…) bloque les robots, mais Google les indexe et sert titres, dates
+// et sources dans un flux librement interrogeable. Pour DÉTECTER, le titre suffit.
+//
+// Ce flux ne consomme aucun quota de recherche web : dix requêtes couvrent la France
+// entière en quatre secondes. C'est pourquoi le balayage est national ET quotidien, là où
+// une rotation par région avait d'abord été envisagée.
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const CRON_SECRET = Deno.env.get('CRON_SECRET') || '';
+const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
+const MODEL = 'claude-sonnet-5';
+
+const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+
+const UA = 'Mozilla/5.0 (compatible; ArcadeOS/1.0; +https://avranchesautomatic.com)';
+const BUDGET_MS = 110_000;
+
+// Types de lieux susceptibles d'acheter des jeux d'arcade, flippers, billards ou grues.
+const LIEUX = [
+  'bowling', '"parc de loisirs"', '"laser game"', '"complexe de loisirs"',
+  '"trampoline park"', '"salle de jeux"', '"escape game"', '"bar à jeux"',
+  '"salle d\'arcade"', 'camping', '"village vacances"', '"parc aquatique"',
+];
+
+// Ce qui trahit un investissement imminent.
+const EVENEMENTS =
+  '(ouverture OR ouvre OR repris OR reprise OR "change de mains" OR rachète OR racheté OR ' +
+  '"nouveau gérant" OR "nouveaux propriétaires" OR "nouveau propriétaire" OR rénove OR ' +
+  'rénovation OR agrandit OR agrandissement OR investit OR "va ouvrir" OR "ouvrira")';
+
+// Écarté avant même d'appeler l'IA : inutile de lui faire lire du bruit évident.
+const BRUIT = /championnat|victoire|grand prix|pilote|kartcom|résultats?\b|festival|concert|journées du patrimoine|pokémon|nintendo|playstation|météo|curistes?|élection/i;
+
+type Brut = { titre: string; url: string; source: string; publie: string };
+
+function xmlDecode(s: string): string {
+  return s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'").replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+}
+
+async function interrogerGoogleNews(requete: string, depuis: string): Promise<Brut[]> {
+  const q = encodeURIComponent(`${requete} ${EVENEMENTS} after:${depuis}`);
+  const url = `https://news.google.com/rss/search?q=${q}&hl=fr&gl=FR&ceid=FR:fr`;
+  const res = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(20_000) });
+  if (!res.ok) return [];
+  const xml = await res.text();
+
+  const out: Brut[] = [];
+  for (const bloc of xml.split('<item>').slice(1)) {
+    const titre = xmlDecode(bloc.match(/<title>(.*?)<\/title>/s)?.[1] ?? '').trim();
+    const lien = (bloc.match(/<link>(.*?)<\/link>/s)?.[1] ?? '').trim();
+    const src = xmlDecode(bloc.match(/<source[^>]*>(.*?)<\/source>/s)?.[1] ?? '').trim();
+    const pub = bloc.match(/<pubDate>(.*?)<\/pubDate>/s)?.[1] ?? '';
+    if (!titre || !lien) continue;
+    const d = new Date(pub);
+    if (isNaN(d.getTime())) continue;               // sans date vérifiable, pas de signal
+    out.push({ titre, url: lien, source: src || '(source inconnue)', publie: d.toISOString().slice(0, 10) });
+  }
+  return out;
+}
+
+// Les liens Google Actualités sont des redirections : on remonte à l'URL réelle pour que
+// le média soit identifiable et que le lien survive.
+async function resoudreUrl(url: string): Promise<string> {
+  if (!url.includes('news.google.com')) return url;
+  try {
+    const res = await fetch(url, {
+      method: 'GET', redirect: 'follow',
+      headers: { 'User-Agent': UA },
+      signal: AbortSignal.timeout(8_000),
+    });
+    return res.url && !res.url.includes('news.google.com') ? res.url : url;
+  } catch {
+    return url;
+  }
+}
+
+const PROMPT = `Tu tries des titres de presse pour Avranches Automatic, distributeur français de JEUX D'ARCADE, FLIPPERS, BILLARDS, BABY-FOOT, GRUES et DISTRIBUTEURS AUTOMATIQUES. Ses clients sont des lieux de loisirs : bowlings, parcs indoor, campings, bars, hôtels, centres commerciaux.
+
+Pour CHAQUE titre, décide s'il signale une OPPORTUNITÉ COMMERCIALE RÉELLE, c'est-à-dire un établissement de loisirs qui va devoir s'équiper :
+- il OUVRE ou va ouvrir → il équipe ses espaces
+- il est REPRIS / change de mains → les nouveaux exploitants renouvellent
+- il RÉNOVE, s'AGRANDIT, se DIVERSIFIE → budget engagé
+- il subit un sinistre ou une fermeture forcée d'attraction → il doit remplacer
+
+ÉCARTE sans hésiter : festivals, concerts, événements ponctuels, résultats sportifs, sorties de jeux vidéo, articles touristiques, faits divers sans rapport avec un investissement, et tout établissement qui n'est pas un lieu de loisirs (restaurant seul, commerce, coiffeur).
+
+Réponds UNIQUEMENT par un tableau JSON, un objet par titre RETENU (n'inclus pas ceux que tu écartes) :
+[{
+  "i": <index du titre dans la liste>,
+  "commune": "<commune, ou null>",
+  "departement": "<numéro à 2 chiffres, ou null>",
+  "region": "<région française, ou 'Belgique' / 'Luxembourg'>",
+  "type_lieu": "<bowling|parc de loisirs|camping|laser game|bar à jeux|escape game|complexe de loisirs|autre>",
+  "evenement": "<ouverture|reprise|rénovation|agrandissement|diversification|sinistre>",
+  "etablissement": "<nom de l'établissement si le titre le donne, sinon null>",
+  "interpretation": "<UNE phrase : ce qui se passe et POURQUOI c'est une occasion pour Avranches Automatic, avec ce qu'on peut lui vendre>",
+  "urgence": "<haute|moyenne|basse>"
+}]
+
+RÈGLES :
+- N'INVENTE RIEN. Si le titre ne donne pas la commune ou le nom, mets null. Ne devine pas.
+- "haute" = l'établissement ouvre ou vient d'être repris : il faut l'appeler cette semaine.
+- Sois SÉVÈRE. Mieux vaut cinq signaux justes que trente approximatifs : un commercial qui perd son temps sur du bruit cesse d'ouvrir la gazette.
+- Si aucun titre ne mérite d'être retenu, réponds [].`;
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  const json = (b: unknown, s = 200) =>
+    new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+  const isCron = !!CRON_SECRET && (req.headers.get('x-cron-secret') || '') === CRON_SECRET;
+  if (!isCron) {
+    const auth = req.headers.get('Authorization') || '';
+    const jwt = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+    if (!jwt) return json({ error: 'Unauthorized' }, 401);
+    const { data: u } = await admin.auth.getUser(jwt);
+    if (!u?.user) return json({ error: 'Unauthorized' }, 401);
+    const { data: roles } = await admin.from('user_roles').select('role').eq('user_id', u.user.id);
+    if (!(roles || []).some((r: any) => r.role === 'admin' || r.role === 'direction'))
+      return json({ error: 'Forbidden' }, 403);
+  }
+
+  const debut = Date.now();
+  try {
+    const body = await req.json().catch(() => ({}));
+    // 2 jours par défaut : le recouvrement absorbe le retard d'indexation, un article publié
+    // en fin de journée n'étant souvent référencé que le lendemain.
+    const jours = Math.min(60, Math.max(1, Number(body.jours ?? 2)));
+    const dryRun = body.dry_run === true;
+    const depuis = new Date(Date.now() - jours * 86_400_000).toISOString().slice(0, 10);
+
+    // --- 1. Collecte -------------------------------------------------------------
+    const parTitre = new Map<string, Brut>();
+    for (const lieu of LIEUX) {
+      if (Date.now() - debut > BUDGET_MS) break;
+      for (const b of await interrogerGoogleNews(lieu, depuis).catch(() => [])) {
+        if (!BRUIT.test(b.titre) && !parTitre.has(b.titre)) parTitre.set(b.titre, b);
+      }
+    }
+    const candidats = [...parTitre.values()].sort((a, b) => b.publie.localeCompare(a.publie));
+
+    // Déjà connus : inutile de les repayer à l'IA ni de les redemander à l'utilisateur.
+    const { data: dejaVus } = await admin
+      .from('gazette_signaux').select('titre').gte('publie_le', depuis);
+    const connus = new Set((dejaVus ?? []).map((r: any) => r.titre));
+    const nouveaux = candidats.filter((c) => !connus.has(c.titre));
+
+    if (nouveaux.length === 0) {
+      return json({ ok: true, candidats: candidats.length, nouveaux: 0, retenus: 0, termine: true });
+    }
+
+    // --- 2. Tri et interprétation par l'IA ---------------------------------------
+    const liste = nouveaux.map((c, i) => `${i}. [${c.publie}] (${c.source}) ${c.titre}`).join('\n');
+    const rep = await anthropicJson(ANTHROPIC_KEY, {
+      model: MODEL,
+      max_tokens: 8000,
+      system: PROMPT,
+      messages: [{ role: 'user', content: `Titres à trier :\n\n${liste}` }],
+    });
+    const texte: string = (rep?.content ?? []).find((b: any) => b.type === 'text')?.text ?? '';
+    const brut = texte.replace(/^```(?:json)?/gm, '').replace(/```$/gm, '').trim();
+    const debutTab = brut.indexOf('['), finTab = brut.lastIndexOf(']');
+    if (debutTab < 0 || finTab < 0) {
+      return json({ error: 'Réponse IA inexploitable', extrait: brut.slice(0, 300) }, 502);
+    }
+    const retenus: any[] = JSON.parse(brut.slice(debutTab, finTab + 1));
+
+    // --- 3. Enregistrement --------------------------------------------------------
+    const lignes = [];
+    for (const r of retenus) {
+      const src = nouveaux[Number(r.i)];
+      if (!src) continue;
+      lignes.push({
+        publie_le: src.publie,
+        source: src.source,
+        titre: src.titre,
+        url: dryRun ? src.url : await resoudreUrl(src.url),
+        url_google: src.url,
+        commune: r.commune ?? null,
+        departement: r.departement ?? null,
+        region: r.region ?? null,
+        type_lieu: r.type_lieu ?? null,
+        evenement: r.evenement ?? null,
+        etablissement: r.etablissement ?? null,
+        interpretation: r.interpretation ?? null,
+        urgence: r.urgence ?? 'moyenne',
+        statut: 'nouveau',
+      });
+    }
+
+    let inseres = 0;
+    if (!dryRun && lignes.length) {
+      // onConflict sur l'URL : une même actualité reprise par plusieurs médias ne crée
+      // qu'un signal, et un second passage dans la journée n'en duplique aucun.
+      const { error, count } = await admin
+        .from('gazette_signaux')
+        .upsert(lignes, { onConflict: 'titre', ignoreDuplicates: true, count: 'exact' });
+      if (error) throw error;
+      inseres = count ?? lignes.length;
+    }
+
+    return json({
+      ok: true, dry_run: dryRun, fenetre_jours: jours, depuis,
+      candidats: candidats.length,
+      nouveaux: nouveaux.length,
+      retenus: lignes.length,
+      inseres,
+      taux_retenu: nouveaux.length ? `${Math.round((100 * lignes.length) / nouveaux.length)} %` : '—',
+      apercu: lignes.slice(0, 5).map((l) => `${l.publie_le} · ${l.commune ?? '?'} · ${l.titre.slice(0, 70)}`),
+      duree_s: Math.round((Date.now() - debut) / 1000),
+    });
+  } catch (e) {
+    console.error(e);
+    return json({ error: String((e as any)?.message || e) }, 500);
+  }
+});

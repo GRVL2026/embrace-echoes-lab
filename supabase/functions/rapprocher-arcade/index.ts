@@ -281,6 +281,21 @@ Deno.serve(async (req) => {
         if (!data || data.length < 1000) break;
       }
 
+      // Détection des enseignes. « Buffalo Grill – Châtellerault », « CGR – Saint
+      // Quentin » : la partie avant le tiret se répète d'un bout à l'autre du pays.
+      // Chez ces lieux la décision est centrale, pas locale — appeler quarante
+      // restaurants d'une même chaîne séparément est une perte de temps. On ne les
+      // écarte pas pour autant : on signale le groupe, comme pour les campings.
+      const frequence = new Map<string, number>();
+      const enseigne = (nom: string) => {
+        const t = nom.split(/\s+[–—-]\s+/)[0].trim();
+        return t.length >= 3 && t.length < nom.length ? t : null;
+      };
+      for (const s of aCreer) {
+        const e = enseigne(String(s.nom ?? ''));
+        if (e) frequence.set(e, (frequence.get(e) ?? 0) + 1);
+      }
+
       const lignes = aCreer.map((s: any) => {
         const p = parc.get(s.id) ?? { n: 0, flip: 0, annees: [] };
         const moy = p.annees.length
@@ -296,6 +311,11 @@ Deno.serve(async (req) => {
           lat: s.lat, lng: s.lng,
           segment: SEGMENT[(s.type_lieu ?? '').toLowerCase()] ?? 'loisirs',
           tag: s.type_lieu, site_web: s.site_web,
+          // Trois établissements de même enseigne suffisent à parler de réseau.
+          groupe: (() => {
+            const e = enseigne(String(s.nom ?? ''));
+            return e && (frequence.get(e) ?? 0) >= 3 ? e : null;
+          })(),
           source: 'annuaire-arcade', sources: ['annuaire-arcade'],
           statut: 'nouveau',
           // Le signal EST l'argument d'appel : un lieu déjà équipé n'a pas à être
@@ -311,8 +331,12 @@ Deno.serve(async (req) => {
       if (!vraiment) {
         const parSegment: Record<string, number> = {};
         for (const l of lignes) parSegment[l.segment] = (parSegment[l.segment] ?? 0) + 1;
+        const groupes: Record<string, number> = {};
+        for (const l of lignes) if (l.groupe) groupes[l.groupe] = (groupes[l.groupe] ?? 0) + 1;
         return json({
           ok: true, mode: 'analyse — rien créé', a_creer: lignes.length, par_segment: parSegment,
+          independants: lignes.filter((l) => !l.groupe).length,
+          reseaux: Object.entries(groupes).sort((a, b) => b[1] - a[1]).slice(0, 15),
           exemples: lignes.slice(0, 8).map((l) => `${l.entreprise} · ${l.ville ?? '?'} · ${l.segment} · ${l.signal}`),
         });
       }

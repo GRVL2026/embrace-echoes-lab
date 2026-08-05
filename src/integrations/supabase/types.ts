@@ -2100,6 +2100,7 @@ export type Database = {
           created_at: string
           effectif: string | null
           email: string | null
+          email_tente_at: string | null
           entreprise: string
           etat_administratif: string | null
           etoiles: number | null
@@ -2120,6 +2121,7 @@ export type Database = {
           notes: string | null
           osm_id: string | null
           osm_match: Json | null
+          osm_tente_at: string | null
           owner_id: string | null
           prepare_at: string | null
           pret_a_envoyer: boolean
@@ -2147,6 +2149,7 @@ export type Database = {
           created_at?: string
           effectif?: string | null
           email?: string | null
+          email_tente_at?: string | null
           entreprise: string
           etat_administratif?: string | null
           etoiles?: number | null
@@ -2167,6 +2170,7 @@ export type Database = {
           notes?: string | null
           osm_id?: string | null
           osm_match?: Json | null
+          osm_tente_at?: string | null
           owner_id?: string | null
           prepare_at?: string | null
           pret_a_envoyer?: boolean
@@ -2194,6 +2198,7 @@ export type Database = {
           created_at?: string
           effectif?: string | null
           email?: string | null
+          email_tente_at?: string | null
           entreprise?: string
           etat_administratif?: string | null
           etoiles?: number | null
@@ -2214,6 +2219,7 @@ export type Database = {
           notes?: string | null
           osm_id?: string | null
           osm_match?: Json | null
+          osm_tente_at?: string | null
           owner_id?: string | null
           prepare_at?: string | null
           pret_a_envoyer?: boolean
@@ -3380,6 +3386,10 @@ export type Database = {
           _type_cle: string
           _user_id: string
         }
+        Returns: string
+      }
+      prochain_departement_a_enrichir: {
+        Args: { _segment: string }
         Returns: string
       }
       refresh_erp_prices: { Args: never; Returns: number }

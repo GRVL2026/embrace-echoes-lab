@@ -21,6 +21,7 @@ import { anthropicJson } from '../_shared/anthropic-fetch.ts';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
+const CRON_SECRET = Deno.env.get('CRON_SECRET') || '';
 const MODEL = 'claude-sonnet-5';
 const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -50,10 +51,18 @@ Deno.serve(async (req) => {
   const json = (b: unknown, s = 200) =>
     new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
-  const jwt = (req.headers.get('Authorization') || '').replace(/^Bearer /, '');
-  if (!jwt) return json({ error: 'Unauthorized' }, 401);
-  const { data: u } = await admin.auth.getUser(jwt);
-  if (!u?.user) return json({ error: 'Unauthorized' }, 401);
+  // Le secret des tâches planifiées est accepté au même titre qu'une session : il
+  // permet de pré-générer les briefs du matin en lot, et de diagnostiquer la fonction
+  // sans dépendre d'un navigateur connecté.
+  const isCron = !!CRON_SECRET && (req.headers.get('x-cron-secret') || '') === CRON_SECRET;
+  let auteur: string | null = null;
+  if (!isCron) {
+    const jwt = (req.headers.get('Authorization') || '').replace(/^Bearer /, '');
+    if (!jwt) return json({ error: 'Unauthorized' }, 401);
+    const { data: u } = await admin.auth.getUser(jwt);
+    if (!u?.user) return json({ error: 'Unauthorized' }, 401);
+    auteur = u.user.id;
+  }
 
   try {
     const body = await req.json().catch(() => ({}));
@@ -158,7 +167,7 @@ Deno.serve(async (req) => {
 
     const { error: eMaj } = await admin.from('fiche_briefs').upsert({
       cible_type: cibleType, cible_id: cibleId, contenu, faits, empreinte,
-      genere_le: new Date().toISOString(), genere_par: u.user.id,
+      genere_le: new Date().toISOString(), genere_par: auteur,
     }, { onConflict: 'cible_type,cible_id' });
     if (eMaj) throw eMaj;
 

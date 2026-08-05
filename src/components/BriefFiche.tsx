@@ -29,7 +29,17 @@ export function BriefFiche({
       const { data, error } = await supabase.functions.invoke("brief-fiche", {
         body: { prospect_id: prospectId ?? undefined, code_client: codeClient ?? undefined, force },
       });
-      if (error) throw error;
+      if (error) {
+        // « Edge Function returned a non-2xx status code » ne dit rien : le motif réel
+        // est dans le corps de la réponse, que le client n'expose pas de lui-même.
+        // Sans ce détour, chaque échec coûte un aller-retour de diagnostic.
+        let motif = error.message;
+        try {
+          const corps = await (error as any)?.context?.json?.();
+          if (corps?.error) motif = String(corps.error);
+        } catch { /* corps illisible : on garde le message d'origine */ }
+        throw new Error(motif);
+      }
       if ((data as any)?.error) throw new Error((data as any).error);
       setContenu((data as any).contenu);
       setDate((data as any).genere_le ?? null);

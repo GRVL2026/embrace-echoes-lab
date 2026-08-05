@@ -37,11 +37,54 @@ type Signal = {
 // davantage qu'un signal en Occitanie, parce qu'on peut s'y déplacer.
 const REGIONS_PRIORITAIRES = ["Normandie", "Bretagne", "Île-de-France", "Ile-de-France"];
 
+// Une icône et une couleur par univers : « bowling » et « camping » ne se lisent pas de
+// la même façon, et un commercial reconnaît son terrain avant même de lire.
+const TYPES: Record<string, { icone: string; teinte: string }> = {
+  bowling: { icone: "🎳", teinte: "bg-violet-500/15 text-violet-300 border-violet-500/30" },
+  camping: { icone: "⛺", teinte: "bg-teal-500/15 text-teal-300 border-teal-500/30" },
+  "parc de loisirs": { icone: "🎡", teinte: "bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30" },
+  "complexe de loisirs": { icone: "🎯", teinte: "bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30" },
+  "laser game": { icone: "🔫", teinte: "bg-rose-500/15 text-rose-300 border-rose-500/30" },
+  "escape game": { icone: "🗝️", teinte: "bg-amber-500/15 text-amber-300 border-amber-500/30" },
+  "bar à jeux": { icone: "🍺", teinte: "bg-orange-500/15 text-orange-300 border-orange-500/30" },
+  "parc aquatique": { icone: "🌊", teinte: "bg-sky-500/15 text-sky-300 border-sky-500/30" },
+  autre: { icone: "📍", teinte: "bg-muted text-muted-foreground border-border" },
+};
+const typeMeta = (t: string | null) => TYPES[(t ?? "autre").toLowerCase()] ?? TYPES.autre;
+
+const EVENEMENTS: Record<string, string> = {
+  ouverture: "Ouvre",
+  reprise: "Repris",
+  rénovation: "Rénove",
+  agrandissement: "S'agrandit",
+  diversification: "Se diversifie",
+  sinistre: "Sinistre",
+};
+
 const URGENCES: Record<string, { label: string; classe: string; rang: number }> = {
   haute: { label: "À appeler cette semaine", classe: "border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400", rang: 0 },
   moyenne: { label: "À qualifier", classe: "border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400", rang: 1 },
   basse: { label: "Pour information", classe: "border-border bg-muted text-muted-foreground", rang: 2 },
 };
+
+const MOIS = ["janv.", "févr.", "mars", "avril", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+
+/** Intertitre d'une journée : la date devient une structure de lecture, pas une étiquette. */
+function titreJour(d: string): string {
+  const j = joursDepuis(d);
+  if (j <= 0) return "Aujourd'hui";
+  if (j === 1) return "Hier";
+  const dt = new Date(d + "T12:00:00");
+  const libelle = dt.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  return libelle.charAt(0).toUpperCase() + libelle.slice(1);
+}
+
+/** Nettoie le titre du suffixe « - Ouest-France » : la source est déjà affichée à part. */
+function titrePropre(t: string, source: string | null): string {
+  let v = t.replace(/\s*[-–—]\s*[^-–—]{2,28}$/, "").trim();
+  if (source) v = v.replace(new RegExp(`\\s*[-–—]\\s*${source.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "i"), "").trim();
+  return v || t;
+}
 
 function joursDepuis(d: string): number {
   return Math.floor((Date.now() - new Date(d + "T12:00:00").getTime()) / 86_400_000);
@@ -80,22 +123,28 @@ export default function Gazette() {
     },
   });
 
-  const signaux = useMemo(() => {
+  const { tries: signaux, parJour } = useMemo(() => {
     let liste = data ?? [];
     if (filtreUrgence !== "all") liste = liste.filter((s) => (s.urgence ?? "moyenne") === filtreUrgence);
     if (filtreZone === "prioritaires") {
       liste = liste.filter((s) => REGIONS_PRIORITAIRES.includes(s.region ?? ""));
     }
-    // Le territoire d'abord, puis l'urgence, puis la fraîcheur.
-    return [...liste].sort((a, b) => {
+    // La chronologie prime : on lit un journal, du plus frais au plus ancien. À
+    // l'intérieur d'une même journée, le territoire puis l'urgence départagent.
+    const tries = [...liste].sort((a, b) => {
+      if (a.publie_le !== b.publie_le) return b.publie_le.localeCompare(a.publie_le);
       const pa = REGIONS_PRIORITAIRES.includes(a.region ?? "") ? 0 : 1;
       const pb = REGIONS_PRIORITAIRES.includes(b.region ?? "") ? 0 : 1;
       if (pa !== pb) return pa - pb;
-      const ua = URGENCES[a.urgence ?? "moyenne"]?.rang ?? 1;
-      const ub = URGENCES[b.urgence ?? "moyenne"]?.rang ?? 1;
-      if (ua !== ub) return ua - ub;
-      return b.publie_le.localeCompare(a.publie_le);
+      return (URGENCES[a.urgence ?? "moyenne"]?.rang ?? 1) - (URGENCES[b.urgence ?? "moyenne"]?.rang ?? 1);
     });
+    const parJour: { jour: string; items: Signal[] }[] = [];
+    for (const sig of tries) {
+      const dernier = parJour[parJour.length - 1];
+      if (dernier && dernier.jour === sig.publie_le) dernier.items.push(sig);
+      else parJour.push({ jour: sig.publie_le, items: [sig] });
+    }
+    return { tries, parJour };
   }, [data, filtreUrgence, filtreZone]);
 
   async function creerProspect(s: Signal) {
@@ -205,63 +254,101 @@ export default function Gazette() {
             calme est un secteur sans opportunité, pas une panne.
           </Card>
         ) : (
-          signaux.map((s) => {
-            const u = URGENCES[s.urgence ?? "moyenne"] ?? URGENCES.moyenne;
-            const prioritaire = REGIONS_PRIORITAIRES.includes(s.region ?? "");
-            const converti = s.statut === "converti";
-            return (
-              <Card
-                key={s.id}
-                className={cn(
-                  "p-4 transition-colors",
-                  prioritaire && "border-l-2 border-l-primary",
-                  converti && "opacity-60",
-                )}
-              >
-                <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground mb-1.5">
-                  <Badge variant="outline" className={cn("h-5 px-2 text-[10px]", u.classe)}>{u.label}</Badge>
-                  <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{fraicheur(s.publie_le)}</span>
-                  {s.commune && (
-                    <span className="inline-flex items-center gap-1">
-                      <MapPin className="h-3 w-3" />{s.commune}{s.departement ? ` (${s.departement})` : ""}
-                    </span>
-                  )}
-                  {s.type_lieu && <span className="inline-flex items-center gap-1"><Building2 className="h-3 w-3" />{s.type_lieu}</span>}
-                  {s.source && <span className="ml-auto italic">{s.source}</span>}
-                </div>
+          parJour.map(({ jour, items }) => (
+            <section key={jour} className="space-y-2">
+              {/* La date structure la lecture : un intertitre par journée, plutôt qu'une
+                  étiquette répétée sur chaque carte. */}
+              <div className="sticky top-[52px] z-10 -mx-4 px-4 py-1.5 bg-background/95 backdrop-blur flex items-baseline gap-2">
+                <h2 className="font-display text-sm font-semibold">{titreJour(jour)}</h2>
+                <span className="text-[11px] text-muted-foreground">
+                  {items.length} signal{items.length > 1 ? "s" : ""}
+                </span>
+                <div className="flex-1 border-b border-border/60 ml-2" />
+              </div>
 
-                <h2 className="font-semibold text-sm leading-snug">{s.titre}</h2>
+              {items.map((s) => {
+                const u = URGENCES[s.urgence ?? "moyenne"] ?? URGENCES.moyenne;
+                const t = typeMeta(s.type_lieu);
+                const converti = s.statut === "converti";
+                const d = new Date(s.publie_le + "T12:00:00");
+                return (
+                  <Card
+                    key={s.id}
+                    className={cn(
+                      "group relative overflow-hidden p-0 transition-colors hover:border-primary/40",
+                      converti && "opacity-55",
+                    )}
+                  >
+                    {/* L'urgence devient un liseré : présente sans répéter un badge vingt fois. */}
+                    <div className={cn("absolute left-0 top-0 h-full w-1",
+                      s.urgence === "haute" ? "bg-emerald-500"
+                        : s.urgence === "moyenne" ? "bg-amber-500" : "bg-border")} />
 
-                {s.interpretation && (
-                  <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">{s.interpretation}</p>
-                )}
+                    <div className="flex gap-3 p-3 pl-4">
+                      {/* Pastille calendrier : la date se lit d'un coup d'œil. */}
+                      <div className="flex-shrink-0 w-12 text-center">
+                        <div className="text-xl font-semibold leading-none tabular-nums">{d.getDate()}</div>
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{MOIS[d.getMonth()]}</div>
+                      </div>
 
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  {converti ? (
-                    <Badge variant="outline" className="h-8 px-3 border-primary/40 text-primary">
-                      Prospect créé
-                    </Badge>
-                  ) : (
-                    <>
-                      <Button size="sm" className="gap-1.5" disabled={enCours === s.id} onClick={() => creerProspect(s)}>
-                        {enCours === s.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                        Créer le prospect
-                      </Button>
-                      <Button size="sm" variant="ghost" className="gap-1.5 text-muted-foreground"
-                        disabled={enCours === s.id} onClick={() => ignorer(s)}>
-                        <X className="h-3.5 w-3.5" /> Ignorer
-                      </Button>
-                    </>
-                  )}
-                  <Button size="sm" variant="outline" asChild className="gap-1.5 ml-auto">
-                    <a href={s.url} target="_blank" rel="noreferrer">
-                      <ExternalLink className="h-3.5 w-3.5" /> Lire l'article
-                    </a>
-                  </Button>
-                </div>
-              </Card>
-            );
-          })
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                          <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px] gap-1", t.teinte)}>
+                            <span aria-hidden>{t.icone}</span>{s.type_lieu ?? "lieu de loisirs"}
+                          </Badge>
+                          {s.evenement && (
+                            <Badge variant="outline" className="h-5 px-1.5 text-[10px] border-border">
+                              {EVENEMENTS[s.evenement] ?? s.evenement}
+                            </Badge>
+                          )}
+                          {(s.commune || s.region) && (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                              <MapPin className="h-3 w-3" />
+                              {[s.region, s.commune && `${s.commune}${s.departement ? ` (${s.departement})` : ""}`]
+                                .filter(Boolean).join(" · ")}
+                            </span>
+                          )}
+                          <span className="ml-auto text-[11px] italic text-muted-foreground">{s.source}</span>
+                        </div>
+
+                        <h3 className="text-sm font-semibold leading-snug">
+                          {titrePropre(s.titre, s.source)}
+                        </h3>
+
+                        {s.interpretation && (
+                          <p className="mt-1 text-[13px] text-muted-foreground leading-relaxed">{s.interpretation}</p>
+                        )}
+
+                        <div className="mt-2 flex items-center gap-1">
+                          {converti ? (
+                            <span className="text-[11px] font-medium text-primary">Prospect créé ✓</span>
+                          ) : (
+                            <Button size="sm" className="h-7 gap-1.5 text-xs" disabled={enCours === s.id}
+                              onClick={() => creerProspect(s)}>
+                              {enCours === s.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                              Créer le prospect
+                            </Button>
+                          )}
+                          {/* Actions secondaires en retrait : vingt fois trois boutons fatiguent l'œil. */}
+                          <Button size="sm" variant="ghost" asChild
+                            className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" title="Lire l'article">
+                            <a href={s.url} target="_blank" rel="noreferrer"><ExternalLink className="h-3.5 w-3.5" /></a>
+                          </Button>
+                          {!converti && (
+                            <Button size="sm" variant="ghost" title="Ignorer ce signal"
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                              disabled={enCours === s.id} onClick={() => ignorer(s)}>
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </section>
+          ))
         )}
       </main>
     </div>

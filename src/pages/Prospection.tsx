@@ -37,10 +37,12 @@ function buildLinkedInSearch(p: { contact_nom?: string | null; entreprise?: stri
   if (!nom) return null;
   const enc = encodeURIComponent(nom);
   return {
-    // Moteur de secours quand la recherche LinkedIn ne donne rien. DuckDuckGo plutôt que
-    // Google : ce dernier est bloqué sur le poste de Léopaul (ERR_BLOCKED_BY_RESPONSE) et
-    // impose un écran de consentement en Europe.
-    web: `https://duckduckgo.com/?q=${encodeURIComponent(`site:linkedin.com/in "${nom}"`)}`,
+    // Recherche web plutôt que recherche LinkedIn. LinkedIn refuse d'ouvrir ses pages de
+    // résultats quand on y arrive par un lien extérieur — « www.linkedin.com est bloqué,
+    // ERR_BLOCKED_BY_RESPONSE » — quel que soit l'état de la session. Trois tentatives de
+    // correction ont buté dessus. Un moteur généraliste, lui, retrouve le profil au nom
+    // seul : c'est la méthode que Léopaul avait trouvée à la main, et elle marche.
+    web: `https://www.google.com/search?q=${encodeURIComponent(`"${nom}" linkedin`)}`,
     people: `https://www.linkedin.com/search/results/people/?keywords=${enc}`,
     sales: `https://www.linkedin.com/sales/search/people?query=(spellCorrectionEnabled:true,keywords:${enc})`,
   };
@@ -842,11 +844,11 @@ function KanbanCard({ prospect, onOpen }: { prospect: Prospect; onOpen: () => vo
                 /* Profil inconnu : on propose de le chercher, libellé explicite pour ne pas
                    confondre l'action avec l'information. */
                 <a
-                  href={liSearch.people}
+                  href={liSearch.web}
                   target="_blank"
                   rel="noreferrer"
-                  onClick={(e) => ouvrirLienExterne(liSearch.people, e)}
-                  title={`Chercher ${prospect.contact_nom} sur LinkedIn`}
+                  onClick={(e) => ouvrirLienExterne(liSearch.web, e)}
+                  title={`Chercher ${prospect.contact_nom} sur le web (LinkedIn refuse les liens entrants)`}
                   className="flex-shrink-0 inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground hover:border-foreground/40"
                 >
                   <Search className="h-3 w-3" /> Chercher

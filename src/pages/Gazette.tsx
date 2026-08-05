@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/sheet";
 import {
   Newspaper, Loader2, ExternalLink, Plus, X, MapPin, Clock, Building2, RefreshCw,
-  Search, Quote, UserRound, Save, Sparkles,
+  Search, Quote, UserRound, Save, Sparkles, ArrowLeft,
 } from "lucide-react";
 
 type Signal = {
@@ -269,7 +269,17 @@ export default function Gazette() {
         className="sticky top-0 z-30 flex items-center gap-3 border-b border-border bg-background/85 backdrop-blur px-4 py-3"
         style={{ paddingTop: "calc(0.75rem + var(--safe-top))" }}
       >
-        <Newspaper className="h-5 w-5" style={{ color: "hsl(var(--space-prospection))" }} />
+        {/* Sans ce retour, la Gazette est un cul-de-sac sur mobile : aucun autre chemin
+            ne ramène au menu. */}
+        <Link
+          to="/"
+          className="flex-shrink-0 -ml-1 rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+          title="Retour au menu"
+          aria-label="Retour au menu"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
+        <Newspaper className="h-5 w-5 flex-shrink-0" style={{ color: "hsl(var(--space-prospection))" }} />
         <div className="flex-1 min-w-0">
           <h1 className="font-display text-base sm:text-lg font-semibold truncate">Gazette</h1>
           <p className="text-xs text-muted-foreground truncate">
@@ -337,7 +347,10 @@ export default function Gazette() {
             <section key={jour} className="space-y-2">
               {/* La date structure la lecture : un intertitre par journée, plutôt qu'une
                   étiquette répétée sur chaque carte. */}
-              <div className="sticky top-[52px] z-10 -mx-4 px-4 py-1.5 bg-background/95 backdrop-blur flex items-baseline gap-2">
+              <div
+                className="sticky z-10 -mx-4 px-4 py-1.5 bg-background/95 backdrop-blur flex items-baseline gap-2"
+                style={{ top: "calc(52px + var(--safe-top))" }}
+              >
                 <h2 className="font-display text-sm font-semibold">{titreJour(jour)}</h2>
                 <span className="text-[11px] text-muted-foreground">
                   {items.length} signal{items.length > 1 ? "s" : ""}

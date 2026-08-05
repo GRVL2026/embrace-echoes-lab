@@ -802,7 +802,11 @@ export default function Carte() {
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
-                  if (suggestions.length === 1) zoomToClient(suggestions[0]);
+                  if (suggestions.length === 1) {
+                    const s = suggestions[0];
+                    if (s.genre === "client") zoomToClient(s.item as ClientPt);
+                    else zoomToPoint((s.item as any).lat, (s.item as any).lng, (s.item as any).nom);
+                  }
                   else askCopilot();
                 }
                 if (e.key === "Escape") setSuggestOpen(false);

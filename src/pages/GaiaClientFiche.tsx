@@ -4,6 +4,7 @@ import { Link, Navigate, useLocation, useNavigate, useParams } from "react-route
 import { CopiloteMarkdown } from "@/components/admin/CopiloteMarkdown";
 import { supabase } from "@/integrations/supabase/client";
 import { ParcArcadeBloc } from "@/components/ParcArcadeBloc";
+import { BriefFiche } from "@/components/BriefFiche";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserMenu } from "@/components/UserMenu";
 import { MobileNav } from "@/components/MobileNav";
@@ -477,7 +478,8 @@ export default function GaiaClientFiche() {
         {/* Le parc installé relevé sur place, distinct de ce que nous lui avons
             facturé : c'est la comparaison des deux qui fait l'argument commercial. */}
         {(fiche?.codes ?? []).length > 0 && (
-          <div className="mb-6">
+          <div className="mb-6 space-y-3">
+            <BriefFiche codeClient={(fiche?.codes ?? [])[0]} />
             <ParcArcadeBloc codeClient={(fiche?.codes ?? [])[0]} />
           </div>
         )}

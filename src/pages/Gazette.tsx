@@ -44,7 +44,12 @@ type Signal = {
   contact_role: string | null;
   contact_citation: string | null;
   contact_origine: string | null;
+  prospect_id: string | null;
+  code_client: string | null;
 };
+
+type Parc = { prospect_id: string | null; code_client: string | null;
+              nb_machines: number; nb_flippers: number; nb_catalogue: number };
 
 // Le territoire de Léopaul passe devant : à volume égal, un signal normand vaut
 // davantage qu'un signal en Occitanie, parce qu'on peut s'y déplacer.
@@ -79,6 +84,40 @@ const URGENCES: Record<string, { label: string; classe: string; rang: number }> 
   moyenne: { label: "À qualifier", classe: "border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400", rang: 1 },
   basse: { label: "Pour information", classe: "border-border bg-muted text-muted-foreground", rang: 2 },
 };
+
+// POURQUOI UN SCORE, ET PAS UN ORDRE CHRONOLOGIQUE.
+//
+// Un journal se lit du plus récent au plus ancien. Une file de prospection, non : un
+// commercial devant quarante signaux doit savoir lequel appeler EN PREMIER, et
+// pourquoi. La date n'est qu'un critère parmi d'autres, et pas le plus fort.
+//
+// Chaque point porte donc une justification affichée à l'écran. Un score sans motif
+// n'est qu'un chiffre auquel on n'obéit pas.
+function priorite(s: Signal, parc: Parc | undefined): { note: number; motifs: string[] } {
+  const motifs: string[] = [];
+  let note = 0;
+
+  if (s.code_client) { note += 50; motifs.push("déjà client"); }
+  else if (s.prospect_id) { note += 30; motifs.push("déjà en fiche"); }
+
+  if (parc?.nb_machines) {
+    note += 15;
+    const manque = parc.nb_flippers === 0 ? ", aucun flipper" : "";
+    motifs.push(`${parc.nb_machines} machines connues${manque}`);
+  }
+
+  const j = joursDepuis(s.publie_le);
+  if (j <= 7) { note += 25; motifs.push(j <= 1 ? "tout frais" : "cette semaine"); }
+  else if (j <= 30) note += 12;
+  else if (j > 120) note -= 10;
+
+  if (REGIONS_PRIORITAIRES.includes(s.region ?? "")) { note += 20; motifs.push("territoire prioritaire"); }
+  if (s.evenement === "reprise" || s.evenement === "ouverture") note += 15;
+  if (s.contact_nom) { note += 10; motifs.push(`contact : ${s.contact_nom}`); }
+  if (s.urgence === "haute") note += 10;
+
+  return { note, motifs };
+}
 
 const MOIS = ["janv.", "févr.", "mars", "avril", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
 
@@ -147,7 +186,30 @@ export default function Gazette() {
     },
   });
 
-  const { tries: signaux, parJour } = useMemo(() => {
+  // Le parc des lieux déjà rattachés : c'est lui qui fait la différence entre
+  // « un bowling a ouvert » et « un bowling de 36 machines sans flipper a ouvert ».
+  const { data: parcs } = useQuery({
+    queryKey: ["gazette-parcs"],
+    enabled: autorise, staleTime: 300_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("v_arcade_parc_resume" as any)
+        .select("prospect_id, code_client, nb_machines, nb_flippers, nb_catalogue").limit(1200);
+      if (error) throw error;
+      return (data ?? []) as unknown as Parc[];
+    },
+  });
+
+  const parcParFiche = useMemo(() => {
+    const m = new Map<string, Parc>();
+    for (const p of parcs ?? []) {
+      if (p.prospect_id) m.set(`p:${p.prospect_id}`, p);
+      if (p.code_client) m.set(`c:${p.code_client}`, p);
+    }
+    return m;
+  }, [parcs]);
+
+  const { tries: signaux, notes } = useMemo(() => {
     let liste = data ?? [];
     if (filtreUrgence !== "all") liste = liste.filter((s) => (s.urgence ?? "moyenne") === filtreUrgence);
     if (filtreZone === "prioritaires") {
@@ -164,23 +226,29 @@ export default function Gazette() {
           .some((v) => (v ?? "").toLowerCase().includes(q)),
       );
     }
-    // La chronologie prime : on lit un journal, du plus frais au plus ancien. À
-    // l'intérieur d'une même journée, le territoire puis l'urgence départagent.
+    // Classement par priorité, et non par date : voir la note sur priorite().
+    const notes = new Map<string, { note: number; motifs: string[] }>();
+    for (const sig of liste) {
+      const cle = sig.code_client ? `c:${sig.code_client}` : sig.prospect_id ? `p:${sig.prospect_id}` : null;
+      notes.set(sig.id, priorite(sig, cle ? parcParFiche.get(cle) : undefined));
+    }
     const tries = [...liste].sort((a, b) => {
-      if (a.publie_le !== b.publie_le) return b.publie_le.localeCompare(a.publie_le);
-      const pa = REGIONS_PRIORITAIRES.includes(a.region ?? "") ? 0 : 1;
-      const pb = REGIONS_PRIORITAIRES.includes(b.region ?? "") ? 0 : 1;
-      if (pa !== pb) return pa - pb;
-      return (URGENCES[a.urgence ?? "moyenne"]?.rang ?? 1) - (URGENCES[b.urgence ?? "moyenne"]?.rang ?? 1);
+      const d = (notes.get(b.id)?.note ?? 0) - (notes.get(a.id)?.note ?? 0);
+      return d !== 0 ? d : b.publie_le.localeCompare(a.publie_le);
     });
+
+    // Trois paquets, parce qu'un commercial ne travaille pas une liste de quarante
+    // lignes : il travaille les cinq premières, puis revient. Le seuil de 60 points
+    // correspond à un signal qui cumule au moins deux atouts — une fiche connue et
+    // de la fraîcheur, ou un territoire et un parc.
     const parJour: { jour: string; items: Signal[] }[] = [];
     for (const sig of tries) {
       const dernier = parJour[parJour.length - 1];
       if (dernier && dernier.jour === sig.publie_le) dernier.items.push(sig);
       else parJour.push({ jour: sig.publie_le, items: [sig] });
     }
-    return { tries, parJour };
-  }, [data, filtreUrgence, filtreZone, recherche]);
+    return { tries, parJour, notes };
+  }, [data, filtreUrgence, filtreZone, recherche, parcParFiche]);
 
   async function creerProspect(s: Signal) {
     setEnCours(s.id);
@@ -283,7 +351,7 @@ export default function Gazette() {
         <div className="flex-1 min-w-0">
           <h1 className="font-display text-base sm:text-lg font-semibold truncate">Gazette</h1>
           <p className="text-xs text-muted-foreground truncate">
-            Les lieux de loisirs qui ouvrent, changent de mains ou s'agrandissent
+            Classés par priorité d'appel — commencez par le haut
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching} className="gap-2">
@@ -343,22 +411,35 @@ export default function Gazette() {
             calme est un secteur sans opportunité, pas une panne.
           </Card>
         ) : (
-          parJour.map(({ jour, items }) => (
-            <section key={jour} className="space-y-2">
-              {/* La date structure la lecture : un intertitre par journée, plutôt qu'une
-                  étiquette répétée sur chaque carte. */}
-              <div
-                className="sticky z-10 -mx-4 px-4 py-1.5 bg-background/95 backdrop-blur flex items-baseline gap-2"
-                style={{ top: "calc(52px + var(--safe-top))" }}
-              >
-                <h2 className="font-display text-sm font-semibold">{titreJour(jour)}</h2>
-                <span className="text-[11px] text-muted-foreground">
-                  {items.length} signal{items.length > 1 ? "s" : ""}
-                </span>
-                <div className="flex-1 border-b border-border/60 ml-2" />
-              </div>
+          <>
+            {[
+              { cle: "top", titre: "Commencez par ici", aide: "Les signaux qui cumulent plusieurs atouts — une fiche déjà connue, un parc recensé, votre territoire, ou une actualité de la semaine.", seuil: 60 },
+              { cle: "semaine", titre: "À traiter ensuite", aide: "Utiles, mais moins d'atouts réunis.", seuil: 30 },
+              { cle: "reste", titre: "Le reste", aide: "Pour information — signaux anciens ou hors territoire.", seuil: -999 },
+            ].map((bloc, i, blocs) => {
+              const borneHaute = i === 0 ? 99999 : blocs[i - 1].seuil;
+              const items = signaux.filter((s) => {
+                const n = notes.get(s.id)?.note ?? 0;
+                return n < borneHaute && n >= bloc.seuil;
+              });
+              if (items.length === 0) return null;
+              const limite = bloc.cle === "top" ? 6 : bloc.cle === "semaine" ? 20 : 30;
+              return (
+                <section key={bloc.cle} className="space-y-2">
+                  <div className="sticky z-10 -mx-4 px-4 py-1.5 bg-background/95 backdrop-blur"
+                    style={{ top: "calc(52px + var(--safe-top))" }}>
+                    <div className="flex items-baseline gap-2">
+                      <h2 className={cn("font-display text-sm font-semibold",
+                        bloc.cle === "top" && "text-emerald-600 dark:text-emerald-400")}>
+                        {bloc.titre}
+                      </h2>
+                      <span className="text-[11px] tabular-nums text-muted-foreground">{items.length}</span>
+                      <div className="flex-1 border-b border-border/60 ml-2" />
+                    </div>
+                    <p className="text-[10px] leading-snug text-muted-foreground">{bloc.aide}</p>
+                  </div>
 
-              {items.map((s) => {
+                  {items.slice(0, limite).map((s) => {
                 const u = URGENCES[s.urgence ?? "moyenne"] ?? URGENCES.moyenne;
                 const t = typeMeta(s.type_lieu);
                 const converti = s.statut === "converti";
@@ -421,6 +502,22 @@ export default function Gazette() {
                           <p className="mt-1 text-[13px] text-muted-foreground leading-relaxed">{s.interpretation}</p>
                         )}
 
+                        {/* POURQUOI CE SIGNAL EST ICI. Un classement dont on ne voit pas
+                            la raison n'est pas suivi : le commercial refait son propre tri
+                            et l'ordre proposé ne sert à rien. */}
+                        {(notes.get(s.id)?.motifs.length ?? 0) > 0 && (
+                          <p className="mt-1.5 flex flex-wrap items-center gap-1">
+                            {notes.get(s.id)!.motifs.map((m) => (
+                              <span key={m} className={cn(
+                                "rounded px-1.5 py-0.5 text-[10px] font-medium",
+                                m === "déjà client" ? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
+                                  : m === "déjà en fiche" ? "bg-violet-500/15 text-violet-600 dark:text-violet-400"
+                                  : "bg-muted text-muted-foreground",
+                              )}>{m}</span>
+                            ))}
+                          </p>
+                        )}
+
                         {s.contact_nom && (
                           <p className="mt-1.5 inline-flex items-center gap-1.5 text-[12px]">
                             <UserRound className="h-3.5 w-3.5 text-primary" />
@@ -459,9 +556,18 @@ export default function Gazette() {
                     </div>
                   </Card>
                 );
-              })}
-            </section>
-          ))
+                  })}
+
+                  {items.length > limite && (
+                    <p className="px-1 text-[11px] text-muted-foreground">
+                      {items.length - limite} autre{items.length - limite > 1 ? "s" : ""} dans cette
+                      catégorie — affine avec la recherche ou les filtres plutôt que de tout parcourir.
+                    </p>
+                  )}
+                </section>
+              );
+            })}
+          </>
         )}
       </main>
 

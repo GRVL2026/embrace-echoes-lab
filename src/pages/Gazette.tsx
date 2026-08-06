@@ -119,6 +119,24 @@ function priorite(s: Signal, parc: Parc | undefined): { note: number; motifs: st
   return { note, motifs };
 }
 
+// Les trois paliers, définis UNE fois. Le filtre et les sections lisent la même
+// source : les voir diverger — un filtre « à qualifier » qui affiche un signal rangé
+// dans « à traiter ensuite » — détruit la confiance dans le classement.
+const PALIERS = [
+  { cle: "top", titre: "Commencez par ici", seuil: 60,
+    aide: "Les signaux qui cumulent plusieurs atouts — une fiche déjà connue, un parc recensé, votre territoire, ou une actualité de la semaine.", max: 6 },
+  { cle: "ensuite", titre: "À traiter ensuite", seuil: 30,
+    aide: "Utiles, mais moins d'atouts réunis.", max: 20 },
+  { cle: "reste", titre: "Le reste", seuil: -9999,
+    aide: "Pour information — signaux anciens ou hors territoire.", max: 30 },
+] as const;
+
+type Palier = typeof PALIERS[number]["cle"];
+
+function palierDe(note: number): Palier {
+  return (PALIERS.find((p) => note >= p.seuil)?.cle ?? "reste") as Palier;
+}
+
 const MOIS = ["janv.", "févr.", "mars", "avril", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
 
 /** Intertitre d'une journée : la date devient une structure de lecture, pas une étiquette. */
@@ -153,7 +171,7 @@ function fraicheur(d: string): string {
 export default function Gazette() {
   const { isAdmin, isDirection, isLoading } = useAuth();
   const qc = useQueryClient();
-  const [filtreUrgence, setFiltreUrgence] = useState<"all" | "haute" | "moyenne" | "basse">("all");
+  const [filtrePalier, setFiltrePalier] = useState<"all" | Palier>("all");
   const [filtreZone, setFiltreZone] = useState<"all" | "prioritaires">("all");
   const [recherche, setRecherche] = useState("");
   const [enCours, setEnCours] = useState<string | null>(null);
@@ -211,7 +229,6 @@ export default function Gazette() {
 
   const { tries: signaux, notes } = useMemo(() => {
     let liste = data ?? [];
-    if (filtreUrgence !== "all") liste = liste.filter((s) => (s.urgence ?? "moyenne") === filtreUrgence);
     if (filtreZone === "prioritaires") {
       liste = liste.filter((s) => REGIONS_PRIORITAIRES.includes(s.region ?? ""));
     }
@@ -232,6 +249,11 @@ export default function Gazette() {
       const cle = sig.code_client ? `c:${sig.code_client}` : sig.prospect_id ? `p:${sig.prospect_id}` : null;
       notes.set(sig.id, priorite(sig, cle ? parcParFiche.get(cle) : undefined));
     }
+    // Le filtre porte sur le palier AFFICHÉ, jamais sur l'urgence décidée par l'IA :
+    // c'est le classement que le commercial a sous les yeux qu'il veut restreindre.
+    if (filtrePalier !== "all") {
+      liste = liste.filter((s) => palierDe(notes.get(s.id)?.note ?? 0) === filtrePalier);
+    }
     const tries = [...liste].sort((a, b) => {
       const d = (notes.get(b.id)?.note ?? 0) - (notes.get(a.id)?.note ?? 0);
       return d !== 0 ? d : b.publie_le.localeCompare(a.publie_le);
@@ -248,7 +270,7 @@ export default function Gazette() {
       else parJour.push({ jour: sig.publie_le, items: [sig] });
     }
     return { tries, parJour, notes };
-  }, [data, filtreUrgence, filtreZone, recherche, parcParFiche]);
+  }, [data, filtrePalier, filtreZone, recherche, parcParFiche]);
 
   async function creerProspect(s: Signal) {
     setEnCours(s.id);
@@ -329,7 +351,7 @@ export default function Gazette() {
   }
   if (!autorise) return <Navigate to="/" replace />;
 
-  const nbHaute = (data ?? []).filter((s) => s.urgence === "haute" && s.statut !== "converti").length;
+  const nbPrioritaires = signaux.filter((s) => (notes.get(s.id)?.note ?? 0) >= 60).length;
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -384,18 +406,20 @@ export default function Gazette() {
               <SelectItem value="prioritaires">Normandie · Bretagne · IDF</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={filtreUrgence} onValueChange={(v) => setFiltreUrgence(v as typeof filtreUrgence)}>
-            <SelectTrigger className="h-9 w-[190px] text-xs"><SelectValue /></SelectTrigger>
+          <Select value={filtrePalier} onValueChange={(v) => setFiltrePalier(v as typeof filtrePalier)}>
+            <SelectTrigger className="h-9 w-[210px] text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes priorités</SelectItem>
-              <SelectItem value="haute">🟢 À appeler cette semaine</SelectItem>
-              <SelectItem value="moyenne">🟠 À qualifier</SelectItem>
-              <SelectItem value="basse">⚪ Pour information</SelectItem>
+              <SelectItem value="all">Tous les paliers</SelectItem>
+              <SelectItem value="top">🟢 Commencez par ici</SelectItem>
+              <SelectItem value="ensuite">🟠 À traiter ensuite</SelectItem>
+              <SelectItem value="reste">⚪ Le reste</SelectItem>
             </SelectContent>
           </Select>
           <span className="ml-auto text-xs text-muted-foreground tabular-nums">
             <span className="font-semibold text-foreground">{signaux.length}</span> signaux
-            {nbHaute > 0 && <span className="ml-2 text-emerald-500">· {nbHaute} à traiter</span>}
+            {nbPrioritaires > 0 && (
+              <span className="ml-2 text-emerald-500">· {nbPrioritaires} à appeler en premier</span>
+            )}
           </span>
         </div>
       </div>
@@ -412,18 +436,10 @@ export default function Gazette() {
           </Card>
         ) : (
           <>
-            {[
-              { cle: "top", titre: "Commencez par ici", aide: "Les signaux qui cumulent plusieurs atouts — une fiche déjà connue, un parc recensé, votre territoire, ou une actualité de la semaine.", seuil: 60 },
-              { cle: "semaine", titre: "À traiter ensuite", aide: "Utiles, mais moins d'atouts réunis.", seuil: 30 },
-              { cle: "reste", titre: "Le reste", aide: "Pour information — signaux anciens ou hors territoire.", seuil: -999 },
-            ].map((bloc, i, blocs) => {
-              const borneHaute = i === 0 ? 99999 : blocs[i - 1].seuil;
-              const items = signaux.filter((s) => {
-                const n = notes.get(s.id)?.note ?? 0;
-                return n < borneHaute && n >= bloc.seuil;
-              });
+            {PALIERS.map((bloc) => {
+              const items = signaux.filter((s) => palierDe(notes.get(s.id)?.note ?? 0) === bloc.cle);
               if (items.length === 0) return null;
-              const limite = bloc.cle === "top" ? 6 : bloc.cle === "semaine" ? 20 : 30;
+              const limite = bloc.max;
               return (
                 <section key={bloc.cle} className="space-y-2">
                   <div className="sticky z-10 -mx-4 px-4 py-1.5 bg-background/95 backdrop-blur"

@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/sheet";
 import {
   Newspaper, Loader2, ExternalLink, Plus, X, MapPin, Clock, Building2, RefreshCw,
-  Search, Quote, UserRound, Save, Sparkles, ArrowLeft,
+  Search, Quote, UserRound, Save, Sparkles, ArrowLeft, ChevronDown,
 } from "lucide-react";
 
 type Signal = {
@@ -172,6 +172,10 @@ export default function Gazette() {
   const { isAdmin, isDirection, isLoading } = useAuth();
   const qc = useQueryClient();
   const [filtrePalier, setFiltrePalier] = useState<"all" | Palier>("all");
+  // Combien de signaux déplier en plus, par palier. Le plafond initial évite le mur de
+  // quarante lignes, mais il ne doit pas devenir une impasse : « affine avec la
+  // recherche » n'est pas une réponse quand on ne sait pas ce qu'on cherche.
+  const [deplie, setDeplie] = useState<Record<string, number>>({});
   const [filtreZone, setFiltreZone] = useState<"all" | "prioritaires">("all");
   const [recherche, setRecherche] = useState("");
   const [enCours, setEnCours] = useState<string | null>(null);
@@ -439,7 +443,7 @@ export default function Gazette() {
             {PALIERS.map((bloc) => {
               const items = signaux.filter((s) => palierDe(notes.get(s.id)?.note ?? 0) === bloc.cle);
               if (items.length === 0) return null;
-              const limite = bloc.max;
+              const limite = bloc.max + (deplie[bloc.cle] ?? 0);
               return (
                 <section key={bloc.cle} className="space-y-2">
                   <div className="sticky z-10 -mx-4 px-4 py-1.5 bg-background/95 backdrop-blur"
@@ -575,10 +579,26 @@ export default function Gazette() {
                   })}
 
                   {items.length > limite && (
-                    <p className="px-1 text-[11px] text-muted-foreground">
-                      {items.length - limite} autre{items.length - limite > 1 ? "s" : ""} dans cette
-                      catégorie — affine avec la recherche ou les filtres plutôt que de tout parcourir.
-                    </p>
+                    <Button
+                      variant="outline"
+                      className="w-full gap-2 text-xs"
+                      onClick={() => setDeplie((d) => ({ ...d, [bloc.cle]: (d[bloc.cle] ?? 0) + 25 }))}
+                    >
+                      <ChevronDown className="h-3.5 w-3.5" />
+                      Voir {Math.min(25, items.length - limite)} de plus
+                      <span className="text-muted-foreground">
+                        ({items.length - limite} restant{items.length - limite > 1 ? "s" : ""})
+                      </span>
+                    </Button>
+                  )}
+                  {limite > bloc.max && items.length <= limite && (
+                    <Button
+                      variant="ghost"
+                      className="w-full gap-2 text-xs text-muted-foreground"
+                      onClick={() => setDeplie((d) => ({ ...d, [bloc.cle]: 0 }))}
+                    >
+                      Replier
+                    </Button>
                   )}
                 </section>
               );

@@ -48,7 +48,8 @@ CTX = ssl.create_default_context()
 
 
 def collecter(jours: int) -> list[dict]:
-    depuis = (datetime.date.today() - datetime.timedelta(days=jours)).isoformat()
+    limite = datetime.date.today() - datetime.timedelta(days=jours)
+    depuis = limite.isoformat()
     vus, articles = set(), []
     for lieu in LIEUX:
         q = f"{lieu} {EVENEMENTS} after:{depuis}"
@@ -74,6 +75,13 @@ def collecter(jours: int) -> list[dict]:
                 pub = datetime.datetime.strptime(d.group(1)[:16], "%a, %d %b %Y").date()
             except ValueError:
                 continue          # sans date exploitable, pas de signal
+            # Google IGNORE le filtre « after: » qu'on lui demande. Sans cette
+            # vérification, sa réponse ramenait des articles de 2016 à 2024 : sept
+            # cents signaux périmés étaient entrés en base, dont des ouvertures de
+            # bowling vieilles de huit ans classées « à traiter, priorité haute ».
+            # On ne fait plus confiance à la requête, on contrôle la réponse.
+            if pub < limite:
+                continue
             vus.add(titre)
             articles.append({
                 "titre": titre,
@@ -165,13 +173,22 @@ PLAFOND_QUOTIDIEN = 25
 
 
 def enrichir(plafond: int = PLAFOND_QUOTIDIEN) -> None:
-    """Résout les liens et fait lire les articles pour en tirer le dirigeant."""
+    """Résout les liens et fait lire les articles pour en tirer le dirigeant.
+
+    Tolérante aux incidents réseau : la tâche de cette nuit s'est terminée en erreur
+    sur un délai dépassé alors que la collecte, elle, avait réussi. Un enrichissement
+    qui échoue ne doit pas faire échouer le relevé du jour."""
     total = 0
     for tour in range(1, 21):
         if total >= plafond:
             print(f"  plafond du jour atteint ({total} articles) — la suite demain")
             return
-        rep = appeler({"action": "a_enrichir", "limite": min(12, plafond - total)})
+        try:
+            rep = appeler({"action": "a_enrichir", "limite": min(12, plafond - total)})
+        except (urllib.error.URLError, TimeoutError, OSError) as e:
+            print(f"  incident réseau ({type(e).__name__}) — enrichissement interrompu, "
+                  f"les articles restants repasseront demain")
+            return
         lot = rep.get("a_enrichir") or []
         if not lot:
             print(f"  enrichissement terminé ({total} articles traités)")

@@ -76,7 +76,7 @@ import {
 type Statut = "nouveau" | "contacte" | "connecte" | "repondu" | "rdv" | "devis" | "client" | "perdu";
 // « camping » est un segment à part entière : l'hôtellerie de plein air n'est ni du
 // loisir indoor (bowling, parc) ni du CHR — qui désigne Cafés, Hôtels, Restaurants.
-type Segment = "camping" | "loisirs" | "chr" | "retail" | "revendeur" | "autre";
+type Segment = "camping" | "loisirs" | "fec" | "chr" | "retail" | "revendeur" | "autre";
 type Source = "linkedin" | "salon" | "reco" | "site" | "signal" | "autre";
 
 type Prospect = {

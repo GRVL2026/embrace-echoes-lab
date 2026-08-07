@@ -858,6 +858,39 @@ export type Database = {
         }
         Relationships: []
       }
+      copilot_documents: {
+        Row: {
+          contenu: Json
+          created_at: string
+          created_by: string | null
+          id: string
+          modele: string | null
+          sujet: string | null
+          titre: string
+          updated_at: string
+        }
+        Insert: {
+          contenu: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          modele?: string | null
+          sujet?: string | null
+          titre: string
+          updated_at?: string
+        }
+        Update: {
+          contenu?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          modele?: string | null
+          sujet?: string | null
+          titre?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       copilot_learnings: {
         Row: {
           created_at: string

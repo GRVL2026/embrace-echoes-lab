@@ -174,6 +174,71 @@ export default function ParcArcade() {
     return [...ids].map((id) => parSalle.get(id)).filter(Boolean) as Salle[];
   }, [detail, salles, modeles, liens, parSalle]);
 
+  // Les modèles d'un TYPE DE LIEU, avec leur sur- ou sous-représentation. Le simple
+  // classement ne dit pas grand-chose : les mêmes gros titres sortent partout. Ce qui
+  // est instructif, c'est l'ÉCART à la moyenne nationale — un modèle présent dans 30 %
+  // des cinémas contre 19 % de l'ensemble révèle une affinité, et donc un argument.
+  const modelesDuType = useMemo(() => {
+    if (detail?.genre !== "type") return [];
+    const duType = new Set(
+      (salles ?? []).filter((s) => (s.type_lieu ?? "non classé") === detail.valeur).map((s) => s.id),
+    );
+    if (duType.size < 5) return [];   // sous cinq lieux, un « classement » n'en est pas un
+    const dansLeType = new Map<string, number>();
+    const partout = new Map<string, number>();
+    for (const l of liens ?? []) {
+      partout.set(l.machine_slug, (partout.get(l.machine_slug) ?? 0) + 1);
+      if (duType.has(l.salle_id)) dansLeType.set(l.machine_slug, (dansLeType.get(l.machine_slug) ?? 0) + 1);
+    }
+    const totalLieux = (salles ?? []).length || 1;
+    return [...dansLeType.entries()]
+      .map(([slug, n]) => {
+        const m = parModele.get(slug);
+        const pctType = (n / duType.size) * 100;
+        const pctPartout = ((partout.get(slug) ?? 0) / totalLieux) * 100;
+        return {
+          slug, nom: m?.nom ?? slug, editeur: m?.editeur ?? null,
+          categorie: m?.categorie ?? null, modele: m,
+          lieux: n, pctType, pctPartout,
+          indice: pctPartout > 0 ? pctType / pctPartout : 1,
+        };
+      })
+      .filter((x) => x.lieux >= 3)
+      .sort((a, b) => b.lieux - a.lieux)
+      .slice(0, 20);
+  }, [detail, salles, liens, parModele]);
+
+  // Symétrique du précédent : pour un fabricant, DANS QUELS TYPES DE LIEUX il est
+  // présent. Une liste de quatre cent quatre-vingts noms d'établissements ne se lit
+  // pas ; savoir que Namco est deux fois plus présent au cinéma qu'ailleurs se lit,
+  // et se travaille.
+  const typesDuFabricant = useMemo(() => {
+    if (detail?.genre !== "fabricant") return [];
+    const slugs = new Set(
+      (modeles ?? []).filter((m) => m.editeur === detail.valeur).map((m) => m.slug),
+    );
+    if (!slugs.size) return [];
+    const equipes = new Set<string>();
+    for (const l of liens ?? []) if (slugs.has(l.machine_slug)) equipes.add(l.salle_id);
+
+    const parTypeTotal = new Map<string, number>();
+    const parTypeEquipe = new Map<string, number>();
+    for (const sa of salles ?? []) {
+      const t = sa.type_lieu ?? "non classé";
+      parTypeTotal.set(t, (parTypeTotal.get(t) ?? 0) + 1);
+      if (equipes.has(sa.id)) parTypeEquipe.set(t, (parTypeEquipe.get(t) ?? 0) + 1);
+    }
+    const pctGlobal = ((salles ?? []).length ? equipes.size / (salles ?? []).length : 0) * 100;
+    return [...parTypeEquipe.entries()]
+      .map(([type, n]) => {
+        const total = parTypeTotal.get(type) ?? 1;
+        const pct = (n / total) * 100;
+        return { type, lieux: n, total, pct, indice: pctGlobal > 0 ? pct / pctGlobal : 1 };
+      })
+      .filter((x) => x.total >= 5)
+      .sort((a, b) => b.lieux - a.lieux);
+  }, [detail, modeles, liens, salles]);
+
   const modelesDuDetail = useMemo((): Modele[] => {
     if (detail?.genre !== "fabricant") return [];
     return (modeles ?? []).filter((m) => m.editeur === detail.valeur && m.salles > 0).slice(0, 40);
@@ -412,7 +477,101 @@ export default function ParcArcade() {
                   </>
                 )}
 
-                <h3 className="text-sm font-semibold">Lieux</h3>
+                {typesDuFabricant.length > 0 && (
+                  <>
+                    <h3 className="text-sm font-semibold">Où ce fabricant est présent</h3>
+                    <p className="text-[11px] leading-snug text-muted-foreground">
+                      Part des lieux de chaque type qui possèdent au moins une de ses machines.
+                      La flèche compare à sa présence moyenne, tous types confondus.
+                    </p>
+                    <div className="space-y-0.5">
+                      {typesDuFabricant.map((t) => {
+                        const fort = t.indice >= 1.3, faible = t.indice <= 0.7;
+                        return (
+                          <button key={t.type} type="button"
+                            onClick={() => setDetail({ genre: "type", valeur: t.type })}
+                            className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left hover:bg-muted">
+                            <span className="w-11 flex-shrink-0 text-right text-[13px] font-semibold tabular-nums">
+                              {Math.round(t.pct)} %
+                            </span>
+                            <span aria-hidden className="flex-shrink-0">{emoji(t.type)}</span>
+                            <span className="min-w-0 flex-1 truncate text-[13px] capitalize">{t.type}</span>
+                            <span className="flex-shrink-0 text-[10px] tabular-nums text-muted-foreground">
+                              {t.lieux}/{t.total}
+                            </span>
+                            <span className="hidden sm:block h-1.5 w-16 flex-shrink-0 overflow-hidden rounded-full bg-muted">
+                              <span className="block h-full rounded-full bg-primary"
+                                style={{ width: `${Math.min(100, Math.round(t.pct))}%` }} />
+                            </span>
+                            {(fort || faible) && (
+                              <span className={cn("flex-shrink-0 rounded px-1 py-0.5 text-[10px] font-medium",
+                                fort ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                                     : "bg-muted text-muted-foreground")}>
+                                ×{t.indice.toFixed(1)}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <Separator />
+                  </>
+                )}
+
+                {modelesDuType.length > 0 && (
+                  <>
+                    <h3 className="text-sm font-semibold">Ce qu'on y trouve</h3>
+                    <p className="text-[11px] leading-snug text-muted-foreground">
+                      Part des {detail.genre === "type" ? detail.valeur : "lieux"} équipés de chaque modèle.
+                      La flèche compare à la moyenne de tous les lieux : elle signale une affinité
+                      avec ce type d'établissement.
+                    </p>
+                    <div className="space-y-0.5">
+                      {modelesDuType.map((m) => {
+                        const fort = m.indice >= 1.4;
+                        const faible = m.indice <= 0.65;
+                        return (
+                          <button key={m.slug} type="button"
+                            onClick={() => m.modele && setDetail({ genre: "modele", modele: m.modele })}
+                            className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left hover:bg-muted">
+                            <span className="w-11 flex-shrink-0 text-right text-[13px] font-semibold tabular-nums">
+                              {Math.round(m.pctType)} %
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-[13px] capitalize">{m.nom}</span>
+                              {m.editeur && (
+                                <span className="block truncate text-[10px] text-muted-foreground">{m.editeur}</span>
+                              )}
+                            </span>
+                            <span className="hidden sm:block h-1.5 w-16 flex-shrink-0 overflow-hidden rounded-full bg-muted">
+                              <span className="block h-full rounded-full bg-primary"
+                                style={{ width: `${Math.min(100, Math.round(m.pctType))}%` }} />
+                            </span>
+                            {/* L'écart à la moyenne, seulement quand il est net : signaler
+                                un indice de 1,05 comme une affinité serait du bruit. */}
+                            {(fort || faible) && (
+                              <span className={cn("flex-shrink-0 rounded px-1 py-0.5 text-[10px] font-medium",
+                                fort ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                                     : "bg-muted text-muted-foreground")}>
+                                {fort ? "×" : "×"}{m.indice.toFixed(1)}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <Separator />
+                  </>
+                )}
+
+                <h3 className="text-sm font-semibold">
+                  Lieux
+                  {(typesDuFabricant.length > 0 || modelesDuType.length > 0) && (
+                    <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">
+                      — du mieux équipé au moins équipé
+                    </span>
+                  )}
+                </h3>
                 <div className="space-y-1">
                   {lieuxDuDetail
                     .sort((a, b) => b.nb_machines - a.nb_machines)

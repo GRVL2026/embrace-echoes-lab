@@ -195,6 +195,11 @@ CHARTE DE L'ANALYSTE — règles SQL OBLIGATOIRES (aucune exception sans justifi
 
 10. GRAPHIQUES : pour toute évolution temporelle (CA mois par mois, tendance annuelle…) OU toute comparaison de plus de 4 valeurs (top clients, familles, articles…), appelle l'outil "afficher_graphique" plutôt que de dresser un long tableau Markdown. Choisis 'ligne' pour une évolution dans le temps, 'barres' pour une comparaison, 'donut' pour une répartition. Continue à commenter le graphique en texte juste après (1-2 phrases).
 
+10 bis. DOCUMENT — PROPOSER, JAMAIS IMPOSER. Réponds toujours comme tu le fais aujourd'hui : librement, avec ta propre réflexion, dans le fil. Tu ne changes RIEN à ta manière de raisonner ni de rédiger.
+   Mais quand le sujet dépasse la question ponctuelle — une stratégie, un bilan, une analyse qui croise plusieurs sources, une décision à préparer, quelque chose qu'il devra relire ou montrer à quelqu'un — TERMINE ta réponse en proposant d'en faire un document, en une phrase, par exemple « Veux-tu que j'en fasse un document ? ». Puis ARRÊTE-TOI.
+   N'appelle "generer_document" QUE s'il accepte. Jamais de ta propre initiative, jamais sur une question courte, jamais pour un chiffre demandé au passage : un document surgi sans qu'on l'ait demandé est une nuisance.
+   Quand tu le rédiges, l'ordre compte : le CONSTAT chiffré, puis la LECTURE que tu en fais, puis le PLAN D'ACTION — c'est cette dernière partie qu'on relira, soigne-la le plus. N'attribue jamais une action à une personne nommée : donne la bonne pratique commerciale qui la justifie. Si le sujet appelle une liste de prospects, classe-la par rapidité de décision, puis par coût pour joindre, puis par densité de la zone.
+
 11. ÉCO-TAXE (DEEE) : l'éco-participation apparaît dans les lignes de vente sous le code article ECOTAXE (présent uniquement dans gaia_ventes, jamais dans gaia_historique). Le CA officiel est TOUJOURS hors éco-taxe : les vues v_gaia_ca_mensuel, v_gaia_ca_client et v_gaia_ca_famille l'excluent déjà automatiquement via v_gaia_ecotax_codes. Si tu calcules un CA directement sur v_gaia_lignes, exclus les codes de v_gaia_ecotax_codes (WHERE code_article NOT IN (SELECT code FROM v_gaia_ecotax_codes)) pour rester cohérent avec le dashboard. Pour analyser l'éco-taxe elle-même, utilise v_gaia_ecotaxe_mensuel (colonnes mois, ecotaxe_ht).
 
 11 bis. NOUVEAU CLIENT vs CLIENT RÉACTIVÉ : dans tout comparatif d'exercices (ex. CA 2026 vs 2025), un client présent sur l'exercice N mais absent sur N-1 n'est PAS forcément un "nouveau" client. Distingue TOUJOURS deux cas et précise-le explicitement dans la réponse :
@@ -465,6 +470,167 @@ const CHART_TOOL = {
     required: ['type', 'titre', 'donnees'],
   },
 };
+
+// Le document ne remplace pas la réponse : il la prolonge, et seulement si on le demande.
+// La structure ci-dessous n'est donc PAS un gabarit à remplir — chaque bloc est
+// facultatif, et un document qui n'a rien à mettre dans « prospects » n'affiche pas de
+// tableau vide. Ce qui compte, dans l'ordre : le constat chiffré, la lecture qu'on en
+// fait, puis le plan d'action, qui est la partie que l'on relit.
+const DOCUMENT_TOOL = {
+  name: 'generer_document',
+  description:
+    "Met en forme un document présentable à partir de la réflexion qui vient d'être menée : constat, "
+    + "lecture, plan d'action, prospects priorisés. À N'APPELER QUE si l'utilisateur a accepté ta "
+    + "proposition d'en faire un document. Ne l'appelle jamais de ta propre initiative, et jamais pour "
+    + "répondre à une question courte. Renvoie l'identifiant du document créé.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      titre: { type: 'string', description: 'Titre du document, court et parlant. Pas de date, elle est ajoutée automatiquement.' },
+      resume: { type: 'string', description: 'Deux ou trois phrases : ce que dit le document et ce qu\'il faut en faire. C\'est ce qu\'on lit si on ne lit rien d\'autre.' },
+      chiffres_cles: {
+        type: 'array',
+        description: 'Quatre chiffres au plus, ceux qui portent la démonstration. Facultatif.',
+        items: {
+          type: 'object',
+          properties: {
+            valeur: { type: 'string', description: 'Le chiffre, mis en forme (ex. "316", "1,2 M€", "0").' },
+            libelle: { type: 'string', description: 'Ce qu\'il compte, en trois ou quatre mots.' },
+            alerte: { type: 'boolean', description: 'Vrai si ce chiffre est un signal d\'alerte, pour le mettre en évidence.' },
+          },
+          required: ['valeur', 'libelle'],
+        },
+      },
+      sections: {
+        type: 'array',
+        description: 'Le corps rédigé : constat, puis lecture du marché ou de la situation. Deux à quatre sections.',
+        items: {
+          type: 'object',
+          properties: {
+            titre: { type: 'string' },
+            corps: { type: 'string', description: 'Texte rédigé, en paragraphes. Markdown simple accepté (gras, listes).' },
+            citation: { type: 'string', description: 'Le constat contre-intuitif de la section, en une phrase, mis en exergue. Facultatif.' },
+          },
+          required: ['titre', 'corps'],
+        },
+      },
+      graphiques: {
+        type: 'array',
+        description: 'Graphiques du document. Même format que afficher_graphique. Facultatif.',
+        items: {
+          type: 'object',
+          properties: {
+            type: { type: 'string', enum: ['ligne', 'barres', 'donut'] },
+            titre: { type: 'string' },
+            commentaire: { type: 'string', description: 'Ce que le graphique montre, en une phrase.' },
+            unite: { type: 'string' },
+            donnees: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: { x: { type: 'string' }, y: { type: 'number' } },
+                required: ['x', 'y'],
+              },
+            },
+          },
+          required: ['type', 'titre', 'donnees'],
+        },
+      },
+      actions: {
+        type: 'array',
+        description:
+          "Le plan d'action, dans l'ordre d'exécution. C'est la partie la plus importante du document. "
+          + "N'attribue JAMAIS une action à une personne nommée : énonce la bonne pratique commerciale "
+          + "qui la justifie, elle se transmet, une affectation non.",
+        items: {
+          type: 'object',
+          properties: {
+            titre: { type: 'string', description: 'L\'action, formulée à l\'infinitif ou à l\'impératif.' },
+            pourquoi: { type: 'string', description: 'Deux phrases : le raisonnement qui la rend nécessaire.' },
+            principe: { type: 'string', description: 'La règle commerciale sous-jacente (ex. « un interlocuteur par centre de décision »).' },
+            echeance: { type: 'string', description: 'Horizon relatif : « semaine 1 », « ce trimestre ». Jamais une date absolue, un document se relit plus tard.' },
+            urgence: { type: 'string', enum: ['immediat', 'court_terme', 'fond'] },
+            resultat_attendu: { type: 'string', description: 'Ce qu\'on doit constater si l\'action a été menée. Chiffré si possible.' },
+          },
+          required: ['titre', 'pourquoi', 'echeance', 'urgence'],
+        },
+      },
+      prospects: {
+        type: 'array',
+        description:
+          'Liste priorisée, si le sujet en appelle une. Classe par rapidité de décision, puis coût '
+          + 'pour joindre, puis densité de la zone. Vingt lignes au plus. Indique si un dirigeant est '
+          + 'identifié, mais NE CITE PAS son nom : le document est partageable.',
+        items: {
+          type: 'object',
+          properties: {
+            priorite: { type: 'string', enum: ['P1', 'P2', 'P3'] },
+            nom: { type: 'string' },
+            lieu: { type: 'string' },
+            contact: { type: 'string', description: '« Dirigeant identifié », « Siège à joindre », « À rechercher »…' },
+            pourquoi: { type: 'string', description: 'Ce qui justifie ce rang, en une phrase.' },
+          },
+          required: ['priorite', 'nom', 'pourquoi'],
+        },
+      },
+      carte: {
+        type: 'object',
+        description: 'Si les lieux évoqués sont cartographiables, la question à poser au copilote de la carte pour les afficher. Facultatif.',
+        properties: {
+          question: { type: 'string', description: 'Formulée comme on la poserait à la carte (ex. « les prospects cabine photo en Gironde »).' },
+          libelle: { type: 'string', description: 'Texte du lien (ex. « Afficher les 278 emplacements sur la carte »).' },
+        },
+        required: ['question', 'libelle'],
+      },
+      sources: { type: 'string', description: 'D\'où viennent les données, et ce qui reste incertain. Une ou deux phrases.' },
+    },
+    required: ['titre', 'resume', 'sections'],
+  },
+};
+
+/** Enregistre le document et rend son identifiant au modèle, pour qu'il puisse donner
+ *  le lien dans sa réponse. On écarte les sections vides ici plutôt que côté rendu :
+ *  un document qui contient un tableau sans lignes a l'air bâclé, et le nettoyer à
+ *  l'affichage laisserait la coquille dans la base. */
+async function enregistrerDocument(
+  admin: any, entree: Record<string, any>, userId: string | null, modele: string,
+): Promise<Record<string, unknown>> {
+  const titre = String(entree.titre ?? '').trim();
+  if (!titre) return { error: 'Un titre est nécessaire.' };
+
+  const liste = (v: unknown) => (Array.isArray(v) && v.length ? v : undefined);
+  const contenu = {
+    resume: String(entree.resume ?? '').trim() || undefined,
+    chiffres_cles: liste(entree.chiffres_cles),
+    sections: liste(entree.sections),
+    graphiques: liste((entree.graphiques ?? []).filter((g: any) => Array.isArray(g?.donnees) && g.donnees.length)),
+    actions: liste(entree.actions),
+    prospects: liste(entree.prospects),
+    carte: entree.carte?.question ? entree.carte : undefined,
+    sources: String(entree.sources ?? '').trim() || undefined,
+  };
+
+  const { data, error } = await admin.from('copilot_documents')
+    .insert({
+      titre,
+      sujet: String(entree.sujet ?? '').trim() || null,
+      contenu,
+      modele,
+      created_by: userId,
+    })
+    .select('id')
+    .single();
+  if (error) return { error: `Enregistrement impossible : ${error.message}` };
+
+  return {
+    ok: true,
+    id: data.id,
+    url: `/document/${data.id}`,
+    // Le modèle doit annoncer le document sans le résumer une seconde fois : il vient
+    // de le rédiger, le répéter en clair doublerait la réponse pour rien.
+    consigne: "Le document est prêt. Annonce-le en une phrase avec son lien, sans en répéter le contenu.",
+  };
+}
 
 function summarizeSql(sql: string): string {
   const s = (sql || '').replace(/\s+/g, ' ').trim();
@@ -922,7 +1088,7 @@ async function toolLoop(params: {
   journal: TurnLog[];
 }> {
   const { admin, model, system, dynamicSuffix, initialMessages, extraTools = [], toolChoice, extraPayload, onEvent, userId = null, salleOnly = false } = params;
-  const tools = [SQL_TOOL, MEMORISE_TOOL, OUBLIER_TOOL, CHART_TOOL, ...extraTools];
+  const tools = [SQL_TOOL, MEMORISE_TOOL, OUBLIER_TOOL, CHART_TOOL, DOCUMENT_TOOL, ...extraTools];
   const messages = [...initialMessages];
   const journal: TurnLog[] = [];
 
@@ -993,6 +1159,8 @@ async function toolLoop(params: {
             onEvent('gaia_chart', call?.input ?? {});
           } else if (call?.name === 'memoriser') {
             onEvent('gaia_memoire', { categorie: call?.input?.categorie, contenu: call?.input?.contenu });
+          } else if (call?.name === 'generer_document') {
+            onEvent('gaia_document_encours', { titre: call?.input?.titre ?? 'Document' });
           }
         } catch { /* ignore */ }
       }
@@ -1013,6 +1181,8 @@ async function toolLoop(params: {
             result = await oublier(admin, String(call?.input?.id ?? ''));
           } else if (call?.name === 'afficher_graphique') {
             result = { ok: true, rendered: 'côté page' };
+          } else if (call?.name === 'generer_document') {
+            result = await enregistrerDocument(admin, call?.input ?? {}, userId, model);
           } else {
             result = { error: `Outil inconnu: ${call?.name}` };
           }

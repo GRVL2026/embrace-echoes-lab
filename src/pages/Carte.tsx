@@ -892,6 +892,21 @@ export default function Carte() {
   };
 
 
+  // Arrivée depuis un document du copilote : /carte?q=… pose la question toute seule.
+  // Sans cela le lien « voir sur la carte » ouvrirait une carte vide, et il faudrait
+  // retaper la question qu'on venait de lire.
+  const questionUrl = search.get("q");
+  const questionUrlFaite = useRef(false);
+  useEffect(() => {
+    if (!questionUrl || questionUrlFaite.current || !authorized) return;
+    questionUrlFaite.current = true;
+    setQuery(questionUrl);
+    void askCopilot(questionUrl);
+    // askCopilot est recréée à chaque rendu : la garde par ref est ce qui empêche
+    // la question de repartir en boucle, pas la liste de dépendances.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [questionUrl, authorized]);
+
   const resetCopilot = () => {
     setCopilotResult(null);
     setQuery("");

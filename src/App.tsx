@@ -21,6 +21,7 @@ import AdminSync from "./pages/AdminSync";
 import AdminVeille from "./pages/AdminVeille";
 import Gazette from "./pages/Gazette";
 import ParcArcade from "./pages/ParcArcade";
+import CopilotDocument from "./pages/CopilotDocument";
 import GaiaClientFiche from "./pages/GaiaClientFiche";
 import Clients from "./pages/Clients";
 import MatriceClients from "./pages/MatriceClients";
@@ -100,6 +101,7 @@ const App = () => (
             <Route path="/admin/veille" element={<P><AdminVeille /></P>} />
             <Route path="/gazette" element={<P><Gazette /></P>} />
             <Route path="/parc-arcade" element={<P><ParcArcade /></P>} />
+            <Route path="/document/:id" element={<P><CopilotDocument /></P>} />
             <Route path="/admin/gaia/client/:nom" element={<P><GaiaClientFiche /></P>} />
             <Route path="/admin/gaia/revue/:id" element={<P><GaiaRevueView /></P>} />
             <Route path="/admin/notifications" element={<P><NotificationsSettings /></P>} />

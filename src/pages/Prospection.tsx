@@ -164,6 +164,11 @@ const STATUT_COLOR: Record<Statut, string> = {
 const SEGMENTS: { key: Segment; label: string; className: string }[] = [
   { key: "camping", label: "Camping", className: "bg-teal-500/15 text-teal-300 border-teal-500/30" },
   { key: "loisirs", label: "Loisirs", className: "bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30" },
+  // FEC : Family Entertainment Center — les complexes qui cumulent bowling, laser,
+  // karting, trampoline… Ils ne se travaillent pas comme un bowling seul : le parc est
+  // plus gros, l'exploitant est un professionnel du loisir, et la décision porte sur un
+  // assortiment complet plutôt que sur une machine.
+  { key: "fec", label: "FEC", className: "bg-violet-500/15 text-violet-300 border-violet-500/30" },
   { key: "chr", label: "CHR", className: "bg-amber-500/15 text-amber-300 border-amber-500/30" },
   { key: "retail", label: "Retail", className: "bg-sky-500/15 text-sky-300 border-sky-500/30" },
   { key: "revendeur", label: "Revendeur", className: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },

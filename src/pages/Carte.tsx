@@ -59,10 +59,10 @@ type ProspectPt = {
 // prospects (par secteur d'activité). Les mélanger dans une seule liste de couches
 // empêchait de travailler un secteur de prospection sans afficher tout le portefeuille.
 type ClientLayer = "actif" | "dormant" | "inactif";
-type ProspectSeg = "camping" | "loisirs" | "chr" | "retail" | "autre";
+type ProspectSeg = "camping" | "loisirs" | "fec" | "chr" | "retail" | "autre";
 
 const CLIENT_LAYERS: ClientLayer[] = ["actif", "dormant", "inactif"];
-const PROSPECT_SEGMENTS: ProspectSeg[] = ["camping", "loisirs", "chr", "retail", "autre"];
+const PROSPECT_SEGMENTS: ProspectSeg[] = ["camping", "loisirs", "fec", "chr", "retail", "autre"];
 
 const COLORS_CLIENT: Record<ClientLayer, string> = {
   actif: "#3b82f6",
@@ -72,6 +72,7 @@ const COLORS_CLIENT: Record<ClientLayer, string> = {
 const COLORS_PROSPECT: Record<ProspectSeg, string> = {
   camping: "#10b981",
   loisirs: "#a855f7",
+  fec: "#8b5cf6",
   chr: "#f43f5e",
   retail: "#0ea5e9",
   autre: "#64748b",
@@ -84,6 +85,7 @@ const LABELS_CLIENT: Record<ClientLayer, string> = {
 const LABELS_PROSPECT: Record<ProspectSeg, string> = {
   camping: "Camping",
   loisirs: "Loisirs",
+  fec: "FEC (multi-activités)",
   chr: "CHR",
   retail: "Retail",
   autre: "Autres",
@@ -350,17 +352,12 @@ export default function Carte() {
     },
   });
 
-  const { data: segmentsEnBase } = useQuery({
-    queryKey: ["segments-prospects"],
-    staleTime: 600_000,
-    queryFn: async () => {
-      const { data, error } = await supabase.from("prospects").select("segment").limit(10000);
-      if (error) throw error;
-      const vus = new Set<string>();
-      for (const r of data ?? []) if ((r as any).segment) vus.add(String((r as any).segment));
-      return [...vus].sort();
-    },
-  });
+  // Les segments proposés à l'arbitrage viennent de la liste de référence, PAS d'un
+  // balayage de la base. Deux raisons : PostgREST plafonne les lectures à mille lignes,
+  // et les mille premiers prospects étant tous des campings, le menu ne proposait que
+  // « camping ». Et surtout, un segment nouveau — FEC — doit pouvoir être choisi avant
+  // qu'aucune fiche ne le porte, sinon il ne peut jamais apparaître.
+  const segmentsEnBase = PROSPECT_SEGMENTS;
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["map-points"],
@@ -1250,8 +1247,8 @@ export default function Carte() {
                         <SelectValue placeholder="Choisir un secteur…" />
                       </SelectTrigger>
                       <SelectContent>
-                        {(segmentsEnBase ?? []).map((sg) => (
-                          <SelectItem key={sg} value={sg} className="capitalize">{sg}</SelectItem>
+                        {segmentsEnBase.map((sg) => (
+                          <SelectItem key={sg} value={sg}>{LABELS_PROSPECT[sg]}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

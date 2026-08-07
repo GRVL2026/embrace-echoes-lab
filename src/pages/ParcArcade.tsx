@@ -15,8 +15,11 @@ import {
 // L'infobulle autonome, et non celle de ui/chart : cette dernière appelle useChart()
 // et LÈVE une exception hors d'un ChartContainer — la page devenait un écran noir.
 import { ChartTooltipContent } from "@/components/admin/chartTooltip";
+// Recharts exporte lui aussi un « Tooltip » : importer les deux sous le même nom est
+// une erreur de syntaxe, et le module entier cesse de se charger — page noire, sans
+// message. On renomme celui du graphique, l'autre reste l'infobulle de l'interface.
 import {
-  ResponsiveContainer, PieChart, Pie, Cell, Tooltip,
+  ResponsiveContainer, PieChart, Pie, Cell, Tooltip as InfobulleGraphique,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList,
 } from "recharts";
 import {
@@ -403,7 +406,7 @@ export default function ParcArcade() {
                       }}>
                       {typesData.map((_, i) => <Cell key={i} fill={COULEURS[i % COULEURS.length]} />)}
                     </Pie>
-                    <Tooltip content={<ChartTooltipContent hideLabel
+                    <InfobulleGraphique content={<ChartTooltipContent hideLabel
                       formatter={(v: any, _n: any, it: any) => [`${v} lieux`, it?.payload?.nom]} />} />
                   </PieChart>
                 </ResponsiveContainer>
@@ -443,7 +446,7 @@ export default function ParcArcade() {
                       qui appartient la barre qu'on regarde. */}
                   <YAxis type="category" dataKey="nom" width={132} tickLine={false} axisLine={false}
                     interval={0} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                  <Tooltip cursor={{ fill: "hsl(var(--muted)/0.4)" }}
+                  <InfobulleGraphique cursor={{ fill: "hsl(var(--muted)/0.4)" }}
                     content={<ChartTooltipContent hideLabel
                       formatter={(v: any, _n: any, it: any) => [`${v} machines`, it?.payload?.nom]} />} />
                   <Bar dataKey="valeur" radius={[0, 4, 4, 0]} cursor="pointer"

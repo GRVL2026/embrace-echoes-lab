@@ -192,6 +192,16 @@ Deno.serve(async (req) => {
     const segment = String(body.segment ?? 'camping').trim();
     const osmFiltre = String(body.osm_filtre ?? '["tourism"="camp_site"]').trim();
     const dryRun = body.dry_run === true;
+
+    // La fonction est née pour les campings importés de l'INSEE ; elle sert désormais
+    // aussi aux lieux relevés sur des sources publiques (cabines photo, annuaire
+    // arcade), qui portent une autre source et plusieurs segments à la fois. D'où ces
+    // deux paramètres, dont les valeurs par défaut préservent le comportement d'origine.
+    const source = String(body.source ?? 'naf').trim();
+    const segments: string[] = Array.isArray(body.segments) && body.segments.length
+      ? body.segments.map((s: unknown) => String(s).trim()).filter(Boolean)
+      : [segment];
+    const cibler = (q: any) => q.eq('source', source).in('segment', segments);
     let deps: string[] = Array.isArray(body.departements)
       ? body.departements.map((d: unknown) => String(d).trim()).filter(Boolean)
       : String(body.departements ?? '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -238,9 +248,8 @@ Deno.serve(async (req) => {
         // bloquerait la file indéfiniment — constaté sur le Pas-de-Calais.
         // Les départements en échec restent identifiables : leur taux d'appariement est nul.
         if (!dryRun) {
-          await admin.from('prospects')
-            .update({ osm_tente_at: new Date().toISOString() })
-            .eq('segment', segment).eq('source', 'naf')
+          await cibler(admin.from('prospects')
+            .update({ osm_tente_at: new Date().toISOString() }))
             .like('adresse', `%${cpPrefixe(dep)}___ %`);
         }
         continue;
@@ -254,11 +263,9 @@ Deno.serve(async (req) => {
         .filter(Boolean) as { lat: number; lon: number; t: Record<string, string>; id: string }[];
 
       // Prospects du département : on filtre sur le code postal contenu dans l'adresse.
-      const { data: prospects, error } = await admin
+      const { data: prospects, error } = await cibler(admin
         .from('prospects')
-        .select('id, entreprise, siret, lat, lng, adresse, groupe, telephone, email, site_web')
-        .eq('segment', segment)
-        .eq('source', 'naf')
+        .select('id, entreprise, siret, lat, lng, adresse, groupe, telephone, email, site_web'))
         .not('lat', 'is', null)
         .like('adresse', `%${cpPrefixe(dep)}___ %`);
       if (error) throw error;
@@ -343,10 +350,9 @@ Deno.serve(async (req) => {
       // département où rien ne correspond serait resélectionné indéfiniment par la
       // tâche planifiée, qui tournerait en boucle sur le même sans jamais avancer.
       if (!dryRun) {
-        const { error: e3 } = await admin
+        const { error: e3 } = await cibler(admin
           .from('prospects')
-          .update({ osm_tente_at: new Date().toISOString() })
-          .eq('segment', segment).eq('source', 'naf')
+          .update({ osm_tente_at: new Date().toISOString() }))
           .like('adresse', `%${cpPrefixe(dep)}___ %`);
         if (e3) throw e3;
       }

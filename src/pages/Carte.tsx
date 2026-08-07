@@ -842,6 +842,13 @@ export default function Carte() {
         points,
       });
 
+      // Sur mobile le copilote occupe tout l'écran : y rester une fois la réponse
+      // obtenue donne l'impression que rien ne s'est passé — la carte est dessous,
+      // invisible. On referme donc le panneau dès que le résultat est là, pour que
+      // l'utilisateur voie les points apparaître. En cas d'erreur on le laisse
+      // ouvert : la question est encore dans le champ, il peut la corriger.
+      setCopilotSheet(false);
+
       if (rows.length === 0) {
         toast({
           title: "Aucun résultat",

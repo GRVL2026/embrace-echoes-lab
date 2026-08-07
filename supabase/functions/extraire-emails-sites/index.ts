@@ -162,11 +162,19 @@ Deno.serve(async (req) => {
     const dryRun = body.dry_run === true;
     const lot = Math.min(200, Math.max(1, Number(body.lot ?? LOT)));
 
+    // Née pour les campings INSEE, la fonction sert désormais aussi aux lieux relevés sur
+    // des sources publiques, qui portent une autre source et plusieurs segments. Les
+    // valeurs par défaut préservent le comportement d'origine.
+    const source = String(body.source ?? 'naf').trim();
+    const segments: string[] = Array.isArray(body.segments) && body.segments.length
+      ? body.segments.map((s: unknown) => String(s).trim()).filter(Boolean)
+      : [segment];
+
     // Cibles : un site web connu, pas encore d'email, et pas déjà tenté.
     const { data: cibles, error } = await admin
       .from('prospects')
       .select('id, entreprise, site_web')
-      .eq('source', 'naf').eq('segment', segment)
+      .eq('source', source).in('segment', segments)
       .not('site_web', 'is', null)
       .is('email', null)
       .is('email_tente_at', null)
@@ -215,7 +223,7 @@ Deno.serve(async (req) => {
     const { count: restants } = await admin
       .from('prospects')
       .select('id', { count: 'exact', head: true })
-      .eq('source', 'naf').eq('segment', segment)
+      .eq('source', source).in('segment', segments)
       .not('site_web', 'is', null).is('email', null).is('email_tente_at', null);
 
     return json({

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Navigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Loader2, Plus, Upload, Target, ExternalLink, Trash2, GripVertical, Mail, Phone,
   Sparkles, Copy, RefreshCw, Save, Link2, Link2Off, Search, TrendingUp, Zap, Send, Linkedin, X,
+  ArrowLeft,
 } from "lucide-react";
 
 /* -------------------- LinkedIn search helpers -------------------- */
@@ -477,7 +478,17 @@ export default function Prospection() {
         className="sticky top-0 z-30 flex items-center gap-3 border-b border-border bg-background/85 backdrop-blur px-4 py-3"
         style={{ paddingTop: "calc(0.75rem + var(--safe-top))" }}
       >
-        <Target className="h-5 w-5" style={{ color: "hsl(var(--space-prospection))" }} />
+        {/* Retour au menu. On y arrive notamment en quittant la carte, et sans cette
+            flèche il n'existait aucun chemin de sortie sur mobile : le menu latéral
+            n'y est pas affiché, et le geste « précédent » ramenait sur la carte. */}
+        <Link
+          to="/"
+          aria-label="Retour au menu"
+          className="-ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
+        <Target className="hidden h-5 w-5 sm:block" style={{ color: "hsl(var(--space-prospection))" }} />
         <div className="flex-1 min-w-0">
           <h1 className="font-display text-base sm:text-lg font-semibold truncate">Prospection</h1>
           <p className="text-xs text-muted-foreground truncate">CRM commercial — pipeline & suivi des leads</p>

@@ -52,7 +52,7 @@ Tu reçois des FAITS vérifiés. Tu n'as le droit d'utiliser QUE ces faits.
 
 FORMAT — trois parties courtes, en Markdown, 120 mots maximum au total :
 1. Une phrase qui situe l'établissement et son parc.
-2. Ce qui saute aux yeux : famille absente, baisse d'activité, signal de presse. Deux constats au plus, les plus actionnables.
+2. Ce qui saute aux yeux. Deux constats au plus, les plus actionnables. Si « absent_chez_lui_courant_ailleurs » existe, c'est le constat le plus fort : dis-le avec le chiffre de comparaison — « aucun flipper, alors que 73 % des bowlings de cette taille en ont un ». Un manque comparé à ses semblables se discute ; un manque affirmé dans l'absolu se conteste.
 3. **À faire** : une à trois actions concrètes, à l'impératif, chacune sur une ligne. Quand « hors_catalogue_par_genre » existe, au moins une action doit proposer NOMMÉMENT une ou deux références de « notre_offre_dans_ces_genres » correspondant au genre le plus représenté. Un lieu qui possède huit jeux de tir qu'aucun de nos fournisseurs ne fabrique est un lieu qui aime les jeux de tir : c'est le meilleur angle possible, bien plus fort qu'une famille absente.
 
 RÈGLES ABSOLUES
@@ -60,6 +60,7 @@ RÈGLES ABSOLUES
 - N'INVENTE AUCUN CHIFFRE ni aucun fait. Si une information manque, ne la mentionne pas.
 - Ne dis JAMAIS « il n'a rien acheté chez nous ». Dis « aucune facture depuis ${DEBUT_VENTES}, notre historique ne remonte pas plus loin ».
 - N'utilise JAMAIS l'année d'un modèle pour parler de l'âge du parc : l'annuaire donne l'année de SORTIE du jeu, pas celle de son achat. Un lieu peut avoir acquis d'occasion un modèle de 2013. Cette donnée ne t'est plus transmise, ne la réclame pas.
+- Ne conclus JAMAIS d'une absence non signalée dans « absent_chez_lui_courant_ailleurs ». L'annuaire ne recense qu'un billard, un baby-foot et quatre grues pour cent quatre-vingt-quatre flippers : leur absence dans les données ne prouve rien, et ces familles ont été écartées de la comparaison pour cette raison.
 - Ne dis JAMAIS qu'une machine installée vient de chez nous : l'annuaire dit ce qui est sur place, pas qui l'a livré. Tu peux dire qu'elle relève de notre catalogue.
 - Un établissement d'un réseau (Buffalo Grill, CGR…) se décide au siège : signale-le au lieu de proposer un démarchage local isolé.
 - Pas de formule de politesse, pas d'introduction. Le commercial lit trois lignes entre deux appels.`;
@@ -148,6 +149,30 @@ Deno.serve(async (req) => {
         ].filter(Boolean),
         principaux_fabricants: [...new Set(machines.map((m: any) => m.editeur).filter(Boolean))].slice(0, 5),
       };
+      // COMPARAISON À SES SEMBLABLES. Un manque ne se juge pas dans l'absolu : un
+      // bowling de douze machines sans jeu de café est une anomalie, celui de deux
+      // machines ne l'est pas. On confronte donc l'assortiment du lieu à la norme de
+      // sa cohorte — même type d'établissement, même taille de parc.
+      const { data: sien } = await admin.from('v_arcade_assortiment')
+        .select('famille, machines_famille, tranche').eq('salle_id', salle.id);
+      const tranche = (sien ?? [])[0]?.tranche ?? null;
+      if (tranche && salle.type_lieu) {
+        const { data: normes } = await admin.from('v_arcade_normes')
+          .select('famille, pct_equipes, lieux_cohorte, absence_interpretable')
+          .eq('type_lieu', salle.type_lieu).eq('tranche', tranche);
+        const possede = new Set((sien ?? []).map((r: any) => r.famille));
+        // On ne signale que ce qu'une majorité nette de la cohorte possède ET dont
+        // l'absence est interprétable : l'annuaire ignore les billards et les grues,
+        // conclure de leur absence serait inventer.
+        const ecarts = (normes ?? [])
+          .filter((n: any) => n.absence_interpretable && n.pct_equipes >= 60 && !possede.has(n.famille))
+          .map((n: any) => ({ famille: n.famille, pct_des_semblables: n.pct_equipes,
+                              cohorte: `${salle.type_lieu} de ${tranche} machines`,
+                              lieux_compares: n.lieux_cohorte }));
+        if (ecarts.length) (faits.parc as any).absent_chez_lui_courant_ailleurs = ecarts;
+        (faits.parc as any).cohorte = `${salle.type_lieu}, ${tranche} machines`;
+      }
+
       // CE QU'IL A ET QUE NOUS NE VENDONS PAS, par genre — et ce que nous proposons
       // dans ces mêmes genres. C'est le croisement qui transforme un constat en offre :
       // un lieu équipé de huit tirs qu'aucun de nos fournisseurs ne fabrique est un lieu

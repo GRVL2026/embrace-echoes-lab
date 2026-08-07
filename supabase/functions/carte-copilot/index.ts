@@ -18,6 +18,8 @@ TABLES AUTORISÉES (whitelist stricte — toute autre table est refusée par le 
 - client_actions(code_client text, type text, date timestamptz, auteur_id uuid)
 - arcade_salles(id uuid, slug text, nom text, adresse text, code_postal text, ville text, departement text, region text, type_lieu text, prestations text[], site_web text, facebook text, lat numeric, lng numeric, ferme boolean, prospect_id uuid, code_client text, rapprochement text, candidat_nom text, fiche_url text)  -- lieux recensés par l'annuaire arcade
 - arcade_machines(slug text, nom text, categorie text, type_jeu text, editeur text, annee smallint, code_article text, famille_aa text, correspondance text)  -- catalogue des modèles
+- v_arcade_assortiment(salle_id, nom, ville, departement, region, type_lieu, prospect_id, code_client, nb_machines, tranche, famille, machines_famille)
+- v_arcade_normes(type_lieu, tranche, famille, lieux_cohorte, lieux_avec, pct_equipes, absence_interpretable)
 - arcade_parc(salle_id uuid, machine_slug text)  -- QUI POSSÈDE QUOI : une ligne par machine présente dans une salle
 
 L'ANNUAIRE ARCADE — comment s'en servir, et ce qu'il ne dit pas :
@@ -27,6 +29,13 @@ L'ANNUAIRE ARCADE — comment s'en servir, et ce qu'il ne dit pas :
 - arcade_parc dit ce qui est INSTALLÉ SUR PLACE, JAMAIS ce que nous avons vendu. Ne dis jamais « ce client a acheté ces machines chez nous » : seul gaia_ventes le prouve, et il ne remonte qu'au 02/12/2024.
 - arcade_machines.correspondance : 'exacte' = référence à notre catalogue, 'marque' = fabricant que nous distribuons sans le modèle exact, 'aucune' = hors périmètre. C'est la mesure du parc concurrent.
 - CHERCHER UN MODÈLE PAR SON NOM : l'orthographe de la question ne correspond jamais exactement — « monsterkart », « monster kart », « Monster Kart Twin ». Utilise TOUJOURS un ILIKE tolérant sur arcade_machines.nom en retirant les espaces : replace(lower(m.nom),' ','') LIKE '%monsterkart%'.
+
+    • ASSORTIMENTS — deux vues qui disent ce qu'un lieu possède et ce que possèdent ses semblables.
+      - v_arcade_assortiment (salle_id, nom, ville, departement, region, type_lieu, prospect_id, code_client, nb_machines, tranche, famille, machines_famille) : une ligne par lieu ET par famille. tranche ∈ {'1-3','4-8','9-15','16-30','31+'}, famille ∈ {flipper, tir, conduite, sport/rythme, jeu de café, grue, autre borne}.
+      - v_arcade_normes (type_lieu, tranche, famille, lieux_cohorte, lieux_avec, pct_equipes, absence_interpretable) : pour chaque cohorte — même type de lieu, même taille de parc — la part des établissements qui possèdent cette famille. Les cohortes de moins de huit lieux en sont exclues.
+      UN MANQUE SE JUGE PAR RAPPORT À LA COHORTE, JAMAIS DANS L'ABSOLU. Un bowling de douze machines sans jeu de café est une anomalie — 95 % des lieux de cette taille en ont un ; un bowling de deux machines sans jeu de café est normal. Cite toujours le pourcentage de comparaison : « aucun flipper, alors que 73 % des bowlings de cette taille en ont un » se discute, « il lui manque un flipper » se conteste.
+      ⚠️ N'INTERPRÈTE JAMAIS UNE ABSENCE quand absence_interpretable = false. L'annuaire est tenu par des passionnés de jeux vidéo : il recense 184 modèles de flippers mais UN SEUL billard, UN SEUL baby-foot et QUATRE grues. Ces familles existent sur le terrain bien plus qu'ici. Dire « personne n'a de grue en France » serait faux.
+      Exemple — les lieux à qui il manque ce que leurs semblables ont : SELECT a.nom, a.ville, a.type_lieu, a.nb_machines, n.famille, n.pct_equipes FROM v_arcade_normes n JOIN v_arcade_assortiment a ON a.type_lieu = n.type_lieu AND a.tranche = n.tranche WHERE n.absence_interpretable AND n.pct_equipes >= 70 AND NOT EXISTS (SELECT 1 FROM v_arcade_assortiment x WHERE x.salle_id = a.salle_id AND x.famille = n.famille) GROUP BY a.nom, a.ville, a.type_lieu, a.nb_machines, n.famille, n.pct_equipes
 
 TU N'AS PAS ACCÈS aux tables profiles, user_roles, allowed_emails, invitations, notifications, gaia_commandes, gaia_achats, gaia_stock, aux schémas auth/storage/vault/pg_catalog/information_schema, ni aux vues v_gaia_* / mv_gaia_*. Toute requête qui les cite sera rejetée : NE LES MENTIONNE JAMAIS.
 

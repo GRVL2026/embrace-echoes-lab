@@ -286,8 +286,12 @@ export default function ParcArcade() {
                 <BarChart data={fabricantsData} layout="vertical" margin={{ left: 4, right: 34, top: 4, bottom: 4 }}>
                   <CartesianGrid horizontal={false} stroke="hsl(var(--border))" strokeDasharray="2 4" />
                   <XAxis type="number" hide />
-                  <YAxis type="category" dataKey="nom" width={124} tickLine={false} axisLine={false}
-                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                  {/* interval={0} force l'affichage de TOUTES les étiquettes. Par
+                      défaut Recharts en saute pour gagner de la place, et un graphique
+                      qui nomme un fabricant sur deux ne se lit pas : on ne sait pas à
+                      qui appartient la barre qu'on regarde. */}
+                  <YAxis type="category" dataKey="nom" width={132} tickLine={false} axisLine={false}
+                    interval={0} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
                   <Tooltip cursor={{ fill: "hsl(var(--muted)/0.4)" }}
                     content={<ChartTooltipContent hideLabel
                       formatter={(v: any, _n: any, it: any) => [`${v} machines`, it?.payload?.nom]} />} />
@@ -379,11 +383,29 @@ export default function ParcArcade() {
                 {modelesDuDetail.length > 0 && (
                   <>
                     <h3 className="text-sm font-semibold">Modèles de ce fabricant</h3>
-                    <div className="flex flex-wrap gap-1">
+                    {/* Une liste ordonnée avec sa barre, et non une nuée d'étiquettes :
+                        vingt-cinq pastilles de même taille ne disent pas lequel pèse.
+                        Ici le décrochage entre le premier et le dixième se voit. */}
+                    <div className="space-y-0.5">
                       {modelesDuDetail.map((m) => (
-                        <Badge key={m.slug} variant="outline" className="h-5 gap-1 px-1.5 text-[10px] capitalize">
-                          {m.nom}<span className="tabular-nums font-semibold">{m.salles}</span>
-                        </Badge>
+                        <button
+                          key={m.slug}
+                          type="button"
+                          onClick={() => setDetail({ genre: "modele", modele: m })}
+                          className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left hover:bg-muted"
+                        >
+                          <span className="w-8 flex-shrink-0 text-right text-[13px] font-semibold tabular-nums">
+                            {m.salles}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-[13px] capitalize">{m.nom}</span>
+                          <span className="hidden sm:block h-1.5 w-20 flex-shrink-0 overflow-hidden rounded-full bg-muted">
+                            <span className="block h-full rounded-full bg-primary"
+                              style={{ width: `${Math.round((m.salles / (modelesDuDetail[0]?.salles || 1)) * 100)}%` }} />
+                          </span>
+                          {m.categorie === "flipper" && (
+                            <Badge variant="outline" className="h-4 flex-shrink-0 px-1 text-[9px]">flipper</Badge>
+                          )}
+                        </button>
                       ))}
                     </div>
                     <Separator />

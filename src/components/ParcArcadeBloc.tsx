@@ -83,6 +83,40 @@ export function ParcArcadeBloc({
     },
   });
 
+  // COMPARAISON AUX SEMBLABLES. Le bloc disait « aucun flipper » ; il dira « aucun
+  // flipper, alors que 73 % des bowlings de cette taille en ont un ». La première
+  // formule est une opinion qu'un exploitant conteste, la seconde un fait qu'il doit
+  // expliquer — le chiffre de comparaison change qui doit se justifier.
+  const { data: cohorte } = useQuery({
+    queryKey: ["parc-cohorte", data?.salle?.id ?? ""],
+    enabled: !!data?.salle?.id,
+    staleTime: 600_000,
+    queryFn: async () => {
+      const { data: sien, error } = await supabase
+        .from("v_arcade_assortiment" as any)
+        .select("famille, tranche").eq("salle_id", data!.salle!.id);
+      if (error) throw error;
+      const tranche = (sien ?? [])[0]?.tranche as string | undefined;
+      const type = data!.salle!.type_lieu;
+      if (!tranche || !type) return null;
+
+      const { data: normes, error: e2 } = await supabase
+        .from("v_arcade_normes" as any)
+        .select("famille, pct_equipes, lieux_cohorte, absence_interpretable")
+        .eq("type_lieu", type).eq("tranche", tranche);
+      if (e2) throw e2;
+
+      const possede = new Set((sien ?? []).map((r: any) => r.famille));
+      // Seules les familles dont l'ABSENCE est interprétable sont retenues : l'annuaire
+      // ne recense qu'un billard et quatre grues, en conclure quoi que ce soit serait
+      // inventer.
+      const manques = (normes ?? [])
+        .filter((n: any) => n.absence_interpretable && n.pct_equipes >= 60 && !possede.has(n.famille))
+        .sort((a: any, b: any) => b.pct_equipes - a.pct_equipes);
+      return { tranche, type, manques, cohorte: (normes ?? [])[0]?.lieux_cohorte ?? 0 };
+    },
+  });
+
   const stats = useMemo(() => {
     const m = data?.machines ?? [];
     return {
@@ -126,6 +160,12 @@ export function ParcArcadeBloc({
             · aucun {stats.absentes.slice(0, 2).join(", aucun ")}
           </span>
         )}
+        {(cohorte?.manques.length ?? 0) > 0 && (
+          <span className="text-emerald-600 dark:text-emerald-400">
+            · pas de {(cohorte!.manques[0] as any).famille}, contre{" "}
+            {(cohorte!.manques[0] as any).pct_equipes} % de ses semblables
+          </span>
+        )}
       </p>
     );
   }
@@ -152,6 +192,28 @@ export function ParcArcadeBloc({
           </Badge>
         )}
       </div>
+
+      {/* L'écart aux semblables, quand il existe : c'est l'argument le plus solide du
+          bloc, parce qu'il ne se conteste pas comme une opinion. */}
+      {(cohorte?.manques.length ?? 0) > 0 && (
+        <div className="mt-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-2">
+          <p className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+            Ce que ses semblables ont et lui pas
+          </p>
+          <ul className="mt-1 space-y-0.5">
+            {cohorte!.manques.slice(0, 3).map((m: any) => (
+              <li key={m.famille} className="text-[12px] leading-snug">
+                <strong className="capitalize">{m.famille}</strong> — présent chez{" "}
+                <strong className="tabular-nums">{m.pct_equipes} %</strong> des {cohorte!.type}s
+                de {cohorte!.tranche} machines
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            Comparé à {cohorte!.cohorte} établissements de même type et de même taille.
+          </p>
+        </div>
+      )}
 
       <Collapsible open={ouvert} onOpenChange={setOuvert}>
         <CollapsibleTrigger asChild>

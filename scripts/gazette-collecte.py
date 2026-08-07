@@ -47,6 +47,28 @@ EVENEMENTS = (
 CTX = ssl.create_default_context()
 
 
+def attendre_le_reseau(essais: int = 6, pause: int = 60) -> bool:
+    """Attend que la connexion soit revenue avant de commencer.
+
+    macOS lance une tâche planifiée manquée dès le réveil de la machine, souvent AVANT
+    que le Wi-Fi ne soit rétabli. Le relevé du 7 août a ainsi collecté zéro article :
+    les quatorze requêtes ont échoué en erreur réseau, sur une machine par ailleurs
+    parfaitement connectée trente secondes plus tard.
+
+    Six essais espacés d'une minute couvrent largement le délai de reconnexion, sans
+    immobiliser la tâche si la panne est réelle."""
+    for i in range(1, essais + 1):
+        try:
+            req = urllib.request.Request("https://news.google.com/", headers={"User-Agent": UA})
+            urllib.request.urlopen(req, timeout=15, context=CTX).read(1024)
+            return True
+        except Exception as e:
+            print(f"  réseau indisponible ({type(e).__name__}), essai {i}/{essais}", file=sys.stderr)
+            if i < essais:
+                time.sleep(pause)
+    return False
+
+
 def collecter(jours: int) -> list[dict]:
     limite = datetime.date.today() - datetime.timedelta(days=jours)
     depuis = limite.isoformat()
@@ -257,6 +279,10 @@ def main() -> None:
         print("Résolution des liens et lecture des articles…")
         enrichir(a.plafond)
         return
+
+    if not attendre_le_reseau():
+        sys.exit("Pas de connexion après six minutes d'attente — relevé abandonné, "
+                 "il sera repris demain.")
 
     print(f"Relevé sur {a.jours} jour(s)…")
     articles = collecter(a.jours)

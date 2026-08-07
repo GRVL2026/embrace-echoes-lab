@@ -9,6 +9,9 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from "@/components/ui/tooltip";
 // L'infobulle autonome, et non celle de ui/chart : cette dernière appelle useChart()
 // et LÈVE une exception hors d'un ChartContainer — la page devenait un écran noir.
 import { ChartTooltipContent } from "@/components/admin/chartTooltip";
@@ -67,6 +70,58 @@ const emoji = (t: string | null) => TYPES[(t ?? "").toLowerCase()] ?? "📍";
 // lieu qui renouvelle chaque année et un lieu figé depuis dix ans obtenaient la même
 // moyenne. La donnée reste en base, elle n'a simplement rien à faire dans un écran
 // d'aide à la décision.
+
+/** Une ligne de classement : colonnes de largeur fixe, pour que les barres et les
+ *  indices s'alignent d'une ligne à l'autre. Sans largeurs fixes, un « 244/321 » plus
+ *  long que « 4/7 » décale toute la ligne et la lecture en colonne se perd. */
+function LigneClassement({
+  pct, icone, libelle, sousTitre, effectif, indice, onClick, explication,
+}: {
+  pct: number; icone?: string; libelle: string; sousTitre?: string | null;
+  effectif?: string | null; indice: number; onClick?: () => void; explication: string;
+}) {
+  const fort = indice >= 1.4, faible = indice <= 0.65;
+  return (
+    <button type="button" onClick={onClick}
+      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-muted">
+      <span className="w-10 flex-shrink-0 text-right text-[13px] font-semibold tabular-nums">
+        {Math.round(pct)}%
+      </span>
+      {icone && <span aria-hidden className="w-4 flex-shrink-0 text-center">{icone}</span>}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] capitalize leading-tight">{libelle}</span>
+        {sousTitre && <span className="block truncate text-[10px] text-muted-foreground">{sousTitre}</span>}
+      </span>
+      {effectif && (
+        <span className="hidden w-14 flex-shrink-0 text-right text-[10px] tabular-nums text-muted-foreground sm:block">
+          {effectif}
+        </span>
+      )}
+      <span className="hidden h-1.5 w-20 flex-shrink-0 overflow-hidden rounded-full bg-muted sm:block">
+        <span className="block h-full rounded-full bg-primary"
+          style={{ width: `${Math.max(2, Math.min(100, Math.round(pct)))}%` }} />
+      </span>
+      {/* L'indice n'est affiché que s'il est net, et il s'explique au survol : un
+          « ×1,6 » sans légende est un chiffre auquel personne ne fait confiance. */}
+      <span className="w-11 flex-shrink-0 text-right">
+        {(fort || faible) && (
+          <Tooltip delayDuration={1000}>
+            <TooltipTrigger asChild>
+              <span className={cn(
+                "inline-block cursor-help rounded px-1 py-0.5 text-[10px] font-medium tabular-nums",
+                fort ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                     : "bg-muted text-muted-foreground",
+              )}>×{indice.toFixed(1)}</span>
+            </TooltipTrigger>
+            <TooltipContent side="left" className="max-w-[240px] text-[11px] leading-relaxed">
+              {explication}
+            </TooltipContent>
+          </Tooltip>
+        )}
+      </span>
+    </button>
+  );
+}
 
 export default function ParcArcade() {
   const { isAdmin, isDirection, isLoading } = useAuth();
@@ -184,23 +239,35 @@ export default function ParcArcade() {
       (salles ?? []).filter((s) => (s.type_lieu ?? "non classé") === detail.valeur).map((s) => s.id),
     );
     if (duType.size < 5) return [];   // sous cinq lieux, un « classement » n'en est pas un
+
+    // L'INDICE SE CALCULE SUR LES MACHINES, PAS SUR LES LIEUX. Comparer la part des
+    // lieux d'un type à celle de tous les lieux donnait un indice supérieur à 1 pour
+    // presque tout : un restaurant a 1,5 machine, une salle d'arcade en a 24, donc
+    // n'importe quel modèle est mécaniquement « sur-représenté » dans les types bien
+    // équipés. Ce n'était pas une affinité mais un artefact de taille de parc.
+    // Rapporter au nombre de MACHINES neutralise cet effet.
     const dansLeType = new Map<string, number>();
     const partout = new Map<string, number>();
+    let machinesDuType = 0, machinesTotal = 0;
     for (const l of liens ?? []) {
       partout.set(l.machine_slug, (partout.get(l.machine_slug) ?? 0) + 1);
-      if (duType.has(l.salle_id)) dansLeType.set(l.machine_slug, (dansLeType.get(l.machine_slug) ?? 0) + 1);
+      machinesTotal++;
+      if (duType.has(l.salle_id)) {
+        dansLeType.set(l.machine_slug, (dansLeType.get(l.machine_slug) ?? 0) + 1);
+        machinesDuType++;
+      }
     }
-    const totalLieux = (salles ?? []).length || 1;
+    if (!machinesDuType) return [];
     return [...dansLeType.entries()]
       .map(([slug, n]) => {
         const m = parModele.get(slug);
-        const pctType = (n / duType.size) * 100;
-        const pctPartout = ((partout.get(slug) ?? 0) / totalLieux) * 100;
+        const partType = (n / machinesDuType) * 100;
+        const partPartout = ((partout.get(slug) ?? 0) / machinesTotal) * 100;
         return {
           slug, nom: m?.nom ?? slug, editeur: m?.editeur ?? null,
           categorie: m?.categorie ?? null, modele: m,
-          lieux: n, pctType, pctPartout,
-          indice: pctPartout > 0 ? pctType / pctPartout : 1,
+          lieux: n, pctType: (n / duType.size) * 100, partType, partPartout,
+          indice: partPartout > 0 ? partType / partPartout : 1,
         };
       })
       .filter((x) => x.lieux >= 3)
@@ -228,12 +295,30 @@ export default function ParcArcade() {
       parTypeTotal.set(t, (parTypeTotal.get(t) ?? 0) + 1);
       if (equipes.has(sa.id)) parTypeEquipe.set(t, (parTypeEquipe.get(t) ?? 0) + 1);
     }
-    const pctGlobal = ((salles ?? []).length ? equipes.size / (salles ?? []).length : 0) * 100;
+    // Là encore, l'indice se mesure en PART DES MACHINES du type, pas en part des
+    // lieux : sinon les types à gros parcs sortent tous sur-représentés.
+    const machinesType = new Map<string, number>(), siennesType = new Map<string, number>();
+    const typeDe = new Map<string, string>();
+    for (const sa of salles ?? []) typeDe.set(sa.id, sa.type_lieu ?? "non classé");
+    let siennesTotal = 0, machinesTotal = 0;
+    for (const l of liens ?? []) {
+      const t = typeDe.get(l.salle_id);
+      if (!t) continue;
+      machinesType.set(t, (machinesType.get(t) ?? 0) + 1);
+      machinesTotal++;
+      if (slugs.has(l.machine_slug)) {
+        siennesType.set(t, (siennesType.get(t) ?? 0) + 1);
+        siennesTotal++;
+      }
+    }
+    const partGlobale = machinesTotal ? (siennesTotal / machinesTotal) * 100 : 0;
     return [...parTypeEquipe.entries()]
       .map(([type, n]) => {
         const total = parTypeTotal.get(type) ?? 1;
-        const pct = (n / total) * 100;
-        return { type, lieux: n, total, pct, indice: pctGlobal > 0 ? pct / pctGlobal : 1 };
+        const mt = machinesType.get(type) ?? 0;
+        const part = mt ? ((siennesType.get(type) ?? 0) / mt) * 100 : 0;
+        return { type, lieux: n, total, pct: (n / total) * 100, part,
+                 indice: partGlobale > 0 ? part / partGlobale : 1 };
       })
       .filter((x) => x.total >= 5)
       .sort((a, b) => b.lieux - a.lieux);
@@ -259,6 +344,7 @@ export default function ParcArcade() {
     : detail.valeur;
 
   return (
+    <TooltipProvider>
     <div className="flex flex-col min-h-screen">
       <header
         className="sticky top-0 z-30 flex items-center gap-3 border-b border-border bg-background/85 backdrop-blur px-4 py-3"
@@ -481,38 +567,22 @@ export default function ParcArcade() {
                   <>
                     <h3 className="text-sm font-semibold">Où ce fabricant est présent</h3>
                     <p className="text-[11px] leading-snug text-muted-foreground">
-                      Part des lieux de chaque type qui possèdent au moins une de ses machines.
-                      La flèche compare à sa présence moyenne, tous types confondus.
+                      Part des machines installées qui viennent de ce fabricant. L'indice compare
+                      à sa part du parc national — survole-le pour le détail.
                     </p>
                     <div className="space-y-0.5">
-                      {typesDuFabricant.map((t) => {
-                        const fort = t.indice >= 1.3, faible = t.indice <= 0.7;
-                        return (
-                          <button key={t.type} type="button"
-                            onClick={() => setDetail({ genre: "type", valeur: t.type })}
-                            className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left hover:bg-muted">
-                            <span className="w-11 flex-shrink-0 text-right text-[13px] font-semibold tabular-nums">
-                              {Math.round(t.pct)} %
-                            </span>
-                            <span aria-hidden className="flex-shrink-0">{emoji(t.type)}</span>
-                            <span className="min-w-0 flex-1 truncate text-[13px] capitalize">{t.type}</span>
-                            <span className="flex-shrink-0 text-[10px] tabular-nums text-muted-foreground">
-                              {t.lieux}/{t.total}
-                            </span>
-                            <span className="hidden sm:block h-1.5 w-16 flex-shrink-0 overflow-hidden rounded-full bg-muted">
-                              <span className="block h-full rounded-full bg-primary"
-                                style={{ width: `${Math.min(100, Math.round(t.pct))}%` }} />
-                            </span>
-                            {(fort || faible) && (
-                              <span className={cn("flex-shrink-0 rounded px-1 py-0.5 text-[10px] font-medium",
-                                fort ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                                     : "bg-muted text-muted-foreground")}>
-                                ×{t.indice.toFixed(1)}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
+                      {typesDuFabricant.map((t) => (
+                        <LigneClassement
+                          key={t.type}
+                          pct={t.part}
+                          icone={emoji(t.type)}
+                          libelle={t.type}
+                          effectif={`${t.lieux}/${t.total} lieux`}
+                          indice={t.indice}
+                          onClick={() => setDetail({ genre: "type", valeur: t.type })}
+                          explication={`${Math.round(t.part)} % des machines installées dans les ${t.type}s viennent de ce fabricant, contre ${Math.round(t.part / (t.indice || 1))} % tous types confondus — soit ${t.indice.toFixed(1)} fois plus.`}
+                        />
+                      ))}
                     </div>
                     <Separator />
                   </>
@@ -522,43 +592,22 @@ export default function ParcArcade() {
                   <>
                     <h3 className="text-sm font-semibold">Ce qu'on y trouve</h3>
                     <p className="text-[11px] leading-snug text-muted-foreground">
-                      Part des {detail.genre === "type" ? detail.valeur : "lieux"} équipés de chaque modèle.
-                      La flèche compare à la moyenne de tous les lieux : elle signale une affinité
-                      avec ce type d'établissement.
+                      Part des lieux de ce type équipés de chaque modèle. L'indice compare le poids
+                      du modèle dans ce type à son poids national — survole-le pour le détail.
                     </p>
                     <div className="space-y-0.5">
-                      {modelesDuType.map((m) => {
-                        const fort = m.indice >= 1.4;
-                        const faible = m.indice <= 0.65;
-                        return (
-                          <button key={m.slug} type="button"
-                            onClick={() => m.modele && setDetail({ genre: "modele", modele: m.modele })}
-                            className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left hover:bg-muted">
-                            <span className="w-11 flex-shrink-0 text-right text-[13px] font-semibold tabular-nums">
-                              {Math.round(m.pctType)} %
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate text-[13px] capitalize">{m.nom}</span>
-                              {m.editeur && (
-                                <span className="block truncate text-[10px] text-muted-foreground">{m.editeur}</span>
-                              )}
-                            </span>
-                            <span className="hidden sm:block h-1.5 w-16 flex-shrink-0 overflow-hidden rounded-full bg-muted">
-                              <span className="block h-full rounded-full bg-primary"
-                                style={{ width: `${Math.min(100, Math.round(m.pctType))}%` }} />
-                            </span>
-                            {/* L'écart à la moyenne, seulement quand il est net : signaler
-                                un indice de 1,05 comme une affinité serait du bruit. */}
-                            {(fort || faible) && (
-                              <span className={cn("flex-shrink-0 rounded px-1 py-0.5 text-[10px] font-medium",
-                                fort ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                                     : "bg-muted text-muted-foreground")}>
-                                {fort ? "×" : "×"}{m.indice.toFixed(1)}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
+                      {modelesDuType.map((m) => (
+                        <LigneClassement
+                          key={m.slug}
+                          pct={m.pctType}
+                          libelle={m.nom}
+                          sousTitre={m.editeur}
+                          effectif={`${m.lieux} lieux`}
+                          indice={m.indice}
+                          onClick={() => m.modele && setDetail({ genre: "modele", modele: m.modele })}
+                          explication={`Ce modèle représente ${m.partType.toFixed(1)} % des machines de ce type de lieu, contre ${m.partPartout.toFixed(1)} % du parc national — soit ${m.indice.toFixed(1)} fois plus.`}
+                        />
+                      ))}
                     </div>
                     <Separator />
                   </>
@@ -612,5 +661,6 @@ export default function ParcArcade() {
         </SheetContent>
       </Sheet>
     </div>
+    </TooltipProvider>
   );
 }

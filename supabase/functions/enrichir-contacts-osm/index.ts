@@ -37,7 +37,12 @@ const MIRRORS = [
 // Overpass refuse par un 406 les clients qui ne s'identifient pas.
 const UA = 'Arcade OS - Avranches Automatic (leopaul@avranchesautomatic.com)';
 
-const LOT = 50;             // points par requête Overpass
+// Vingt-cinq points par requête, mesuré : la requête aboutit en une trentaine de
+// secondes et rend quelque neuf cents objets. Ce n'est PAS la taille qui limite —
+// des lots de cinq ont échoué quand vingt-cinq passaient. Les instances publiques
+// distribuent des créneaux d'exécution ; quand aucun n'est libre elles répondent 504.
+// C'est transitoire, et cela se traite par la patience, pas en réduisant le lot.
+const LOT = 25;
 const RAYON_M = 80;         // le géocodage est à l'adresse : au-delà, c'est le voisin
 const SIM_MIN = 0.34;       // « Le Comptoir » contre « Comptoir Général » passe, pas deux inconnus
 const BUDGET_MS = 110_000;  // les edge functions sont coupées à 150 s
@@ -78,15 +83,20 @@ async function interroger(points: Fiche[], echeance: number): Promise<Objet[]> {
     .join('\n');
   const q = `[out:json][timeout:60];\n(\n${clauses}\n);\nout center tags;`;
 
+  // Deux passages sur les miroirs. Un 504 signifie « aucun créneau libre pour l'instant »
+  // et se résorbe en quelques secondes : abandonner au premier refus, c'est renoncer
+  // alors que la requête est bonne — mesuré, elle aboutit ailleurs ou un peu plus tard.
   let dernier = '';
-  for (let essai = 0; essai < MIRRORS.length; essai++) {
+  for (let essai = 0; essai < MIRRORS.length * 2; essai++) {
     if (Date.now() > echeance) throw new Error(`Temps imparti dépassé (${dernier || 'aucune réponse'})`);
     const url = MIRRORS[essai % MIRRORS.length];
     try {
       // SANS DÉLAI D'ATTENTE, fetch patiente indéfiniment : c'est ce qui faisait
       // dépasser les 150 s malgré le contrôle de temps, celui-ci n'intervenant
       // qu'ENTRE deux tentatives.
-      const restant = Math.max(5_000, Math.min(40_000, echeance - Date.now()));
+      // Une requête de vingt-cinq points aboutit en une trentaine de secondes : couper
+      // à quarante serait couper des réponses en train d'arriver.
+      const restant = Math.max(5_000, Math.min(55_000, echeance - Date.now()));
       const res = await fetch(url, {
         method: 'POST',
         headers: {
@@ -114,7 +124,9 @@ async function interroger(points: Fiche[], echeance: number): Promise<Objet[]> {
     } catch (err) {
       dernier = String((err as any)?.message || err).slice(0, 120);
     }
-    await new Promise((r) => setTimeout(r, 1500 * (essai + 1)));
+    // Le créneau se libère en quelques secondes ; réessayer aussitôt ne fait que
+    // consommer une tentative pour rien.
+    await new Promise((r) => setTimeout(r, 5_000));
   }
   throw new Error(`Overpass injoignable (${dernier})`);
 }

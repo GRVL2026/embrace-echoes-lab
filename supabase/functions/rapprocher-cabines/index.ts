@@ -34,6 +34,12 @@ const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
 const BUDGET_MS = 110_000;   // les edge functions sont coupées à 150 s : rendre la main avant
 
+// Plancher de similarité de nom pour retenir un voisin géographique. Les cabines sont
+// en centre-ville : à moins que les deux fiches ne partagent la même adresse au mètre
+// près, il faut que les NOMS disent quelque chose. Un tiers de trigrammes communs, c'est
+// « Le Rive Gauche » contre « Rive Gauche » — pas « Barapapa » contre « Audenge Vacances ».
+const SIM_URBAIN = 0.30;
+
 // ── Segment ───────────────────────────────────────────────────────────────────
 // Le profil de ces lieux contredit ce qu'annonce le fabricant : ce ne sont ni des
 // bowlings ni des cinémas, mais des bars, des clubs et des galeries commerciales. Un
@@ -201,9 +207,12 @@ Deno.serve(async (req) => {
         lng: c.lng != null ? Number(c.lng) : null,
         cp: c.code_postal,
       };
-      const vClient = rapprocher(lieu, idxClients, cpClients);
-      const vProspect = rapprocher(lieu, idxProspects, cpProspects);
-      const vSalle = rapprocher(lieu, idxSalles, cpSalles);
+      // SIM_URBAIN : ces lieux sont en centre-ville, où la proximité ne prouve rien.
+      // Sans plancher sur le nom, l'analyse rendait 161 « à confirmer » dont presque
+      // tous à 0 % de similarité — un bar messin apparié à un camping à 187 mètres.
+      const vClient = rapprocher(lieu, idxClients, cpClients, SIM_URBAIN);
+      const vProspect = rapprocher(lieu, idxProspects, cpProspects, SIM_URBAIN);
+      const vSalle = rapprocher(lieu, idxSalles, cpSalles, SIM_URBAIN);
 
       // La salle d'arcade n'emporte JAMAIS la décision à elle seule : elle enrichit un
       // rattachement, elle ne le crée pas. C'est le garde-fou contre la coïncidence de

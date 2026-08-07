@@ -127,10 +127,24 @@ export type Verdict =
   | { cible: Cible; niveau: 'sur' | 'doute'; motif: string; score: number }
   | null;
 
+/** Distance en deçà de laquelle deux fiches désignent le même bâtiment : le nom n'a
+ *  alors plus à concorder pour qu'un œil humain vaille la peine d'être sollicité. Un
+ *  établissement change d'enseigne sans changer d'adresse. */
+const D_MEME_ADRESSE = 50;
+
 export function rapprocher(
   lieu: { nom: string | null; cle: string; cleBrute: string; lat: number | null; lng: number | null; cp: string | null },
   grille: Map<string, Cible[]>,
   parCp: Map<string, Cible[]>,
+  // Similarité de nom minimale pour retenir un voisin géographique. Zéro par défaut :
+  // c'est le comportement d'origine, calibré sur des salles isolées, où deux
+  // établissements proches sont presque toujours le même.
+  //
+  // EN MILIEU DENSE IL FAUT L'ÉLEVER. Six cents mètres, dans un centre-ville, ce sont
+  // des centaines de commerces : la proximité seule n'apprend plus rien, et laisser le
+  // seuil à zéro produit des rapprochements comme « Bar Latino Metz » avec un camping
+  // à 187 m — du bruit qui noie les vrais sous des dizaines d'arbitrages inutiles.
+  simMin = 0,
 ): Verdict {
   let meilleur: Verdict = null;
 
@@ -140,6 +154,8 @@ export function rapprocher(
       const d = metres(lieu.lat, lieu.lng, c.lat!, c.lng!);
       if (d > D_MAX) continue;
       const { valeur: sim, franc } = accord(lieu, c);
+      // Même adresse : on garde quoi qu'il arrive. Sinon le nom doit dire quelque chose.
+      if (d > D_MEME_ADRESSE && sim < simMin) continue;
       const niveau: 'sur' | 'doute' =
         (franc && d <= D_MAX) || (franc && sim >= SIM_APPUI && d <= D_PROCHE) ? 'sur' : 'doute';
       const score = sim * 600 + Math.max(0, 600 - d);

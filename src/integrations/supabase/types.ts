@@ -119,6 +119,13 @@ export type Database = {
             foreignKeyName: "arcade_parc_salle_id_fkey"
             columns: ["salle_id"]
             isOneToOne: false
+            referencedRelation: "v_arcade_assortiment"
+            referencedColumns: ["salle_id"]
+          },
+          {
+            foreignKeyName: "arcade_parc_salle_id_fkey"
+            columns: ["salle_id"]
+            isOneToOne: false
             referencedRelation: "v_arcade_parc_resume"
             referencedColumns: ["salle_id"]
           },
@@ -3065,6 +3072,31 @@ export type Database = {
         }
         Relationships: []
       }
+      v_arcade_assortiment: {
+        Row: {
+          code_client: string | null
+          departement: string | null
+          famille: string | null
+          machines_famille: number | null
+          nb_machines: number | null
+          nom: string | null
+          prospect_id: string | null
+          region: string | null
+          salle_id: string | null
+          tranche: string | null
+          type_lieu: string | null
+          ville: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arcade_salles_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "prospects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_arcade_modeles: {
         Row: {
           annee: number | null
@@ -3077,6 +3109,18 @@ export type Database = {
           salles: number | null
           slug: string | null
           type_jeu: string | null
+        }
+        Relationships: []
+      }
+      v_arcade_normes: {
+        Row: {
+          absence_interpretable: boolean | null
+          famille: string | null
+          lieux_avec: number | null
+          lieux_cohorte: number | null
+          pct_equipes: number | null
+          tranche: string | null
+          type_lieu: string | null
         }
         Relationships: []
       }
@@ -3479,6 +3523,11 @@ export type Database = {
     }
     Functions: {
       appliquer_enrichissement_osm: { Args: { _maj: Json }; Returns: number }
+      arcade_famille: {
+        Args: { categorie: string; nom: string; type_jeu: string }
+        Returns: string
+      }
+      arcade_famille_fiable: { Args: { famille: string }; Returns: boolean }
       can_access_dashboard: { Args: { _uid?: string }; Returns: boolean }
       can_access_prospection: { Args: { _uid?: string }; Returns: boolean }
       can_access_salle: { Args: { _uid?: string }; Returns: boolean }

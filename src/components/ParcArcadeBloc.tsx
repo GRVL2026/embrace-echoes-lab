@@ -92,19 +92,21 @@ export function ParcArcadeBloc({
     enabled: !!data?.salle?.id,
     staleTime: 600_000,
     queryFn: async () => {
-      const { data: sien, error } = await supabase
+      const { data: sienRaw, error } = await supabase
         .from("v_arcade_assortiment" as any)
         .select("famille, tranche").eq("salle_id", data!.salle!.id);
       if (error) throw error;
-      const tranche = (sien ?? [])[0]?.tranche as string | undefined;
+      const sien = (sienRaw ?? []) as any[];
+      const tranche = sien[0]?.tranche as string | undefined;
       const type = data!.salle!.type_lieu;
       if (!tranche || !type) return null;
 
-      const { data: normes, error: e2 } = await supabase
+      const { data: normesRaw, error: e2 } = await supabase
         .from("v_arcade_normes" as any)
         .select("famille, pct_equipes, lieux_cohorte, absence_interpretable")
         .eq("type_lieu", type).eq("tranche", tranche);
       if (e2) throw e2;
+      const normes = (normesRaw ?? []) as any[];
 
       const possede = new Set((sien ?? []).map((r: any) => r.famille));
       // Seules les familles dont l'ABSENCE est interprétable sont retenues : l'annuaire

@@ -44,7 +44,6 @@ type Signal = {
   contact_role: string | null;
   contact_citation: string | null;
   contact_origine: string | null;
-  prospect_id: string | null;
   code_client: string | null;
 };
 

@@ -73,15 +73,19 @@ function siteValide(brut: string | null): string | null {
   }
 }
 
-async function interroger(points: Fiche[], echeance: number): Promise<Objet[]> {
-  // Une seule requête pour tout le lot : autant de clauses « around » que de fiches,
-  // réunies en un groupe. On ne filtre pas par catégorie — un bar peut être étiqueté
-  // amenity=bar, =pub, =nightclub ou leisure=* selon le contributeur, et exiger la
-  // bonne étiquette ferait perdre plus que le bruit qu'on éviterait. Le nom tranchera.
+/** Une seule requête pour tout le lot : autant de clauses « around » que de fiches,
+ *  réunies en un groupe. On ne filtre pas par catégorie — un bar peut être étiqueté
+ *  amenity=bar, =pub, =nightclub ou leisure=* selon le contributeur, et exiger la
+ *  bonne étiquette ferait perdre plus que le bruit qu'on éviterait. Le nom tranchera. */
+function requeteOverpass(points: { lat: number; lng: number }[]): string {
   const clauses = points
-    .map((p) => `nwr(around:${RAYON_M},${p.lat.toFixed(6)},${p.lng.toFixed(6)})["name"];`)
+    .map((p) => `nwr["name"](around:${RAYON_M},${p.lat.toFixed(6)},${p.lng.toFixed(6)});`)
     .join('\n');
-  const q = `[out:json][timeout:60];\n(\n${clauses}\n);\nout center tags;`;
+  return `[out:json][timeout:60];\n(\n${clauses}\n);\nout tags center;`;
+}
+
+async function interroger(points: Fiche[], echeance: number): Promise<Objet[]> {
+  const q = requeteOverpass(points);
 
   // Deux passages sur les miroirs. Un 504 signifie « aucun créneau libre pour l'instant »
   // et se résorbe en quelques secondes : abandonner au premier refus, c'est renoncer
@@ -131,6 +135,88 @@ async function interroger(points: Fiche[], echeance: number): Promise<Objet[]> {
   throw new Error(`Overpass injoignable (${dernier})`);
 }
 
+/** Appariement biunivoque, puis écriture.
+ *
+ *  On note tous les couples plausibles, on les trie du meilleur au moins bon, et chaque
+ *  objet comme chaque fiche ne peut être retenu qu'une seule fois. Sans cette contrainte,
+ *  dans une galerie marchande, plusieurs commerces héritent du même téléphone — c'est le
+ *  défaut qui avait été corrigé sur les campings vendéens. */
+async function apparierEtEcrire(
+  fiches: Fiche[], objets: Objet[], dryRun: boolean, source: string,
+) {
+  type Couple = { fi: number; oi: number; score: number; d: number; sim: number };
+  const couples: Couple[] = [];
+  for (let fi = 0; fi < fiches.length; fi++) {
+    const f = fiches[fi];
+    for (let oi = 0; oi < objets.length; oi++) {
+      const o = objets[oi];
+      const d = metres(f.lat, f.lng, o.lat, o.lon);
+      if (d > RAYON_M) continue;
+      const nom = o.t.name ?? '';
+      const sim = Math.max(
+        similarite(f.cle, cleIdentifiante(nom)),
+        similarite(f.cleBrute, cle(nom)),
+      );
+      if (sim < SIM_MIN) continue;
+      couples.push({ fi, oi, score: sim * 1000 + Math.max(0, RAYON_M - d), d, sim });
+    }
+  }
+  couples.sort((a, b) => b.score - a.score);
+
+  const fichePrise = new Set<number>(), objetPris = new Set<number>();
+  const retenus: { f: Fiche; o: Objet; d: number; sim: number }[] = [];
+  for (const c of couples) {
+    if (fichePrise.has(c.fi) || objetPris.has(c.oi)) continue;
+    fichePrise.add(c.fi); objetPris.add(c.oi);
+    retenus.push({ f: fiches[c.fi], o: objets[c.oi], d: c.d, sim: c.sim });
+  }
+
+  let tel = 0, site = 0, mail = 0;
+  const patches: { id: string; patch: Record<string, unknown> }[] = [];
+  for (const r of retenus) {
+    const patch: Record<string, unknown> = {};
+    const t = tag(r.o.t, 'phone', 'contact:phone', 'contact:mobile');
+    const w = siteValide(tag(r.o.t, 'website', 'contact:website', 'url'));
+    const e = tag(r.o.t, 'email', 'contact:email');
+    if (t) { patch.telephone = t; tel++; }
+    if (w) { patch.site_web = w; site++; }
+    if (e) { patch.email = e; mail++; }
+    if (Object.keys(patch).length) patches.push({ id: r.f.id, patch });
+  }
+
+  const commun = {
+    interroges: fiches.length, objets_osm: objets.length, apparies: retenus.length,
+    telephones: tel, sites: site, emails: mail,
+    apercu: retenus.slice(0, 10).map((r) =>
+      `${r.f.entreprise} ↔ ${r.o.t.name} (${Math.round(r.d)} m, ${Math.round(r.sim * 100)} %)`
+      + ` · ${[tag(r.o.t, 'phone', 'contact:phone') ? 'tél' : null,
+               tag(r.o.t, 'website', 'contact:website') ? 'site' : null].filter(Boolean).join(' ') || '—'}`),
+  };
+  if (dryRun) return { mode: 'analyse', ...commun };
+
+  // On n'écrase JAMAIS une valeur déjà présente : une donnée saisie à la main ou trouvée
+  // sur le site officiel vaut mieux qu'une contribution anonyme.
+  for (const { id, patch } of patches) {
+    let q = admin.from('prospects').update(patch).eq('id', id);
+    if (patch.telephone) q = q.is('telephone', null);
+    const { error } = await q;
+    if (error) throw error;
+  }
+
+  // Marquer TOUT le lot comme tenté, apparié ou non : sans cela les mêmes fiches
+  // reviendraient à chaque appel et les suivantes ne seraient jamais interrogées.
+  const { error: e3 } = await admin.from('prospects')
+    .update({ osm_tente_at: new Date().toISOString() })
+    .in('id', fiches.map((f) => f.id));
+  if (e3) throw e3;
+
+  const { count: restants } = await admin.from('prospects')
+    .select('id', { count: 'exact', head: true })
+    .eq('source', source).is('osm_tente_at', null).not('lat', 'is', null);
+
+  return { ...commun, restants: restants ?? 0 };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   const json = (b: unknown, s = 200) =>
@@ -150,9 +236,50 @@ Deno.serve(async (req) => {
   const debut = Date.now();
   try {
     const body = await req.json().catch(() => ({}));
+    const action = String(body.action ?? 'complet');
     const source = String(body.source ?? 'cabine-photo').trim();
     const lot = Math.min(120, Math.max(1, Number(body.lot ?? LOT)));
     const dryRun = body.dry_run === true;
+
+    // ── Relais depuis un poste de travail ─────────────────────────────────────
+    // Overpass étrangle l'adresse IP de l'hébergeur, partagée avec d'autres locataires :
+    // la même requête qui aboutit en trente secondes depuis une ligne ordinaire n'obtient
+    // jamais de créneau depuis Supabase. Plutôt que de dupliquer l'appariement dans un
+    // script, on découpe : « points » rend le lot ET la requête toute faite, le poste
+    // n'a qu'à la poster et renvoyer la réponse brute à « elements », qui apparie et
+    // écrit. Le poste ne connaît aucune clé de service et ne décide de rien.
+    if (action === 'points' || action === 'elements') {
+      const fiches: Fiche[] = (body.fiches ?? []).map((f: any) => ({
+        id: String(f.id), entreprise: String(f.entreprise ?? ''),
+        lat: Number(f.lat), lng: Number(f.lng),
+        cle: cleIdentifiante(f.entreprise), cleBrute: cle(f.entreprise),
+      }));
+
+      if (action === 'points') {
+        const { data, error: e1 } = await admin.from('prospects')
+          .select('id, entreprise, lat, lng')
+          .eq('source', source).is('osm_tente_at', null)
+          .not('lat', 'is', null).not('lng', 'is', null)
+          .limit(lot);
+        if (e1) throw e1;
+        const { count } = await admin.from('prospects')
+          .select('id', { count: 'exact', head: true })
+          .eq('source', source).is('osm_tente_at', null).not('lat', 'is', null);
+        return json({ ok: true, fiches: data ?? [], restants: count ?? 0,
+          requete: requeteOverpass((data ?? []).map((p: any) => ({ lat: Number(p.lat), lng: Number(p.lng) }))) });
+      }
+
+      const objets: Objet[] = (body.elements ?? [])
+        .map((e: any) => {
+          const lat = e.lat ?? e.center?.lat;
+          const lon = e.lon ?? e.center?.lon;
+          return lat != null && lon != null
+            ? { lat, lon, t: (e.tags ?? {}) as Record<string, string>, id: `${e.type}/${e.id}` }
+            : null;
+        })
+        .filter(Boolean) as Objet[];
+      return json({ ok: true, ...(await apparierEtEcrire(fiches, objets, dryRun, source)) });
+    }
 
     const { data: brutes, error } = await admin.from('prospects')
       .select('id, entreprise, lat, lng')
@@ -172,84 +299,7 @@ Deno.serve(async (req) => {
     }));
 
     const objets = await interroger(fiches, debut + BUDGET_MS);
-
-    // --- Appariement biunivoque -------------------------------------------------
-    // On note tous les couples plausibles, on les trie du meilleur au moins bon, et
-    // chaque objet comme chaque fiche ne peut être retenu qu'une seule fois. Dans une
-    // galerie marchande, deux commerces voisins ne doivent pas hériter du même numéro.
-    type Couple = { fi: number; oi: number; score: number; d: number; sim: number };
-    const couples: Couple[] = [];
-    for (let fi = 0; fi < fiches.length; fi++) {
-      const f = fiches[fi];
-      for (let oi = 0; oi < objets.length; oi++) {
-        const o = objets[oi];
-        const d = metres(f.lat, f.lng, o.lat, o.lon);
-        if (d > RAYON_M) continue;
-        const nom = o.t.name ?? '';
-        const sim = Math.max(
-          similarite(f.cle, cleIdentifiante(nom)),
-          similarite(f.cleBrute, cle(nom)),
-        );
-        if (sim < SIM_MIN) continue;
-        couples.push({ fi, oi, score: sim * 1000 + Math.max(0, RAYON_M - d), d, sim });
-      }
-    }
-    couples.sort((a, b) => b.score - a.score);
-
-    const fichePrise = new Set<number>(), objetPris = new Set<number>();
-    const retenus: { f: Fiche; o: Objet; d: number; sim: number }[] = [];
-    for (const c of couples) {
-      if (fichePrise.has(c.fi) || objetPris.has(c.oi)) continue;
-      fichePrise.add(c.fi); objetPris.add(c.oi);
-      retenus.push({ f: fiches[c.fi], o: objets[c.oi], d: c.d, sim: c.sim });
-    }
-
-    let tel = 0, site = 0, mail = 0;
-    const patches: { id: string; patch: Record<string, unknown> }[] = [];
-    for (const r of retenus) {
-      const patch: Record<string, unknown> = {};
-      const t = tag(r.o.t, 'phone', 'contact:phone', 'contact:mobile');
-      const w = siteValide(tag(r.o.t, 'website', 'contact:website', 'url'));
-      const e = tag(r.o.t, 'email', 'contact:email');
-      if (t) { patch.telephone = t; tel++; }
-      if (w) { patch.site_web = w; site++; }
-      if (e) { patch.email = e; mail++; }
-      if (Object.keys(patch).length) patches.push({ id: r.f.id, patch });
-    }
-
-    if (dryRun) {
-      return json({ ok: true, mode: 'analyse', interroges: fiches.length,
-        objets_osm: objets.length, apparies: retenus.length,
-        telephones: tel, sites: site, emails: mail,
-        apercu: retenus.slice(0, 10).map((r) =>
-          `${r.f.entreprise} ↔ ${r.o.t.name} (${Math.round(r.d)} m, ${Math.round(r.sim * 100)} %)`
-          + ` · ${[tag(r.o.t, 'phone', 'contact:phone') ? 'tél' : null,
-                   tag(r.o.t, 'website', 'contact:website') ? 'site' : null].filter(Boolean).join(' ') || '—'}`) });
-    }
-
-    // On n'écrase JAMAIS une valeur déjà présente : une donnée saisie à la main ou
-    // trouvée sur le site officiel vaut mieux qu'une contribution anonyme.
-    for (const { id, patch } of patches) {
-      let q = admin.from('prospects').update(patch).eq('id', id);
-      if (patch.telephone) q = q.is('telephone', null);
-      const { error: e2 } = await q;
-      if (e2) throw e2;
-    }
-
-    // Marquer TOUT le lot comme tenté, apparié ou non : sans cela les mêmes fiches
-    // reviendraient à chaque appel et les suivantes ne seraient jamais interrogées.
-    const { error: e3 } = await admin.from('prospects')
-      .update({ osm_tente_at: new Date().toISOString() })
-      .in('id', fiches.map((f) => f.id));
-    if (e3) throw e3;
-
-    const { count: restants } = await admin.from('prospects')
-      .select('id', { count: 'exact', head: true })
-      .eq('source', source).is('osm_tente_at', null).not('lat', 'is', null);
-
-    return json({ ok: true, interroges: fiches.length, objets_osm: objets.length,
-      apparies: retenus.length, telephones: tel, sites: site, emails: mail,
-      restants: restants ?? 0 });
+    return json({ ok: true, ...(await apparierEtEcrire(fiches, objets, dryRun, source)) });
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
   }

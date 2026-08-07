@@ -352,6 +352,108 @@ export type Database = {
         }
         Relationships: []
       }
+      cabines_photo: {
+        Row: {
+          adresse: string | null
+          code_client: string | null
+          code_postal: string | null
+          departement: string | null
+          empreinte: string | null
+          exploitant: string
+          geocode_at: string | null
+          geocode_score: number | null
+          id: string
+          lat: number | null
+          lng: number | null
+          nom: string
+          pays: string
+          prospect_id: string | null
+          rapprochement: string | null
+          region: string | null
+          releve_le: string
+          salle_id: string | null
+          ville: string | null
+        }
+        Insert: {
+          adresse?: string | null
+          code_client?: string | null
+          code_postal?: string | null
+          departement?: string | null
+          empreinte?: string | null
+          exploitant?: string
+          geocode_at?: string | null
+          geocode_score?: number | null
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          nom: string
+          pays?: string
+          prospect_id?: string | null
+          rapprochement?: string | null
+          region?: string | null
+          releve_le?: string
+          salle_id?: string | null
+          ville?: string | null
+        }
+        Update: {
+          adresse?: string | null
+          code_client?: string | null
+          code_postal?: string | null
+          departement?: string | null
+          empreinte?: string | null
+          exploitant?: string
+          geocode_at?: string | null
+          geocode_score?: number | null
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          nom?: string
+          pays?: string
+          prospect_id?: string | null
+          rapprochement?: string | null
+          region?: string | null
+          releve_le?: string
+          salle_id?: string | null
+          ville?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cabines_photo_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "prospects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cabines_photo_salle_id_fkey"
+            columns: ["salle_id"]
+            isOneToOne: false
+            referencedRelation: "arcade_salles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cabines_photo_salle_id_fkey"
+            columns: ["salle_id"]
+            isOneToOne: false
+            referencedRelation: "v_arcade_assortiment"
+            referencedColumns: ["salle_id"]
+          },
+          {
+            foreignKeyName: "cabines_photo_salle_id_fkey"
+            columns: ["salle_id"]
+            isOneToOne: false
+            referencedRelation: "v_arcade_parc_resume"
+            referencedColumns: ["salle_id"]
+          },
+          {
+            foreignKeyName: "cabines_photo_salle_id_fkey"
+            columns: ["salle_id"]
+            isOneToOne: false
+            referencedRelation: "v_arcade_salles_parc"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       catalog_products: {
         Row: {
           active: boolean

@@ -37,7 +37,28 @@ const DOMAINES_REJETES = /(sentry|wixpress|example|godaddy|ovh\.net|w3\.org|sche
 // Une adresse de service vaut mieux qu'une adresse nominative : on la préfère.
 const GENERIQUES = /^(contact|info|infos|accueil|reservation|reservations|booking|camping|direction|commercial|bonjour|hello)@/i;
 
-const RE_EMAIL = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+// Les quantificateurs sont BORNÉS, et ce n'est pas une coquetterie.
+//
+// La version d'origine s'écrivait `[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}` :
+// un `+` non borné suivi d'un point littéral, alors que le point appartient déjà à la
+// classe. Sur une longue suite sans arobase — du JavaScript minifié, par exemple — le
+// moteur reprend l'essai à chaque position et le coût grimpe au carré de la longueur.
+// Quatre cent mille caractères suffisaient à brûler le CPU du worker, que Supabase
+// coupait par un WORKER_RESOURCE_LIMIT en quatre secondes.
+//
+// Les bornes correspondent à la norme : 64 caractères avant l'arobase, 255 après,
+// 24 pour l'extension. Aucune adresse réelle n'est perdue.
+const RE_EMAIL = /[a-zA-Z0-9._%+-]{1,64}@[a-zA-Z0-9-]{1,63}(?:\.[a-zA-Z0-9-]{1,63}){0,4}\.[a-zA-Z]{2,24}/g;
+
+/** Le contact d'un exploitant est dans son texte, jamais dans son code. Retirer les
+ *  scripts et les styles enlève l'essentiel du volume — et précisément la matière
+ *  minifiée qui met les expressions régulières en difficulté. */
+function texteUtile(html: string): string {
+  return html
+    .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ');
+}
 
 function normaliserUrl(brut: string): string | null {
   const v = (brut ?? '').trim();
@@ -160,8 +181,11 @@ async function lirePage(url: string): Promise<string | null> {
 async function chercherContacts(site: string): Promise<{ email: string | null; tel: string | null }> {
   let tel: string | null = null;
   for (const chemin of CHEMINS) {
-    const html = await lirePage(site + chemin);
-    if (!html) continue;
+    const brut = await lirePage(site + chemin);
+    if (!brut) continue;
+    // On travaille sur le texte, débarrassé des scripts et des styles : c'est là que
+    // se trouve le contact, et c'est ce qui rend la lecture prévisible en temps.
+    const html = texteUtile(brut);
     tel ??= meilleurTel(html);
     const email = meilleurEmail(html, site);
     // On continue à parcourir les pages tant qu'il manque l'un des deux.

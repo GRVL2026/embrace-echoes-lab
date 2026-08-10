@@ -89,14 +89,23 @@ def main() -> int:
     ap.add_argument('--essai', action='store_true',
                     help="un seul lot, analysé sans rien écrire en base")
     ap.add_argument('--lot', type=int, default=25)
+    ap.add_argument('--source', default='cabine-photo',
+                    help="source à enrichir, ou « * » pour toutes")
+    ap.add_argument('--hors-segments', default='',
+                    help="segments à écarter, séparés par des virgules. Les campings sont "
+                         "déjà enrichis : les repasser gaspillerait des créneaux Overpass rares.")
     args = ap.parse_args()
+
+    cible = {'source': args.source}
+    if args.hors_segments:
+        cible['hors_segments'] = [s.strip() for s in args.hors_segments.split(',') if s.strip()]
 
     total = {'apparies': 0, 'telephones': 0, 'sites': 0, 'emails': 0}
     tour = 0
     repit = 0   # échecs consécutifs ; remis à zéro dès qu'un lot passe
     while True:
         tour += 1
-        depart = serveur({'action': 'points', 'lot': args.lot})
+        depart = serveur({'action': 'points', 'lot': args.lot, **cible})
         fiches = depart.get('fiches') or []
         if not fiches:
             print('Plus aucune fiche à interroger.')
@@ -129,6 +138,7 @@ def main() -> int:
             'fiches': fiches,
             'elements': elements,
             'dry_run': args.essai,
+            **cible,
         })
         if res.get('error'):
             print(f"\nErreur serveur : {res['error']}")

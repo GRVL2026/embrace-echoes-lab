@@ -142,7 +142,10 @@ async function interroger(points: Fiche[], echeance: number): Promise<Objet[]> {
  *  dans une galerie marchande, plusieurs commerces héritent du même téléphone — c'est le
  *  défaut qui avait été corrigé sur les campings vendéens. */
 async function apparierEtEcrire(
-  fiches: Fiche[], objets: Objet[], dryRun: boolean, source: string,
+  fiches: Fiche[], objets: Objet[], dryRun: boolean,
+  // Le décompte du reste à faire dépend de la cible demandée — une source précise ou
+  // toutes, avec ou sans segments écartés. Le caller le sait, pas cette fonction.
+  compterRestants: () => Promise<{ count: number | null }>,
 ) {
   type Couple = { fi: number; oi: number; score: number; d: number; sim: number };
   const couples: Couple[] = [];
@@ -210,10 +213,7 @@ async function apparierEtEcrire(
     .in('id', fiches.map((f) => f.id));
   if (e3) throw e3;
 
-  const { count: restants } = await admin.from('prospects')
-    .select('id', { count: 'exact', head: true })
-    .eq('source', source).is('osm_tente_at', null).not('lat', 'is', null);
-
+  const { count: restants } = await compterRestants();
   return { ...commun, restants: restants ?? 0 };
 }
 
@@ -237,9 +237,38 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
     const action = String(body.action ?? 'complet');
+    // « * » vise toutes les sources. La fonction est née pour les cabines photo, mais le
+    // manque de coordonnées touche TOUS les prospects qualifiés : les 771 salles de
+    // l'annuaire arcade n'ont pas un seul téléphone, les 576 fiches « loisirs » non plus.
+    // Ce sont pourtant les meilleurs — parc installé connu, argumentaire tout prêt — et
+    // ils restent inappelables. Le goulot de la prospection est là, pas dans le découpage
+    // des secteurs.
     const source = String(body.source ?? 'cabine-photo').trim();
+    // Les campings sont déjà enrichis (1 243 joignables) : les repasser gaspillerait des
+    // créneaux Overpass rares au lieu de servir ceux qui n'ont rien.
+    const horsSegments: string[] = Array.isArray(body.hors_segments) ? body.hors_segments : [];
     const lot = Math.min(120, Math.max(1, Number(body.lot ?? LOT)));
     const dryRun = body.dry_run === true;
+
+    /** Les fiches restant à interroger, selon la cible demandée. */
+    const aInterroger = (limite: number) => {
+      let q = admin.from('prospects')
+        .select('id, entreprise, lat, lng')
+        .is('osm_tente_at', null)
+        .not('lat', 'is', null).not('lng', 'is', null);
+      if (source !== '*') q = q.eq('source', source);
+      if (horsSegments.length) q = q.not('segment', 'in', `(${horsSegments.join(',')})`);
+      return q.limit(limite);
+    };
+
+    const compterRestants = () => {
+      let q = admin.from('prospects')
+        .select('id', { count: 'exact', head: true })
+        .is('osm_tente_at', null).not('lat', 'is', null);
+      if (source !== '*') q = q.eq('source', source);
+      if (horsSegments.length) q = q.not('segment', 'in', `(${horsSegments.join(',')})`);
+      return q;
+    };
 
     // ── Relais depuis un poste de travail ─────────────────────────────────────
     // Overpass étrangle l'adresse IP de l'hébergeur, partagée avec d'autres locataires :
@@ -256,15 +285,9 @@ Deno.serve(async (req) => {
       }));
 
       if (action === 'points') {
-        const { data, error: e1 } = await admin.from('prospects')
-          .select('id, entreprise, lat, lng')
-          .eq('source', source).is('osm_tente_at', null)
-          .not('lat', 'is', null).not('lng', 'is', null)
-          .limit(lot);
+        const { data, error: e1 } = await aInterroger(lot);
         if (e1) throw e1;
-        const { count } = await admin.from('prospects')
-          .select('id', { count: 'exact', head: true })
-          .eq('source', source).is('osm_tente_at', null).not('lat', 'is', null);
+        const { count } = await compterRestants();
         return json({ ok: true, fiches: data ?? [], restants: count ?? 0,
           requete: requeteOverpass((data ?? []).map((p: any) => ({ lat: Number(p.lat), lng: Number(p.lng) }))) });
       }
@@ -278,15 +301,10 @@ Deno.serve(async (req) => {
             : null;
         })
         .filter(Boolean) as Objet[];
-      return json({ ok: true, ...(await apparierEtEcrire(fiches, objets, dryRun, source)) });
+      return json({ ok: true, ...(await apparierEtEcrire(fiches, objets, dryRun, compterRestants)) });
     }
 
-    const { data: brutes, error } = await admin.from('prospects')
-      .select('id, entreprise, lat, lng')
-      .eq('source', source)
-      .is('osm_tente_at', null)
-      .not('lat', 'is', null).not('lng', 'is', null)
-      .limit(lot);
+    const { data: brutes, error } = await aInterroger(lot);
     if (error) throw error;
     if (!brutes?.length) return json({ ok: true, traites: 0, termine: true });
 
@@ -299,7 +317,7 @@ Deno.serve(async (req) => {
     }));
 
     const objets = await interroger(fiches, debut + BUDGET_MS);
-    return json({ ok: true, ...(await apparierEtEcrire(fiches, objets, dryRun, source)) });
+    return json({ ok: true, ...(await apparierEtEcrire(fiches, objets, dryRun, compterRestants)) });
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
   }

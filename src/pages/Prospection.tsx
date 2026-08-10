@@ -312,7 +312,11 @@ export default function Prospection() {
   const load = useCallback(async () => {
     setLoading(true);
     const [{ data: rows }, { data: r }] = await Promise.all([
-      (supabase as any).from("prospects").select("*").order("updated_at", { ascending: false }),
+      // Seulement le pipeline ACTIF. La réserve — neuf mille fiches — reste hors de vue :
+      // un tableau qui les déverse toutes ne se lit pas, et c'est en le regardant qu'on
+      // finit par ne plus rien traiter. Elle se sert depuis l'écran de distribution.
+      (supabase as any).from("prospects").select("*").eq("etat", "actif")
+        .order("updated_at", { ascending: false }),
       (supabase as any).rpc("get_prospection_resume"),
     ]);
     setProspects((rows as Prospect[]) ?? []);
@@ -493,6 +497,15 @@ export default function Prospection() {
           <h1 className="font-display text-base sm:text-lg font-semibold truncate">Prospection</h1>
           <p className="text-xs text-muted-foreground truncate">CRM commercial — pipeline & suivi des leads</p>
         </div>
+        {/* La réserve ne s'ouvre que d'ici : le pipeline n'affiche que ce qui a été servi. */}
+        {(isAdmin || isDirection) && (
+          <Button asChild size="sm" variant="outline" className="gap-2">
+            <Link to="/distribution" title="Servir la semaine depuis la réserve">
+              <Send className="h-4 w-4" />
+              <span className="hidden sm:inline">Distribuer</span>
+            </Link>
+          </Button>
+        )}
         {canDetecter && (
           <Button
             size="sm"

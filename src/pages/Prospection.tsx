@@ -499,12 +499,20 @@ export default function Prospection() {
         </div>
         {/* La réserve ne s'ouvre que d'ici : le pipeline n'affiche que ce qui a été servi. */}
         {(isAdmin || isDirection) && (
-          <Button asChild size="sm" variant="outline" className="gap-2">
-            <Link to="/distribution" title="Servir la semaine depuis la réserve">
-              <Send className="h-4 w-4" />
-              <span className="hidden sm:inline">Distribuer</span>
-            </Link>
-          </Button>
+          <>
+            <Button asChild size="sm" variant="outline" className="gap-2">
+              <Link to="/suivi-prospection" title="Retards et fiches sans prochaine action">
+                <TrendingUp className="h-4 w-4" />
+                <span className="hidden sm:inline">Suivi</span>
+              </Link>
+            </Button>
+            <Button asChild size="sm" variant="outline" className="gap-2">
+              <Link to="/distribution" title="Servir la semaine depuis la réserve">
+                <Send className="h-4 w-4" />
+                <span className="hidden sm:inline">Distribuer</span>
+              </Link>
+            </Button>
+          </>
         )}
         {canDetecter && (
           <Button

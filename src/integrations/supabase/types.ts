@@ -2575,11 +2575,14 @@ export type Database = {
           contact_nom: string | null
           contact_role: string | null
           created_at: string
+          departement: string | null
+          distribue_le: string | null
           effectif: string | null
           email: string | null
           email_tente_at: string | null
           empreinte: string | null
           entreprise: string
+          etat: string
           etat_administratif: string | null
           etoiles: number | null
           geocode_attempts: number
@@ -2589,6 +2592,7 @@ export type Database = {
           gouv_tente_at: string | null
           groupe: string | null
           id: string
+          joignable: boolean | null
           lat: number | null
           lgm_audience: string | null
           lgm_lead_id: string | null
@@ -2604,6 +2608,10 @@ export type Database = {
           owner_id: string | null
           prepare_at: string | null
           pret_a_envoyer: boolean
+          prochaine_action: string | null
+          prochaine_action_le: string | null
+          proprietaire: string | null
+          secteur: string | null
           segment: string
           signal: string | null
           siren: string | null
@@ -2628,11 +2636,14 @@ export type Database = {
           contact_nom?: string | null
           contact_role?: string | null
           created_at?: string
+          departement?: string | null
+          distribue_le?: string | null
           effectif?: string | null
           email?: string | null
           email_tente_at?: string | null
           empreinte?: string | null
           entreprise: string
+          etat?: string
           etat_administratif?: string | null
           etoiles?: number | null
           geocode_attempts?: number
@@ -2642,6 +2653,7 @@ export type Database = {
           gouv_tente_at?: string | null
           groupe?: string | null
           id?: string
+          joignable?: boolean | null
           lat?: number | null
           lgm_audience?: string | null
           lgm_lead_id?: string | null
@@ -2657,6 +2669,10 @@ export type Database = {
           owner_id?: string | null
           prepare_at?: string | null
           pret_a_envoyer?: boolean
+          prochaine_action?: string | null
+          prochaine_action_le?: string | null
+          proprietaire?: string | null
+          secteur?: string | null
           segment?: string
           signal?: string | null
           siren?: string | null
@@ -2681,11 +2697,14 @@ export type Database = {
           contact_nom?: string | null
           contact_role?: string | null
           created_at?: string
+          departement?: string | null
+          distribue_le?: string | null
           effectif?: string | null
           email?: string | null
           email_tente_at?: string | null
           empreinte?: string | null
           entreprise?: string
+          etat?: string
           etat_administratif?: string | null
           etoiles?: number | null
           geocode_attempts?: number
@@ -2695,6 +2714,7 @@ export type Database = {
           gouv_tente_at?: string | null
           groupe?: string | null
           id?: string
+          joignable?: boolean | null
           lat?: number | null
           lgm_audience?: string | null
           lgm_lead_id?: string | null
@@ -2710,6 +2730,10 @@ export type Database = {
           owner_id?: string | null
           prepare_at?: string | null
           pret_a_envoyer?: boolean
+          prochaine_action?: string | null
+          prochaine_action_le?: string | null
+          proprietaire?: string | null
+          secteur?: string | null
           segment?: string
           signal?: string | null
           siren?: string | null

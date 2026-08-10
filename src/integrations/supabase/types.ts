@@ -3685,6 +3685,18 @@ export type Database = {
         }
         Relationships: []
       }
+      v_prospection_avancement: {
+        Row: {
+          departement: string | null
+          distribues: number | null
+          en_reserve: number | null
+          injoignables: number | null
+          joignables: number | null
+          secteur: string | null
+          total: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       appliquer_enrichissement_osm: { Args: { _maj: Json }; Returns: number }

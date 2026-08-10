@@ -19,8 +19,13 @@ const CRON_SECRET = Deno.env.get('CRON_SECRET') || '';
 const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
 const UA = 'Mozilla/5.0 (compatible; ArcadeOS/1.0; +https://avranchesautomatic.com)';
-const LOT = 60;                  // sites visités par invocation
-const PARALLELE = 8;             // requêtes simultanées : rester poli avec de petits hébergeurs
+// Soixante sites à huit en parallèle, sur cinq chemins chacun, faisaient jusqu'à trois
+// cents requêtes et autant de pages en mémoire dans une même invocation : Supabase
+// coupait le worker par un HTTP 546. Le travail était pourtant écrit avant la coupure —
+// seule la réponse se perdait, ce qui rendait la panne difficile à lire depuis l'appelant.
+// Vingt-cinq sites à cinq en parallèle tiennent confortablement.
+const LOT = 25;                  // sites visités par invocation
+const PARALLELE = 5;             // requêtes simultanées : rester poli avec de petits hébergeurs
 const TIMEOUT_MS = 8_000;
 const BUDGET_MS = 110_000;       // les edge functions sont coupées à 150 s
 const CHEMINS = ['', '/contact', '/contactez-nous', '/nous-contacter', '/contact.html'];

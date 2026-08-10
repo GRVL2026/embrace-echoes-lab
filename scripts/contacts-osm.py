@@ -31,15 +31,20 @@ SECRET = Path.home() / '.config' / 'arcadeos' / 'cron_secret'
 
 # L'instance principale est la plus fiable depuis une ligne domestique ; les deux autres
 # servent de repli quand elle ne distribue plus de créneau.
+# kumi.systems en tête : mesuré le 10 août, c'est le seul à répondre quand l'instance
+# principale renvoie 504 en huit secondes. L'ordre compte — chaque miroir essayé pour
+# rien coûte une minute et demie sur une fenêtre de disponibilité déjà étroite.
 MIROIRS = [
-    'https://overpass-api.de/api/interpreter',
     'https://overpass.kumi.systems/api/interpreter',
+    'https://overpass-api.de/api/interpreter',
     'https://overpass.private.coffee/api/interpreter',
 ]
 UA = 'Arcade OS - Avranches Automatic (leopaul@avranchesautomatic.com)'
 
 PAUSE_ENTRE_LOTS = 8      # rester courtois : le service est bénévole et mutualisé
 ESSAIS_PAR_LOT = 6
+PAUSE_LONGUE = 180        # après un lot en échec : laisser passer la vague de charge
+REPITS_MAX = 5            # au-delà, le service est fermé, pas encombré
 
 
 class Injoignable(Exception):
@@ -88,6 +93,7 @@ def main() -> int:
 
     total = {'apparies': 0, 'telephones': 0, 'sites': 0, 'emails': 0}
     tour = 0
+    repit = 0   # échecs consécutifs ; remis à zéro dès qu'un lot passe
     while True:
         tour += 1
         depart = serveur({'action': 'points', 'lot': args.lot})
@@ -100,9 +106,23 @@ def main() -> int:
 
         try:
             elements = overpass(depart['requete'])
+            repit = 0
         except Injoignable as e:
-            print(f'\nOverpass injoignable ({e}). Rien n\'a été écrit, relance plus tard.')
-            return 1
+            # Overpass est intermittent : le 10 août, le lot 1 est passé et le lot 2 a
+            # échoué dans la minute. Abandonner là obligeait à relancer douze fois à la
+            # main. On patiente donc franchement — le lot n'ayant rien écrit, il revient
+            # tel quel au tour suivant — et on ne renonce qu'après plusieurs longues
+            # attentes, signe que le service est vraiment fermé.
+            repit += 1
+            if repit > REPITS_MAX:
+                print(f"\nOverpass reste injoignable après {REPITS_MAX} longues attentes "
+                      f"({e}). Rien n'a été perdu : relance quand tu veux, il reprendra ici.")
+                return 1
+            print(f"indisponible, pause de {PAUSE_LONGUE // 60} min "
+                  f"(tentative {repit}/{REPITS_MAX})…", flush=True)
+            time.sleep(PAUSE_LONGUE)
+            tour -= 1          # ce tour n'a rien traité, il ne compte pas
+            continue
 
         res = serveur({
             'action': 'elements',

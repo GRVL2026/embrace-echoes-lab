@@ -40,6 +40,45 @@ type Charge = {
 
 type Dispo = { secteur: string | null; n: number };
 
+type Avancement = {
+  secteur: string; departement: string;
+  total: number; joignables: number;
+  distribues: number; en_reserve: number; injoignables: number;
+};
+
+type Cumul = { distribues: number; en_reserve: number; injoignables: number; total: number };
+
+const vide = (): Cumul => ({ distribues: 0, en_reserve: 0, injoignables: 0, total: 0 });
+
+function additionner(c: Cumul, a: Avancement): Cumul {
+  return {
+    distribues: c.distribues + a.distribues,
+    en_reserve: c.en_reserve + a.en_reserve,
+    injoignables: c.injoignables + a.injoignables,
+    total: c.total + a.total,
+  };
+}
+
+/** Barre en trois parts : ce qui est servi, ce qui peut l'être, et ce qui ne le peut pas
+ *  encore faute de coordonnées. Cette troisième part est la plus instructive — elle dit
+ *  pourquoi un secteur n'avance pas, là où un simple pourcentage laisserait croire à un
+ *  manque de travail. */
+function Barre({ c, compact = false }: { c: Cumul; compact?: boolean }) {
+  const t = Math.max(1, c.total);
+  const pct = (n: number) => `${(n / t) * 100}%`;
+  return (
+    <div
+      className={cn("flex w-full overflow-hidden rounded", compact ? "h-1.5" : "h-2.5")}
+      role="img"
+      aria-label={`${c.distribues} distribués, ${c.en_reserve} en réserve, ${c.injoignables} sans coordonnées`}
+    >
+      <div style={{ width: pct(c.distribues) }} className="bg-primary" />
+      <div style={{ width: pct(c.en_reserve) }} className="bg-primary/35" />
+      <div style={{ width: pct(c.injoignables) }} className="bg-muted" />
+    </div>
+  );
+}
+
 const SECTEURS: { cle: string; nom: string }[] = [
   { cle: "nord-ouest", nom: "Grand Ouest" },
   { cle: "est-sud-est", nom: "Est et Sud-Est" },
@@ -61,6 +100,8 @@ export default function Distribution() {
   const [profils, setProfils] = useState<Profil[]>([]);
   const [charges, setCharges] = useState<Record<string, Charge>>({});
   const [dispos, setDispos] = useState<Dispo[]>([]);
+  const [avancement, setAvancement] = useState<Avancement[]>([]);
+  const [detailDe, setDetailDe] = useState<string | null>(null);
   const [aServir, setAServir] = useState<Record<string, number>>({});
   const [secteurDe, setSecteurDe] = useState<Record<string, string>>({});
   const [chargement, setChargement] = useState(true);
@@ -68,7 +109,7 @@ export default function Distribution() {
 
   const charger = useCallback(async () => {
     setChargement(true);
-    const [{ data: prof }, { data: actifs }, { data: vivier }] = await Promise.all([
+    const [{ data: prof }, { data: actifs }, { data: vivier }, { data: avance }] = await Promise.all([
       (supabase as any).from("profiles").select("id, email, full_name"),
       (supabase as any).from("prospects")
         .select("proprietaire, prochaine_action_le, distribue_le")
@@ -76,7 +117,11 @@ export default function Distribution() {
       (supabase as any).from("prospects")
         .select("secteur")
         .eq("etat", "vivier").eq("joignable", true),
+      // Agrégé en base : lire les neuf mille fiches ici se heurterait au plafond de
+      // mille lignes de PostgREST, sans le moindre avertissement.
+      (supabase as any).from("v_prospection_avancement").select("*"),
     ]);
+    setAvancement((avance as Avancement[]) ?? []);
 
     setProfils((prof as Profil[]) ?? []);
 
@@ -199,15 +244,76 @@ export default function Distribution() {
               un e-mail. Servir un lead sans coordonnée, c'est offrir vingt minutes de
               recherche avant le premier appel.
             </p>
-            <div className="grid gap-2 sm:grid-cols-3">
-              {SECTEURS.map((s) => (
-                <Card key={s.cle} className="p-3">
-                  <b className="block font-mono text-2xl font-bold tabular-nums leading-none">
-                    {dispoDe(s.cle).toLocaleString("fr-FR")}
-                  </b>
-                  <span className="mt-1 block text-xs text-muted-foreground">{s.nom}</span>
-                </Card>
-              ))}
+            <div className="grid gap-2">
+              {SECTEURS.map((s) => {
+                const lignes = avancement.filter((a) => a.secteur === s.cle);
+                const c = lignes.reduce(additionner, vide());
+                const servable = c.distribues + c.en_reserve;
+                const pct = servable ? Math.round((c.distribues / servable) * 100) : 0;
+                const ouvert = detailDe === s.cle;
+                return (
+                  <Card key={s.cle} className="p-3">
+                    <button
+                      type="button"
+                      className="w-full text-left"
+                      onClick={() => setDetailDe(ouvert ? null : s.cle)}
+                      aria-expanded={ouvert}
+                    >
+                      <div className="flex items-baseline gap-2">
+                        <span className="flex-1 text-sm font-semibold">{s.nom}</span>
+                        <span className="font-mono text-sm font-bold tabular-nums">{pct} %</span>
+                        <span className="text-xs text-muted-foreground">servis</span>
+                      </div>
+                      <div className="mt-2"><Barre c={c} /></div>
+                      <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                        <span className="tabular-nums">
+                          <b className="text-foreground">{c.distribues}</b> distribués
+                        </span>
+                        <span className="tabular-nums">
+                          <b className="text-foreground">{c.en_reserve}</b> en réserve
+                        </span>
+                        <span className="tabular-nums">{c.injoignables} sans coordonnées</span>
+                        <span className="ml-auto">{ouvert ? "Masquer" : "Par département"}</span>
+                      </div>
+                    </button>
+
+                    {ouvert && (
+                      <div className="mt-3 max-h-64 space-y-1.5 overflow-y-auto border-t border-border pt-3">
+                        {lignes
+                          .filter((a) => a.distribues + a.en_reserve > 0)
+                          .sort((a, b) => (b.distribues + b.en_reserve) - (a.distribues + a.en_reserve))
+                          .map((a) => (
+                            <div key={a.departement} className="grid grid-cols-[2.5rem_1fr_5.5rem] items-center gap-2">
+                              <span className="font-mono text-[11px] text-muted-foreground">{a.departement}</span>
+                              <Barre c={{ ...a, total: a.total }} compact />
+                              <span className="text-right font-mono text-[11px] tabular-nums text-muted-foreground">
+                                {a.distribues} / {a.distribues + a.en_reserve}
+                              </span>
+                            </div>
+                          ))}
+                        {lignes.every((a) => a.distribues + a.en_reserve === 0) && (
+                          <p className="text-xs text-muted-foreground">
+                            Aucune fiche joignable dans ce secteur — l'enrichissement des coordonnées
+                            doit passer avant la distribution.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <i className="h-2 w-4 rounded-sm bg-primary" />distribués
+              </span>
+              <span className="flex items-center gap-1.5">
+                <i className="h-2 w-4 rounded-sm bg-primary/35" />prêts à servir
+              </span>
+              <span className="flex items-center gap-1.5">
+                <i className="h-2 w-4 rounded-sm bg-muted" />sans coordonnées
+              </span>
             </div>
           </section>
 

@@ -3697,6 +3697,19 @@ export type Database = {
         }
         Relationships: []
       }
+      v_suivi_prospection: {
+        Row: {
+          a_rendre: number | null
+          actifs: number | null
+          dernier_service: string | null
+          en_retard: number | null
+          proprietaire: string | null
+          sans_action: number | null
+          servis_semaine: number | null
+          traites_semaine: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       appliquer_enrichissement_osm: { Args: { _maj: Json }; Returns: number }

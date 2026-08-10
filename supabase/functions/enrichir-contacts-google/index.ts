@@ -158,6 +158,13 @@ Deno.serve(async (req) => {
       .eq('joignable', false)          // on ne paie pas pour ce qu'on a déjà
       .limit(lot);
     if (body.source) q = q.eq('source', String(body.source));
+
+    // Ciblage géographique. Le quota gratuit est mensuel et limité : mieux vaut le
+    // dépenser sur une zone cohérente, qui donnera de vraies tournées, que le disperser
+    // sur toute la France en points isolés qu'aucun commercial ne pourra enchaîner.
+    if (Array.isArray(body.departements) && body.departements.length) {
+      q = q.in('departement', body.departements.map((d: unknown) => String(d)));
+    }
     const { data: brutes, error } = await q;
     if (error) throw error;
     if (!brutes?.length) return json({ ok: true, interroges: 0, termine: true });
@@ -210,9 +217,17 @@ Deno.serve(async (req) => {
       }
     }
 
-    const { count: restants } = await admin.from('prospects')
+    // Le décompte doit porter EXACTEMENT sur le même périmètre que la sélection, filtre
+    // géographique compris : sinon la boucle appelante croit qu'il reste du travail
+    // ailleurs et relance indéfiniment sur un lot déjà vide — en payant à chaque tour.
+    let qr = admin.from('prospects')
       .select('id', { count: 'exact', head: true })
       .in('segment', segments).is('google_tente_at', null).eq('joignable', false);
+    if (body.source) qr = qr.eq('source', String(body.source));
+    if (Array.isArray(body.departements) && body.departements.length) {
+      qr = qr.in('departement', body.departements.map((d: unknown) => String(d)));
+    }
+    const { count: restants } = await qr;
 
     return json({
       ok: true, mode: dryRun ? 'analyse' : 'écriture',

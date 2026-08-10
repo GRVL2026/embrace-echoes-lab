@@ -2589,6 +2589,8 @@ export type Database = {
           geocode_last_attempt: string | null
           geocode_source: string | null
           geocoded_at: string | null
+          google_place_id: string | null
+          google_tente_at: string | null
           gouv_tente_at: string | null
           groupe: string | null
           id: string
@@ -2650,6 +2652,8 @@ export type Database = {
           geocode_last_attempt?: string | null
           geocode_source?: string | null
           geocoded_at?: string | null
+          google_place_id?: string | null
+          google_tente_at?: string | null
           gouv_tente_at?: string | null
           groupe?: string | null
           id?: string
@@ -2711,6 +2715,8 @@ export type Database = {
           geocode_last_attempt?: string | null
           geocode_source?: string | null
           geocoded_at?: string | null
+          google_place_id?: string | null
+          google_tente_at?: string | null
           gouv_tente_at?: string | null
           groupe?: string | null
           id?: string

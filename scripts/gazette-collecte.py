@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse, datetime, html, json, os, re, ssl, sys, time
 import urllib.parse, urllib.request
+from pathlib import Path
 
 FONCTION = "https://yhfghipueqfkgysaulvl.supabase.co/functions/v1/gazette-locale"
 SECRET = os.path.expanduser("~/.config/arcadeos/cron_secret")
@@ -122,6 +123,42 @@ def collecter(jours: int) -> list[dict]:
 # variante d'URL ne la contourne. En revanche le titre exact, cherché sur le web, ramène
 # l'article en un coup. Cette recherche se fait ici, depuis la même connexion ordinaire
 # qui nous donne déjà accès à la presse.
+
+# Fenêtre de collecte : rattraper les jours manqués plutôt que regarder toujours deux
+# jours en arrière.
+#
+# La tâche est programmée à 7h, mais le Mac dort la nuit et le week-end. macOS rejoue
+# alors le travail manqué au réveil — parfois. Le 8 août elle est partie à 10h10 ; les 9
+# et 10, pas du tout. Avec une fenêtre fixe de deux jours, un lundi matin ne voyait ni le
+# samedi ni le dimanche : ces articles étaient perdus pour de bon.
+#
+# On mémorise donc la date du dernier relevé RÉUSSI, et la fenêtre s'étend jusqu'à elle.
+# Un lundi après un week-end sans réveil couvre trois jours ; une journée normale en
+# couvre deux.
+DERNIER_RELEVE = Path.home() / "Library" / "Application Support" / "ArcadeOS" / "gazette-dernier-releve.txt"
+FENETRE_MIN = 2    # le recouvrement absorbe le retard d'indexation des moteurs
+FENETRE_MAX = 10   # au-delà, c'est une reprise manuelle : --jours l'autorise explicitement
+
+
+def fenetre_a_couvrir() -> int:
+    """Nombre de jours à remonter pour ne rien manquer depuis le dernier relevé réussi."""
+    try:
+        dernier = datetime.date.fromisoformat(DERNIER_RELEVE.read_text().strip())
+    except (OSError, ValueError):
+        return FENETRE_MIN     # premier lancement, ou marqueur illisible
+    ecart = (datetime.date.today() - dernier).days
+    return max(FENETRE_MIN, min(FENETRE_MAX, ecart + 1))
+
+
+def marquer_releve_reussi() -> None:
+    """N'est appelé qu'après une collecte menée à son terme. Un échec réseau laisse donc
+    le marqueur en arrière, et la prochaine exécution reprendra la période manquée."""
+    try:
+        DERNIER_RELEVE.parent.mkdir(parents=True, exist_ok=True)
+        DERNIER_RELEVE.write_text(datetime.date.today().isoformat())
+    except OSError as e:
+        print(f"  ⚠️  marqueur de relevé non écrit ({e}) — la prochaine fenêtre sera large")
+
 
 class MoteurSature(Exception):
     """Le moteur de recherche refuse de répondre. C'est temporaire : il faut s'arrêter
@@ -266,8 +303,9 @@ def appeler(charge: dict) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--jours", type=int, default=2,
-                    help="fenêtre en jours (2 par défaut : le recouvrement absorbe le retard d'indexation)")
+    ap.add_argument("--jours", type=int, default=None,
+                    help="fenêtre en jours. Par défaut : depuis le dernier relevé réussi, "
+                         f"minimum {FENETRE_MIN}, maximum {FENETRE_MAX}.")
     ap.add_argument("--test", action="store_true", help="afficher sans envoyer")
     ap.add_argument("--enrichir-seulement", action="store_true",
                     help="ne rien collecter : résoudre les liens et lire les articles déjà en base")
@@ -284,10 +322,16 @@ def main() -> None:
         sys.exit("Pas de connexion après six minutes d'attente — relevé abandonné, "
                  "il sera repris demain.")
 
-    print(f"Relevé sur {a.jours} jour(s)…")
-    articles = collecter(a.jours)
+    jours = a.jours if a.jours is not None else fenetre_a_couvrir()
+    if a.jours is None and jours > FENETRE_MIN:
+        print(f"Dernier relevé il y a {jours - 1} jour(s) — on rattrape.")
+    print(f"Relevé sur {jours} jour(s)…")
+    articles = collecter(jours)
     print(f"{len(articles)} articles collectés")
     if not articles:
+        # Zéro article n'est pas un échec : un dimanche de presse locale peut être vide.
+        # On avance quand même le marqueur, sinon la fenêtre grandirait indéfiniment.
+        marquer_releve_reussi()
         return
 
     if a.test:
@@ -303,6 +347,11 @@ def main() -> None:
         if not rep.get("restants_a_traiter"):
             break
         time.sleep(2)
+
+    # Le marqueur est posé ICI, la collecte étant menée à son terme. En cas d'abandon —
+    # réseau absent, moteur saturé — le script sort plus haut sans y toucher, et la
+    # prochaine exécution reprendra la période manquée d'elle-même.
+    marquer_releve_reussi()
 
     print("Résolution des liens et lecture des articles…")
     enrichir(a.plafond)

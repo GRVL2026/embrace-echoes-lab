@@ -73,6 +73,9 @@ type Cabine = {
   id: string; nom: string; ville: string | null; code_postal: string | null;
   adresse: string | null; lat: number | null; lng: number | null;
   departement: string | null; exploitant: string;
+  // État déjà en base. `arbitre_le` non nul signifie qu'un humain a tranché : sa
+  // décision prime alors sur tout ce que le calcul peut proposer.
+  rapprochement: string | null; arbitre_le: string | null;
 };
 
 Deno.serve(async (req) => {
@@ -160,8 +163,11 @@ Deno.serve(async (req) => {
     }
 
     // ── Chargement ────────────────────────────────────────────────────────────
+    // On lit aussi le rapprochement STOCKÉ et sa date d'arbitrage : sans eux, le
+    // recalcul ignorerait qu'un humain est déjà passé par là.
     const cabines = (await toutLire(admin, 'cabines_photo',
-      'id, nom, ville, code_postal, adresse, lat, lng, departement, exploitant, pays',
+      'id, nom, ville, code_postal, adresse, lat, lng, departement, exploitant, pays,'
+      + ' rapprochement, arbitre_le',
     )).filter((c: any) => c.pays === 'FR') as Cabine[];
 
     const clientsBruts = await toutLire(admin, 'gaia_clients', 'customer_id, name, code_postal, lat, lng');
@@ -239,8 +245,15 @@ Deno.serve(async (req) => {
       }
     }
 
-    const compte = (r: string) => lignes.filter((l) => l.rapprochement === r).length;
+    // L'état qui fait foi : la décision humaine si elle existe, le calcul sinon. Les
+    // comptes rendus s'appuient dessus, sinon ils annonceraient onze arbitrages en
+    // attente alors que cinq sont tranchés — et on croirait le travail non fait.
+    const etatRetenu = (l: Ligne) =>
+      l.cabine.arbitre_le ? (l.cabine.rapprochement ?? 'aucun') : l.rapprochement;
+
+    const compte = (r: string) => lignes.filter((l) => etatRetenu(l) === r).length;
     const resume = {
+      arbitres: lignes.filter((l) => l.cabine.arbitre_le).length,
       cabines: cabines.length,
       client: compte('client'),
       prospect: compte('prospect'),
@@ -258,19 +271,24 @@ Deno.serve(async (req) => {
 
     // ── Écriture des rattachements ────────────────────────────────────────────
     if (action === 'appliquer') {
-      let ecrits = 0;
+      let ecrits = 0, respectes = 0;
       for (const l of lignes) {
         if (Date.now() - debut > BUDGET_MS) break;
-        const { error } = await admin.from('cabines_photo').update({
+        // CE QU'UN HUMAIN A TRANCHÉ NE SE RECALCULE PAS. Le filtre est dans le WHERE
+        // plutôt que dans une condition JavaScript : ainsi une ligne arbitrée entre le
+        // calcul et l'écriture — la boucle dure plusieurs secondes — est protégée elle
+        // aussi. Sans cela, les rejets du 10 août disparaissaient au premier
+        // relancement, sans le moindre avertissement.
+        const { data, error } = await admin.from('cabines_photo').update({
           rapprochement: l.rapprochement,
           code_client: l.code_client,
           prospect_id: l.prospect_id,
           salle_id: l.salle_id,
-        }).eq('id', l.cabine.id);
+        }).eq('id', l.cabine.id).is('arbitre_le', null).select('id');
         if (error) throw error;
-        ecrits++;
+        if (data?.length) ecrits++; else respectes++;
       }
-      return json({ ok: true, ...resume, ecrits });
+      return json({ ok: true, ...resume, ecrits, arbitrages_respectes: respectes });
     }
 
     // ── Création des fiches manquantes ────────────────────────────────────────
@@ -283,8 +301,12 @@ Deno.serve(async (req) => {
         prospectsBruts.map((p: any) => `${cleIdentifiante(p.entreprise)}|${cle(p.ville ?? '')}`),
       );
 
+      // etatRetenu fait foi ici aussi : les cinq galeries rejetées à la main restaient
+      // « à confirmer » aux yeux du recalcul, donc n'obtenaient jamais leur fiche —
+      // alors qu'un exploitant de galerie est un interlocuteur à part entière,
+      // distinct de ses locataires, et mérite la sienne.
       const aCreer = lignes
-        .filter((l) => l.rapprochement === 'aucun')
+        .filter((l) => etatRetenu(l) === 'aucun')
         .filter((l) => !dejaLa.has(`${cleIdentifiante(l.cabine.nom)}|${cle(l.cabine.ville ?? '')}`));
 
       // Deux relevés d'un même établissement (deux cabines dans la même galerie) ne

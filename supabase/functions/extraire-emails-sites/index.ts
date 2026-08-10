@@ -27,6 +27,7 @@ const UA = 'Mozilla/5.0 (compatible; ArcadeOS/1.0; +https://avranchesautomatic.c
 const LOT = 25;                  // sites visités par invocation
 const PARALLELE = 5;             // requêtes simultanées : rester poli avec de petits hébergeurs
 const TIMEOUT_MS = 8_000;
+const MAX_OCTETS = 400_000;      // au-delà, on cesse de lire : le contact est en haut ou en bas de page
 const BUDGET_MS = 110_000;       // les edge functions sont coupées à 150 s
 const CHEMINS = ['', '/contact', '/contactez-nous', '/nous-contacter', '/contact.html'];
 
@@ -117,11 +118,40 @@ async function lirePage(url: string): Promise<string | null> {
       redirect: 'follow',
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-    if (!res.ok) return null;
+    if (!res.ok) { await res.body?.cancel(); return null; }
     const type = res.headers.get('content-type') ?? '';
-    if (!type.includes('html')) return null;
-    // On ne lit que le début : une adresse de contact figure dans l'en-tête ou le pied de page.
-    return (await res.text()).slice(0, 400_000);
+    if (!type.includes('html')) { await res.body?.cancel(); return null; }
+
+    // ON COUPE AU FLUX, PAS APRÈS COUP.
+    //
+    // La version précédente faisait `(await res.text()).slice(0, 400_000)` : le
+    // `.slice` n'intervenait qu'une fois la page ENTIÈREMENT chargée en mémoire. Un
+    // seul site copieux suffisait alors à faire dépasser le worker, que Supabase
+    // tuait par un WORKER_RESOURCE_LIMIT — en quatre secondes, avant même d'avoir
+    // visité les autres. Et comme l'ordre de la file est déterministe, on retombait
+    // sur le même site à chaque appel : la source entière restait bloquée par une
+    // seule fiche, y compris avec un lot de trois.
+    //
+    // On s'arrête donc dès qu'on a de quoi travailler. Une adresse de contact figure
+    // dans l'en-tête ou le pied de page ; quatre cent mille caractères en couvrent
+    // très largement l'un et l'autre.
+    const lecteur = res.body?.getReader();
+    if (!lecteur) return null;
+    const morceaux: Uint8Array[] = [];
+    let lus = 0;
+    while (lus < MAX_OCTETS) {
+      const { done, value } = await lecteur.read();
+      if (done) break;
+      if (value) { morceaux.push(value); lus += value.length; }
+    }
+    // Fermer la connexion sans attendre la fin du téléchargement : sur une page
+    // interminable, l'oublier laisserait le flux ouvert jusqu'au bout.
+    await lecteur.cancel().catch(() => { /* déjà close */ });
+
+    const tampon = new Uint8Array(lus);
+    let pos = 0;
+    for (const m of morceaux) { tampon.set(m, pos); pos += m.length; }
+    return new TextDecoder('utf-8', { fatal: false }).decode(tampon);
   } catch {
     return null;
   }

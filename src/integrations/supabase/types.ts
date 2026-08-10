@@ -355,6 +355,7 @@ export type Database = {
       cabines_photo: {
         Row: {
           adresse: string | null
+          arbitre_le: string | null
           code_client: string | null
           code_postal: string | null
           departement: string | null
@@ -376,6 +377,7 @@ export type Database = {
         }
         Insert: {
           adresse?: string | null
+          arbitre_le?: string | null
           code_client?: string | null
           code_postal?: string | null
           departement?: string | null
@@ -397,6 +399,7 @@ export type Database = {
         }
         Update: {
           adresse?: string | null
+          arbitre_le?: string | null
           code_client?: string | null
           code_postal?: string | null
           departement?: string | null

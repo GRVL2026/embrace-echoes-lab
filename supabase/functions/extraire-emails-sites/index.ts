@@ -208,15 +208,27 @@ Deno.serve(async (req) => {
       for (const m of maj) {
         // On marque TOUJOURS la tentative, même infructueuse : sans cela, les sites
         // muets seraient revisités à chaque passage et bloqueraient la progression.
+        // DEUX ÉCRITURES SÉPARÉES, ET C'EST ESSENTIEL.
+        //
+        // Le garde-fou « ne pas écraser un téléphone existant » était posé sur la
+        // requête entière : dès que la fiche avait déjà un numéro, la condition ne
+        // filtrait plus rien du tout — elle annulait l'écriture complète, e-mail et
+        // horodatage compris. Ces fiches revenaient donc à chaque appel, indéfiniment,
+        // et leur site était revisité en boucle. Mille cinq cents visites inutiles
+        // avant que le compteur « restants », figé, ne le trahisse.
         const patch: Record<string, unknown> = { email_tente_at: maintenant };
         if (m.email) patch.email = m.email;
-        // Le téléphone d'OpenStreetMap, quand il existe, a été renseigné par un humain :
-        // on ne l'écrase pas avec celui déniché sur le site.
-        if (m.tel) patch.telephone = m.tel;
-        let req = admin.from('prospects').update(patch).eq('id', m.id);
-        if (m.tel) req = req.is('telephone', null);
-        const { error: e2 } = await req;
+        const { error: e2 } = await admin.from('prospects').update(patch).eq('id', m.id);
         if (e2) throw e2;
+
+        // Le téléphone d'OpenStreetMap, quand il existe, a été renseigné par un humain :
+        // on ne l'écrase pas avec celui déniché sur le site. Cette prudence-là ne
+        // concerne QUE le téléphone, d'où sa propre requête.
+        if (m.tel) {
+          const { error: e3 } = await admin.from('prospects')
+            .update({ telephone: m.tel }).eq('id', m.id).is('telephone', null);
+          if (e3) throw e3;
+        }
       }
     }
 

@@ -38,13 +38,27 @@ type Charge = {
   dernier_contact: string | null;
 };
 
-type Dispo = { secteur: string | null; n: number };
 
 type Avancement = {
-  secteur: string; departement: string;
+  secteur: string; departement: string; segment: string;
   total: number; joignables: number;
   distribues: number; en_reserve: number; injoignables: number;
 };
+
+// L'ACTIVITÉ SE CHOISIT AVANT LA RÉGION.
+//
+// « Grand Ouest : 971 fiches » ne dit rien d'exploitable — six cent douze campings et
+// trois cent cinquante-neuf salles d'arcade, ce sont deux métiers, deux argumentaires,
+// deux saisons. Un commercial ne prépare pas la même journée, et un lot qui les mélange
+// l'oblige à changer de discours toutes les trois fiches.
+const ACTIVITES: { cle: string; nom: string }[] = [
+  { cle: "loisirs", nom: "Salles d'arcade et loisirs" },
+  { cle: "chr", nom: "Bars et restaurants" },
+  { cle: "camping", nom: "Campings" },
+  { cle: "fec", nom: "Centres multi-activités" },
+  { cle: "retail", nom: "Centres commerciaux" },
+  { cle: "autre", nom: "Autres" },
+];
 
 type Cumul = { distribues: number; en_reserve: number; injoignables: number; total: number };
 
@@ -99,9 +113,9 @@ export default function Distribution() {
   const { isAdmin, isDirection, isLoading } = useAuth();
   const [profils, setProfils] = useState<Profil[]>([]);
   const [charges, setCharges] = useState<Record<string, Charge>>({});
-  const [dispos, setDispos] = useState<Dispo[]>([]);
   const [avancement, setAvancement] = useState<Avancement[]>([]);
   const [detailDe, setDetailDe] = useState<string | null>(null);
+  const [activite, setActivite] = useState<string | null>(null);
   const [aServir, setAServir] = useState<Record<string, number>>({});
   const [secteurDe, setSecteurDe] = useState<Record<string, string>>({});
   const [chargement, setChargement] = useState(true);
@@ -109,7 +123,7 @@ export default function Distribution() {
 
   const charger = useCallback(async () => {
     setChargement(true);
-    const [{ data: prof }, { data: actifs }, { data: vivier }, { data: avance }] = await Promise.all([
+    const [{ data: prof }, { data: actifs }, { data: avance }] = await Promise.all([
       // Seuls les porteurs de portefeuille. La liste complète des comptes mélangeait la
       // direction, les tests et les commerciaux : sept cartes pour trois personnes qui
       // reçoivent réellement des leads, et autant d'occasions de se tromper de ligne un
@@ -120,11 +134,11 @@ export default function Distribution() {
       (supabase as any).from("prospects")
         .select("proprietaire, prochaine_action_le, distribue_le")
         .eq("etat", "actif"),
-      // NE PAS compter la réserve en lisant les fiches une à une : PostgREST en rend
-      // mille au maximum, sans le dire. Le menu affichait « 369 / 631 / 0 » — un total
-      // de mille pile, et un Sud-Ouest vide alors qu'il compte 663 fiches. Le décompte
-      // vient donc de la vue agrégée, comme les cartes du haut.
-      (supabase as any).from("v_prospection_avancement").select("secteur, en_reserve"),
+      // UNE SEULE SOURCE POUR TOUS LES DÉCOMPTES : la vue agrégée. Compter en lisant les
+      // fiches une à une est plafonné à mille lignes par PostgREST, silencieusement —
+      // le menu des secteurs affichait « 369 / 631 / 0 », mille pile, avec un Sud-Ouest
+      // vide alors qu'il compte 663 fiches. Trois écrans s'y sont fait prendre le
+      // 10 août ; il n'existe plus qu'un seul chemin ici.
       // Agrégé en base : lire les neuf mille fiches ici se heurterait au plafond de
       // mille lignes de PostgREST, sans le moindre avertissement.
       (supabase as any).from("v_prospection_avancement").select("*"),
@@ -149,20 +163,27 @@ export default function Distribution() {
     }
     setCharges(parPersonne);
 
-    // La vue rend une ligne par département : on additionne pour retrouver les secteurs.
-    const parSecteur = new Map<string, number>();
-    for (const v of ((vivier as any[]) ?? [])) {
-      const k = v.secteur ?? "(sans secteur)";
-      parSecteur.set(k, (parSecteur.get(k) ?? 0) + Number(v.en_reserve ?? 0));
-    }
-    setDispos([...parSecteur.entries()].map(([secteur, n]) => ({ secteur, n })).sort((a, b) => b.n - a.n));
     setChargement(false);
   }, []);
 
   useEffect(() => { void charger(); }, [charger]);
 
+  // Toutes les vues de cet écran découlent de l'activité choisie. Tant qu'aucune ne l'est,
+  // on ne montre pas de secteurs : un total qui mêle campings et salles d'arcade n'aide
+  // personne à composer une journée.
+  const lignesActivite = useMemo(
+    () => activite ? avancement.filter((a) => a.segment === activite) : [],
+    [avancement, activite],
+  );
+
+  const parActivite = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const a of avancement) m.set(a.segment, (m.get(a.segment) ?? 0) + a.en_reserve);
+    return m;
+  }, [avancement]);
+
   const dispoDe = (secteur: string | undefined) =>
-    dispos.find((d) => d.secteur === secteur)?.n ?? 0;
+    lignesActivite.filter((a) => a.secteur === secteur).reduce((n, a) => n + a.en_reserve, 0);
 
   const totalAServir = useMemo(
     () => Object.values(aServir).reduce((s, n) => s + (n || 0), 0),
@@ -187,6 +208,7 @@ export default function Distribution() {
           .from("prospects")
           .select("id")
           .eq("etat", "vivier").eq("joignable", true).eq("secteur", secteur)
+          .eq("segment", activite)
           .order("source", { ascending: true })
           .order("departement", { ascending: true })
           .limit(combien);
@@ -246,16 +268,54 @@ export default function Distribution() {
           <section className="space-y-2">
             <h2 className="font-display text-sm font-semibold">
               <span className="mr-2 font-mono text-xs text-primary">1</span>
-              Ce que contient la réserve
+              Quelle activité
             </h2>
             <p className="text-xs text-muted-foreground">
-              Uniquement les fiches <strong>joignables</strong> — celles qui portent un téléphone ou
-              un e-mail. Servir un lead sans coordonnée, c'est offrir vingt minutes de
-              recherche avant le premier appel.
+              Un camping et une salle d'arcade, ce sont deux argumentaires et deux saisons.
+              On sert une activité à la fois — sinon le commercial change de discours toutes
+              les trois fiches. Seules les fiches <strong>joignables</strong> sont comptées.
             </p>
-            <div className="grid gap-2">
+
+            <div className="flex flex-wrap gap-2">
+              {ACTIVITES.filter((a) => (parActivite.get(a.cle) ?? 0) > 0).map((a) => {
+                const n = parActivite.get(a.cle) ?? 0;
+                const actif = activite === a.cle;
+                return (
+                  <button
+                    key={a.cle}
+                    type="button"
+                    aria-pressed={actif}
+                    onClick={() => { setActivite(actif ? null : a.cle); setAServir({}); setDetailDe(null); }}
+                    className={cn(
+                      "rounded-md border px-3 py-2 text-left text-sm transition-colors",
+                      actif
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-border hover:border-primary/50",
+                    )}
+                  >
+                    <span className="block font-medium">{a.nom}</span>
+                    <span className={cn("font-mono text-xs tabular-nums",
+                      actif ? "text-primary" : "text-muted-foreground")}>
+                      {n.toLocaleString("fr-FR")} en réserve
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* ── 2 — la géographie, une fois l'activité choisie ──────────────── */}
+          <section className={cn("space-y-2", !activite && "opacity-40")}>
+            <h2 className="font-display text-sm font-semibold">
+              <span className="mr-2 font-mono text-xs text-primary">2</span>
+              Où
+            </h2>
+            {!activite && (
+              <p className="text-xs text-muted-foreground">Choisis d'abord une activité.</p>
+            )}
+            <div className={cn("grid gap-2", !activite && "hidden")}>
               {SECTEURS.map((s) => {
-                const lignes = avancement.filter((a) => a.secteur === s.cle);
+                const lignes = lignesActivite.filter((a) => a.secteur === s.cle);
                 const c = lignes.reduce(additionner, vide());
                 const servable = c.distribues + c.en_reserve;
                 const pct = servable ? Math.round((c.distribues / servable) * 100) : 0;
@@ -326,10 +386,10 @@ export default function Distribution() {
             </div>
           </section>
 
-          {/* ── 2 — la charge, puis le curseur ────────────────────────────── */}
-          <section className="space-y-2">
+          {/* ── 3 — la charge, puis le curseur ────────────────────────────── */}
+          <section className={cn("space-y-2", !activite && "opacity-40 pointer-events-none")}>
             <h2 className="font-display text-sm font-semibold">
-              <span className="mr-2 font-mono text-xs text-primary">2</span>
+              <span className="mr-2 font-mono text-xs text-primary">3</span>
               Qui peut en prendre
             </h2>
             <p className="text-xs text-muted-foreground">
@@ -408,7 +468,7 @@ export default function Distribution() {
           {/* ── 3 — valider ──────────────────────────────────────────────── */}
           <section className="space-y-2">
             <h2 className="font-display text-sm font-semibold">
-              <span className="mr-2 font-mono text-xs text-primary">3</span>
+              <span className="mr-2 font-mono text-xs text-primary">4</span>
               Servir
             </h2>
             <p className="text-xs text-muted-foreground">

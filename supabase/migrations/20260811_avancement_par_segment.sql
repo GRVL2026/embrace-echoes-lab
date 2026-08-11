@@ -9,7 +9,13 @@
 -- veut : le total par activité, puis la répartition par secteur une fois l'activité
 -- choisie.
 
-create or replace view public.v_prospection_avancement
+-- SUPPRIMER PUIS RECRÉER, et non « create or replace ». Ce dernier ne sait qu'ajouter
+-- des colonnes EN FIN de liste : insérer « segment » en troisième position lui fait
+-- comprendre qu'on renomme « total », et il refuse — 42P16. Rien ne dépend de cette vue
+-- en base, le front la lit en direct.
+drop view if exists public.v_prospection_avancement;
+
+create view public.v_prospection_avancement
 with (security_invoker = true) as
 select
   coalesce(secteur, '(sans secteur)')      as secteur,

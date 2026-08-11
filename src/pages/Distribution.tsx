@@ -53,6 +53,10 @@ type Avancement = {
 // l'oblige à changer de discours toutes les trois fiches.
 const ACTIVITES: { cle: string; nom: string }[] = [
   { cle: "loisirs", nom: "Salles d'arcade et loisirs" },
+  // Les agences événementielles ne sont pas un lieu mais un prescripteur : elles louent
+  // pour un client, sur quelques jours. Argumentaire et cycle n'ont rien à voir avec une
+  // vente à un exploitant — d'où une activité à part entière.
+  { cle: "agence", nom: "Agences événementielles" },
   { cle: "chr", nom: "Bars et restaurants" },
   { cle: "camping", nom: "Campings" },
   { cle: "fec", nom: "Centres multi-activités" },

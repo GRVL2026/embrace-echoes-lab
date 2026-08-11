@@ -76,7 +76,10 @@ import {
 type Statut = "nouveau" | "contacte" | "connecte" | "repondu" | "rdv" | "devis" | "client" | "perdu";
 // « camping » est un segment à part entière : l'hôtellerie de plein air n'est ni du
 // loisir indoor (bowling, parc) ni du CHR — qui désigne Cafés, Hôtels, Restaurants.
-type Segment = "camping" | "loisirs" | "fec" | "chr" | "retail" | "revendeur" | "autre";
+// « agence » désigne les agences événementielles : un prescripteur, pas un lieu. Elles
+// louent pour le compte d'un client, sur quelques jours — cycle et argumentaire n'ont
+// rien de commun avec une vente à un exploitant.
+type Segment = "camping" | "loisirs" | "fec" | "chr" | "retail" | "agence" | "revendeur" | "autre";
 type Source = "linkedin" | "salon" | "reco" | "site" | "signal" | "autre";
 
 type Prospect = {
@@ -172,6 +175,7 @@ const SEGMENTS: { key: Segment; label: string; className: string }[] = [
   { key: "fec", label: "FEC", className: "bg-violet-500/15 text-violet-300 border-violet-500/30" },
   { key: "chr", label: "CHR", className: "bg-amber-500/15 text-amber-300 border-amber-500/30" },
   { key: "retail", label: "Retail", className: "bg-sky-500/15 text-sky-300 border-sky-500/30" },
+  { key: "agence", label: "Agence event", className: "bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30" },
   { key: "revendeur", label: "Revendeur", className: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },
   { key: "autre", label: "Autre", className: "bg-muted text-muted-foreground border-border" },
 ];

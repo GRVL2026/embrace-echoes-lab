@@ -120,9 +120,11 @@ export default function Distribution() {
       (supabase as any).from("prospects")
         .select("proprietaire, prochaine_action_le, distribue_le")
         .eq("etat", "actif"),
-      (supabase as any).from("prospects")
-        .select("secteur")
-        .eq("etat", "vivier").eq("joignable", true),
+      // NE PAS compter la réserve en lisant les fiches une à une : PostgREST en rend
+      // mille au maximum, sans le dire. Le menu affichait « 369 / 631 / 0 » — un total
+      // de mille pile, et un Sud-Ouest vide alors qu'il compte 663 fiches. Le décompte
+      // vient donc de la vue agrégée, comme les cartes du haut.
+      (supabase as any).from("v_prospection_avancement").select("secteur, en_reserve"),
       // Agrégé en base : lire les neuf mille fiches ici se heurterait au plafond de
       // mille lignes de PostgREST, sans le moindre avertissement.
       (supabase as any).from("v_prospection_avancement").select("*"),
@@ -147,10 +149,11 @@ export default function Distribution() {
     }
     setCharges(parPersonne);
 
+    // La vue rend une ligne par département : on additionne pour retrouver les secteurs.
     const parSecteur = new Map<string, number>();
     for (const v of ((vivier as any[]) ?? [])) {
       const k = v.secteur ?? "(sans secteur)";
-      parSecteur.set(k, (parSecteur.get(k) ?? 0) + 1);
+      parSecteur.set(k, (parSecteur.get(k) ?? 0) + Number(v.en_reserve ?? 0));
     }
     setDispos([...parSecteur.entries()].map(([secteur, n]) => ({ secteur, n })).sort((a, b) => b.n - a.n));
     setChargement(false);

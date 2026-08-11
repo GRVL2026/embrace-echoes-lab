@@ -219,7 +219,6 @@ type Resume = {
 export default function Prospection() {
   const { isAdmin, isDirection, canAccessProspection, isLoading, hasRestrictedAction } = useAuth();
   const canDetecter = hasRestrictedAction("prospection.detecter_signaux");
-  const canPreparer = hasRestrictedAction("prospection.preparer");
   const canEnvoyerLgm = hasRestrictedAction("prospection.envoyer_lgm");
   const canImporterCsv = hasRestrictedAction("prospection.importer_csv");
   const [prospects, setProspects] = useState<Prospect[]>([]);
@@ -229,7 +228,6 @@ export default function Prospection() {
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [detecting, setDetecting] = useState(false);
-  const [preparing, setPreparing] = useState(false);
   const [bulkSending, setBulkSending] = useState(false);
   const [lgmFilter, setLgmFilter] = useState<"all" | "loisirs" | "chr" | "retail" | "none">("all");
   // Filtres de travail du pipeline. Le filtre par secteur devient indispensable dès qu'un
@@ -286,32 +284,6 @@ export default function Prospection() {
     }
   }, []);
 
-  const runPreparation = useCallback(async () => {
-    setPreparing(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("preparer-prospects-agent", { body: {} });
-      if (error) throw error;
-      const prepared = Number((data as any)?.prepared ?? 0);
-      const candidats = Number((data as any)?.candidats ?? 0);
-      const errs = ((data as any)?.errors ?? []) as any[];
-      if (prepared > 0) {
-        toast.success(`${prepared} prospect(s) préparé(s)`, {
-          description: errs.length ? `${errs.length} erreur(s) ignorée(s)` : `${candidats} candidat(s) analysés`,
-        });
-      } else if (candidats === 0) {
-        toast("Aucun signal à préparer");
-      } else {
-        toast.error("Aucun prospect préparé", {
-          description: errs[0]?.error ?? "Erreurs pendant la préparation",
-        });
-      }
-      await load();
-    } catch (e) {
-      toast.error("Préparation impossible", { description: (e as Error).message });
-    } finally {
-      setPreparing(false);
-    }
-  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -525,23 +497,10 @@ export default function Prospection() {
             onClick={runDetection}
             disabled={detecting}
             className="gap-2"
-            title="Détecter les établissements récemment créés en France (30 jours)"
+            title="Interroger Pappers : établissements récemment créés en France (30 jours)"
           >
             {detecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-            <span className="hidden sm:inline">{detecting ? "Détection…" : "Détecter les signaux"}</span>
-          </Button>
-        )}
-        {canPreparer && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={runPreparation}
-            disabled={preparing}
-            className="gap-2"
-            title="Enrichir et générer une accroche IA pour les signaux non préparés (agent semi-auto)"
-          >
-            {preparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            <span className="hidden sm:inline">{preparing ? "Préparation…" : "Préparer les nouveaux"}</span>
+            <span className="hidden sm:inline">{detecting ? "Scan en cours…" : "Scan Pappers"}</span>
           </Button>
         )}
         {canEnvoyerLgm && readyToSend.length > 0 && (

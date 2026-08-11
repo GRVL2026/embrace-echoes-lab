@@ -15,14 +15,12 @@ export type RestrictedAction = {
 export const RESTRICTED_ACTIONS: RestrictedAction[] = [
   {
     key: "prospection.detecter_signaux",
-    label: "Prospection · Détecter les signaux",
-    description: "Lancer la détection des établissements récemment créés.",
+    label: "Prospection · Scan Pappers",
+    description: "Interroger Pappers pour les établissements récemment créés. Chaque scan consomme des crédits.",
   },
-  {
-    key: "prospection.preparer",
-    label: "Prospection · Préparer les nouveaux",
-    description: "Lancer l'agent d'enrichissement + accroche IA.",
-  },
+  // « prospection.preparer » a été retiré avec son bouton : l'agent d'enrichissement
+  // et d'accroche IA n'était plus utilisé. La clé reste réservée — si des permissions
+  // la portent encore en base, elles deviennent simplement sans effet.
   {
     key: "prospection.envoyer_lgm",
     label: "Prospection · Envoyer vers LGM",

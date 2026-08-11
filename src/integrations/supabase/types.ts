@@ -3702,6 +3702,7 @@ export type Database = {
           injoignables: number | null
           joignables: number | null
           secteur: string | null
+          segment: string | null
           total: number | null
         }
         Relationships: []

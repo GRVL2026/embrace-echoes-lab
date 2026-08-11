@@ -40,7 +40,7 @@ type Charge = {
 
 
 type Avancement = {
-  secteur: string; departement: string; segment: string;
+  region: string; departement: string; segment: string;
   total: number; joignables: number;
   distribues: number; en_reserve: number; injoignables: number;
 };
@@ -97,13 +97,27 @@ function Barre({ c, compact = false }: { c: Cumul; compact?: boolean }) {
   );
 }
 
-// Les noms disent ce que les secteurs contiennent. L'ancien « Est et Sud-Est » désignait
-// en réalité l'Île-de-France, le Nord et l'Est — les régions les plus denses du fichier,
-// que l'étiquette passait entièrement sous silence.
-const SECTEURS: { cle: string; nom: string; detail: string }[] = [
-  { cle: "grand-ouest",  nom: "Grand Ouest",              detail: "Normandie, Bretagne, Pays de la Loire" },
-  { cle: "idf-nord-est", nom: "Île-de-France, Nord, Est", detail: "IDF, Hauts-de-France, Grand Est, Bourgogne-Franche-Comté" },
-  { cle: "sud-centre",   nom: "Sud et Centre",            detail: "Nouvelle-Aquitaine, Occitanie, AURA, PACA, Centre, Corse, outre-mer" },
+// Les régions administratives, et non des « grands ensembles » inventés. Une convention
+// se change — j'en ai redessiné les frontières deux fois dans la même journée, et Paris
+// s'est retrouvé dans deux secteurs à la fois. Une région ne se discute pas.
+//
+// La liste est figée dans cet ordre plutôt que triée par volume : un menu dont les
+// entrées bougent d'une semaine à l'autre oblige à le relire en entier à chaque fois.
+const REGIONS: string[] = [
+  "Île-de-France",
+  "Normandie",
+  "Bretagne",
+  "Pays de la Loire",
+  "Hauts-de-France",
+  "Grand Est",
+  "Bourgogne-Franche-Comté",
+  "Centre-Val de Loire",
+  "Nouvelle-Aquitaine",
+  "Occitanie",
+  "Auvergne-Rhône-Alpes",
+  "Provence-Alpes-Côte d'Azur",
+  "Corse",
+  "Outre-mer",
 ];
 
 /** Une fiche fraîchement servie porte toujours une échéance. Vendredi de la semaine en
@@ -124,7 +138,7 @@ export default function Distribution() {
   const [detailDe, setDetailDe] = useState<string | null>(null);
   const [activite, setActivite] = useState<string | null>(null);
   const [aServir, setAServir] = useState<Record<string, number>>({});
-  const [secteurDe, setSecteurDe] = useState<Record<string, string>>({});
+  const [regionDe, setRegionDe] = useState<Record<string, string>>({});
   const [chargement, setChargement] = useState(true);
   const [envoi, setEnvoi] = useState(false);
 
@@ -189,8 +203,8 @@ export default function Distribution() {
     return m;
   }, [avancement]);
 
-  const dispoDe = (secteur: string | undefined) =>
-    lignesActivite.filter((a) => a.secteur === secteur).reduce((n, a) => n + a.en_reserve, 0);
+  const dispoDe = (region: string | undefined) =>
+    lignesActivite.filter((a) => a.region === region).reduce((n, a) => n + a.en_reserve, 0);
 
   const totalAServir = useMemo(
     () => Object.values(aServir).reduce((s, n) => s + (n || 0), 0),
@@ -203,8 +217,8 @@ export default function Distribution() {
     try {
       for (const [uid, combien] of Object.entries(aServir)) {
         if (!combien || combien < 1) continue;
-        const secteur = secteurDe[uid];
-        if (!secteur) continue;
+        const region = regionDe[uid];
+        if (!region) continue;
 
         // On relit la réserve au moment de servir, et non à l'affichage : entre les deux,
         // un enrichissement a pu rendre des fiches joignables, ou un autre écran en a pu
@@ -214,7 +228,7 @@ export default function Distribution() {
         const { data: choix, error } = await (supabase as any)
           .from("prospects")
           .select("id")
-          .eq("etat", "vivier").eq("joignable", true).eq("secteur", secteur)
+          .eq("etat", "vivier").eq("joignable", true).eq("region", region)
           .eq("segment", activite)
           .order("source", { ascending: true })
           .order("departement", { ascending: true })
@@ -321,25 +335,25 @@ export default function Distribution() {
               <p className="text-xs text-muted-foreground">Choisis d'abord une activité.</p>
             )}
             <div className={cn("grid gap-2", !activite && "hidden")}>
-              {SECTEURS.map((s) => {
-                const lignes = lignesActivite.filter((a) => a.secteur === s.cle);
+              {/* Une région sans rien à servir n'a pas besoin d'une carte : quatorze
+                  régions dont dix vides se parcourent moins bien que les quatre qui
+                  comptent. */}
+              {REGIONS.filter((r) => lignesActivite.some((a) => a.region === r && a.total > 0)).map((r) => {
+                const lignes = lignesActivite.filter((a) => a.region === r);
                 const c = lignes.reduce(additionner, vide());
                 const servable = c.distribues + c.en_reserve;
                 const pct = servable ? Math.round((c.distribues / servable) * 100) : 0;
-                const ouvert = detailDe === s.cle;
+                const ouvert = detailDe === r;
                 return (
-                  <Card key={s.cle} className="p-3">
+                  <Card key={r} className="p-3">
                     <button
                       type="button"
                       className="w-full text-left"
-                      onClick={() => setDetailDe(ouvert ? null : s.cle)}
+                      onClick={() => setDetailDe(ouvert ? null : r)}
                       aria-expanded={ouvert}
                     >
                       <div className="flex items-baseline gap-2">
-                        <span className="flex-1">
-                          <span className="block text-sm font-semibold">{s.nom}</span>
-                          <span className="block text-[11px] font-normal text-muted-foreground">{s.detail}</span>
-                        </span>
+                        <span className="flex-1 text-sm font-semibold">{r}</span>
                         <span className="font-mono text-sm font-bold tabular-nums">{pct} %</span>
                         <span className="text-xs text-muted-foreground">servis</span>
                       </div>
@@ -372,7 +386,7 @@ export default function Distribution() {
                           ))}
                         {lignes.every((a) => a.distribues + a.en_reserve === 0) && (
                           <p className="text-xs text-muted-foreground">
-                            Aucune fiche joignable dans ce secteur — l'enrichissement des coordonnées
+                            Aucune fiche joignable dans cette région — l'enrichissement des coordonnées
                             doit passer avant la distribution.
                           </p>
                         )}
@@ -418,8 +432,8 @@ export default function Distribution() {
             <div className="grid gap-2">
               {profils.map((p) => {
                 const c = charges[p.id] ?? { actifs: 0, en_retard: 0, sans_action: 0, dernier_contact: null };
-                const secteur = secteurDe[p.id] ?? "";
-                const restant = dispoDe(secteur);
+                const region = regionDe[p.id] ?? "";
+                const restant = dispoDe(region);
                 return (
                   <Card key={p.id} className="space-y-3 p-3">
                     <div className="flex flex-wrap items-center gap-2">
@@ -442,14 +456,14 @@ export default function Distribution() {
 
                     <div className="flex flex-wrap items-center gap-2">
                       <select
-                        aria-label="Secteur"
+                        aria-label="Région"
                         className="h-9 min-w-[9rem] flex-1 rounded-md border border-border bg-background px-2 text-sm"
-                        value={secteur}
-                        onChange={(e) => setSecteurDe((s) => ({ ...s, [p.id]: e.target.value }))}
+                        value={region}
+                        onChange={(e) => setRegionDe((s) => ({ ...s, [p.id]: e.target.value }))}
                       >
-                        <option value="">Choisir un secteur…</option>
-                        {SECTEURS.map((s) => (
-                          <option key={s.cle} value={s.cle}>{s.nom} — {dispoDe(s.cle)} en réserve</option>
+                        <option value="">Choisir une région…</option>
+                        {REGIONS.filter((r) => dispoDe(r) > 0).map((r) => (
+                          <option key={r} value={r}>{r} — {dispoDe(r)} en réserve</option>
                         ))}
                       </select>
                       <Input
@@ -458,7 +472,7 @@ export default function Distribution() {
                         className="h-9 w-24 tabular-nums"
                         placeholder="0"
                         value={aServir[p.id] ?? ""}
-                        disabled={!secteur}
+                        disabled={!region}
                         onChange={(e) => setAServir((s) => ({ ...s, [p.id]: Number(e.target.value) }))}
                       />
                     </div>

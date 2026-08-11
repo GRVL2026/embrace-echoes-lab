@@ -110,7 +110,13 @@ export default function Distribution() {
   const charger = useCallback(async () => {
     setChargement(true);
     const [{ data: prof }, { data: actifs }, { data: vivier }, { data: avance }] = await Promise.all([
-      (supabase as any).from("profiles").select("id, email, full_name"),
+      // Seuls les porteurs de portefeuille. La liste complète des comptes mélangeait la
+      // direction, les tests et les commerciaux : sept cartes pour trois personnes qui
+      // reçoivent réellement des leads, et autant d'occasions de se tromper de ligne un
+      // lundi matin. Tristan distribue mais ne porte pas de portefeuille — il n'y figure
+      // donc pas non plus.
+      (supabase as any).from("profiles").select("id, email, full_name")
+        .eq("recoit_des_leads", true).order("full_name"),
       (supabase as any).from("prospects")
         .select("proprietaire, prochaine_action_le, distribue_le")
         .eq("etat", "actif"),
@@ -330,7 +336,9 @@ export default function Distribution() {
 
             {profils.length === 0 && (
               <Card className="p-4 text-sm text-muted-foreground">
-                Aucun compte trouvé. Les commerciaux doivent d'abord créer le leur.
+                Aucun porteur de portefeuille. Un compte n'apparaît ici que si son profil
+                porte <code className="text-xs">recoit_des_leads</code> — la direction et les
+                comptes de test en sont volontairement exclus.
               </Card>
             )}
 

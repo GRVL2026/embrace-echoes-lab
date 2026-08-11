@@ -2375,6 +2375,7 @@ export type Database = {
           email: string | null
           full_name: string | null
           id: string
+          recoit_des_leads: boolean
           salle_enabled: boolean
         }
         Insert: {
@@ -2384,6 +2385,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id: string
+          recoit_des_leads?: boolean
           salle_enabled?: boolean
         }
         Update: {
@@ -2393,6 +2395,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id?: string
+          recoit_des_leads?: boolean
           salle_enabled?: boolean
         }
         Relationships: []

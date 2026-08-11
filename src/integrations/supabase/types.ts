@@ -2616,7 +2616,7 @@ export type Database = {
           prochaine_action: string | null
           prochaine_action_le: string | null
           proprietaire: string | null
-          secteur: string | null
+          region: string | null
           segment: string
           signal: string | null
           siren: string | null
@@ -2679,7 +2679,7 @@ export type Database = {
           prochaine_action?: string | null
           prochaine_action_le?: string | null
           proprietaire?: string | null
-          secteur?: string | null
+          region?: string | null
           segment?: string
           signal?: string | null
           siren?: string | null
@@ -2742,7 +2742,7 @@ export type Database = {
           prochaine_action?: string | null
           prochaine_action_le?: string | null
           proprietaire?: string | null
-          secteur?: string | null
+          region?: string | null
           segment?: string
           signal?: string | null
           siren?: string | null
@@ -3701,7 +3701,7 @@ export type Database = {
           en_reserve: number | null
           injoignables: number | null
           joignables: number | null
-          secteur: string | null
+          region: string | null
           segment: string | null
           total: number | null
         }
@@ -4059,6 +4059,7 @@ export type Database = {
       }
       refresh_erp_prices: { Args: never; Returns: number }
       refresh_gaia_resumes: { Args: never; Returns: undefined }
+      region_depuis_departement: { Args: { dep: string }; Returns: string }
       search_clients_prospection: {
         Args: { _q: string }
         Returns: {

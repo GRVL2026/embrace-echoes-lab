@@ -97,10 +97,13 @@ function Barre({ c, compact = false }: { c: Cumul; compact?: boolean }) {
   );
 }
 
-const SECTEURS: { cle: string; nom: string }[] = [
-  { cle: "nord-ouest", nom: "Grand Ouest" },
-  { cle: "est-sud-est", nom: "Est et Sud-Est" },
-  { cle: "sud-ouest", nom: "Sud-Ouest" },
+// Les noms disent ce que les secteurs contiennent. L'ancien « Est et Sud-Est » désignait
+// en réalité l'Île-de-France, le Nord et l'Est — les régions les plus denses du fichier,
+// que l'étiquette passait entièrement sous silence.
+const SECTEURS: { cle: string; nom: string; detail: string }[] = [
+  { cle: "grand-ouest",  nom: "Grand Ouest",              detail: "Normandie, Bretagne, Pays de la Loire" },
+  { cle: "idf-nord-est", nom: "Île-de-France, Nord, Est", detail: "IDF, Hauts-de-France, Grand Est, Bourgogne-Franche-Comté" },
+  { cle: "sud-centre",   nom: "Sud et Centre",            detail: "Nouvelle-Aquitaine, Occitanie, AURA, PACA, Centre, Corse, outre-mer" },
 ];
 
 /** Une fiche fraîchement servie porte toujours une échéance. Vendredi de la semaine en
@@ -333,7 +336,10 @@ export default function Distribution() {
                       aria-expanded={ouvert}
                     >
                       <div className="flex items-baseline gap-2">
-                        <span className="flex-1 text-sm font-semibold">{s.nom}</span>
+                        <span className="flex-1">
+                          <span className="block text-sm font-semibold">{s.nom}</span>
+                          <span className="block text-[11px] font-normal text-muted-foreground">{s.detail}</span>
+                        </span>
                         <span className="font-mono text-sm font-bold tabular-nums">{pct} %</span>
                         <span className="text-xs text-muted-foreground">servis</span>
                       </div>

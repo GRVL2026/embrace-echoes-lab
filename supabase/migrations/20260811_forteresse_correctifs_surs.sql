@@ -27,16 +27,16 @@ revoke select on public.v_cron_jobs from public;
 revoke select on public.v_cron_jobs from anon;
 revoke select on public.v_cron_jobs from authenticated;
 
--- 3. copilot_briefings : la policy « Read briefings authentifies » (USING true) laissait
---    TOUT compte connecté — même sans aucun rôle métier — lire les briefings nominatifs
---    de toute l'équipe : clients, montants, plans d'action. On restreint chacun à son
---    propre briefing ; la direction et l'admin gardent la vue d'ensemble. La carte de
---    briefing du front lit le briefing du jour de l'utilisateur courant : elle continue
---    de fonctionner, en mieux (plus d'ambiguïté entre plusieurs briefings).
+-- 3. copilot_briefings : une SEULE ligne par jour (clé = date), le briefing commercial
+--    de l'entreprise — clients, montants, plans d'action. La policy « Read briefings
+--    authentifies » (USING true) le laissait lire à TOUT compte connecté, même un compte
+--    à périmètre minimal sans rôle commerce. On le réserve aux profils qui pilotent
+--    l'activité. La carte de briefing du front (BriefingCard) est affichée à ces mêmes
+--    profils : elle continue de fonctionner.
 drop policy if exists "Read briefings authentifies" on public.copilot_briefings;
 create policy "briefings_perimetre" on public.copilot_briefings
   for select to authenticated
-  using (user_id = auth.uid() or public.is_direction() or public.is_admin());
+  using (public.can_access_dashboard(auth.uid()));
 
 -- 4. gaia_equipe : l'annuaire interne (noms, logins des 16 comptes) était lisible par
 --    tout compte authentifié via une policy USING true. Aucun écran du front ne le lit.

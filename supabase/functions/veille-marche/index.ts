@@ -2,6 +2,7 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { AnthropicApiError } from "../_shared/anthropic-fetch.ts";
 import { scheduleSelfInvoke } from "../_shared/self-invoke.ts";
+import { requireRole } from "../_shared/require-role.ts";
 
 const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -571,6 +572,12 @@ Deno.serve(async (req) => {
   }
 
   // ============ MODE 1 : créer un nouveau job ============
+  // Ce mode lance un travail coûteux (collecte + synthèse par modèle Opus). Il était
+  // déclenchable par n'importe qui ; on le réserve à la direction. MODE 2 reste protégé
+  // par son secret de relais interne, il n'est pas concerné.
+  const gate = await requireRole(req, ["admin", "direction"]);
+  if (!gate.ok) return gate.response;
+
   try {
     const { type } = body as { type: "quotidien" | "hebdomadaire" };
     if (type !== "quotidien" && type !== "hebdomadaire") {

@@ -6,6 +6,7 @@
 // =====================================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { anthropicJson, isAnthropicOverload } from "../_shared/anthropic-fetch.ts";
+import { requireRole } from "../_shared/require-role.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -109,6 +110,13 @@ const TOOL = {
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  // Cette fonction appelle un modèle payant et déballe le catalogue par briefs successifs.
+  // Elle était OUVERTE : aucune vérification d'identité. Un anonyme muni de la seule clé
+  // publiable pouvait brûler le crédit Anthropic et extraire les produits un à un. On exige
+  // désormais un compte commercial au minimum — la génération de dossier est leur métier.
+  const gate = await requireRole(req, ["admin", "direction", "commercial"]);
+  if (!gate.ok) return gate.response;
 
   try {
     const { brief, offer = "vente", brand_key, room_context, client_name } = await req.json();

@@ -70,10 +70,17 @@ def attendre_le_reseau(essais: int = 6, pause: int = 60) -> bool:
     return False
 
 
-def collecter(jours: int) -> list[dict]:
+def collecter(jours: int) -> tuple[list[dict], int, int]:
+    """Rend les articles trouvés, le nombre de requêtes ABOUTIES et leur nombre total.
+
+    Les deux compteurs ne sont pas décoratifs : zéro article peut vouloir dire « rien
+    n'a été publié » ou « rien n'a pu être interrogé », et ces deux situations appellent
+    des suites opposées. Sans eux, une panne de réseau se solderait par un relevé marqué
+    réussi et une période perdue pour de bon."""
     limite = datetime.date.today() - datetime.timedelta(days=jours)
     depuis = limite.isoformat()
     vus, articles = set(), []
+    reussies = 0
     for lieu in LIEUX:
         q = f"{lieu} {EVENEMENTS} after:{depuis}"
         url = ("https://news.google.com/rss/search?q=" + urllib.parse.quote(q)
@@ -84,6 +91,7 @@ def collecter(jours: int) -> list[dict]:
         except Exception as e:
             print(f"  ⚠️  {lieu} : {type(e).__name__}", file=sys.stderr)
             continue
+        reussies += 1
         for bloc in xml.split("<item>")[1:]:
             t = re.search(r"<title>(.*?)</title>", bloc, re.S)
             l = re.search(r"<link>(.*?)</link>", bloc, re.S)
@@ -114,7 +122,7 @@ def collecter(jours: int) -> list[dict]:
             })
         time.sleep(0.4)           # rester courtois avec le service
     articles.sort(key=lambda a: a["publie"], reverse=True)
-    return articles
+    return articles, reussies, len(LIEUX)
 
 
 # ── Résolution des liens et lecture des articles ─────────────────────────────────
@@ -326,12 +334,27 @@ def main() -> None:
     if a.jours is None and jours > FENETRE_MIN:
         print(f"Dernier relevé il y a {jours - 1} jour(s) — on rattrape.")
     print(f"Relevé sur {jours} jour(s)…")
-    articles = collecter(jours)
-    print(f"{len(articles)} articles collectés")
+    articles, reussies, total = collecter(jours)
+    print(f"{len(articles)} articles collectés ({reussies}/{total} recherches abouties)")
+
+    # AUCUNE RECHERCHE ABOUTIE = PANNE, PAS SILENCE DE LA PRESSE. Ne surtout pas avancer
+    # le marqueur : la période serait considérée comme couverte et ne serait jamais
+    # reprise. C'est le défaut qui avait fait marquer 136 articles comme lus après un
+    # blocage du moteur, en juillet.
+    if reussies == 0:
+        sys.exit("Aucune recherche n'a abouti — réseau ou moteur indisponible. "
+                 "Rien n'a été marqué, la période sera reprise au prochain passage.")
+    if reussies < total // 2:
+        print(f"  ⚠️  couverture partielle ({reussies}/{total}) : la période sera reprise")
+        return
+
     if not articles:
-        # Zéro article n'est pas un échec : un dimanche de presse locale peut être vide.
-        # On avance quand même le marqueur, sinon la fenêtre grandirait indéfiniment.
-        marquer_releve_reussi()
+        # Zéro article après des recherches abouties, c'est un vrai silence : la presse
+        # locale ne publie pas tous les jours sur ces sujets. On avance le marqueur,
+        # sinon la fenêtre grandirait sans fin — mais jamais en mode essai, qui doit
+        # pouvoir se relancer autant de fois qu'on veut sans rien changer à l'état.
+        if not a.test:
+            marquer_releve_reussi()
         return
 
     if a.test:

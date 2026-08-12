@@ -56,20 +56,28 @@ create policy "prospect_events_commercial_own" on public.prospect_events
     where p.id = prospect_events.prospect_id and p.proprietaire = auth.uid()));
 
 -- ── Tables Cegid : réservées à la direction (pas de propriétaire encore) ────────────
--- On ne casse que la lecture élargie 'can_access_dashboard' ; les writes de ces tables
--- passent par le service_role (synchro Cegid) et ne sont pas concernés.
+-- On remplace la lecture élargie 'can_access_dashboard' par 'admin OU direction'. Les
+-- writes de ces tables passent par le service_role (synchro Cegid) : non concernés.
+--
+-- POINT DÉLICAT — le rôle « public » et non « authenticated ». La policy d'origine
+-- « dashboard read » visait le rôle public, ce qui la faisait s'appliquer AUSSI au rôle
+-- technique du copilote (copilot_readonly) lorsqu'il lit ces tables. gaia_clients et
+-- gaia_ventes n'ont PAS de policy copilote dédiée — elles ne tenaient QUE par là. En
+-- restant sur « to public », le copilote conserve exactement le même chemin de lecture,
+-- évalué sur l'identité réelle de l'appelant : plein pour l'admin, fermé pour un
+-- commercial. Passer à « to authenticated » aurait coupé le copilote de ces deux tables.
 drop policy if exists "dashboard read" on public.gaia_clients;
 create policy "gaia_clients_direction_read" on public.gaia_clients
-  for select to authenticated using (public.is_admin() or public.is_direction());
+  for select to public using (public.is_admin() or public.is_direction());
 
 drop policy if exists "dashboard read" on public.gaia_ventes;
 create policy "gaia_ventes_direction_read" on public.gaia_ventes
-  for select to authenticated using (public.is_admin() or public.is_direction());
+  for select to public using (public.is_admin() or public.is_direction());
 
 drop policy if exists "dashboard read" on public.gaia_commandes;
 create policy "gaia_commandes_direction_read" on public.gaia_commandes
-  for select to authenticated using (public.is_admin() or public.is_direction());
+  for select to public using (public.is_admin() or public.is_direction());
 
 drop policy if exists "dashboard read" on public.gaia_stock;
 create policy "gaia_stock_direction_read" on public.gaia_stock
-  for select to authenticated using (public.is_admin() or public.is_direction());
+  for select to public using (public.is_admin() or public.is_direction());

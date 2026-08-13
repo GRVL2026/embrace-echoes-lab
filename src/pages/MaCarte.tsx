@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { BriefFiche } from "@/components/BriefFiche";
+import { IssueRapide } from "@/components/prospection/IssueRapide";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster";
@@ -239,6 +240,23 @@ export default function MaCarte() {
                 {!selected.telephone && !selected.email && (
                   <p className="text-xs text-muted-foreground">Pas encore de coordonnée sur cette fiche.</p>
                 )}
+
+                {/* Capture de l'issue en un clic, juste après l'appel. */}
+                <div className="border-t border-border pt-3">
+                  <IssueRapide
+                    prospectId={selected.id}
+                    statut={selected.statut}
+                    onDone={(patch) => {
+                      // La fiche vit hors de la carte : on met à jour l'état local et on
+                      // retire de la carte un lead gagné ou perdu (il quitte le pipeline actif).
+                      if (patch.statut) setSelected((s) => (s ? { ...s, statut: patch.statut! } : s));
+                      if (patch.statut === "client" || patch.statut === "perdu") {
+                        setLeads((list) => list.filter((l) => l.id !== selected.id));
+                        setSelected(null);
+                      }
+                    }}
+                  />
+                </div>
 
                 {/* Le brief : ce qui fait gagner du temps avant de décrocher. */}
                 <div className="border-t border-border pt-3">

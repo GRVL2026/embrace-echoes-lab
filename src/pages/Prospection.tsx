@@ -52,6 +52,7 @@ function buildLinkedInSearch(p: { contact_nom?: string | null; entreprise?: stri
 import { supabase } from "@/integrations/supabase/client";
 import { ParcArcadeBloc } from "@/components/ParcArcadeBloc";
 import { BriefFiche } from "@/components/BriefFiche";
+import { IssueRapide } from "@/components/prospection/IssueRapide";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -1030,6 +1031,19 @@ function ProspectSheet({
           <SheetTitle className="truncate">{form.entreprise || "Prospect"}</SheetTitle>
           <SheetDescription>Détail, historique et actions</SheetDescription>
         </SheetHeader>
+
+        {/* Capture de l'issue en un clic, tout en haut : le geste que le commercial fait
+            juste après avoir raccroché. Il ferme la boucle vers le copilote. */}
+        <div className="mt-4 rounded-lg border border-border p-3">
+          <IssueRapide
+            prospectId={prospect.id}
+            statut={form.statut}
+            onDone={(patch) => {
+              if (patch.statut) { setForm((f) => ({ ...f, statut: patch.statut as any })); onChange({ ...form, statut: patch.statut as any }); }
+              loadEvents();
+            }}
+          />
+        </div>
 
         {/* Le parc installé arrive AVANT le formulaire : c'est ce qui décide de la
             teneur de l'appel, pas la saisie des coordonnées. */}

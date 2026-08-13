@@ -260,8 +260,8 @@ function popupProspectHtml(p: { id: string; nom: string | null; ville: string | 
 
 
 export default function Carte() {
-  const { isAdmin, isDirection, canReactivation } = useAuth();
-  const authorized = isAdmin || isDirection;
+  const { isAdmin, isDirection, isChefVentes, canReactivation } = useAuth();
+  const authorized = isAdmin || isDirection || isChefVentes;
   const navigate = useNavigate();
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;

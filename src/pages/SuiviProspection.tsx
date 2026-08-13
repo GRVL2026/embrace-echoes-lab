@@ -37,7 +37,7 @@ function jours(depuis: string | null): number | null {
 }
 
 export default function SuiviProspection() {
-  const { isAdmin, isDirection, isLoading } = useAuth();
+  const { isAdmin, isDirection, isChefVentes, isLoading } = useAuth();
   const [lignes, setLignes] = useState<Suivi[]>([]);
   const [profils, setProfils] = useState<Record<string, Profil>>({});
   const [chargement, setChargement] = useState(true);
@@ -95,7 +95,7 @@ export default function SuiviProspection() {
   if (isLoading) {
     return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-5 w-5 animate-spin" /></div>;
   }
-  if (!isAdmin && !isDirection) return <Navigate to="/" replace />;
+  if (!isAdmin && !isDirection && !isChefVentes) return <Navigate to="/" replace />;
 
   const nom = (id: string | null) => {
     if (!id) return "Non attribué";

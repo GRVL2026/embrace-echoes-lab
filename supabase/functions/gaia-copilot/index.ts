@@ -1285,9 +1285,14 @@ Deno.serve(async (req) => {
     const isAdmin = roles.includes('admin');
     const isDirection = isAdmin || roles.includes('direction');
     const isChefVentes = roles.includes('chef_ventes');
-    const isCommercialRole = roles.includes('commercial');
-    // Accès copilote commerce : commercial et au-dessus (nouveau modèle 4 niveaux).
-    const hasCommercialAccess = isDirection || isChefVentes || isCommercialRole;
+    // Le copilote exécute du SQL libre en tant que copilot_readonly, rôle qui possède des
+    // policies USING(true) sur les prospects, commandes, stock, actions clients… Ouvert à
+    // un commercial, il devient une PORTE DÉROBÉE : « donne-moi tous les prospects avec
+    // leur téléphone » contournerait le cloisonnement posé sur l'accès direct aux tables.
+    // Le copilote est donc réservé au management (admin, direction, chef_ventes) — les
+    // commerciaux ont le brief par fiche et leur carte, pas le robinet SQL.
+    const isManagement = isDirection || isChefVentes;
+    const hasCommercialAccess = isManagement;
     // Marge globale (agrégats) : chef_ventes et au-dessus.
     const canMargeGlobale = isDirection || isChefVentes;
     // Marge par client (fiche individuelle) : commercial et au-dessus.

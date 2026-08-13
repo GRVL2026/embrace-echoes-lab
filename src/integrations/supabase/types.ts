@@ -4040,6 +4040,7 @@ export type Database = {
       import_prospects_csv: { Args: { _rows: Json }; Returns: number }
       is_admin: { Args: never; Returns: boolean }
       is_direction: { Args: never; Returns: boolean }
+      is_management: { Args: { _uid?: string }; Returns: boolean }
       notify_user: {
         Args: {
           _corps?: string

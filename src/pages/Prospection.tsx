@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import {
   Loader2, Plus, Upload, Target, ExternalLink, Trash2, GripVertical, Mail, Phone,
   Sparkles, Copy, RefreshCw, Save, Link2, Link2Off, Search, TrendingUp, Zap, Send, Linkedin, X,
-  ArrowLeft,
+  ArrowLeft, MapPin,
 } from "lucide-react";
 
 /* -------------------- LinkedIn search helpers -------------------- */
@@ -473,6 +473,15 @@ export default function Prospection() {
           <h1 className="font-display text-base sm:text-lg font-semibold truncate">Prospection</h1>
           <p className="text-xs text-muted-foreground truncate">CRM commercial — pipeline & suivi des leads</p>
         </div>
+        {/* Ma carte : accessible à tout commercial — il n'y voit que ses leads assignés. */}
+        {canAccessProspection && (
+          <Button asChild size="sm" variant="outline" className="gap-2">
+            <Link to="/ma-carte" title="Mes leads sur la carte, avec le parc installé autour">
+              <MapPin className="h-4 w-4" />
+              <span className="hidden sm:inline">Ma carte</span>
+            </Link>
+          </Button>
+        )}
         {/* La réserve ne s'ouvre que d'ici : le pipeline n'affiche que ce qui a été servi. */}
         {(isAdmin || isDirection) && (
           <>

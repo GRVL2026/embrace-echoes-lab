@@ -24,6 +24,7 @@ import ParcArcade from "./pages/ParcArcade";
 import CopilotDocument from "./pages/CopilotDocument";
 import Distribution from "./pages/Distribution";
 import SuiviProspection from "./pages/SuiviProspection";
+import MaCarte from "./pages/MaCarte";
 import GaiaClientFiche from "./pages/GaiaClientFiche";
 import Clients from "./pages/Clients";
 import MatriceClients from "./pages/MatriceClients";
@@ -106,6 +107,7 @@ const App = () => (
             <Route path="/document/:id" element={<P><CopilotDocument /></P>} />
             <Route path="/distribution" element={<P><Distribution /></P>} />
             <Route path="/suivi-prospection" element={<P><SuiviProspection /></P>} />
+            <Route path="/ma-carte" element={<P><MaCarte /></P>} />
             <Route path="/admin/gaia/client/:nom" element={<P><GaiaClientFiche /></P>} />
             <Route path="/admin/gaia/revue/:id" element={<P><GaiaRevueView /></P>} />
             <Route path="/admin/notifications" element={<P><NotificationsSettings /></P>} />

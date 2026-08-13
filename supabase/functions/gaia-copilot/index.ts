@@ -864,7 +864,18 @@ async function loadSalleData(admin: any) {
 // (utilisé pour les utilisateurs salle_enabled sans rôle admin/direction).
 function sqlTouchesOnlySalle(sql: string): boolean {
   const s = (sql || '').toLowerCase();
-  const refs = Array.from(s.matchAll(/\b(?:from|join)\s+([a-z_0-9."]+)/g)).map((m) => m[1].replace(/"/g, ''));
+  // Une sous-requête ou un CTE peut cacher une table interdite hors de la clause FROM
+  // principale (« SELECT (SELECT … FROM gaia_ventes) FROM salle_journees »). On les
+  // refuse en bloc : un utilisateur « salle » n'a aucune raison d'en écrire.
+  if ((s.match(/\bselect\b/g)?.length ?? 0) > 1) return false;
+  if (/\bwith\b/.test(s)) return false;
+  // On ISOLE la clause FROM jusqu'au prochain mot-clé, puis on lit toutes les tables
+  // qu'elle contient — y compris celles séparées par une VIRGULE (jointure implicite),
+  // qui était la faille : « FROM salle_journees, gaia_ventes » ne capturait que la
+  // première. Les virgules de la liste SELECT ne sont, elles, pas concernées.
+  const m = s.match(/\bfrom\b([\s\S]*?)(?:\bwhere\b|\bgroup\b|\border\b|\blimit\b|\bhaving\b|;|$)/);
+  if (!m) return false;
+  const refs = Array.from(m[1].matchAll(/(?:^|,|\bjoin\b)\s*([a-z_0-9."]+)/g)).map((x) => x[1].replace(/"/g, ''));
   if (refs.length === 0) return false;
   return refs.every((r) => {
     const bare = r.split('.').pop() ?? r;

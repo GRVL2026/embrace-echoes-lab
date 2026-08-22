@@ -27,7 +27,10 @@ const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
 // Début de l'historique de facturation. Écrit une fois ici : toute phrase du brief qui
 // parle d'absence d'achat doit porter cette date, sinon elle ment par omission.
-const DEBUT_VENTES = '2024-12-02';
+// Profondeur réelle de l'historique en base, archive comprise (gaia_historique remonte
+// à 2022-09, gaia_ventes prend le relais à partir de 2024-12). Sert de repli quand une
+// fiche n'a aucune facture.
+const DEBUT_VENTES = '2022-09-02';
 
 // Du genre de l'annuaire vers nos familles de catalogue. C'est ce qui permet de passer
 // de « il lui manque un flipper » à « ses huit rail shooters sont tous hors de notre
@@ -58,7 +61,7 @@ FORMAT — trois parties courtes, en Markdown, 120 mots maximum au total :
 RÈGLES ABSOLUES
 - Ne propose QUE des références figurant dans « notre_offre_dans_ces_genres ». N'invente jamais un nom de produit : un commercial qui cite une référence inexistante devant un client perd la partie sur-le-champ.
 - N'INVENTE AUCUN CHIFFRE ni aucun fait. Si une information manque, ne la mentionne pas.
-- Ne dis JAMAIS « il n'a rien acheté chez nous ». Dis « aucune facture depuis ${DEBUT_VENTES}, notre historique ne remonte pas plus loin ».
+- Facturation : appuie-toi sur « facturation » (ca_12_mois, ca_total_historique, premiere_facture, derniere_facture, horizon_donnees). Notre historique remonte à septembre 2022. Ne dis JAMAIS « il n'a rien acheté chez nous » sans nuance : si ca_total_historique > 0 mais ca_12_mois = 0, c'est un ANCIEN client dormant — dis « a acheté pour X € entre premiere_facture et derniere_facture, plus rien depuis : cible de renouvellement » (sur du matériel durable, c'est le meilleur signal commercial). Si aucune facture du tout, dis « aucune facture depuis septembre 2022 (profondeur de notre historique) ».
 - N'utilise JAMAIS l'année d'un modèle pour parler de l'âge du parc : l'annuaire donne l'année de SORTIE du jeu, pas celle de son achat. Un lieu peut avoir acquis d'occasion un modèle de 2013. Cette donnée ne t'est plus transmise, ne la réclame pas.
 - Ne conclus JAMAIS d'une absence non signalée dans « absent_chez_lui_courant_ailleurs ». L'annuaire ne recense qu'un billard, un baby-foot et quatre grues pour cent quatre-vingt-quatre flippers : leur absence dans les données ne prouve rien, et ces familles ont été écartées de la comparaison pour cette raison.
 - Ne dis JAMAIS qu'une machine installée vient de chez nous : l'annuaire dit ce qui est sur place, pas qui l'a livré. Tu peux dire qu'elle relève de notre catalogue.
@@ -108,17 +111,28 @@ Deno.serve(async (req) => {
         .eq('customer_id', codeClient).maybeSingle();
       faits.client = c ?? { customer_id: codeClient };
 
-      // Facturation sur douze mois glissants, et date de la dernière commande.
-      const depuis = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
-      const { data: v } = await admin.from('gaia_ventes')
-        .select('invoice_date, montant_ht, code_article')
-        .eq('code_client', codeClient).gte('invoice_date', depuis).limit(2000);
-      const lignes = v ?? [];
+      // Facturation sur TOUT l'historique disponible — les ventes récentes (gaia_ventes,
+      // depuis déc. 2024) ET l'archive (gaia_historique, depuis sept. 2022). Le brief ne
+      // lisait que la première et se croyait aveugle avant 2024 : sur du matériel durable
+      // (un flipper dure 5 à 10 ans), l'achat d'il y a trois ans est LE signal de
+      // renouvellement. La limite haute couvre largement un gros client sur quatre ans.
+      const [{ data: vr }, { data: va }] = await Promise.all([
+        admin.from('gaia_ventes').select('invoice_date, montant_ht, code_article')
+          .eq('code_client', codeClient).limit(5000),
+        admin.from('gaia_historique').select('invoice_date, montant_ht, code_article')
+          .eq('code_client', codeClient).limit(5000),
+      ]);
+      const lignes = [...(vr ?? []), ...(va ?? [])];
+      const depuis12 = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
+      const dates = lignes.map((l: any) => l.invoice_date).filter(Boolean).sort();
+      const somme = (arr: any[]) => Math.round(arr.reduce((n, l: any) => n + Number(l.montant_ht ?? 0), 0));
       faits.facturation = {
-        depuis_le: DEBUT_VENTES,
-        ca_12_mois: Math.round(lignes.reduce((n, l: any) => n + Number(l.montant_ht ?? 0), 0)),
+        horizon_donnees: dates[0] ?? DEBUT_VENTES,   // la vraie profondeur, pas une constante
+        premiere_facture: dates[0] ?? null,
+        derniere_facture: dates.at(-1) ?? null,
+        ca_12_mois: somme(lignes.filter((l: any) => l.invoice_date >= depuis12)),
+        ca_total_historique: somme(lignes),
         nb_lignes: lignes.length,
-        derniere_facture: lignes.map((l: any) => l.invoice_date).sort().at(-1) ?? null,
       };
     }
 

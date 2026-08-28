@@ -10,7 +10,7 @@ const DEVIS_DARK = "#7c3aed";
 const CMD = "#34d399";
 const CMD_DARK = "#059669";
 
-type HebdoRow = { jour: string; type_doc: "devis" | "commande"; univers: "jeux" | "magasin"; n_docs: number };
+type HebdoRow = { jour: string; type_doc: "devis" | "commande"; univers: "jeux" | "magasin"; n_docs: number; montant: number | null };
 type JourDoc = { n_cde: string; type_doc: "devis" | "commande"; code_client: string | null; montant_ht: number | null; univers: "jeux" | "magasin" | null; proprietaire: string | null };
 type SemaineDoc = JourDoc & { jour: string };
 
@@ -96,23 +96,26 @@ export function WeekActivitySection() {
     const rows = hebdo ?? [];
     const byDay = new Map<string, { devis_jeux: number; devis_magasin: number; commandes_jeux: number; commandes_magasin: number }>();
     for (const iso of currentIsoDays) byDay.set(iso, { devis_jeux: 0, devis_magasin: 0, commandes_jeux: 0, commandes_magasin: 0 });
-    const prevAgg = { devis: 0, commandes: 0 };
-    const curAgg = { devis: 0, commandes: 0 };
+    // On suit désormais le MONTANT en plus du nombre : le dirigeant voulait le total en
+    // euros sans l'additionner de tête, en cours et sur la semaine précédente.
+    const prevAgg = { devis: 0, commandes: 0, devis_montant: 0, commandes_montant: 0 };
+    const curAgg = { devis: 0, commandes: 0, devis_montant: 0, commandes_montant: 0 };
     const curSplit = { devis_jeux: 0, devis_magasin: 0, commandes_jeux: 0, commandes_magasin: 0 };
 
     for (const r of rows) {
       const iso = String(r.jour).slice(0, 10);
       const n = Number(r.n_docs || 0);
+      const m = Number(r.montant || 0);
       if (currentIsoDays.includes(iso)) {
         const b = byDay.get(iso)!;
         const key = `${r.type_doc === "devis" ? "devis" : "commandes"}_${r.univers}` as keyof typeof b;
         b[key] += n;
-        if (r.type_doc === "devis") curAgg.devis += n;
-        else curAgg.commandes += n;
+        if (r.type_doc === "devis") { curAgg.devis += n; curAgg.devis_montant += m; }
+        else { curAgg.commandes += n; curAgg.commandes_montant += m; }
         (curSplit as any)[key] += n;
       } else if (prevIsoDays.includes(iso)) {
-        if (r.type_doc === "devis") prevAgg.devis += n;
-        else prevAgg.commandes += n;
+        if (r.type_doc === "devis") { prevAgg.devis += n; prevAgg.devis_montant += m; }
+        else { prevAgg.commandes += n; prevAgg.commandes_montant += m; }
       }
     }
 
@@ -139,6 +142,8 @@ export function WeekActivitySection() {
           label="Devis saisis"
           total={totals.devis}
           prev={prevTotals.devis}
+          montant={totals.devis_montant}
+          prevMontant={prevTotals.devis_montant}
           jeux={splits.devis_jeux}
           magasin={splits.devis_magasin}
           color={DEVIS_DARK}
@@ -150,6 +155,8 @@ export function WeekActivitySection() {
           label="Commandes saisies"
           total={totals.commandes}
           prev={prevTotals.commandes}
+          montant={totals.commandes_montant}
+          prevMontant={prevTotals.commandes_montant}
           jeux={splits.commandes_jeux}
           magasin={splits.commandes_magasin}
           color={CMD_DARK}
@@ -223,6 +230,8 @@ function StatCard({
   label,
   total,
   prev,
+  montant,
+  prevMontant,
   jeux,
   magasin,
   color,
@@ -233,6 +242,8 @@ function StatCard({
   label: string;
   total: number;
   prev: number;
+  montant: number;
+  prevMontant: number;
   jeux: number;
   magasin: number;
   color: string;
@@ -271,7 +282,17 @@ function StatCard({
           {delta} vs S-1
         </div>
       </div>
-      <div className="mt-1 font-display text-2xl font-semibold tabular-nums text-foreground">{total}</div>
+      <div className="mt-1 flex items-baseline gap-2">
+        <span className="font-display text-2xl font-semibold tabular-nums text-foreground">{total}</span>
+        {/* Le total en euros, en cours et semaine précédente — pour ne plus additionner
+            de tête. C'est le chiffre que le dirigeant regarde en premier. */}
+        <span className="font-display text-xl font-semibold tabular-nums" style={{ color: colorLight }}>
+          {eur(montant)}
+        </span>
+      </div>
+      <div className="mt-0.5 text-[11px] text-muted-foreground tabular-nums">
+        S-1&nbsp;: <span className="text-foreground/70">{eur(prevMontant)}</span>
+      </div>
       <div className="mt-2 h-1.5 w-full rounded-full overflow-hidden bg-background/60">
         <div
           className="h-full"

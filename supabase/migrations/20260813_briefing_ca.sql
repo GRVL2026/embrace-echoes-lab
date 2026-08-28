@@ -25,7 +25,9 @@ as $function$
 declare
   fy   int  := extract(year from current_date + interval '4 months')::int;  -- exercice courant
   m0   date := date_trunc('month', current_date)::date;
-  m1   date := (date_trunc('month', current_date) - interval '1 month')::date;
+  -- Mois de référence = le MÊME mois l'an dernier (N-1), pas le mois précédent : on
+  -- compare août à août pour neutraliser la saisonnalité, pas août à juillet.
+  m1   date := (date_trunc('month', current_date) - interval '1 year')::date;
   lun  date := date_trunc('week', current_date)::date;
   lun1 date := date_trunc('week', current_date)::date - 7;
   dim1 date := date_trunc('week', current_date)::date - 1;

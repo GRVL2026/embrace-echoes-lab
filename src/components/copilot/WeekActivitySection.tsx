@@ -145,7 +145,7 @@ export function WeekActivitySection() {
           base="global"
           montant={ca?.ca_m ?? 0}
           prev={ca?.ca_m1 ?? 0}
-          prevLabel="M-1"
+          prevLabel="N-1"
           color="#22d3ee"
         />
         <CaCard

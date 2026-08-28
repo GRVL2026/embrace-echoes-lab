@@ -10,7 +10,8 @@ const DEVIS_DARK = "#7c3aed";
 const CMD = "#34d399";
 const CMD_DARK = "#059669";
 
-type HebdoRow = { jour: string; type_doc: "devis" | "commande"; univers: "jeux" | "magasin"; n_docs: number; montant: number | null };
+type HebdoRow = { jour: string; type_doc: "devis" | "commande"; univers: "jeux" | "magasin"; n_docs: number };
+type CaRow = { ca_n: number; ca_n1: number; ca_m: number; ca_m1: number; ca_s: number; ca_s1: number };
 type JourDoc = { n_cde: string; type_doc: "devis" | "commande"; code_client: string | null; montant_ht: number | null; univers: "jeux" | "magasin" | null; proprietaire: string | null };
 type SemaineDoc = JourDoc & { jour: string };
 
@@ -92,80 +93,72 @@ export function WeekActivitySection() {
     },
   });
 
-  const { chartData, totals, prevTotals, splits } = useMemo(() => {
+  // Les trois CA — exercice (N), mois (M), semaine (S) — chacun contre sa période
+  // précédente. Le calcul, avec l'éco-taxe exclue et l'exercice fiscal sept→août, se fait
+  // en base (get_briefing_ca) ; on ne fait qu'afficher.
+  const { data: ca } = useQuery({
+    queryKey: ["briefing-ca"],
+    refetchInterval: 5 * 60_000,
+    queryFn: async (): Promise<CaRow | null> => {
+      const { data, error } = await (supabase as any).rpc("get_briefing_ca");
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      return (row ?? null) as CaRow | null;
+    },
+  });
+
+  const chartData = useMemo(() => {
     const rows = hebdo ?? [];
     const byDay = new Map<string, { devis_jeux: number; devis_magasin: number; commandes_jeux: number; commandes_magasin: number }>();
     for (const iso of currentIsoDays) byDay.set(iso, { devis_jeux: 0, devis_magasin: 0, commandes_jeux: 0, commandes_magasin: 0 });
-    // On suit désormais le MONTANT en plus du nombre : le dirigeant voulait le total en
-    // euros sans l'additionner de tête, en cours et sur la semaine précédente.
-    const prevAgg = { devis: 0, commandes: 0, devis_montant: 0, commandes_montant: 0 };
-    const curAgg = { devis: 0, commandes: 0, devis_montant: 0, commandes_montant: 0 };
-    const curSplit = { devis_jeux: 0, devis_magasin: 0, commandes_jeux: 0, commandes_magasin: 0 };
-
     for (const r of rows) {
       const iso = String(r.jour).slice(0, 10);
-      const n = Number(r.n_docs || 0);
-      const m = Number(r.montant || 0);
-      if (currentIsoDays.includes(iso)) {
-        const b = byDay.get(iso)!;
-        const key = `${r.type_doc === "devis" ? "devis" : "commandes"}_${r.univers}` as keyof typeof b;
-        b[key] += n;
-        if (r.type_doc === "devis") { curAgg.devis += n; curAgg.devis_montant += m; }
-        else { curAgg.commandes += n; curAgg.commandes_montant += m; }
-        (curSplit as any)[key] += n;
-      } else if (prevIsoDays.includes(iso)) {
-        if (r.type_doc === "devis") { prevAgg.devis += n; prevAgg.devis_montant += m; }
-        else { prevAgg.commandes += n; prevAgg.commandes_montant += m; }
-      }
+      if (!currentIsoDays.includes(iso)) continue;
+      const b = byDay.get(iso)!;
+      const key = `${r.type_doc === "devis" ? "devis" : "commandes"}_${r.univers}` as keyof typeof b;
+      b[key] += Number(r.n_docs || 0);
     }
-
     const labels = ["Lun", "Mar", "Mer", "Jeu", "Ven"];
-    const chart = currentIsoDays.map((iso, i) => ({
-      iso,
-      label: labels[i],
-      ...byDay.get(iso)!,
-    }));
-    return { chartData: chart, totals: curAgg, prevTotals: prevAgg, splits: curSplit };
-  }, [hebdo, currentIsoDays.join(","), prevIsoDays.join(",")]);
+    return currentIsoDays.map((iso, i) => ({ iso, label: labels[i], ...byDay.get(iso)! }));
+  }, [hebdo, currentIsoDays.join(",")]);
 
   const selectDay = (iso: string) =>
     setSelection((s) => (s?.kind === "jour" && s.day === iso ? null : { kind: "jour", day: iso }));
-  const selectCard = (t: "devis" | "commande") =>
-    setSelection((s) => (s?.kind === "semaine" && s.typeDoc === t ? null : { kind: "semaine", typeDoc: t }));
 
   return (
     <div>
-      <div className="mb-2 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Semaine en cours</div>
+      <div className="mb-2 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Chiffre d'affaires</div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-        <StatCard
-          label="Devis saisis"
-          total={totals.devis}
-          prev={prevTotals.devis}
-          montant={totals.devis_montant}
-          prevMontant={prevTotals.devis_montant}
-          jeux={splits.devis_jeux}
-          magasin={splits.devis_magasin}
-          color={DEVIS_DARK}
-          colorLight={DEVIS}
-          active={selection?.kind === "semaine" && selection.typeDoc === "devis"}
-          onClick={() => selectCard("devis")}
+      {/* Trois échelles, du large au fin : l'exercice pour la tendance de fond, le mois
+          pour le rythme, la semaine pour le pouls. Chacune avec le bon repère. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+        <CaCard
+          label="CA exercice"
+          base="à date"
+          montant={ca?.ca_n ?? 0}
+          prev={ca?.ca_n1 ?? 0}
+          prevLabel="N-1"
+          color="#8b5cf6"
         />
-        <StatCard
-          label="Commandes saisies"
-          total={totals.commandes}
-          prev={prevTotals.commandes}
-          montant={totals.commandes_montant}
-          prevMontant={prevTotals.commandes_montant}
-          jeux={splits.commandes_jeux}
-          magasin={splits.commandes_magasin}
-          color={CMD_DARK}
-          colorLight={CMD}
-          active={selection?.kind === "semaine" && selection.typeDoc === "commande"}
-          onClick={() => selectCard("commande")}
+        <CaCard
+          label="CA mois"
+          base="global"
+          montant={ca?.ca_m ?? 0}
+          prev={ca?.ca_m1 ?? 0}
+          prevLabel="M-1"
+          color="#22d3ee"
+        />
+        <CaCard
+          label="CA semaine"
+          base="global"
+          montant={ca?.ca_s ?? 0}
+          prev={ca?.ca_s1 ?? 0}
+          prevLabel="S-1"
+          color="#34d399"
         />
       </div>
 
+      <div className="mb-2 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Activité de la semaine</div>
       <div className="rounded-lg border border-border/60 bg-background/40 p-2">
         <div style={{ width: "100%", height: 200 }}>
           <ResponsiveContainer>
@@ -226,87 +219,51 @@ export function WeekActivitySection() {
   );
 }
 
-function StatCard({
+function CaCard({
   label,
-  total,
-  prev,
+  base,
   montant,
-  prevMontant,
-  jeux,
-  magasin,
+  prev,
+  prevLabel,
   color,
-  colorLight,
-  active,
-  onClick,
 }: {
   label: string;
-  total: number;
-  prev: number;
+  base: "à date" | "global";
   montant: number;
-  prevMontant: number;
-  jeux: number;
-  magasin: number;
+  prev: number;
+  prevLabel: string;
   color: string;
-  colorLight: string;
-  active?: boolean;
-  onClick?: () => void;
 }) {
-  const delta = total - prev;
-  const DeltaIcon = delta > 0 ? TrendingUp : delta < 0 ? TrendingDown : Minus;
-  const deltaColor = delta > 0 ? "text-emerald-400" : delta < 0 ? "text-red-400" : "text-muted-foreground";
-  const totalSplit = jeux + magasin;
-  const pctJeux = totalSplit > 0 ? (jeux / totalSplit) * 100 : 0;
+  const delta = prev > 0 ? ((montant - prev) / prev) * 100 : montant > 0 ? 100 : 0;
+  const DeltaIcon = montant > prev ? TrendingUp : montant < prev ? TrendingDown : Minus;
+  const deltaColor = montant > prev ? "text-emerald-400" : montant < prev ? "text-red-400" : "text-muted-foreground";
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "text-left rounded-lg border p-3 cursor-pointer transition-all hover:brightness-110 hover:-translate-y-0.5",
-        active && "ring-2 ring-offset-0",
-      )}
-      style={{
-        borderColor: `${color}55`,
-        background: `linear-gradient(135deg, ${color}18, ${color}05)`,
-        // @ts-expect-error CSS var for ring color
-        "--tw-ring-color": color,
-      }}
+    <div
+      className="rounded-lg border p-3"
+      style={{ borderColor: `${color}55`, background: `linear-gradient(135deg, ${color}18, ${color}05)` }}
     >
       <div className="flex items-baseline justify-between gap-2">
-        <div className="text-[11px] uppercase tracking-wider font-semibold" style={{ color: colorLight }}>
+        <div className="text-[11px] uppercase tracking-wider font-semibold" style={{ color }}>
           {label}
         </div>
-        <div className={cn("inline-flex items-center gap-0.5 text-[11px] font-medium", deltaColor)}>
-          <DeltaIcon className="h-3 w-3" />
-          {delta > 0 ? "+" : ""}
-          {delta} vs S-1
-        </div>
-      </div>
-      <div className="mt-1 flex items-baseline gap-2">
-        <span className="font-display text-2xl font-semibold tabular-nums text-foreground">{total}</span>
-        {/* Le total en euros, en cours et semaine précédente — pour ne plus additionner
-            de tête. C'est le chiffre que le dirigeant regarde en premier. */}
-        <span className="font-display text-xl font-semibold tabular-nums" style={{ color: colorLight }}>
-          {eur(montant)}
+        {/* Le repère de comparaison : « à date » pour l'exercice (à période égale),
+            « global » pour le mois et la semaine (période précédente complète). */}
+        <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-background/60 text-muted-foreground">
+          {base}
         </span>
       </div>
-      <div className="mt-0.5 text-[11px] text-muted-foreground tabular-nums">
-        S-1&nbsp;: <span className="text-foreground/70">{eur(prevMontant)}</span>
+      <div className="mt-1 font-display text-2xl font-semibold tabular-nums text-foreground">{eur(montant)}</div>
+      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
+        <span className={cn("inline-flex items-center gap-0.5 font-medium", deltaColor)}>
+          <DeltaIcon className="h-3 w-3" />
+          {prev > 0 ? `${delta > 0 ? "+" : ""}${Math.round(delta)}%` : "—"}
+        </span>
+        <span className="text-muted-foreground tabular-nums">
+          {prevLabel}&nbsp;: {eur(prev)}
+        </span>
       </div>
-      <div className="mt-2 h-1.5 w-full rounded-full overflow-hidden bg-background/60">
-        <div
-          className="h-full"
-          style={{ width: `${pctJeux}%`, background: color, float: "left" }}
-        />
-        <div
-          className="h-full"
-          style={{ width: `${100 - pctJeux}%`, background: colorLight, opacity: 0.5, float: "left" }}
-        />
-      </div>
-      <div className="mt-1 text-[11px] text-muted-foreground">
-        <span className="text-foreground/80">{jeux}</span> Jeux · <span className="text-foreground/80">{magasin}</span> Magasin
-      </div>
-    </button>
+    </div>
   );
 }
 

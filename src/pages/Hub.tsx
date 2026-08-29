@@ -1,10 +1,11 @@
 import { Link, Navigate } from "react-router-dom";
-import { Loader2, Gamepad2, Radar, Bell, FolderKanban } from "lucide-react";
+import { Loader2, Gamepad2, Radar, Bell, FolderKanban, Receipt } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserMenu } from "@/components/UserMenu";
 import { MobileNav } from "@/components/MobileNav";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { BriefingCard } from "@/components/copilot/BriefingCard";
+import { WeekActivitySection } from "@/components/copilot/WeekActivitySection";
 import logoImg from "@/assets/logo.png";
 
 /* -------------------------------------------------------------------------- */
@@ -16,6 +17,7 @@ export default function Hub() {
   const {
     isAdmin,
     isDirection,
+    isChefVentes,
     canAccessGaia,
     canAccessDashboard,
     copilotEnabled,
@@ -37,6 +39,9 @@ export default function Hub() {
   if (salleOnly) return <Navigate to="/salle" replace />;
 
   const isDir = isAdmin || isDirection;
+  // Le pouls commercial (devis/commandes de la semaine) reste réservé au management :
+  // ce sont des chiffres globaux (montants, clients, tous commerciaux confondus).
+  const isManagement = isDir || isChefVentes;
   const firstName =
     (user?.user_metadata as any)?.full_name?.split(" ")[0] ??
     user?.email?.split("@")[0] ??
@@ -75,6 +80,23 @@ export default function Hub() {
             Ce qui mérite votre attention aujourd'hui.
           </p>
         </section>
+
+        {/* Devis & commandes de la semaine — toujours visible, remis à zéro chaque lundi.
+            Réservé au management : chiffres globaux (montants, clients, tous commerciaux). */}
+        {isManagement && (
+          <section className="rounded-2xl border border-border/60 bg-card/40 backdrop-blur px-4 sm:px-5 py-4">
+            <div className="mb-3 flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15 text-primary flex-shrink-0">
+                <Receipt className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold">Devis &amp; commandes de la semaine</div>
+                <div className="text-[11px] text-muted-foreground">Le pouls commercial, remis à zéro chaque lundi</div>
+              </div>
+            </div>
+            <WeekActivitySection />
+          </section>
+        )}
 
         {copilotEnabled && (
           <section>

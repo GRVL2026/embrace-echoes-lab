@@ -6,7 +6,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCopilot } from "@/contexts/CopilotContext";
-import { cn } from "@/lib/utils";
 
 type Briefing = {
   date: string;

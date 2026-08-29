@@ -1,5 +1,5 @@
 import { Link, Navigate } from "react-router-dom";
-import { Loader2, Gamepad2, Radar, Bell, FolderKanban, Receipt } from "lucide-react";
+import { Loader2, Receipt } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserMenu } from "@/components/UserMenu";
 import { MobileNav } from "@/components/MobileNav";
@@ -18,10 +18,7 @@ export default function Hub() {
     isAdmin,
     isDirection,
     isChefVentes,
-    canAccessGaia,
-    canAccessDashboard,
     copilotEnabled,
-    canAccessSalle,
     salleOnly,
     user,
     isLoading,
@@ -81,7 +78,8 @@ export default function Hub() {
           </p>
         </section>
 
-        {/* Devis & commandes de la semaine — toujours visible, remis à zéro chaque lundi.
+        {/* Cockpit commercial — toujours visible : chiffre d'affaires (exercice / mois /
+            semaine) et devis/commandes de la semaine, celle-ci remise à zéro chaque lundi.
             Réservé au management : chiffres globaux (montants, clients, tous commerciaux). */}
         {isManagement && (
           <section className="rounded-2xl border border-border/60 bg-card/40 backdrop-blur px-4 sm:px-5 py-4">
@@ -90,8 +88,8 @@ export default function Hub() {
                 <Receipt className="h-4 w-4" />
               </div>
               <div className="min-w-0">
-                <div className="text-sm font-semibold">Devis &amp; commandes de la semaine</div>
-                <div className="text-[11px] text-muted-foreground">Le pouls commercial, remis à zéro chaque lundi</div>
+                <div className="text-sm font-semibold">Activité commerciale</div>
+                <div className="text-[11px] text-muted-foreground">Chiffre d'affaires · Devis &amp; commandes de la semaine</div>
               </div>
             </div>
             <WeekActivitySection />
@@ -103,75 +101,7 @@ export default function Hub() {
             <BriefingCard defaultExpanded={false} />
           </section>
         )}
-
-        <QuickActions
-          isDirection={isDir}
-          isAdmin={isAdmin}
-          canAccessSalle={canAccessSalle}
-          canAccessDashboard={canAccessDashboard}
-          copilotEnabled={copilotEnabled}
-        />
       </main>
     </div>
-  );
-}
-
-
-
-/* ============================== ACTIONS RAPIDES ========================== */
-
-const SPACE_COLOR: Record<string, string> = {
-  commerce: "--space-commerce",
-  pilotage: "--space-pilotage",
-  salle: "--space-salle",
-  ecommerce: "--space-ecommerce",
-  sav: "--space-sav",
-  logistique: "--space-logistique",
-};
-
-function QuickActions({
-  isDirection,
-  isAdmin,
-  canAccessSalle,
-  canAccessDashboard,
-  copilotEnabled,
-}: {
-  isDirection: boolean;
-  isAdmin: boolean;
-  canAccessSalle: boolean;
-  canAccessDashboard: boolean;
-  copilotEnabled: boolean;
-}) {
-  const actions: { label: string; to: string; icon: any; space: keyof typeof SPACE_COLOR }[] = [];
-  if (canAccessSalle) actions.push({ label: "Saisir la journée salle", to: "/salle#saisie", icon: Gamepad2, space: "salle" });
-  actions.push({ label: "Nouveau dossier", to: "/dossiers", icon: FolderKanban, space: "commerce" });
-  if (isDirection || isAdmin) actions.push({ label: "Générer la veille", to: "/admin/veille", icon: Radar, space: "pilotage" });
-  actions.push({ label: "Voir les notifications", to: "/admin/notifications", icon: Bell, space: "pilotage" });
-
-  return (
-    <section>
-      <h3 className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
-        Actions rapides
-      </h3>
-      <div className="flex flex-wrap gap-2">
-        {actions.map((a) => {
-          const color = `hsl(var(${SPACE_COLOR[a.space]}))`;
-          const border = `hsl(var(${SPACE_COLOR[a.space]}) / 0.35)`;
-          const bg = `hsl(var(${SPACE_COLOR[a.space]}) / 0.08)`;
-          const Icon = a.icon;
-          return (
-            <Link
-              key={a.to}
-              to={a.to}
-              className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:-translate-y-0.5 transition-transform"
-              style={{ borderColor: border, backgroundColor: bg, color }}
-            >
-              <Icon className="h-3.5 w-3.5" />
-              <span className="text-foreground">{a.label}</span>
-            </Link>
-          );
-        })}
-      </div>
-    </section>
   );
 }

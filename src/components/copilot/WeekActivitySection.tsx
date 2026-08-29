@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from "recharts";
-import { X } from "lucide-react";
+import { X, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +11,7 @@ const CMD = "#34d399";
 const CMD_DARK = "#059669";
 
 type HebdoRow = { jour: string; type_doc: "devis" | "commande"; univers: "jeux" | "magasin"; n_docs: number };
+type CaRow = { ca_n: number; ca_n1: number; ca_m: number; ca_m1: number; ca_s: number; ca_s1: number };
 type JourDoc = { n_cde: string; type_doc: "devis" | "commande"; code_client: string | null; montant_ht: number | null; univers: "jeux" | "magasin" | null; proprietaire: string | null };
 type SemaineDoc = JourDoc & { jour: string };
 
@@ -92,6 +93,20 @@ export function WeekActivitySection() {
     },
   });
 
+  // Les trois CA — exercice (N), mois (M), semaine (S) — chacun contre sa période
+  // précédente. Le calcul, avec l'éco-taxe exclue et l'exercice fiscal sept→août, se fait
+  // en base (get_briefing_ca) ; on ne fait qu'afficher.
+  const { data: ca } = useQuery({
+    queryKey: ["briefing-ca"],
+    refetchInterval: 5 * 60_000,
+    queryFn: async (): Promise<CaRow | null> => {
+      const { data, error } = await (supabase as any).rpc("get_briefing_ca");
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      return (row ?? null) as CaRow | null;
+    },
+  });
+
   const chartData = useMemo(() => {
     const rows = hebdo ?? [];
     const byDay = new Map<string, { devis_jeux: number; devis_magasin: number; commandes_jeux: number; commandes_magasin: number }>();
@@ -112,6 +127,38 @@ export function WeekActivitySection() {
 
   return (
     <div>
+      <div className="mb-2 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Chiffre d'affaires</div>
+
+      {/* Trois échelles, du large au fin : l'exercice pour la tendance de fond, le mois
+          pour le rythme, la semaine pour le pouls. Chacune avec le bon repère. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+        <CaCard
+          label="CA exercice"
+          base="à date"
+          montant={ca?.ca_n ?? 0}
+          prev={ca?.ca_n1 ?? 0}
+          prevLabel="N-1"
+          color="#8b5cf6"
+        />
+        <CaCard
+          label="CA mois"
+          base="global"
+          montant={ca?.ca_m ?? 0}
+          prev={ca?.ca_m1 ?? 0}
+          prevLabel="N-1"
+          color="#22d3ee"
+        />
+        <CaCard
+          label="CA semaine"
+          base="global"
+          montant={ca?.ca_s ?? 0}
+          prev={ca?.ca_s1 ?? 0}
+          prevLabel="S-1"
+          color="#34d399"
+        />
+      </div>
+
+      <div className="mb-2 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Activité de la semaine</div>
       <div className="rounded-lg border border-border/60 bg-background/40 p-2">
         <div style={{ width: "100%", height: 200 }}>
           <ResponsiveContainer>
@@ -168,6 +215,54 @@ export function WeekActivitySection() {
       </div>
 
       {selection && <DocsDetail selection={selection} onClose={() => setSelection(null)} />}
+    </div>
+  );
+}
+
+function CaCard({
+  label,
+  base,
+  montant,
+  prev,
+  prevLabel,
+  color,
+}: {
+  label: string;
+  base: "à date" | "global";
+  montant: number;
+  prev: number;
+  prevLabel: string;
+  color: string;
+}) {
+  const delta = prev > 0 ? ((montant - prev) / prev) * 100 : montant > 0 ? 100 : 0;
+  const DeltaIcon = montant > prev ? TrendingUp : montant < prev ? TrendingDown : Minus;
+  const deltaColor = montant > prev ? "text-emerald-400" : montant < prev ? "text-red-400" : "text-muted-foreground";
+
+  return (
+    <div
+      className="rounded-lg border p-3"
+      style={{ borderColor: `${color}55`, background: `linear-gradient(135deg, ${color}18, ${color}05)` }}
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <div className="text-[11px] uppercase tracking-wider font-semibold" style={{ color }}>
+          {label}
+        </div>
+        {/* Le repère de comparaison : « à date » pour l'exercice (à période égale),
+            « global » pour le mois et la semaine (période précédente complète). */}
+        <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-background/60 text-muted-foreground">
+          {base}
+        </span>
+      </div>
+      <div className="mt-1 font-display text-2xl font-semibold tabular-nums text-foreground">{eur(montant)}</div>
+      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
+        <span className={cn("inline-flex items-center gap-0.5 font-medium", deltaColor)}>
+          <DeltaIcon className="h-3 w-3" />
+          {prev > 0 ? `${delta > 0 ? "+" : ""}${Math.round(delta)}%` : "—"}
+        </span>
+        <span className="text-muted-foreground tabular-nums">
+          {prevLabel}&nbsp;: {eur(prev)}
+        </span>
+      </div>
     </div>
   );
 }

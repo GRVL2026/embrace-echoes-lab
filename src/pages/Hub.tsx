@@ -6,6 +6,7 @@ import { MobileNav } from "@/components/MobileNav";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { BriefingCard } from "@/components/copilot/BriefingCard";
 import { WeekActivitySection } from "@/components/copilot/WeekActivitySection";
+import { NewsDuJour } from "@/components/gazette/NewsDuJour";
 import logoImg from "@/assets/logo.png";
 
 /* -------------------------------------------------------------------------- */
@@ -95,6 +96,9 @@ export default function Hub() {
             <WeekActivitySection />
           </section>
         )}
+
+        {/* Actualités du secteur détectées par la veille (accès Gazette = admin/direction). */}
+        {isDir && <NewsDuJour />}
 
         {copilotEnabled && (
           <section>

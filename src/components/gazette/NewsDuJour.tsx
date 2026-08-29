@@ -5,14 +5,14 @@ import { supabase } from "@/integrations/supabase/client";
 
 // Les dernières actualités du secteur, en tête d'accueil.
 //
-// « Détectées du jour » se lit sur created_at (l'insertion par la veille), PAS sur
-// publie_le (la date de l'article, souvent antérieure). La veille tourne en semaine :
-// pour ne pas afficher une carte vide le week-end, on montre le dernier lot détecté et
-// on date honnêtement le sous-titre — « aujourd'hui » quand la veille a tourné le jour
-// même, sinon « hier » ou la date. Rien détecté du tout → la carte disparaît.
+// Triées par DATE DE PARUTION (publie_le) décroissante : on veut les nouvelles les plus
+// récentes, dans l'ordre. Trier par date de détection (created_at) mélangeait de vieux
+// articles remontés tard par la veille — une parution de mai détectée en août se
+// retrouvait au milieu des actus d'août, donnant une fausse impression de trou.
 //
-// Réservée aux profils qui accèdent à la Gazette (admin/direction) : le gate est posé
-// par l'appelant (Hub), et chaque ligne mène à la Gazette pour agir sur le signal.
+// Réservée aux profils qui accèdent à la Gazette (admin/direction) : le gate est posé par
+// l'appelant (Hub), et chaque ligne mène à la Gazette pour agir sur le signal. Carte
+// masquée s'il n'y a rien à montrer.
 
 type NewsRow = {
   id: string;
@@ -22,7 +22,6 @@ type NewsRow = {
   region: string | null;
   type_lieu: string | null;
   publie_le: string;
-  created_at: string | null;
   statut: string;
 };
 
@@ -33,18 +32,6 @@ function titrePropre(t: string, source: string | null): string {
   return v || t;
 }
 
-function joursDepuis(iso: string): number {
-  return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
-}
-
-function labelDetection(created_at: string | null): string {
-  if (!created_at) return "récemment";
-  const j = joursDepuis(created_at);
-  if (j <= 0) return "aujourd'hui";
-  if (j === 1) return "hier";
-  return new Date(created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
-}
-
 export function NewsDuJour() {
   const { data } = useQuery({
     queryKey: ["hub-news-du-jour"],
@@ -53,8 +40,9 @@ export function NewsDuJour() {
     queryFn: async (): Promise<NewsRow[]> => {
       const { data, error } = await supabase
         .from("gazette_signaux" as any)
-        .select("id, titre, source, commune, region, type_lieu, publie_le, created_at, statut")
+        .select("id, titre, source, commune, region, type_lieu, publie_le, statut")
         .in("statut", ["nouveau", "retenu", "converti"])
+        .order("publie_le", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(6);
       if (error) throw error;
@@ -77,7 +65,7 @@ export function NewsDuJour() {
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold">Actualités du secteur</div>
           <div className="text-[11px] text-muted-foreground">
-            Dernières détections · {labelDetection(news[0].created_at)}
+            Les parutions les plus récentes
           </div>
         </div>
         <Link

@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/sheet";
 import {
   Newspaper, Loader2, ExternalLink, Plus, X, MapPin, Clock, Building2, RefreshCw,
-  Search, Quote, UserRound, Save, Sparkles, ArrowLeft, ChevronDown,
+  Search, Quote, UserRound, Save, Sparkles, ArrowLeft, ChevronDown, ChevronUp,
 } from "lucide-react";
 
 type Signal = {
@@ -78,62 +78,29 @@ const EVENEMENTS: Record<string, string> = {
   sinistre: "Sinistre",
 };
 
-const URGENCES: Record<string, { label: string; classe: string; rang: number }> = {
-  haute: { label: "À appeler cette semaine", classe: "border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400", rang: 0 },
-  moyenne: { label: "À qualifier", classe: "border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400", rang: 1 },
-  basse: { label: "Pour information", classe: "border-border bg-muted text-muted-foreground", rang: 2 },
-};
-
-// POURQUOI UN SCORE, ET PAS UN ORDRE CHRONOLOGIQUE.
-//
-// Un journal se lit du plus récent au plus ancien. Une file de prospection, non : un
-// commercial devant quarante signaux doit savoir lequel appeler EN PREMIER, et
-// pourquoi. La date n'est qu'un critère parmi d'autres, et pas le plus fort.
-//
-// Chaque point porte donc une justification affichée à l'écran. Un score sans motif
-// n'est qu'un chiffre auquel on n'obéit pas.
-function priorite(s: Signal, parc: Parc | undefined): { note: number; motifs: string[] } {
+// Les annonces sont classées par DATE (voir l'ordre plus bas). Le score de priorité et les
+// paliers ont été retirés : on ne calcule plus qu'une poignée de repères affichés sur chaque
+// carte — « déjà client », « tout frais », le contact trouvé… — qui aident à décider d'un
+// coup d'œil, sans réordonner la liste.
+function motifsDe(s: Signal, parc: Parc | undefined): string[] {
   const motifs: string[] = [];
-  let note = 0;
 
-  if (s.code_client) { note += 50; motifs.push("déjà client"); }
-  else if (s.prospect_id) { note += 30; motifs.push("déjà en fiche"); }
+  if (s.code_client) motifs.push("déjà client");
+  else if (s.prospect_id) motifs.push("déjà en fiche");
 
   if (parc?.nb_machines) {
-    note += 15;
     const manque = parc.nb_flippers === 0 ? ", aucun flipper" : "";
     motifs.push(`${parc.nb_machines} machines connues${manque}`);
   }
 
   const j = joursDepuis(s.publie_le);
-  if (j <= 7) { note += 25; motifs.push(j <= 1 ? "tout frais" : "cette semaine"); }
-  else if (j <= 30) note += 12;
-  else if (j > 120) note -= 10;
+  if (j <= 1) motifs.push("tout frais");
+  else if (j <= 7) motifs.push("cette semaine");
 
-  if (REGIONS_PRIORITAIRES.includes(s.region ?? "")) { note += 20; motifs.push("territoire prioritaire"); }
-  if (s.evenement === "reprise" || s.evenement === "ouverture") note += 15;
-  if (s.contact_nom) { note += 10; motifs.push(`contact : ${s.contact_nom}`); }
-  if (s.urgence === "haute") note += 10;
+  if (REGIONS_PRIORITAIRES.includes(s.region ?? "")) motifs.push("territoire prioritaire");
+  if (s.contact_nom) motifs.push(`contact : ${s.contact_nom}`);
 
-  return { note, motifs };
-}
-
-// Les trois paliers, définis UNE fois. Le filtre et les sections lisent la même
-// source : les voir diverger — un filtre « à qualifier » qui affiche un signal rangé
-// dans « à traiter ensuite » — détruit la confiance dans le classement.
-const PALIERS = [
-  { cle: "top", titre: "Commencez par ici", seuil: 60,
-    aide: "Les signaux qui cumulent plusieurs atouts — une fiche déjà connue, un parc recensé, votre territoire, ou une actualité de la semaine.", max: 6 },
-  { cle: "ensuite", titre: "À traiter ensuite", seuil: 30,
-    aide: "Utiles, mais moins d'atouts réunis.", max: 20 },
-  { cle: "reste", titre: "Le reste", seuil: -9999,
-    aide: "Pour information — signaux anciens ou hors territoire.", max: 30 },
-] as const;
-
-type Palier = typeof PALIERS[number]["cle"];
-
-function palierDe(note: number): Palier {
-  return (PALIERS.find((p) => note >= p.seuil)?.cle ?? "reste") as Palier;
+  return motifs;
 }
 
 const MOIS = ["janv.", "févr.", "mars", "avril", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
@@ -170,11 +137,11 @@ function fraicheur(d: string): string {
 export default function Gazette() {
   const { isAdmin, isDirection, isLoading } = useAuth();
   const qc = useQueryClient();
-  const [filtrePalier, setFiltrePalier] = useState<"all" | Palier>("all");
-  // Combien de signaux déplier en plus, par palier. Le plafond initial évite le mur de
-  // quarante lignes, mais il ne doit pas devenir une impasse : « affine avec la
-  // recherche » n'est pas une réponse quand on ne sait pas ce qu'on cherche.
-  const [deplie, setDeplie] = useState<Record<string, number>>({});
+  // L'ordre de lecture : les plus récentes d'abord par défaut, un bouton inverse.
+  const [ordre, setOrdre] = useState<"recent" | "ancien">("recent");
+  // Combien d'annonces afficher d'un coup, pour ne pas peindre 300 cartes. Un seul
+  // « Voir plus » global remplace la pagination par palier.
+  const [affiche, setAffiche] = useState(30);
   const [filtreZone, setFiltreZone] = useState<"all" | "prioritaires">("all");
   const [recherche, setRecherche] = useState("");
   const [enCours, setEnCours] = useState<string | null>(null);
@@ -230,7 +197,7 @@ export default function Gazette() {
     return m;
   }, [parcs]);
 
-  const { tries: signaux, notes } = useMemo(() => {
+  const { signaux, notes } = useMemo(() => {
     let liste = data ?? [];
     if (filtreZone === "prioritaires") {
       liste = liste.filter((s) => REGIONS_PRIORITAIRES.includes(s.region ?? ""));
@@ -246,34 +213,20 @@ export default function Gazette() {
           .some((v) => (v ?? "").toLowerCase().includes(q)),
       );
     }
-    // Classement par priorité, et non par date : voir la note sur priorite().
-    const notes = new Map<string, { note: number; motifs: string[] }>();
+    // Repères affichés sur chaque carte (voir motifsDe) — plus aucun score de classement.
+    const notes = new Map<string, string[]>();
     for (const sig of liste) {
       const cle = sig.code_client ? `c:${sig.code_client}` : sig.prospect_id ? `p:${sig.prospect_id}` : null;
-      notes.set(sig.id, priorite(sig, cle ? parcParFiche.get(cle) : undefined));
+      notes.set(sig.id, motifsDe(sig, cle ? parcParFiche.get(cle) : undefined));
     }
-    // Le filtre porte sur le palier AFFICHÉ, jamais sur l'urgence décidée par l'IA :
-    // c'est le classement que le commercial a sous les yeux qu'il veut restreindre.
-    if (filtrePalier !== "all") {
-      liste = liste.filter((s) => palierDe(notes.get(s.id)?.note ?? 0) === filtrePalier);
-    }
-    const tries = [...liste].sort((a, b) => {
-      const d = (notes.get(b.id)?.note ?? 0) - (notes.get(a.id)?.note ?? 0);
-      return d !== 0 ? d : b.publie_le.localeCompare(a.publie_le);
-    });
-
-    // Trois paquets, parce qu'un commercial ne travaille pas une liste de quarante
-    // lignes : il travaille les cinq premières, puis revient. Le seuil de 60 points
-    // correspond à un signal qui cumule au moins deux atouts — une fiche connue et
-    // de la fraîcheur, ou un territoire et un parc.
-    const parJour: { jour: string; items: Signal[] }[] = [];
-    for (const sig of tries) {
-      const dernier = parJour[parJour.length - 1];
-      if (dernier && dernier.jour === sig.publie_le) dernier.items.push(sig);
-      else parJour.push({ jour: sig.publie_le, items: [sig] });
-    }
-    return { tries, parJour, notes };
-  }, [data, filtrePalier, filtreZone, recherche, parcParFiche]);
+    // Ordre chronologique pur : les plus récentes d'abord, ou l'inverse au choix.
+    const signaux = [...liste].sort((a, b) =>
+      ordre === "recent"
+        ? b.publie_le.localeCompare(a.publie_le)
+        : a.publie_le.localeCompare(b.publie_le),
+    );
+    return { signaux, notes };
+  }, [data, filtreZone, recherche, ordre, parcParFiche]);
 
   async function creerProspect(s: Signal) {
     setEnCours(s.id);
@@ -354,7 +307,15 @@ export default function Gazette() {
   }
   if (!autorise) return <Navigate to="/" replace />;
 
-  const nbPrioritaires = signaux.filter((s) => (notes.get(s.id)?.note ?? 0) >= 60).length;
+  // On n'affiche que les premières annonces ; le reste attend « Voir plus ». Elles sont
+  // regroupées par jour pour donner un repère de lecture (« Aujourd'hui », « Hier »…).
+  const visibles = signaux.slice(0, affiche);
+  const parJour: { jour: string; items: Signal[] }[] = [];
+  for (const s of visibles) {
+    const dernier = parJour[parJour.length - 1];
+    if (dernier && dernier.jour === s.publie_le) dernier.items.push(s);
+    else parJour.push({ jour: s.publie_le, items: [s] });
+  }
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -376,7 +337,7 @@ export default function Gazette() {
         <div className="flex-1 min-w-0">
           <h1 className="font-display text-base sm:text-lg font-semibold truncate">Gazette</h1>
           <p className="text-xs text-muted-foreground truncate">
-            Classés par priorité d'appel — commencez par le haut
+            La veille du secteur, classée par date
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching} className="gap-2">
@@ -409,20 +370,19 @@ export default function Gazette() {
               <SelectItem value="prioritaires">Normandie · Bretagne · IDF</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={filtrePalier} onValueChange={(v) => setFiltrePalier(v as typeof filtrePalier)}>
-            <SelectTrigger className="h-9 w-[210px] text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous les paliers</SelectItem>
-              <SelectItem value="top">🟢 Commencez par ici</SelectItem>
-              <SelectItem value="ensuite">🟠 À traiter ensuite</SelectItem>
-              <SelectItem value="reste">⚪ Le reste</SelectItem>
-            </SelectContent>
-          </Select>
+          {/* Un seul bouton d'ordre : la flèche indique ce qui remonte en tête. */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setOrdre((o) => (o === "recent" ? "ancien" : "recent"))}
+            className="h-9 gap-1.5 text-xs"
+            title="Changer l'ordre d'affichage"
+          >
+            {ordre === "recent" ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+            {ordre === "recent" ? "Plus récentes d'abord" : "Plus anciennes d'abord"}
+          </Button>
           <span className="ml-auto text-xs text-muted-foreground tabular-nums">
-            <span className="font-semibold text-foreground">{signaux.length}</span> signaux
-            {nbPrioritaires > 0 && (
-              <span className="ml-2 text-emerald-500">· {nbPrioritaires} à appeler en premier</span>
-            )}
+            <span className="font-semibold text-foreground">{signaux.length}</span> annonces
           </span>
         </div>
       </div>
@@ -439,27 +399,18 @@ export default function Gazette() {
           </Card>
         ) : (
           <>
-            {PALIERS.map((bloc) => {
-              const items = signaux.filter((s) => palierDe(notes.get(s.id)?.note ?? 0) === bloc.cle);
-              if (items.length === 0) return null;
-              const limite = bloc.max + (deplie[bloc.cle] ?? 0);
-              return (
-                <section key={bloc.cle} className="space-y-2">
-                  <div className="sticky z-10 -mx-4 px-4 py-1.5 bg-background/95 backdrop-blur"
-                    style={{ top: "calc(52px + var(--safe-top))" }}>
-                    <div className="flex items-baseline gap-2">
-                      <h2 className={cn("font-display text-sm font-semibold",
-                        bloc.cle === "top" && "text-emerald-600 dark:text-emerald-400")}>
-                        {bloc.titre}
-                      </h2>
-                      <span className="text-[11px] tabular-nums text-muted-foreground">{items.length}</span>
-                      <div className="flex-1 border-b border-border/60 ml-2" />
-                    </div>
-                    <p className="text-[10px] leading-snug text-muted-foreground">{bloc.aide}</p>
+            {parJour.map((groupe) => (
+              <section key={groupe.jour} className="space-y-2">
+                <div className="sticky z-10 -mx-4 px-4 py-1.5 bg-background/95 backdrop-blur"
+                  style={{ top: "calc(52px + var(--safe-top))" }}>
+                  <div className="flex items-baseline gap-2">
+                    <h2 className="font-display text-sm font-semibold">{titreJour(groupe.jour)}</h2>
+                    <span className="text-[11px] tabular-nums text-muted-foreground">{groupe.items.length}</span>
+                    <div className="flex-1 border-b border-border/60 ml-2" />
                   </div>
+                </div>
 
-                  {items.slice(0, limite).map((s) => {
-                const u = URGENCES[s.urgence ?? "moyenne"] ?? URGENCES.moyenne;
+                  {groupe.items.map((s) => {
                 const t = typeMeta(s.type_lieu);
                 const converti = s.statut === "converti";
                 const d = new Date(s.publie_le + "T12:00:00");
@@ -524,9 +475,9 @@ export default function Gazette() {
                         {/* POURQUOI CE SIGNAL EST ICI. Un classement dont on ne voit pas
                             la raison n'est pas suivi : le commercial refait son propre tri
                             et l'ordre proposé ne sert à rien. */}
-                        {(notes.get(s.id)?.motifs.length ?? 0) > 0 && (
+                        {(notes.get(s.id)?.length ?? 0) > 0 && (
                           <p className="mt-1.5 flex flex-wrap items-center gap-1">
-                            {notes.get(s.id)!.motifs.map((m) => (
+                            {notes.get(s.id)!.map((m) => (
                               <span key={m} className={cn(
                                 "rounded px-1.5 py-0.5 text-[10px] font-medium",
                                 m === "déjà client" ? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
@@ -575,33 +526,23 @@ export default function Gazette() {
                     </div>
                   </Card>
                 );
-                  })}
+                })}
+              </section>
+            ))}
 
-                  {items.length > limite && (
-                    <Button
-                      variant="outline"
-                      className="w-full gap-2 text-xs"
-                      onClick={() => setDeplie((d) => ({ ...d, [bloc.cle]: (d[bloc.cle] ?? 0) + 25 }))}
-                    >
-                      <ChevronDown className="h-3.5 w-3.5" />
-                      Voir {Math.min(25, items.length - limite)} de plus
-                      <span className="text-muted-foreground">
-                        ({items.length - limite} restant{items.length - limite > 1 ? "s" : ""})
-                      </span>
-                    </Button>
-                  )}
-                  {limite > bloc.max && items.length <= limite && (
-                    <Button
-                      variant="ghost"
-                      className="w-full gap-2 text-xs text-muted-foreground"
-                      onClick={() => setDeplie((d) => ({ ...d, [bloc.cle]: 0 }))}
-                    >
-                      Replier
-                    </Button>
-                  )}
-                </section>
-              );
-            })}
+            {signaux.length > affiche && (
+              <Button
+                variant="outline"
+                className="w-full gap-2 text-xs"
+                onClick={() => setAffiche((a) => a + 30)}
+              >
+                <ChevronDown className="h-3.5 w-3.5" />
+                Voir plus
+                <span className="text-muted-foreground">
+                  ({signaux.length - affiche} restante{signaux.length - affiche > 1 ? "s" : ""})
+                </span>
+              </Button>
+            )}
           </>
         )}
       </main>

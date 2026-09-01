@@ -10,7 +10,7 @@ const DEVIS_DARK = "#7c3aed";
 const CMD = "#34d399";
 const CMD_DARK = "#059669";
 
-type HebdoRow = { jour: string; type_doc: "devis" | "commande"; univers: "jeux" | "magasin"; n_docs: number };
+type HebdoRow = { jour: string; type_doc: "devis" | "commande"; univers: "jeux" | "magasin"; n_docs: number; montant: number };
 type CaRow = { ca_n: number; ca_n1: number; ca_m: number; ca_m1: number; ca_s: number; ca_s1: number };
 type JourDoc = { n_cde: string; type_doc: "devis" | "commande"; code_client: string | null; montant_ht: number | null; univers: "jeux" | "magasin" | null; proprietaire: string | null };
 type SemaineDoc = JourDoc & { jour: string };
@@ -122,19 +122,24 @@ export function WeekActivitySection() {
     return currentIsoDays.map((iso, i) => ({ iso, label: labels[i], ...byDay.get(iso)! }));
   }, [hebdo, currentIsoDays.join(",")]);
 
-  // Total de la semaine en cours (lun→ven) : devis et commandes, toutes catégories
-  // confondues. Somme des mêmes données que le graphique — pas d'appel supplémentaire.
-  const totaux = useMemo(
-    () =>
-      chartData.reduce(
-        (t, d) => ({
-          devis: t.devis + d.devis_jeux + d.devis_magasin,
-          commandes: t.commandes + d.commandes_jeux + d.commandes_magasin,
-        }),
-        { devis: 0, commandes: 0 },
-      ),
-    [chartData],
-  );
+  // Totaux devis & commandes : semaine en cours (S0) vs semaine précédente COMPLÈTE (S-1),
+  // en nombre ET en montant €. La RPC get_briefing_activite_hebdo couvre déjà les deux
+  // semaines et renvoie le montant ; on répartit selon le lundi courant. Même base de
+  // comparaison que la carte « CA semaine » (en cours vs S-1 global).
+  const totaux = useMemo(() => {
+    const lundiIso = currentIsoDays[0];
+    const vide = () => ({ devis: { n: 0, montant: 0 }, commande: { n: 0, montant: 0 } });
+    const s0 = vide();
+    const s1 = vide();
+    for (const r of hebdo ?? []) {
+      const iso = String(r.jour).slice(0, 10);
+      const cible = iso >= lundiIso ? s0 : s1;
+      const k = r.type_doc === "devis" ? "devis" : "commande";
+      cible[k].n += Number(r.n_docs || 0);
+      cible[k].montant += Number(r.montant || 0);
+    }
+    return { s0, s1 };
+  }, [hebdo, currentIsoDays.join(",")]);
 
   const selectDay = (iso: string) =>
     setSelection((s) => (s?.kind === "jour" && s.day === iso ? null : { kind: "jour", day: iso }));
@@ -172,16 +177,16 @@ export function WeekActivitySection() {
         />
       </div>
 
-      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Activité de la semaine</span>
-        {/* Total de la semaine en cours : le nombre de devis et de commandes, distinct du CA
-            (facturé). C'est l'indicateur d'activité commerciale que le graphique détaille. */}
-        <span className="text-xs text-muted-foreground">
-          <b className="font-display text-base text-foreground tabular-nums">{totaux.devis}</b> devis
-          <span className="mx-1.5 text-border">·</span>
-          <b className="font-display text-base text-foreground tabular-nums">{totaux.commandes}</b> commandes
-        </span>
+      <div className="mb-2 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Activité de la semaine</div>
+
+      {/* Devis / commandes de la semaine en cours : nombre + montant €, chacun comparé à la
+          semaine précédente complète (S-1). Distinct du CA (facturé) : c'est l'activité
+          commerciale générée, en amont de la facturation. */}
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <DocCard label="Devis" color="#a78bfa" cur={totaux.s0.devis} prev={totaux.s1.devis} />
+        <DocCard label="Commandes" color="#34d399" cur={totaux.s0.commande} prev={totaux.s1.commande} />
       </div>
+
       <div className="rounded-lg border border-border/60 bg-background/40 p-2">
         <div style={{ width: "100%", height: 200 }}>
           <ResponsiveContainer>
@@ -238,6 +243,55 @@ export function WeekActivitySection() {
       </div>
 
       {selection && <DocsDetail selection={selection} onClose={() => setSelection(null)} />}
+    </div>
+  );
+}
+
+/** Petit indicateur de variation vs S-1, réutilisé pour le nombre et pour le montant. */
+function Delta({ cur, prev }: { cur: number; prev: number }) {
+  const d = prev > 0 ? ((cur - prev) / prev) * 100 : cur > 0 ? 100 : 0;
+  const Icon = cur > prev ? TrendingUp : cur < prev ? TrendingDown : Minus;
+  const color = cur > prev ? "text-emerald-400" : cur < prev ? "text-red-400" : "text-muted-foreground";
+  return (
+    <span className={cn("inline-flex items-center gap-0.5 text-[11px] font-medium tabular-nums", color)}>
+      <Icon className="h-3 w-3" />
+      {prev > 0 ? `${d > 0 ? "+" : ""}${Math.round(d)}%` : "—"}
+    </span>
+  );
+}
+
+/** Carte « Devis » ou « Commandes » de la semaine : nombre et montant €, chacun comparé
+ *  à la semaine précédente complète (S-1). */
+function DocCard({
+  label,
+  color,
+  cur,
+  prev,
+}: {
+  label: string;
+  color: string;
+  cur: { n: number; montant: number };
+  prev: { n: number; montant: number };
+}) {
+  return (
+    <div
+      className="rounded-lg border p-3"
+      style={{ borderColor: `${color}55`, background: `linear-gradient(135deg, ${color}18, ${color}05)` }}
+    >
+      <div className="text-[11px] uppercase tracking-wider font-semibold" style={{ color }}>
+        {label}
+      </div>
+      <div className="mt-1.5 flex items-baseline justify-between gap-2">
+        <span className="font-display text-2xl font-semibold tabular-nums text-foreground">{cur.n}</span>
+        <Delta cur={cur.n} prev={prev.n} />
+      </div>
+      <div className="mt-1 flex items-baseline justify-between gap-2">
+        <span className="font-display text-base font-semibold tabular-nums text-foreground">{eur(cur.montant)}</span>
+        <Delta cur={cur.montant} prev={prev.montant} />
+      </div>
+      <div className="mt-1.5 text-[11px] text-muted-foreground tabular-nums">
+        S-1&nbsp;: {prev.n} · {eur(prev.montant)}
+      </div>
     </div>
   );
 }

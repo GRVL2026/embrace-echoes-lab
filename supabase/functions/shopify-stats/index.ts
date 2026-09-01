@@ -6,10 +6,13 @@ import { requireRole } from "../_shared/require-role.ts";
 const SHOP = Deno.env.get("SHOPIFY_SHOP_DOMAIN") || "";
 const CLIENT_ID = Deno.env.get("SHOPIFY_CLIENT_ID") || "";
 const CLIENT_SECRET = Deno.env.get("SHOPIFY_CLIENT_SECRET") || "";
+// Secret pour l'appel cron (pg_cron) : évite d'exiger un JWT admin pour le rafraîchissement auto.
+const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
 const API_VERSION = "2026-01";
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 min
 // Bump on every structural change to the returned stats payload to invalidate stale cache entries.
-const CACHE_VERSION = 2;
+// v3 : montants passés en HT (subtotalPriceSet) au lieu du TTC (totalPriceSet).
+const CACHE_VERSION = 3;
 const cacheKey = (p: string) => `v${CACHE_VERSION}:${p}`;
 
 const supabase = createClient(
@@ -235,8 +238,9 @@ async function buildStats(period: PeriodKey) {
     tryShopifyQL(),
   ]);
 
+  // CA en HT : on somme subtotalPriceSet (hors taxes & port), pas totalPriceSet (TTC).
   const sum = (arr: any[]) =>
-    arr.reduce((s, o) => s + Number(o.totalPriceSet?.shopMoney?.amount || 0), 0);
+    arr.reduce((s, o) => s + Number(o.subtotalPriceSet?.shopMoney?.amount || 0), 0);
   const caCur = sum(ordersCur);
   const caPrev = sum(ordersPrev);
   const countCur = ordersCur.length;
@@ -260,7 +264,7 @@ async function buildStats(period: PeriodKey) {
     const d = o.createdAt.slice(0, 10);
     if (perDay.has(d)) {
       const v = perDay.get(d)!;
-      v.amount += Number(o.totalPriceSet?.shopMoney?.amount || 0);
+      v.amount += Number(o.subtotalPriceSet?.shopMoney?.amount || 0); // HT
       v.count += 1;
     }
   }
@@ -278,7 +282,7 @@ async function buildStats(period: PeriodKey) {
     const key = o.createdAt.slice(0, 7);
     if (!perMonth.has(key)) perMonth.set(key, { month: key, amount: 0, count: 0 });
     const v = perMonth.get(key)!;
-    v.amount += Number(o.totalPriceSet?.shopMoney?.amount || 0);
+    v.amount += Number(o.subtotalPriceSet?.shopMoney?.amount || 0); // HT
     v.count += 1;
   }
   const salesByMonth = Array.from(perMonth.values()).sort((a, b) => a.month.localeCompare(b.month));
@@ -354,8 +358,18 @@ async function buildStats(period: PeriodKey) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  const gate = await requireRole(req, ['admin', 'direction']);
-  if (!gate.ok) return gate.response;
+  // Auth : soit le secret cron (pg_cron → rafraîchissement auto), soit un utilisateur admin/direction.
+  const url = new URL(req.url);
+  const cronHeader = req.headers.get("x-cron-secret") ?? url.searchParams.get("secret") ?? "";
+  let isCron = !!CRON_SECRET && cronHeader === CRON_SECRET;
+  if (!isCron && cronHeader) {
+    const { data: cfg } = await supabase.from("gaia_config").select("value").eq("key", "cron_secret").maybeSingle();
+    if (cfg?.value && cronHeader === cfg.value) isCron = true;
+  }
+  if (!isCron) {
+    const gate = await requireRole(req, ['admin', 'direction']);
+    if (!gate.ok) return gate.response;
+  }
 
   try {
     if (!SHOP || !CLIENT_ID || !CLIENT_SECRET) {
@@ -365,7 +379,26 @@ Deno.serve(async (req) => {
       );
     }
 
-    const url = new URL(req.url);
+    // Appel cron : on rafraîchit TOUTES les périodes d'un coup — le cache ne dépend plus
+    // d'une visite de la page /ecommerce.
+    if (isCron) {
+      const periods: PeriodKey[] = ["7d", "30d", "90d", "12m", "all"];
+      const fetched_at = new Date().toISOString();
+      await supabase.from("shopify_stats_cache").delete().not("period", "like", `v${CACHE_VERSION}:%`);
+      const refreshed: string[] = [];
+      for (const p of periods) {
+        const stats = await buildStats(p);
+        const k = cacheKey(p);
+        await supabase.from("shopify_stats_cache").delete().eq("period", k);
+        await supabase.from("shopify_stats_cache").insert({ data: stats, fetched_at, period: k });
+        refreshed.push(p);
+      }
+      return new Response(
+        JSON.stringify({ refreshed, fetched_at }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const force = url.searchParams.get("refresh") === "1";
     const rawPeriod = (url.searchParams.get("period") || "30d") as PeriodKey;
     const period: PeriodKey = ["7d", "30d", "90d", "12m", "all"].includes(rawPeriod) ? rawPeriod : "30d";

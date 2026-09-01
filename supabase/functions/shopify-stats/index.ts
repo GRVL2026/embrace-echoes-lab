@@ -11,8 +11,9 @@ const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
 const API_VERSION = "2026-01";
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 min
 // Bump on every structural change to the returned stats payload to invalidate stale cache entries.
-// v3 : montants passés en HT (subtotalPriceSet) au lieu du TTC (totalPriceSet).
-const CACHE_VERSION = 3;
+// v3 : montants passés en HT (subtotalPriceSet). v4 : mensuel + CA long via ShopifyQL analytics
+// (historique complet, non limité aux ~60 j de l'API Commandes).
+const CACHE_VERSION = 4;
 const cacheKey = (p: string) => `v${CACHE_VERSION}:${p}`;
 
 const supabase = createClient(
@@ -197,6 +198,43 @@ async function tryShopifyQL(): Promise<{ sessions: number; conversion: number } 
   }
 }
 
+/* -------- Ventes mensuelles via ShopifyQL (analytics) : PAS de limite ~60 j comme l'API Commandes -------- */
+
+async function fetchMonthlySalesQL(
+  sinceDate: string,
+): Promise<{ month: string; amount: number; count: number }[] | null> {
+  try {
+    // net_sales = HT (hors taxes). L'API analytics voit tout l'historique, contrairement à l'API Orders.
+    const q = `FROM sales SHOW net_sales, orders TIMESERIES month SINCE ${sinceDate} UNTIL today`;
+    const data: any = await gql(
+      `query($q: String!) {
+        shopifyqlQuery(query: $q) {
+          __typename
+          ... on TableResponse { tableData { columns { name } rowData } }
+        }
+      }`,
+      { q },
+    );
+    const td = data?.shopifyqlQuery?.tableData;
+    if (!td?.rowData?.length) return null;
+    const cols: string[] = (td.columns || []).map((c: any) => String(c.name).toLowerCase());
+    const iMonth = cols.findIndex((c) => c.includes("month"));
+    const iNet = cols.findIndex((c) => c.includes("net_sales") || c.includes("net sales"));
+    const iOrders = cols.findIndex((c) => c.includes("order"));
+    if (iMonth < 0 || iNet < 0) return null;
+    const out = td.rowData
+      .map((r: any[]) => ({
+        month: String(r[iMonth] ?? "").slice(0, 7),
+        amount: Number(r[iNet] ?? 0),
+        count: iOrders >= 0 ? Number(r[iOrders] ?? 0) : 0,
+      }))
+      .filter((x: any) => /^\d{4}-\d{2}$/.test(x.month));
+    return out.length ? out : null;
+  } catch {
+    return null;
+  }
+}
+
 function mapOrderDetail(o: any, fallbackCurrency: string) {
   return {
     id: o.id,
@@ -231,20 +269,30 @@ async function buildStats(period: PeriodKey) {
   const sinceIso = isoDaysAgo(days);
   const prevSinceIso = isoDaysAgo(days * 2);
 
-  const [ordersCur, ordersPrev, lowStock, trafficRaw] = await Promise.all([
+  const [ordersCur, ordersPrev, lowStock, trafficRaw, monthlyQL] = await Promise.all([
     fetchOrdersRange(sinceIso),
     fetchOrdersRange(prevSinceIso, sinceIso),
     fetchLowStock(),
     tryShopifyQL(),
+    fetchMonthlySalesQL(sinceIso.slice(0, 10)),
   ]);
 
   // CA en HT : on somme subtotalPriceSet (hors taxes & port), pas totalPriceSet (TTC).
   const sum = (arr: any[]) =>
     arr.reduce((s, o) => s + Number(o.subtotalPriceSet?.shopMoney?.amount || 0), 0);
-  const caCur = sum(ordersCur);
-  const caPrev = sum(ordersPrev);
-  const countCur = ordersCur.length;
-  const countPrev = ordersPrev.length;
+  let caCur = sum(ordersCur);
+  let caPrev = sum(ordersPrev);
+  let countCur = ordersCur.length;
+  let countPrev = ordersPrev.length;
+  // ShopifyQL (analytics) n'a pas la limite ~60 j de l'API Commandes : source de vérité pour
+  // l'historique long. Sur les vues longues, le CA total vient de là ; la comparaison "période
+  // précédente" n'ayant pas de sens sur tout l'historique, on la neutralise.
+  if (monthlyQL && (period === "all" || period === "12m")) {
+    caCur = monthlyQL.reduce((s, m) => s + m.amount, 0);
+    countCur = monthlyQL.reduce((s, m) => s + m.count, 0);
+    caPrev = 0;
+    countPrev = 0;
+  }
   const currency = ordersCur[0]?.totalPriceSet?.shopMoney?.currencyCode
     || ordersPrev[0]?.totalPriceSet?.shopMoney?.currencyCode
     || "EUR";
@@ -285,7 +333,9 @@ async function buildStats(period: PeriodKey) {
     v.amount += Number(o.subtotalPriceSet?.shopMoney?.amount || 0); // HT
     v.count += 1;
   }
-  const salesByMonth = Array.from(perMonth.values()).sort((a, b) => a.month.localeCompare(b.month));
+  const salesByMonthOrders = Array.from(perMonth.values()).sort((a, b) => a.month.localeCompare(b.month));
+  // Mensuel : l'analytics (monthlyQL, historique complet) prime ; sinon repli sur les commandes (≤60 j).
+  const salesByMonth = monthlyQL ?? salesByMonthOrders;
 
   // Top products
   const prodMap = new Map<string, { title: string; qty: number; revenue: number }>();

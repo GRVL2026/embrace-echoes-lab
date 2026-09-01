@@ -122,6 +122,20 @@ export function WeekActivitySection() {
     return currentIsoDays.map((iso, i) => ({ iso, label: labels[i], ...byDay.get(iso)! }));
   }, [hebdo, currentIsoDays.join(",")]);
 
+  // Total de la semaine en cours (lun→ven) : devis et commandes, toutes catégories
+  // confondues. Somme des mêmes données que le graphique — pas d'appel supplémentaire.
+  const totaux = useMemo(
+    () =>
+      chartData.reduce(
+        (t, d) => ({
+          devis: t.devis + d.devis_jeux + d.devis_magasin,
+          commandes: t.commandes + d.commandes_jeux + d.commandes_magasin,
+        }),
+        { devis: 0, commandes: 0 },
+      ),
+    [chartData],
+  );
+
   const selectDay = (iso: string) =>
     setSelection((s) => (s?.kind === "jour" && s.day === iso ? null : { kind: "jour", day: iso }));
 
@@ -158,7 +172,16 @@ export function WeekActivitySection() {
         />
       </div>
 
-      <div className="mb-2 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Activité de la semaine</div>
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Activité de la semaine</span>
+        {/* Total de la semaine en cours : le nombre de devis et de commandes, distinct du CA
+            (facturé). C'est l'indicateur d'activité commerciale que le graphique détaille. */}
+        <span className="text-xs text-muted-foreground">
+          <b className="font-display text-base text-foreground tabular-nums">{totaux.devis}</b> devis
+          <span className="mx-1.5 text-border">·</span>
+          <b className="font-display text-base text-foreground tabular-nums">{totaux.commandes}</b> commandes
+        </span>
+      </div>
       <div className="rounded-lg border border-border/60 bg-background/40 p-2">
         <div style={{ width: "100%", height: 200 }}>
           <ResponsiveContainer>

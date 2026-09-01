@@ -174,14 +174,33 @@ export function WeekActivitySection() {
 
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Activité de la semaine</span>
-        {/* Total de la semaine en cours : le nombre de devis et de commandes, distinct du CA
-            (facturé). C'est l'indicateur d'activité commerciale que le graphique détaille. */}
-        <span className="text-xs text-muted-foreground">
-          <b className="font-display text-base text-foreground tabular-nums">{totaux.devis}</b> devis
-          <span className="mx-1.5 text-border">·</span>
-          <b className="font-display text-base text-foreground tabular-nums">{totaux.commandes}</b> commandes
-        </span>
       </div>
+
+      {/* Ligne de total bien visible, dans le style des cartes CA existantes. */}
+      <div className="mb-3 rounded-lg border p-3"
+        style={{
+          borderColor: "#8b5cf655",
+          background: "linear-gradient(135deg, #8b5cf418, #8b5cf405)",
+        }}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+          <span className="text-[11px] uppercase tracking-wider font-semibold" style={{ color: "#8b5cf6" }}>
+            Cette semaine
+          </span>
+          <div className="flex items-baseline gap-3 text-sm">
+            <span className="tabular-nums">
+              <b className="font-display text-xl text-foreground">{totaux.devis}</b>{" "}
+              <span className="text-muted-foreground">devis</span>
+            </span>
+            <span className="text-border">·</span>
+            <span className="tabular-nums">
+              <b className="font-display text-xl text-foreground">{totaux.commandes}</b>{" "}
+              <span className="text-muted-foreground">commandes</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
       <div className="rounded-lg border border-border/60 bg-background/40 p-2">
         <div style={{ width: "100%", height: 200 }}>
           <ResponsiveContainer>

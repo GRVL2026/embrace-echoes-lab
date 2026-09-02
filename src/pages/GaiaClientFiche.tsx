@@ -233,6 +233,20 @@ export default function GaiaClientFiche() {
     }
     return Array.from(map.values()).sort((a, b) => String(b.invoice_date).localeCompare(String(a.invoice_date)));
   }, [caLignes]);
+  // Répartition du CA HT par type de jeu (famille catalogue) — pour le camembert.
+  const caParType = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const l of caLignes as CaLigne[]) {
+      const fam = (l.famille && String(l.famille).trim()) || "Non catégorisé";
+      map.set(fam, (map.get(fam) ?? 0) + Number(l.montant_ht ?? 0));
+    }
+    const palette = ["#8b5cf6", "#22d3ee", "#34d399", "#f5a524", "#f87171", "#a78bfa", "#38bdf8", "#fb923c", "#f472b6", "#4ade80"];
+    return Array.from(map.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .map((d, i) => ({ ...d, color: palette[i % palette.length] }));
+  }, [caLignes]);
+  const caParTypeTotal = caParType.reduce((n, t) => n + t.value, 0);
   const ventes12m = fiche?.ventes12m ?? [];
   const firstSale = fiche?.firstSale ?? null;
   const reparations = fiche?.reparations ?? [];
@@ -1231,8 +1245,39 @@ export default function GaiaClientFiche() {
                 Aucune facture pour cet exercice.
               </div>
             ) : (
-              <div className="rounded border border-border/60">
-                <Accordion type="multiple">
+              <>
+                {/* Camembert : CA HT par type de jeu */}
+                {caParType.length > 0 && (
+                  <div className="mb-4 grid grid-cols-[minmax(0,118px)_1fr] gap-3 items-center rounded border border-border/60 p-3">
+                    <div className="h-[118px]">
+                      <DonutHoverCenter
+                        data={caParType.filter((t) => t.value > 0).map((t) => ({ name: t.name, value: t.value, color: t.color }))}
+                        total={caParTypeTotal}
+                        totalLabel="CA HT"
+                        innerRadius={38}
+                        outerRadius={58}
+                        paddingAngle={2}
+                        formatTotal={(v) => eur(Number(v))}
+                        formatValue={(v) => `${eur(v)} (${caParTypeTotal > 0 ? ((v / caParTypeTotal) * 100).toFixed(0) : "0"} %)`}
+                      />
+                    </div>
+                    <ul className="min-w-0 space-y-1">
+                      {caParType.map((t) => {
+                        const pct = caParTypeTotal > 0 ? (t.value / caParTypeTotal) * 100 : 0;
+                        return (
+                          <li key={t.name} className="flex items-center gap-2 text-xs">
+                            <span className="inline-block h-2.5 w-2.5 flex-shrink-0 rounded-sm" style={{ background: t.color }} />
+                            <span className="truncate flex-1 font-medium">{t.name}</span>
+                            <span className="tabular-nums text-muted-foreground">{eur(t.value)}</span>
+                            <span className="tabular-nums text-muted-foreground w-9 text-right">{pct.toFixed(0)}%</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+                <div className="rounded border border-border/60">
+                  <Accordion type="multiple">
                   {caFactures.map((f) => (
                     <AccordionItem key={f.n_fact} value={f.n_fact} className="border-border/60 px-3 last:border-b-0">
                       <AccordionTrigger className="py-2 text-xs hover:no-underline">
@@ -1274,7 +1319,8 @@ export default function GaiaClientFiche() {
                     </AccordionItem>
                   ))}
                 </Accordion>
-              </div>
+                </div>
+              </>
             )}
           </div>
         </SheetContent>

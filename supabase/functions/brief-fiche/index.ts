@@ -245,15 +245,22 @@ Deno.serve(async (req) => {
     }
 
     // ── L'interprétation ──────────────────────────────────────────────────────
+    // claude-sonnet-5 raisonne par défaut (thinking adaptatif). Avec un max_tokens
+    // trop bas (700), tout le budget partait dans la réflexion → aucun bloc de texte
+    // → « Aucun texte renvoyé ». On donne de la marge et on borne la réflexion
+    // (effort low) : un brief est une courte interprétation, pas du raisonnement lourd.
     const rep = await anthropicJson(ANTHROPIC_KEY, {
-      model: MODEL, max_tokens: 700, system: PROMPT,
+      model: MODEL, max_tokens: 2000, system: PROMPT,
+      thinking: { type: 'adaptive' },
+      output_config: { effort: 'low' },
       messages: [{ role: 'user', content: `FAITS VÉRIFIÉS :\n\n${JSON.stringify(faits, null, 2)}` }],
     });
     const contenu: string = (rep?.content ?? []).find((b: any) => b.type === 'text')?.text?.trim() ?? '';
     if (!contenu) {
-      // Sans le corps réel, « échec » ne dit rien : modèle refusé, quota et format
-      // inattendu se ressemblent tous vus d'ici.
-      return json({ error: 'Aucun texte renvoyé par le modèle', modele: MODEL, reponse: rep }, 502);
+      // Message parlant pour le diagnostic : la raison d'arrêt distingue refus,
+      // troncature (max_tokens) et format inattendu.
+      const stop = rep?.stop_reason ?? 'inconnu';
+      return json({ error: `Le modèle n'a pas renvoyé de texte (arrêt : ${stop}).`, modele: MODEL, stop_reason: stop, reponse: rep }, 502);
     }
 
     const { error: eMaj } = await admin.from('fiche_briefs').upsert({

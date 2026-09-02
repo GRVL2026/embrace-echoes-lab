@@ -1,16 +1,28 @@
--- Ventilation du CA d'un client par FACTURE, pour l'exercice cliqué sur la fiche client.
+-- Ventilation du CA d'un client par FACTURE puis par LIGNE (modèle + type de jeu),
+-- pour l'exercice cliqué sur la fiche client.
 --
--- La fiche ne charge que les 10 dernières LIGNES de vente (limite front) : insuffisant pour
--- une ventilation complète et juste. On agrège donc en base, par n_fact, sur l'année demandée
--- (une ligne par facture, montant = somme HT des lignes), ce qui évite aussi le plafond de
--- 1000 lignes de PostgREST côté client.
+-- La fiche ne charge que les 10 dernières lignes de vente (limite front) : insuffisant.
+-- On renvoie ici TOUTES les lignes de l'année (jointes au catalogue ERP pour le modèle et
+-- la famille), le front les regroupe par facture (total + détail dépliable). L'agrégation/
+-- jointure en base évite aussi le plafond de 1000 lignes de PostgREST côté client.
 --
--- SECURITY DEFINER (contourne la RLS) → réservé admin/direction, comme la fiche client
--- (canAccessGaia). Casts défensifs sur invoice_date / montant_ht au cas où le type source
--- serait du texte.
+-- SECURITY DEFINER (contourne la RLS) → réservé admin/direction, comme la fiche client.
+-- catalogue_erp ne contient que les articles ACTIFS : description peut être NULL pour un
+-- article retiré → on retombe sur le code_article. Casts défensifs (types source parfois texte).
 
-create or replace function public.get_client_factures(_codes text[], _annee int)
-returns table(n_fact text, invoice_date date, montant_ht numeric, nb_lignes int)
+-- Ancienne version niveau-facture, remplacée par la version niveau-ligne ci-dessous.
+drop function if exists public.get_client_factures(text[], int);
+
+create or replace function public.get_client_ventes_lignes(_codes text[], _annee int)
+returns table(
+  n_fact       text,
+  invoice_date date,
+  code_article text,
+  modele       text,
+  famille      text,
+  qty          numeric,
+  montant_ht   numeric
+)
 language plpgsql stable security definer set search_path = public
 as $$
 begin
@@ -20,17 +32,20 @@ begin
 
   return query
   select v.n_fact,
-         max(v.invoice_date::date)                as invoice_date,
-         sum(coalesce(v.montant_ht::numeric, 0))  as montant_ht,
-         count(*)::int                            as nb_lignes
+         v.invoice_date::date                      as invoice_date,
+         v.code_article,
+         coalesce(ce.description, v.code_article)   as modele,
+         ce.famille                                 as famille,
+         coalesce(v.qty::numeric, 0)                as qty,
+         coalesce(v.montant_ht::numeric, 0)         as montant_ht
   from public.gaia_ventes v
+  left join public.catalogue_erp ce on ce.code = v.code_article
   where v.code_client = any(_codes)
     and v.n_fact is not null
     and v.invoice_date is not null
     and extract(year from v.invoice_date::date)::int = _annee
-  group by v.n_fact
-  order by max(v.invoice_date::date) desc;
+  order by v.invoice_date::date desc, v.n_fact, v.montant_ht::numeric desc;
 end;
 $$;
 
-grant execute on function public.get_client_factures(text[], int) to authenticated;
+grant execute on function public.get_client_ventes_lignes(text[], int) to authenticated;

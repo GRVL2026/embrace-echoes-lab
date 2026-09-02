@@ -70,6 +70,7 @@ type PipelineDoc = {
 };
 type ReparationDoc = PipelineDoc;
 type Vente = { code_client: string; n_fact: string | null; code_article: string | null; invoice_date: string | null; qty: number | null; montant_ht: number | string | null; classe_article?: string | null };
+type CaLigne = { n_fact: string; invoice_date: string; code_article: string | null; modele: string | null; famille: string | null; qty: number | string | null; montant_ht: number | string | null };
 
 const eur = (n: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);
@@ -206,20 +207,32 @@ export default function GaiaClientFiche() {
   const commandes = fiche?.commandes ?? [];
   const ventes = fiche?.ventes ?? [];
 
-  // Ventilation du CA par facture (agrégée en base, chargée à l'ouverture du panneau).
+  // Ventilation du CA par facture puis par ligne (modèle + type), chargée à l'ouverture.
   const codesKey = (fiche?.codes ?? []).join(",");
-  const { data: caFactures = [], isFetching: caFacturesLoading } = useQuery({
-    queryKey: ["client-factures", openCaFactures, codesKey],
+  const { data: caLignes = [], isFetching: caFacturesLoading } = useQuery({
+    queryKey: ["client-ventes-lignes", openCaFactures, codesKey],
     enabled: openCaFactures !== null && (fiche?.codes ?? []).length > 0,
-    queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc("get_client_factures", {
+    queryFn: async (): Promise<CaLigne[]> => {
+      const { data, error } = await (supabase as any).rpc("get_client_ventes_lignes", {
         _codes: fiche?.codes ?? [],
         _annee: openCaFactures,
       });
       if (error) throw error;
-      return (data ?? []) as { n_fact: string; invoice_date: string; montant_ht: number; nb_lignes: number }[];
+      return (data ?? []) as CaLigne[];
     },
   });
+  // Regroupement des lignes par facture : total + détail dépliable (modèle/type).
+  const caFactures = useMemo(() => {
+    const map = new Map<string, { n_fact: string; invoice_date: string; montant: number; lignes: CaLigne[] }>();
+    for (const l of caLignes as CaLigne[]) {
+      const g = map.get(l.n_fact) ?? { n_fact: l.n_fact, invoice_date: l.invoice_date, montant: 0, lignes: [] };
+      g.montant += Number(l.montant_ht ?? 0);
+      if (l.invoice_date && String(l.invoice_date) > String(g.invoice_date)) g.invoice_date = l.invoice_date;
+      g.lignes.push(l);
+      map.set(l.n_fact, g);
+    }
+    return Array.from(map.values()).sort((a, b) => String(b.invoice_date).localeCompare(String(a.invoice_date)));
+  }, [caLignes]);
   const ventes12m = fiche?.ventes12m ?? [];
   const firstSale = fiche?.firstSale ?? null;
   const reparations = fiche?.reparations ?? [];
@@ -1204,7 +1217,7 @@ export default function GaiaClientFiche() {
             <SheetDescription>
               {caFacturesLoading
                 ? "Chargement des factures…"
-                : `${caFactures.length} facture${caFactures.length > 1 ? "s" : ""} · total ${eur(caFactures.reduce((n, f) => n + Number(f.montant_ht ?? 0), 0))}`}
+                : `${caFactures.length} facture${caFactures.length > 1 ? "s" : ""} · total ${eur(caFactures.reduce((n, f) => n + Number(f.montant ?? 0), 0))} — déplie une facture pour le modèle et le type`}
             </SheetDescription>
           </SheetHeader>
 
@@ -1218,30 +1231,49 @@ export default function GaiaClientFiche() {
                 Aucune facture pour cet exercice.
               </div>
             ) : (
-              <div className="overflow-auto rounded border border-border/60">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
-                    <tr>
-                      <th className="px-2 py-2 text-left">Facture</th>
-                      <th className="px-2 py-2 text-right w-24">Date</th>
-                      <th className="px-2 py-2 text-right w-28">Montant HT</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {caFactures.map((f) => (
-                      <tr key={f.n_fact} className="border-t border-border/60">
-                        <td className="px-2 py-2 font-mono text-xs">
-                          {f.n_fact}
-                          {f.nb_lignes > 1 && (
-                            <span className="ml-1 text-[10px] text-muted-foreground">· {f.nb_lignes} lignes</span>
-                          )}
-                        </td>
-                        <td className="px-2 py-2 text-right text-xs tabular-nums text-muted-foreground">{dateShort(f.invoice_date)}</td>
-                        <td className="px-2 py-2 text-right font-medium tabular-nums">{eur(Number(f.montant_ht ?? 0))}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="rounded border border-border/60">
+                <Accordion type="multiple">
+                  {caFactures.map((f) => (
+                    <AccordionItem key={f.n_fact} value={f.n_fact} className="border-border/60 px-3 last:border-b-0">
+                      <AccordionTrigger className="py-2 text-xs hover:no-underline">
+                        <div className="flex flex-1 items-center gap-3 pr-2 text-left">
+                          <span className="font-mono">{f.n_fact}</span>
+                          <span className="text-muted-foreground">{dateShort(f.invoice_date)}</span>
+                          <span className="ml-auto font-semibold tabular-nums">{eur(Number(f.montant ?? 0))}</span>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="pb-3">
+                        <table className="w-full text-xs">
+                          <thead className="text-[10px] uppercase text-muted-foreground">
+                            <tr>
+                              <th className="py-1 text-left">Modèle</th>
+                              <th className="py-1 text-left">Type</th>
+                              <th className="py-1 text-right w-10">Qté</th>
+                              <th className="py-1 text-right w-24">Montant HT</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {f.lignes.map((l, i) => (
+                              <tr key={(l.code_article ?? "") + i} className="border-t border-border/40 align-top">
+                                <td className="py-1 pr-2">
+                                  <div className="truncate">{l.modele ?? l.code_article ?? "—"}</div>
+                                  {l.code_article && <div className="font-mono text-[9px] text-muted-foreground">{l.code_article}</div>}
+                                </td>
+                                <td className="py-1 pr-2">
+                                  {l.famille
+                                    ? <Badge variant="outline" className="h-4 px-1 text-[9px] font-normal">{l.famille}</Badge>
+                                    : <span className="text-muted-foreground">—</span>}
+                                </td>
+                                <td className="py-1 text-right tabular-nums">{Number(l.qty ?? 0)}</td>
+                                <td className="py-1 text-right tabular-nums">{eur(Number(l.montant_ht ?? 0))}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
               </div>
             )}
           </div>

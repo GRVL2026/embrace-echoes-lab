@@ -3905,16 +3905,19 @@ export type Database = {
           code_client: string
         }[]
       }
-      get_client_factures: {
+      get_client_reactivation: { Args: { _code: string }; Returns: Json }
+      get_client_ventes_lignes: {
         Args: { _annee: number; _codes: string[] }
         Returns: {
+          code_article: string
+          famille: string
           invoice_date: string
+          modele: string
           montant_ht: number
           n_fact: string
-          nb_lignes: number
+          qty: number
         }[]
       }
-      get_client_reactivation: { Args: { _code: string }; Returns: Json }
       get_cout_article_famille: {
         Args: { _famille: string }
         Returns: {

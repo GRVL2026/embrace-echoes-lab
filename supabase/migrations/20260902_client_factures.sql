@@ -1,19 +1,22 @@
 -- Ventilation du CA d'un client par FACTURE puis par LIGNE (modèle + type de jeu),
--- pour l'exercice cliqué sur la fiche client.
+-- pour l'EXERCICE cliqué sur la fiche client.
 --
--- La fiche ne charge que les 10 dernières lignes de vente (limite front) : insuffisant.
--- On renvoie ici TOUTES les lignes de l'année (jointes au catalogue ERP pour le modèle et
--- la famille), le front les regroupe par facture (total + détail dépliable). L'agrégation/
--- jointure en base évite aussi le plafond de 1000 lignes de PostgREST côté client.
+-- IMPORTANT — même base que la carte CA (vue v_gaia_ca_client) pour que les totaux collent :
+--   • EXERCICE FISCAL (sept N-1 → août N), pas l'année civile. La carte « CA 2026 » = les
+--     factures du 2025-09-01 au 2026-08-31. (v_gaia_ca_client fait extract(year from date+4 mois).)
+--   • HORS ÉCO-TAXE (codes de v_gaia_ecotax_codes exclus).
+-- Vérifié sur EURL Bananas : gaia_ventes fiscal 2026 hors éco-taxe = 270 234 € = le CA affiché.
 --
+-- Chaque LIGNE est jointe au catalogue ERP pour le modèle (description) et le type (famille) ;
+-- le front regroupe par facture (total + détail dépliable) et agrège par type (camembert).
 -- SECURITY DEFINER (contourne la RLS) → réservé admin/direction, comme la fiche client.
--- catalogue_erp ne contient que les articles ACTIFS : description peut être NULL pour un
--- article retiré → on retombe sur le code_article. Casts défensifs (types source parfois texte).
+-- catalogue_erp = articles ACTIFS seulement : description NULL pour un article retiré → on
+-- retombe sur le code_article. Casts défensifs (types source parfois texte).
 
--- Ancienne version niveau-facture, remplacée par la version niveau-ligne ci-dessous.
 drop function if exists public.get_client_factures(text[], int);
+drop function if exists public.get_client_ventes_lignes(text[], int);
 
-create or replace function public.get_client_ventes_lignes(_codes text[], _annee int)
+create function public.get_client_ventes_lignes(_codes text[], _annee int)
 returns table(
   n_fact       text,
   invoice_date date,
@@ -43,7 +46,9 @@ begin
   where v.code_client = any(_codes)
     and v.n_fact is not null
     and v.invoice_date is not null
-    and extract(year from v.invoice_date::date)::int = _annee
+    and v.invoice_date::date >= make_date(_annee - 1, 9, 1)
+    and v.invoice_date::date <  make_date(_annee, 9, 1)
+    and v.code_article not in (select code from public.v_gaia_ecotax_codes)
   order by v.invoice_date::date desc, v.n_fact, v.montant_ht::numeric desc;
 end;
 $$;

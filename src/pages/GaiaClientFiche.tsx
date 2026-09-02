@@ -110,6 +110,8 @@ export default function GaiaClientFiche() {
   const [copilotAnswer, setCopilotAnswer] = useState<string>("");
   const [copilotLoading, setCopilotLoading] = useState(false);
   const [openParcFamille, setOpenParcFamille] = useState<string | null>(null);
+  // Exercice dont on affiche la ventilation du CA par facture (null = panneau fermé).
+  const [openCaFactures, setOpenCaFactures] = useState<number | null>(null);
 
   const { data: fiche, isPending: loading } = useQuery({
     queryKey: ["gaia-client", clientName],
@@ -203,6 +205,21 @@ export default function GaiaClientFiche() {
   const parc = fiche?.parc ?? [];
   const commandes = fiche?.commandes ?? [];
   const ventes = fiche?.ventes ?? [];
+
+  // Ventilation du CA par facture (agrégée en base, chargée à l'ouverture du panneau).
+  const codesKey = (fiche?.codes ?? []).join(",");
+  const { data: caFactures = [], isFetching: caFacturesLoading } = useQuery({
+    queryKey: ["client-factures", openCaFactures, codesKey],
+    enabled: openCaFactures !== null && (fiche?.codes ?? []).length > 0,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("get_client_factures", {
+        _codes: fiche?.codes ?? [],
+        _annee: openCaFactures,
+      });
+      if (error) throw error;
+      return (data ?? []) as { n_fact: string; invoice_date: string; montant_ht: number; nb_lignes: number }[];
+    },
+  });
   const ventes12m = fiche?.ventes12m ?? [];
   const firstSale = fiche?.firstSale ?? null;
   const reparations = fiche?.reparations ?? [];
@@ -438,9 +455,18 @@ export default function GaiaClientFiche() {
           <h2 className="font-display text-xl sm:text-2xl font-bold break-words">{clientName}</h2>
 
           <div className="mt-4 grid grid-cols-2 lg:grid-cols-3 gap-3">
-            {/* CA exercice courant */}
-            <div className="rounded-lg border border-border/60 bg-background/40 p-3">
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">CA {currentYear?.[0] ?? "—"}</div>
+            {/* CA exercice courant — cliquable : ouvre la ventilation par facture */}
+            <button
+              type="button"
+              disabled={!currentYear}
+              onClick={() => currentYear && setOpenCaFactures(Number(currentYear[0]))}
+              className="rounded-lg border border-border/60 bg-background/40 p-3 text-left transition-colors hover:border-primary/50 hover:bg-primary/5 disabled:cursor-default disabled:hover:border-border/60 disabled:hover:bg-background/40"
+              title={currentYear ? "Voir la ventilation du CA par facture" : undefined}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">CA {currentYear?.[0] ?? "—"}</div>
+                {currentYear && <FileText className="h-3 w-3 text-muted-foreground" />}
+              </div>
               <div className="mt-1 font-display text-xl font-bold">{eur(currentYear?.[1] ?? 0)}</div>
               {evolPct !== null && (
                 <div className={`mt-1 inline-flex items-center gap-1 text-[11px] font-medium ${evolPct >= 0 ? "text-secondary" : "text-destructive"}`}>
@@ -448,7 +474,7 @@ export default function GaiaClientFiche() {
                   {evolPct >= 0 ? "+" : ""}{evolPct.toFixed(1)}% vs N-1
                 </div>
               )}
-            </div>
+            </button>
             {/* Marge estimée — admin/direction uniquement */}
             {canMargeClient && (
             <div className="rounded-lg border border-border/60 bg-background/40 p-3">
@@ -1164,6 +1190,60 @@ export default function GaiaClientFiche() {
                 </div>
               );
             })()}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Panneau Ventilation du CA par facture (carte CA cliquable) */}
+      <Sheet open={openCaFactures !== null} onOpenChange={(o) => !o && setOpenCaFactures(null)}>
+        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="font-display inline-flex items-center gap-2">
+              <FileText className="h-4 w-4 text-primary" /> Ventilation du CA {openCaFactures ?? ""}
+            </SheetTitle>
+            <SheetDescription>
+              {caFacturesLoading
+                ? "Chargement des factures…"
+                : `${caFactures.length} facture${caFactures.length > 1 ? "s" : ""} · total ${eur(caFactures.reduce((n, f) => n + Number(f.montant_ht ?? 0), 0))}`}
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-4">
+            {caFacturesLoading ? (
+              <div className="flex items-center justify-center py-10 text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin" />
+              </div>
+            ) : caFactures.length === 0 ? (
+              <div className="rounded border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
+                Aucune facture pour cet exercice.
+              </div>
+            ) : (
+              <div className="overflow-auto rounded border border-border/60">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
+                    <tr>
+                      <th className="px-2 py-2 text-left">Facture</th>
+                      <th className="px-2 py-2 text-right w-24">Date</th>
+                      <th className="px-2 py-2 text-right w-28">Montant HT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {caFactures.map((f) => (
+                      <tr key={f.n_fact} className="border-t border-border/60">
+                        <td className="px-2 py-2 font-mono text-xs">
+                          {f.n_fact}
+                          {f.nb_lignes > 1 && (
+                            <span className="ml-1 text-[10px] text-muted-foreground">· {f.nb_lignes} lignes</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-2 text-right text-xs tabular-nums text-muted-foreground">{dateShort(f.invoice_date)}</td>
+                        <td className="px-2 py-2 text-right font-medium tabular-nums">{eur(Number(f.montant_ht ?? 0))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </SheetContent>
       </Sheet>

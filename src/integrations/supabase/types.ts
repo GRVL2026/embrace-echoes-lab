@@ -3905,6 +3905,14 @@ export type Database = {
           code_client: string
         }[]
       }
+      get_client_ca_par_type: {
+        Args: { _annee: number; _codes: string[] }
+        Returns: {
+          famille: string
+          montant_ht: number
+          nb_lignes: number
+        }[]
+      }
       get_client_reactivation: { Args: { _code: string }; Returns: Json }
       get_client_ventes_lignes: {
         Args: { _annee: number; _codes: string[] }

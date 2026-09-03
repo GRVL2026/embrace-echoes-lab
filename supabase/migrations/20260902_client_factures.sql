@@ -54,3 +54,39 @@ end;
 $$;
 
 grant execute on function public.get_client_ventes_lignes(text[], int) to authenticated;
+
+
+-- CA HT par TYPE DE JEU (famille) pour l'exercice — depuis v_gaia_lignes, la MÊME source que
+-- la carte CA. Contrairement à get_client_ventes_lignes (basée sur gaia_ventes, déc. 2024 →
+-- aujourd'hui), v_gaia_lignes couvre TOUT l'historique → le camembert marche pour les vieux
+-- exercices aussi, et son total colle exactement au CA affiché. v_gaia_lignes n'a pas de
+-- n° de facture : d'où deux fonctions distinctes (type = tous exercices, factures = récents).
+
+drop function if exists public.get_client_ca_par_type(text[], int);
+
+create function public.get_client_ca_par_type(_codes text[], _annee int)
+returns table(famille text, montant_ht numeric, nb_lignes int)
+language plpgsql stable security definer set search_path = public
+as $$
+begin
+  if not (public.is_admin() or public.is_direction()) then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+
+  return query
+  select coalesce(nullif(trim(ce.famille), ''), 'Non catégorisé') as famille,
+         sum(l.montant_ht::numeric)                                as montant_ht,
+         count(*)::int                                             as nb_lignes
+  from public.v_gaia_lignes l
+  left join public.catalogue_erp ce on ce.code = l.code_article
+  where l.code_client = any(_codes)
+    and l.invoice_date is not null
+    and l.invoice_date >= make_date(_annee - 1, 9, 1)
+    and l.invoice_date <  make_date(_annee, 9, 1)
+    and l.code_article not in (select code from public.v_gaia_ecotax_codes)
+  group by coalesce(nullif(trim(ce.famille), ''), 'Non catégorisé')
+  order by sum(l.montant_ht::numeric) desc;
+end;
+$$;
+
+grant execute on function public.get_client_ca_par_type(text[], int) to authenticated;

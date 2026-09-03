@@ -233,19 +233,27 @@ export default function GaiaClientFiche() {
     }
     return Array.from(map.values()).sort((a, b) => String(b.invoice_date).localeCompare(String(a.invoice_date)));
   }, [caLignes]);
-  // Répartition du CA HT par type de jeu (famille catalogue) — pour le camembert.
+  // CA HT par type de jeu — depuis v_gaia_lignes (RPC dédiée), MÊME source que la carte CA :
+  // marche pour TOUS les exercices (y compris anciens) et le total colle au CA affiché.
+  const { data: caTypeData = [], isFetching: caTypeLoading } = useQuery({
+    queryKey: ["client-ca-par-type", openCaFactures, codesKey],
+    enabled: openCaFactures !== null && (fiche?.codes ?? []).length > 0,
+    queryFn: async (): Promise<{ famille: string; montant_ht: number; nb_lignes: number }[]> => {
+      const { data, error } = await (supabase as any).rpc("get_client_ca_par_type", {
+        _codes: fiche?.codes ?? [],
+        _annee: openCaFactures,
+      });
+      if (error) throw error;
+      return (data ?? []) as { famille: string; montant_ht: number; nb_lignes: number }[];
+    },
+  });
   const caParType = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const l of caLignes as CaLigne[]) {
-      const fam = (l.famille && String(l.famille).trim()) || "Non catégorisé";
-      map.set(fam, (map.get(fam) ?? 0) + Number(l.montant_ht ?? 0));
-    }
     const palette = ["#8b5cf6", "#22d3ee", "#34d399", "#f5a524", "#f87171", "#a78bfa", "#38bdf8", "#fb923c", "#f472b6", "#4ade80"];
-    return Array.from(map.entries())
-      .map(([name, value]) => ({ name, value }))
+    return (caTypeData as { famille: string; montant_ht: number }[])
+      .map((t) => ({ name: t.famille || "Non catégorisé", value: Number(t.montant_ht ?? 0) }))
       .sort((a, b) => b.value - a.value)
       .map((d, i) => ({ ...d, color: palette[i % palette.length] }));
-  }, [caLignes]);
+  }, [caTypeData]);
   const caParTypeTotal = caParType.reduce((n, t) => n + t.value, 0);
   const ventes12m = fiche?.ventes12m ?? [];
   const firstSale = fiche?.firstSale ?? null;
@@ -736,9 +744,12 @@ export default function GaiaClientFiche() {
                       const evo = prev && prev[1] > 0 ? ((amount - prev[1]) / prev[1]) * 100 : null;
                       const isCurrent = idx === 0;
                       return (
-                        <div
+                        <button
                           key={year}
-                          className={`flex-shrink-0 rounded-lg border p-2.5 min-w-[120px] ${
+                          type="button"
+                          onClick={() => setOpenCaFactures(Number(year))}
+                          title={`Voir la situation de l'exercice ${year}`}
+                          className={`flex-shrink-0 rounded-lg border p-2.5 min-w-[120px] text-left transition-colors hover:border-primary hover:bg-primary/5 ${
                             isCurrent
                               ? "border-primary/50 bg-primary/10"
                               : "border-border/60 bg-background/40"
@@ -752,7 +763,7 @@ export default function GaiaClientFiche() {
                               {evo >= 0 ? "+" : ""}{evo.toFixed(1)}%
                             </div>
                           )}
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
@@ -1229,20 +1240,20 @@ export default function GaiaClientFiche() {
               <FileText className="h-4 w-4 text-primary" /> Ventilation du CA {openCaFactures ?? ""}
             </SheetTitle>
             <SheetDescription>
-              {caFacturesLoading
-                ? "Chargement des factures…"
-                : `${caFactures.length} facture${caFactures.length > 1 ? "s" : ""} · total ${eur(caFactures.reduce((n, f) => n + Number(f.montant ?? 0), 0))} — déplie une facture pour le modèle et le type`}
+              {(caFacturesLoading || caTypeLoading)
+                ? "Chargement…"
+                : `Total ${eur(caParTypeTotal)}${caFactures.length > 0 ? ` · ${caFactures.length} facture${caFactures.length > 1 ? "s" : ""}` : ""}`}
             </SheetDescription>
           </SheetHeader>
 
           <div className="mt-4">
-            {caFacturesLoading ? (
+            {(caFacturesLoading || caTypeLoading) ? (
               <div className="flex items-center justify-center py-10 text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin" />
               </div>
-            ) : caFactures.length === 0 ? (
+            ) : caParType.length === 0 ? (
               <div className="rounded border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
-                Aucune facture pour cet exercice.
+                Aucune vente pour cet exercice.
               </div>
             ) : (
               <>
@@ -1276,6 +1287,7 @@ export default function GaiaClientFiche() {
                     </ul>
                   </div>
                 )}
+                {caFactures.length > 0 ? (
                 <div className="rounded border border-border/60">
                   <Accordion type="multiple">
                   {caFactures.map((f) => (
@@ -1320,6 +1332,11 @@ export default function GaiaClientFiche() {
                   ))}
                 </Accordion>
                 </div>
+                ) : (
+                  <div className="rounded border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground">
+                    Détail par facture disponible pour les exercices récents (depuis déc. 2024). Le CA par type ci-dessus reste complet.
+                  </div>
+                )}
               </>
             )}
           </div>

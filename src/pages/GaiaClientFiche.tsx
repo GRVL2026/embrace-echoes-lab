@@ -1334,7 +1334,7 @@ export default function GaiaClientFiche() {
                 </div>
                 ) : (
                   <div className="rounded border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground">
-                    Détail par facture disponible pour les exercices récents (depuis déc. 2024). Le CA par type ci-dessus reste complet.
+                    Aucun document de facturation pour cet exercice.
                   </div>
                 )}
               </>

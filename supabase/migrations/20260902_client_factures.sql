@@ -34,13 +34,14 @@ begin
   end if;
 
   return query
+  -- Récent : gaia_ventes (déc. 2024 → aujourd'hui), n° de FACTURE.
   select v.n_fact,
-         v.invoice_date::date                      as invoice_date,
+         v.invoice_date::date,
          v.code_article,
-         coalesce(ce.description, v.code_article)   as modele,
-         ce.famille                                 as famille,
-         coalesce(v.qty::numeric, 0)                as qty,
-         coalesce(v.montant_ht::numeric, 0)         as montant_ht
+         coalesce(ce.description, v.code_article),
+         ce.famille,
+         coalesce(v.qty::numeric, 0),
+         coalesce(v.montant_ht::numeric, 0)
   from public.gaia_ventes v
   left join public.catalogue_erp ce on ce.code = v.code_article
   where v.code_client = any(_codes)
@@ -49,7 +50,25 @@ begin
     and v.invoice_date::date >= make_date(_annee - 1, 9, 1)
     and v.invoice_date::date <  make_date(_annee, 9, 1)
     and v.code_article not in (select code from public.v_gaia_ecotax_codes)
-  order by v.invoice_date::date desc, v.n_fact, v.montant_ht::numeric desc;
+  union all
+  -- Archive : gaia_historique (sept. 2022 → nov. 2024), n° de DOCUMENT (n_cde, type FH).
+  -- Les deux tables sont disjointes par date (archive ≤ 20/11, récent ≥ 03/12) → pas de doublon.
+  select h.n_cde,
+         h.invoice_date::date,
+         h.code_article,
+         coalesce(ce.description, h.code_article),
+         ce.famille,
+         coalesce(h.qty::numeric, 0),
+         coalesce(h.montant_ht::numeric, 0)
+  from public.gaia_historique h
+  left join public.catalogue_erp ce on ce.code = h.code_article
+  where h.code_client = any(_codes)
+    and h.n_cde is not null
+    and h.invoice_date is not null
+    and h.invoice_date::date >= make_date(_annee - 1, 9, 1)
+    and h.invoice_date::date <  make_date(_annee, 9, 1)
+    and h.code_article not in (select code from public.v_gaia_ecotax_codes)
+  order by 2 desc, 1, 7 desc;
 end;
 $$;
 

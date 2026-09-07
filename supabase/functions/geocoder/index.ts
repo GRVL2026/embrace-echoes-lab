@@ -309,7 +309,7 @@ async function geocodeClientsEtranger(): Promise<{
   };
 
   // Regroupement par (ville nettoyée, pays), hors pays couverts par la BAN
-  const groups = new Map<string, { ville: string; pays: string; clients: { id: string; attempts: number }[] }>();
+  const groups = new Map<string, { ville: string; pays: string; clients: { id: string; pays: string; attempts: number }[] }>();
   const sansVille: { id: string; pays: string; attempts: number }[] = [];
 
   for (const r of (data || []) as any[]) {
@@ -462,7 +462,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ ok: true, clients, etranger, prospects }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
-  } catch (e) {
+  } catch (e: any) {
     console.error(e);
     return new Response(JSON.stringify({ error: String(e?.message || e) }), {
       status: 500,

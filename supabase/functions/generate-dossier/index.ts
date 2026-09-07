@@ -126,6 +126,7 @@ Deno.serve(async (req: Request) => {
 
     const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
     if (!ANTHROPIC_API_KEY) return json({ error: "ANTHROPIC_API_KEY non configurée" }, 500);
+    const anthropicKey: string = ANTHROPIC_API_KEY;
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -164,7 +165,7 @@ Deno.serve(async (req: Request) => {
     const catalogNotEmpty = (products ?? []).length > 0;
 
     async function callClaude(system: string): Promise<any> {
-      return await anthropicJson(ANTHROPIC_API_KEY, {
+      return await anthropicJson(anthropicKey, {
         model: MODEL,
         max_tokens: 16000,
         system,

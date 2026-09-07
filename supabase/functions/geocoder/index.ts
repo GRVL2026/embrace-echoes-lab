@@ -321,8 +321,8 @@ async function geocodeClientsEtranger(): Promise<{
     if (!ville) { sansVille.push({ id, pays, attempts }); continue; }
     const vNorm = ville.toUpperCase();
     const key = `${vNorm}|${pays}`;
-    const g = groups.get(key) || { ville: vNorm, pays, clients: [] };
-    g.clients.push({ id, attempts });
+    const g = groups.get(key) || { ville: vNorm, pays, clients: [] as { id: string; pays: string; attempts: number }[] };
+    g.clients.push({ id, pays, attempts });
     groups.set(key, g);
   }
 

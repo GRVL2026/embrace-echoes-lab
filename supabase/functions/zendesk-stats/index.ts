@@ -207,7 +207,7 @@ async function fetchStats() {
       for (const m of metrics.ticket_metrics ?? []) {
         if (m.reply_time_in_minutes?.calendar != null) map.set(m.ticket_id, m.reply_time_in_minutes.calendar);
       }
-      const vals = ids.map((id: number) => map.get(id)).filter((v): v is number => typeof v === 'number');
+      const vals = ids.map((id: number) => map.get(id)).filter((v: number | undefined): v is number => typeof v === 'number');
       if (vals.length) avgFirstReplyMinutes = Math.round(vals.reduce((a: number, b: number) => a + b, 0) / vals.length);
     }
   } catch { avgFirstReplyMinutes = null; }

@@ -134,26 +134,56 @@ export default function Clients() {
   const [stateFilter, setStateFilter] = useState<EntrepriseState | "all">("all");
   const [kindFilter, setKindFilter] = useState<ClientKind | "all">("all");
   const [sortKey, setSortKey] = useState<SortKey>("ca_current");
+  // Exercice choisi par l'utilisateur (null = défaut intelligent ci-dessous).
+  const [selectedExercice, setSelectedExercice] = useState<number | null>(null);
 
-  const { data, isPending } = useQuery({
-    queryKey: ["clients-ca-agg"],
+  // Exercices disponibles (alimente le sélecteur) — requête légère et stable.
+  const { data: exercices = [] } = useQuery({
+    queryKey: ["gaia-exercices"],
     enabled: canAccessDashboard,
-    queryFn: async () => {
-      const c: any = supabase;
-      // 1. Exercices disponibles via RPC (pas de risque de troncature)
-      const { data: exYears, error: exErr } = await c.rpc("get_gaia_exercices");
-      if (exErr) throw exErr;
-      const years = ((exYears as { annee: number }[]) ?? [])
+    queryFn: async (): Promise<number[]> => {
+      const { data, error } = await (supabase as any).rpc("get_gaia_exercices");
+      if (error) throw error;
+      return ((data as { annee: number }[]) ?? [])
         .map((r) => Number(r.annee))
         .filter((n) => Number.isFinite(n))
         .sort((a, b) => b - a);
-      const current = years[0];
-      const prev = years[1];
+    },
+  });
+
+  // Défaut intelligent : le dernier exercice, SAUF s'il vient de démarrer (< ~45 j depuis le
+  // 1er sept.) → on retombe sur le dernier exercice COMPLET, pour ne pas ouvrir sur une page
+  // vide en début d'exercice. L'utilisateur peut toujours choisir via le sélecteur.
+  const currentFy = useMemo(() => {
+    const now = new Date();
+    const fyStartYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1; // sept = mois 8
+    const daysSinceStart = Math.floor((now.getTime() - new Date(fyStartYear, 8, 1).getTime()) / 86_400_000);
+    return { annee: fyStartYear + 1, daysSinceStart };
+  }, []);
+  const defaultExercice = useMemo(() => {
+    if (exercices.length === 0) return null;
+    const latest = exercices[0];
+    if (latest === currentFy.annee && currentFy.daysSinceStart < 45 && exercices.length > 1) {
+      return exercices[1];
+    }
+    return latest;
+  }, [exercices, currentFy]);
+
+  const exercice = selectedExercice ?? defaultExercice;
+  const prevExercice = exercice != null ? (exercices[exercices.indexOf(exercice) + 1] ?? null) : null;
+
+  const { data, isPending } = useQuery({
+    queryKey: ["clients-ca-agg", exercice, prevExercice],
+    enabled: canAccessDashboard && exercice != null,
+    queryFn: async () => {
+      const c: any = supabase;
+      const current = exercice as number;
+      const prev = prevExercice;
       if (current == null || prev == null) {
         return { rows: [] as Row[], current, prev };
       }
 
-      // 2. CA par client (agrégé côté serveur : une ligne par client, courant + précédent)
+      // CA par client (agrégé côté serveur : une ligne par client, courant + précédent)
       const { data: rows, error } = await c.rpc("get_ca_client", {
         _annee: current,
         _annee_prev: prev,
@@ -391,6 +421,30 @@ export default function Clients() {
           className="pl-9"
         />
       </div>
+
+      {/* Sélecteur d'exercice : par défaut le dernier exercice complet en début d'année. */}
+      {exercices.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <label htmlFor="exercice-select" className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+            Exercice
+          </label>
+          <select
+            id="exercice-select"
+            value={exercice ?? ""}
+            onChange={(e) => setSelectedExercice(Number(e.target.value))}
+            className="rounded-md border border-border bg-card/60 px-2.5 py-1.5 text-sm font-medium text-foreground focus:border-primary focus:outline-none"
+          >
+            {exercices.map((y) => (
+              <option key={y} value={y}>
+                {y}{y === currentFy.annee ? " (en cours)" : ""}
+              </option>
+            ))}
+          </select>
+          {data?.prev != null && (
+            <span className="text-xs text-muted-foreground">comparé à {data.prev}</span>
+          )}
+        </div>
+      )}
 
       {false && isDirection && (
         <div className="flex flex-wrap items-center gap-2">

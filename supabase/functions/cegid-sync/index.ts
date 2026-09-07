@@ -729,7 +729,7 @@ async function authorize(req: Request): Promise<
     // sinon on tente l'auth JWT ci-dessous
   }
 
-  if (!hasBearer) {
+  if (!hasBearer || !authHeader) {
     return { ok: false, status: 403, error: 'header Authorization Bearer manquant' };
   }
 

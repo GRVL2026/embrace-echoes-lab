@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Cog,
   Bell,
+  Plug,
   Building2,
   Gamepad2,
   Grid2x2,
@@ -293,6 +294,14 @@ export const SPACES: Space[] = [
         to: "/admin/notifications",
         icon: Bell,
         match: startsWith("/admin/notifications"),
+      },
+      {
+        key: "reglages.pipedrive",
+        label: "Pipedrive",
+        to: "/admin/pipedrive",
+        icon: Plug,
+        show: (c) => c.isAdmin || c.isDirection,
+        match: startsWith("/admin/pipedrive"),
       },
       {
         key: "reglages.utilisateurs",

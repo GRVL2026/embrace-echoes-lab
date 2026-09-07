@@ -27,6 +27,7 @@ import SuiviProspection from "./pages/SuiviProspection";
 import MaCarte from "./pages/MaCarte";
 import GaiaClientFiche from "./pages/GaiaClientFiche";
 import Clients from "./pages/Clients";
+import PipedriveConnexion from "./pages/PipedriveConnexion";
 import MatriceClients from "./pages/MatriceClients";
 import MatriceFamilles from "./pages/MatriceFamilles";
 import Salle from "./pages/Salle";
@@ -111,6 +112,7 @@ const App = () => (
             <Route path="/admin/gaia/client/:nom" element={<P><GaiaClientFiche /></P>} />
             <Route path="/admin/gaia/revue/:id" element={<P><GaiaRevueView /></P>} />
             <Route path="/admin/notifications" element={<P><NotificationsSettings /></P>} />
+            <Route path="/admin/pipedrive" element={<P><PipedriveConnexion /></P>} />
             <Route path="/admin/entreprises" element={<P><AdminEntreprises /></P>} />
             <Route path="/admin/matrice-clients" element={<P><MatriceClients /></P>} />
             <Route path="/matrice-familles" element={<P><MatriceFamilles /></P>} />

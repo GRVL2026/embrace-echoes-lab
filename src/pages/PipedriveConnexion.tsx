@@ -20,7 +20,14 @@ type Explore = {
   commerciaux?: { id: number; nom: string; email: string }[];
   pipelines?: { id: number; nom: string }[];
   etapes?: { id: number; nom: string; pipeline_id: number; ordre: number }[];
+  champs?: {
+    deal: Champ[];
+    person: Champ[];
+    organization: Champ[];
+  };
 };
+
+type Champ = { nom: string; cle: string; type: string; options?: string[] };
 
 export default function PipedriveConnexion() {
   const { isAdmin, isDirection, isLoading } = useAuth();
@@ -103,6 +110,33 @@ export default function PipedriveConnexion() {
                 </div>
               </div>
             )}
+            {res.champs && (
+              <div className="space-y-2 border-t border-emerald-500/20 pt-3">
+                <div className="text-xs uppercase tracking-wider text-muted-foreground">Champs personnalisés (remplissables)</div>
+                {(["deal", "person", "organization"] as const).map((k) => {
+                  const label = k === "deal" ? "Deal" : k === "person" ? "Contact" : "Société";
+                  const list = res.champs![k] ?? [];
+                  if (list.length === 0) return null;
+                  return (
+                    <div key={k}>
+                      <div className="text-[11px] font-semibold text-foreground/80">{label} ({list.length})</div>
+                      <ul className="mt-1 space-y-0.5">
+                        {list.map((f) => (
+                          <li key={f.cle} className="text-xs text-muted-foreground">
+                            <span className="text-foreground">{f.nom}</span>
+                            <span className="ml-1 text-[10px]">· {f.type}</span>
+                            {f.options && f.options.length > 0 && (
+                              <span className="ml-1 text-[10px]">({f.options.slice(0, 6).join(", ")}{f.options.length > 6 ? "…" : ""})</span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             <details className="text-xs text-muted-foreground">
               <summary className="cursor-pointer">Voir le détail (commerciaux, étapes)</summary>
               <pre className="mt-2 max-h-72 overflow-auto rounded bg-background/60 p-2 text-[11px]">

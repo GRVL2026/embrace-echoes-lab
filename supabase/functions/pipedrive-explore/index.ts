@@ -20,6 +20,18 @@ function apiBase(): string {
   return `https://${d}/api/v1`;
 }
 
+/** Ne garde que les champs PERSONNALISÉS (edit_flag=true) et les décrit simplement. */
+function champsPerso(fields: any): any[] {
+  return ((fields ?? []) as any[])
+    .filter((f) => f?.edit_flag === true)
+    .map((f) => ({
+      nom: f.name,
+      cle: f.key,
+      type: f.field_type,
+      options: Array.isArray(f.options) ? f.options.map((o: any) => o.label) : undefined,
+    }));
+}
+
 async function pd(path: string): Promise<any> {
   const base = apiBase();
   const sep = path.includes("?") ? "&" : "?";
@@ -52,10 +64,13 @@ Deno.serve(async (req) => {
 
   try {
     const me = await pd("/users/me");
-    const [users, pipelines, stages] = await Promise.all([
+    const [users, pipelines, stages, dealFields, personFields, orgFields] = await Promise.all([
       pd("/users"),
       pd("/pipelines"),
       pd("/stages"),
+      pd("/dealFields"),
+      pd("/personFields"),
+      pd("/organizationFields"),
     ]);
     return json({
       ok: true,
@@ -71,6 +86,11 @@ Deno.serve(async (req) => {
       etapes: ((stages ?? []) as any[])
         .map((s) => ({ id: s.id, nom: s.name, pipeline_id: s.pipeline_id, ordre: s.order_nr }))
         .sort((a, b) => (a.pipeline_id - b.pipeline_id) || (a.ordre - b.ordre)),
+      champs: {
+        deal: champsPerso(dealFields),
+        person: champsPerso(personFields),
+        organization: champsPerso(orgFields),
+      },
     });
   } catch (e: any) {
     return json({

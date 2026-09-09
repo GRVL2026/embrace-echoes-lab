@@ -99,8 +99,10 @@ export default function MaCarte() {
   useEffect(() => {
     if (!mapEl.current || mapRef.current) return;
     const map = L.map(mapEl.current, { preferCanvas: true }).setView([46.6, 2.5], 6);
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-      attribution: "&copy; OpenStreetMap &copy; CARTO", maxZoom: 19,
+    // Fond gris clair Esri (sans clé API) — CARTO exige désormais une clé.
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
+      attribution: "Tiles &copy; Esri &mdash; &copy; OpenStreetMap contributors",
+      maxNativeZoom: 16, maxZoom: 19,
     }).addTo(map);
     mapRef.current = map;
     leadLayer.current = L.layerGroup().addTo(map);

@@ -444,9 +444,12 @@ export default function Carte() {
   useEffect(() => {
     if (!mapEl.current || mapRef.current) return;
     const map = L.map(mapEl.current, { preferCanvas: true }).setView([46.6, 2.5], 6);
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-      attribution: "&copy; OpenStreetMap &copy; CARTO",
-      subdomains: "abcd",
+    // Fond gris clair Esri (sans clé API). CARTO impose désormais une clé → tuiles
+    // « API KEY REQUIRED ». Esri « World Light Gray » garde le rendu épuré nécessaire
+    // à la lisibilité des pastilles ; natif jusqu'au zoom 16, sur-échantillonné au-delà.
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
+      attribution: "Tiles &copy; Esri &mdash; &copy; OpenStreetMap contributors",
+      maxNativeZoom: 16,
       maxZoom: 19,
     }).addTo(map);
     mapRef.current = map;

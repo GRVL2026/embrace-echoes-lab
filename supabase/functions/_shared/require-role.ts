@@ -5,7 +5,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-type Role = 'admin' | 'direction' | 'commercial';
+type Role = 'admin' | 'direction' | 'chef_ventes' | 'commercial' | 'prospection';
 
 function jsonErr(status: number, error: string) {
   return new Response(JSON.stringify({ error }), {

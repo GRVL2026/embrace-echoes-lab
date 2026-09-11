@@ -139,11 +139,19 @@ export const SPACES: Space[] = [
     show: (c) => c.canAccessProspection,
     entries: [
       {
+        // Nouveau hub : cockpit unique, démarre par le pipe Pipedrive (JEUX).
+        key: "prospection.cockpit",
+        label: "Cockpit (pipe Pipedrive)",
+        to: "/prospection/cockpit",
+        icon: Target,
+        match: (p) => p === "/prospection/cockpit",
+      },
+      {
         key: "prospection.pipeline",
         label: "Pipeline prospects",
         to: "/prospection",
         icon: Target,
-        match: startsWith("/prospection"),
+        match: (p) => p === "/prospection",
       },
       {
         // Remplace « À relancer » : la gazette de presse locale est le point d'entrée

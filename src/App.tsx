@@ -32,6 +32,7 @@ import MatriceClients from "./pages/MatriceClients";
 import MatriceFamilles from "./pages/MatriceFamilles";
 import Salle from "./pages/Salle";
 import Prospection from "./pages/Prospection";
+import CockpitProspection from "./pages/CockpitProspection";
 import Reconquete from "./pages/Reconquete";
 
 import GaiaCarnet from "./pages/GaiaCarnet";
@@ -87,6 +88,7 @@ const App = () => (
             <Route path="/clients" element={<P><Clients /></P>} />
             <Route path="/salle" element={<P><Salle /></P>} />
             <Route path="/prospection" element={<P><Prospection /></P>} />
+            <Route path="/prospection/cockpit" element={<P><CockpitProspection /></P>} />
             <Route path="/reconquete" element={<P><Reconquete /></P>} />
             <Route path="/carte" element={<P><Carte /></P>} />
 

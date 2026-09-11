@@ -19,7 +19,6 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const MANAGEMENT = ["admin", "direction", "chef_ventes"];
-const DEFAULT_PIPELINE = "JEUX";
 
 function apiBase(): string {
   let d = RAW_DOMAIN.trim().replace(/^https?:\/\//i, "").replace(/\/+$/, "");
@@ -117,58 +116,49 @@ Deno.serve(async (req) => {
         return json({
           ok: true, isManagement: false, ownerForced: true, mapped: false,
           note: "Ton compte Arcade OS n'est pas encore relié à un utilisateur Pipedrive (email non trouvé).",
-          pipeline: null, pipelines: [], stages: [], commerciaux: [], deals: [],
+          pipelines_cibles: [], stages: [], commerciaux: [], deals: [],
         });
       }
       ownerId = myPipedriveId;
     }
 
-    // ---- Résolution du pipeline (JEUX par défaut) ----
+    // ---- Pipelines cibles : JEUX + Flippers fusionnés (les autres sont moins utiles) ----
+    const norm = (s: any) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[^\x00-\x7f]/g, "").trim();
     const pipelines = ((await pd("/pipelines")) ?? []) as any[];
-    const wantPipeline = (p("pipeline") ?? DEFAULT_PIPELINE).toString().toLowerCase();
-    const wantPipelineId = p("pipeline_id");
-    const pipeline =
-      (wantPipelineId && pipelines.find((pl) => String(pl.id) === String(wantPipelineId))) ||
-      pipelines.find((pl) => String(pl.name).toLowerCase() === wantPipeline) ||
-      pipelines.find((pl) => String(pl.name).toLowerCase().includes(wantPipeline)) ||
-      pipelines[0];
-    if (!pipeline) return json({ ok: false, error: "Aucun pipeline trouvé sur ce compte Pipedrive." });
+    const tagOf = (name: string): string | null => {
+      const n = norm(name);
+      if (n.includes("flipper")) return "Flipper";
+      if (n.includes("jeu")) return "Jeux";
+      return null;
+    };
+    const only = norm(p("only")); // '' (les deux), 'jeux', 'flipper'
+    let targets = pipelines.filter((pl) => tagOf(pl.name));
+    if (only.includes("flipper")) targets = targets.filter((pl) => norm(pl.name).includes("flipper"));
+    else if (only.includes("jeu")) targets = targets.filter((pl) => norm(pl.name).includes("jeu"));
+    if (targets.length === 0) targets = pipelines.slice(0, 1);
 
-    const stagesRaw = ((await pd(`/stages?pipeline_id=${pipeline.id}`)) ?? []) as any[];
-    const stages = stagesRaw
-      .map((s) => ({ id: s.id, nom: s.name, ordre: s.order_nr }))
-      .sort((a, b) => a.ordre - b.ordre);
+    const commerciauxOut = isManagement ? actifs.map((u) => ({ id: u.id, nom: u.name, email: u.email })) : [];
 
-    const pipelinesOut = pipelines.map((pl) => ({ id: pl.id, nom: pl.name }));
-    const commerciauxOut = isManagement
-      ? actifs.map((u) => ({ id: u.id, nom: u.name, email: u.email }))
-      : [];
-
-    // ---- MODE DÉTAIL ----
+    // ---- MODE DÉTAIL (une affaire) ----
     const dealId = p("deal_id");
     if (dealId) {
       const deal = await pd(`/deals/${dealId}`);
       if (!deal) return json({ ok: false, error: "Affaire introuvable." });
       // Cloisonnement : un commercial ne peut ouvrir qu'une de ses affaires.
-      if (ownerForced && deal.user_id?.value !== myPipedriveId && deal.user_id !== myPipedriveId) {
+      const dOwner = deal.user_id?.value ?? deal.user_id;
+      if (ownerForced && dOwner !== myPipedriveId) {
         return json({ ok: false, error: "Accès refusé à cette affaire." }, 403);
       }
       const [acts, products] = await Promise.all([
         pdAll(`/deals/${dealId}/activities`, 30),
         pd(`/deals/${dealId}/products`).catch(() => []),
       ]);
-      const ownerName = deal.user_id?.name ?? deal.owner_name ?? null;
       return json({
-        ok: true,
-        mode: "detail",
+        ok: true, mode: "detail",
         deal: {
           id: deal.id, titre: deal.title, valeur: eur(deal.value), devise: deal.currency,
-          etape_id: deal.stage_id, statut: deal.status, owner_id: deal.user_id?.value ?? deal.user_id,
-          owner_nom: ownerName,
-          organisation: deal.org_id?.name ?? null, personne: deal.person_id?.name ?? null,
-          ajoute_le: deal.add_time, maj_le: deal.update_time,
-          activites_faites: deal.done_activities_count, activites_a_faire: deal.undone_activities_count,
-          derniere_activite: deal.last_activity_date, prochaine_activite: deal.next_activity_date,
+          statut: deal.status, owner_nom: deal.user_id?.name ?? null,
+          organisation: deal.org_id?.name ?? null, personne: deal.person_id?.name ?? null, maj_le: deal.update_time,
         },
         activites: (acts ?? []).slice(0, 20).map((a: any) => ({
           type: a.type, sujet: a.subject, faite: a.done, date: a.due_date || a.marked_as_done_time || a.add_time, note: a.note,
@@ -179,32 +169,48 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ---- MODE LISTE ----
-    let path = `/pipelines/${pipeline.id}/deals?status=open`;
-    if (ownerId != null) path += `&user_id=${ownerId}`;
-    else path += `&everyone=1`; // management "Tous" : toutes les affaires, pas seulement celles du jeton
-    const dealsRaw = await pdAll(path, 1000);
-    const deals = dealsRaw.map((d: any) => ({
-      id: d.id, titre: d.title, valeur: eur(d.value), devise: d.currency,
-      etape_id: d.stage_id, owner_id: d.user_id?.value ?? d.user_id, owner_nom: d.user_id?.name ?? null,
-      organisation: d.org_id?.name ?? d.org_name ?? null, personne: d.person_id?.name ?? d.person_name ?? null,
-      maj_le: d.update_time, ville: d["ville"] ?? null,
-      activites_a_faire: d.undone_activities_count ?? 0, prochaine_activite: d.next_activity_date,
-    }));
+    // ---- Étapes fusionnées (par nom) sur les pipelines cibles + carte stage_id → nom ----
+    const stageName = new Map<number, string>();
+    const stageAgg = new Map<string, { nom: string; ordre: number; n: number }>();
+    for (const pl of targets) {
+      const raw = ((await pd(`/stages?pipeline_id=${pl.id}`)) ?? []) as any[];
+      raw.forEach((s) => {
+        stageName.set(s.id, s.name);
+        const k = norm(s.name);
+        const cur = stageAgg.get(k);
+        if (cur) { cur.ordre += s.order_nr; cur.n += 1; }
+        else stageAgg.set(k, { nom: s.name, ordre: s.order_nr, n: 1 });
+      });
+    }
+    const stages = [...stageAgg.entries()]
+      .map(([key, v]) => ({ key, nom: v.nom, ordre: v.ordre / v.n }))
+      .sort((a, b) => a.ordre - b.ordre);
+
+    // ---- Affaires ouvertes de chaque pipeline cible, taguées Jeux / Flipper ----
+    const deals: any[] = [];
+    for (const pl of targets) {
+      const tag = tagOf(pl.name);
+      let path = `/pipelines/${pl.id}/deals?status=open`;
+      if (ownerId != null) path += `&user_id=${ownerId}`;
+      else path += `&everyone=1`; // management "Tous" : toutes les affaires, pas seulement celles du jeton
+      const raw = await pdAll(path, 1000);
+      raw.forEach((d: any) => {
+        const sName = stageName.get(d.stage_id) ?? "";
+        deals.push({
+          id: d.id, titre: d.title, valeur: eur(d.value), devise: d.currency,
+          etape_key: norm(sName), etape_nom: sName, tag, pipeline_nom: pl.name,
+          owner_id: d.user_id?.value ?? d.user_id, owner_nom: d.user_id?.name ?? null,
+          organisation: d.org_id?.name ?? d.org_name ?? null, personne: d.person_id?.name ?? d.person_name ?? null,
+          maj_le: d.update_time, activites_a_faire: d.undone_activities_count ?? 0, prochaine_activite: d.next_activity_date,
+        });
+      });
+    }
 
     return json({
-      ok: true,
-      mode: "liste",
-      isManagement,
-      ownerForced,
-      owner_id: ownerId,
-      pipeline: { id: pipeline.id, nom: pipeline.name },
-      pipelines: pipelinesOut,
-      stages,
-      commerciaux: commerciauxOut,
-      deals,
-      total: deals.length,
-      valeur_totale: deals.reduce((s, d) => s + d.valeur, 0),
+      ok: true, mode: "liste", isManagement, ownerForced, owner_id: ownerId,
+      pipelines_cibles: targets.map((pl) => ({ id: pl.id, nom: pl.name, tag: tagOf(pl.name) })),
+      stages, commerciaux: commerciauxOut, deals,
+      total: deals.length, valeur_totale: deals.reduce((s, d) => s + d.valeur, 0),
     });
   } catch (e: any) {
     return json({ ok: false, error: e?.message || String(e) });

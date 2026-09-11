@@ -484,14 +484,54 @@ export default function GaiaClientFiche() {
 
 
 
-        {/* 1) EN-TÊTE COMPACT */}
+        {/* 1) HÉRO — nom + exercices cliquables + bande santé */}
         <div className="mb-6 rounded-lg border border-border bg-card/40 p-4 sm:p-6">
           <div className="text-xs uppercase tracking-wider text-muted-foreground">Cockpit client</div>
           <h2 className="font-display text-xl sm:text-2xl font-bold break-words">{clientName}</h2>
 
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            {/* Le CA vit dans la timeline des exercices (cliquable) plus bas — plus de
-                doublon dans le cockpit. On garde la marge et la dernière facture. */}
+          {/* Exercices — le CA vit ici ; chaque carte est cliquable → situation de l'exercice */}
+          {caByYear.length > 0 && (
+            <div className="mt-4">
+              <div className="mb-2 flex items-baseline justify-between gap-2">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold inline-flex items-center gap-1.5">
+                  <CalendarClock className="h-3.5 w-3.5 text-primary" /> Chiffre d'affaires par exercice
+                </span>
+                <span className="hidden sm:block text-[11px] text-muted-foreground">Clique un exercice → sa situation détaillée</span>
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {caByYearDesc.map(([year, amount], idx) => {
+                  const prev = caByYearDesc[idx + 1];
+                  const evo = prev && prev[1] > 0 ? ((amount - prev[1]) / prev[1]) * 100 : null;
+                  const isCurrent = idx === 0;
+                  return (
+                    <button
+                      key={year}
+                      type="button"
+                      onClick={() => setOpenCaFactures(Number(year))}
+                      title={`Voir la situation de l'exercice ${year}`}
+                      className={`flex-shrink-0 rounded-lg border p-2.5 min-w-[120px] text-left transition-colors hover:border-primary hover:bg-primary/5 ${
+                        isCurrent
+                          ? "border-primary/50 bg-primary/10"
+                          : "border-border/60 bg-background/40"
+                      }`}
+                    >
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Ex. {year}</div>
+                      <div className="mt-0.5 font-display text-base font-bold tabular-nums">{eur(amount)}</div>
+                      {evo !== null && (
+                        <div className={`mt-0.5 inline-flex items-center gap-0.5 text-[10px] font-medium ${evo >= 0 ? "text-secondary" : "text-destructive"}`}>
+                          {evo >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                          {evo >= 0 ? "+" : ""}{evo.toFixed(1)}%
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Bande santé : marge · dernière facture · tendance */}
+          <div className="mt-4 grid grid-cols-2 lg:grid-cols-3 gap-3">
             {/* Marge estimée — admin/direction uniquement */}
             {canMargeClient && (
             <div className="rounded-lg border border-border/60 bg-background/40 p-3">
@@ -517,6 +557,34 @@ export default function GaiaClientFiche() {
                 </div>
               )}
             </div>
+            {/* Tendance — mini-barres des exercices (ordre chronologique) */}
+            {caByYear.length > 1 && (
+              <div className="rounded-lg border border-border/60 bg-background/40 p-3 col-span-2 lg:col-span-1">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Tendance {caByYear.length} exercices</div>
+                <div className="mt-2 flex items-end gap-1.5" style={{ height: 46 }}>
+                  {(() => {
+                    const max = Math.max(...caByYear.map(([, a]) => a), 1);
+                    return caByYear.map(([year, amount], i) => {
+                      const h = Math.max(4, Math.round((amount / max) * 40));
+                      const isLast = i === caByYear.length - 1;
+                      return (
+                        <div key={year} className="flex-1 flex flex-col items-center gap-1" title={`${year} · ${eur(amount)}`}>
+                          <div
+                            className="w-full rounded-sm"
+                            style={{
+                              height: h,
+                              background: "hsl(var(--primary))",
+                              opacity: isLast ? 1 : 0.35 + (i / Math.max(1, caByYear.length - 1)) * 0.5,
+                            }}
+                          />
+                          <span className="text-[8px] text-muted-foreground">{String(year).slice(2)}</span>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -704,62 +772,6 @@ export default function GaiaClientFiche() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 items-start">
             <div className="space-y-4 md:space-y-5">
-            {/* 1) HISTORIQUE — bandeau compact en haut */}
-            <section className="rounded-lg border border-border bg-card/40 p-4 sm:p-5">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h3 className="font-display text-sm font-semibold uppercase tracking-wider text-muted-foreground inline-flex items-center gap-2">
-                  <CalendarClock className="h-4 w-4 text-primary" /> Historique CA
-                </h3>
-                <div className="text-xs text-muted-foreground">
-                  {ventes.length > 0 && <>Dernière facture : <span className="text-foreground">{dateShort(lastInvoiceDate)}</span></>}
-                </div>
-              </div>
-              {caByYear.length === 0 ? (
-                <div className="rounded border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground">
-                  Aucun CA connu.
-                </div>
-              ) : (
-                <>
-                  <div className="flex gap-2 overflow-x-auto pb-1">
-                    {caByYearDesc.map(([year, amount], idx) => {
-                      const prev = caByYearDesc[idx + 1];
-                      const evo = prev && prev[1] > 0 ? ((amount - prev[1]) / prev[1]) * 100 : null;
-                      const isCurrent = idx === 0;
-                      return (
-                        <button
-                          key={year}
-                          type="button"
-                          onClick={() => setOpenCaFactures(Number(year))}
-                          title={`Voir la situation de l'exercice ${year}`}
-                          className={`flex-shrink-0 rounded-lg border p-2.5 min-w-[120px] text-left transition-colors hover:border-primary hover:bg-primary/5 ${
-                            isCurrent
-                              ? "border-primary/50 bg-primary/10"
-                              : "border-border/60 bg-background/40"
-                          }`}
-                        >
-                          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Ex. {year}</div>
-                          <div className="mt-0.5 font-display text-base font-bold tabular-nums">{eur(amount)}</div>
-                          {evo !== null && (
-                            <div className={`mt-0.5 inline-flex items-center gap-0.5 text-[10px] font-medium ${evo >= 0 ? "text-secondary" : "text-destructive"}`}>
-                              {evo >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                              {evo >= 0 ? "+" : ""}{evo.toFixed(1)}%
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {/* « 10 dernières factures » retiré : le détail par facture (avec modèle
-                      et type de jeu) est désormais dans le panneau « situation » de chaque
-                      exercice — clic sur une carte d'exercice ci-dessus. */}
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    Clique un exercice ci-dessus pour sa ventilation : camembert du CA par type
-                    de jeu + factures détaillées.
-                  </p>
-                </>
-              )}
-            </section>
-
             {/* 2) PIPELINE */}
             <section className="rounded-lg border border-border bg-card/40 p-4 sm:p-6">
               <div className="mb-3 flex items-center justify-between gap-3">

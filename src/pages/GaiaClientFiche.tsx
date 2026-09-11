@@ -489,27 +489,9 @@ export default function GaiaClientFiche() {
           <div className="text-xs uppercase tracking-wider text-muted-foreground">Cockpit client</div>
           <h2 className="font-display text-xl sm:text-2xl font-bold break-words">{clientName}</h2>
 
-          <div className="mt-4 grid grid-cols-2 lg:grid-cols-3 gap-3">
-            {/* CA exercice courant — cliquable : ouvre la ventilation par facture */}
-            <button
-              type="button"
-              disabled={!currentYear}
-              onClick={() => currentYear && setOpenCaFactures(Number(currentYear[0]))}
-              className="rounded-lg border border-border/60 bg-background/40 p-3 text-left transition-colors hover:border-primary/50 hover:bg-primary/5 disabled:cursor-default disabled:hover:border-border/60 disabled:hover:bg-background/40"
-              title={currentYear ? "Voir la ventilation du CA par facture" : undefined}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">CA {currentYear?.[0] ?? "—"}</div>
-                {currentYear && <FileText className="h-3 w-3 text-muted-foreground" />}
-              </div>
-              <div className="mt-1 font-display text-xl font-bold">{eur(currentYear?.[1] ?? 0)}</div>
-              {evolPct !== null && (
-                <div className={`mt-1 inline-flex items-center gap-1 text-[11px] font-medium ${evolPct >= 0 ? "text-secondary" : "text-destructive"}`}>
-                  {evolPct >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                  {evolPct >= 0 ? "+" : ""}{evolPct.toFixed(1)}% vs N-1
-                </div>
-              )}
-            </button>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            {/* Le CA vit dans la timeline des exercices (cliquable) plus bas — plus de
+                doublon dans le cockpit. On garde la marge et la dernière facture. */}
             {/* Marge estimée — admin/direction uniquement */}
             {canMargeClient && (
             <div className="rounded-lg border border-border/60 bg-background/40 p-3">
@@ -767,41 +749,13 @@ export default function GaiaClientFiche() {
                       );
                     })}
                   </div>
-                  <Accordion type="single" collapsible className="mt-3">
-                    <AccordionItem value="factures" className="border-border/60">
-                      <AccordionTrigger className="text-xs">10 dernières factures ({ventes.length})</AccordionTrigger>
-                      <AccordionContent>
-                        {ventes.length === 0 ? (
-                          <div className="text-sm text-muted-foreground">Aucune facture récente.</div>
-                        ) : (
-                          <div className="overflow-auto rounded border border-border/60">
-                            <table className="w-full text-sm">
-                              <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
-                                <tr>
-                                  <th className="px-2 py-2 text-left">Date</th>
-                                  <th className="px-2 py-2 text-left">Facture</th>
-                                  <th className="px-2 py-2 text-left">Article</th>
-                                  <th className="px-2 py-2 text-right">Qté</th>
-                                  <th className="px-2 py-2 text-right">Montant HT</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {ventes.map((v, i) => (
-                                  <tr key={(v.n_fact ?? "") + i} className="border-t border-border/60">
-                                    <td className="px-2 py-2 text-xs text-muted-foreground tabular-nums">{dateShort(v.invoice_date)}</td>
-                                    <td className="px-2 py-2 font-mono text-xs">{v.n_fact ?? "—"}</td>
-                                    <td className="px-2 py-2 truncate max-w-[240px]">{v.code_article ?? "—"}</td>
-                                    <td className="px-2 py-2 text-right tabular-nums">{Number(v.qty ?? 0)}</td>
-                                    <td className="px-2 py-2 text-right font-medium tabular-nums">{eur(Number(v.montant_ht ?? 0))}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                      </AccordionContent>
-                    </AccordionItem>
-                  </Accordion>
+                  {/* « 10 dernières factures » retiré : le détail par facture (avec modèle
+                      et type de jeu) est désormais dans le panneau « situation » de chaque
+                      exercice — clic sur une carte d'exercice ci-dessus. */}
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Clique un exercice ci-dessus pour sa ventilation : camembert du CA par type
+                    de jeu + factures détaillées.
+                  </p>
                 </>
               )}
             </section>

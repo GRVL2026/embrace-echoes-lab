@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { Room, Door, Pillar, CirculationSegment, Point } from "@/types/editor";
-import type { PlacedEquipment } from "@/types/equipment";
+import type { PlacedEquipment, GameEquipment } from "@/types/equipment";
 
 const WALL_HEIGHT = 2.8;
 const CANVAS_SIZE = 1200;
@@ -376,4 +376,101 @@ export async function capture3DViews(
   });
 
   return result;
+}
+
+/**
+ * Rendu d'une vue unique 16:9 pour la passe photoréaliste du Planner, 100 % fidèle au plan 2D :
+ *  - murs aux dimensions exactes du polygone (buildScene) ;
+ *  - chaque machine à sa position ET son orientation du plan ; GLB quand il existe (angle correct
+ *    par la perspective 3D), sinon billboard texturé de la photo de fiche (face caméra) ;
+ *  - caméra calculée depuis le plan pour que TOUTES les machines tiennent dans le cadre.
+ * Renvoie le dataURL JPEG à envoyer à l'edge generer-vue.
+ */
+export async function renderPlannerScene(
+  rooms: Room[],
+  doors: Door[],
+  pillars: Pillar[],
+  equipments: PlacedEquipment[],
+  circulation: CirculationSegment[],
+  catalog: GameEquipment[],
+): Promise<{ dataUrl: string; count: number }> {
+  const W = 1600, H = 900;
+  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  renderer.setSize(W, H); renderer.setPixelRatio(1);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
+  const built = buildScene(rooms, doors, pillars, equipments, circulation, { showWalls: true });
+  const scene = built.scene;
+  scene.background = new THREE.Color("#b8bcc2"); // gris neutre (Krea repeint la salle)
+
+  // GLB pour les machines qui en ont un (position + rotation exactes).
+  await replaceWithGLBModels(new Map([["k", built]]), equipments);
+
+  // Plafond gris : ferme la boîte pour que Krea rende une salle close.
+  const rp = rooms.flatMap((r) => r.points);
+  if (rp.length) {
+    const xs = rp.map((p) => p.x / 100), zs = rp.map((p) => -p.y / 100);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+    const ceil = new THREE.Mesh(
+      new THREE.PlaneGeometry(x1 - x0, z1 - z0),
+      new THREE.MeshStandardMaterial({ color: "#c2c6cc", side: THREE.DoubleSide }),
+    );
+    ceil.rotation.x = Math.PI / 2;
+    ceil.position.set((x0 + x1) / 2, WALL_HEIGHT, (z0 + z1) / 2);
+    scene.add(ceil);
+  }
+
+  // Caméra dérivée du plan : cadre toutes les machines (fit sphère englobante).
+  const cam = new THREE.PerspectiveCamera(50, W / H, 0.1, 500);
+  const P = equipments.map((e) => ({ x: e.position.x / 100, z: -e.position.y / 100, h: (e.height || 120) / 100 }));
+  let camPos: THREE.Vector3, target: THREE.Vector3;
+  if (P.length) {
+    const xs = P.map((p) => p.x), zs = P.map((p) => p.z);
+    const mnx = Math.min(...xs), mxx = Math.max(...xs), mnz = Math.min(...zs), mxz = Math.max(...zs);
+    const maxh = Math.max(...P.map((p) => p.h), 1.2);
+    const cxm = (mnx + mxx) / 2, czm = (mnz + mxz) / 2;
+    const R = 0.5 * Math.hypot(mxx - mnx, mxz - mnz, maxh) + 1.0;
+    const rcx = rp.reduce((s, p) => s + p.x, 0) / (rp.length || 1) / 100;
+    const rcz = rp.reduce((s, p) => s + -p.y, 0) / (rp.length || 1) / 100;
+    const dx = cxm - rcx, dz = czm - rcz, l = Math.hypot(dx, dz);
+    let dirx: number, dirz: number;
+    if (l > 0.5) { dirx = -dx / l; dirz = -dz / l; }             // caméra du côté libre, face aux machines
+    else if ((mxx - mnx) >= (mxz - mnz)) { dirx = 0; dirz = -1; } // machines centrées -> vue selon l'axe court
+    else { dirx = -1; dirz = 0; }
+    const fov = (50 * Math.PI) / 180;
+    const dist = Math.max(3, (R / Math.sin(fov / 2)) * 1.1);
+    camPos = new THREE.Vector3(cxm + dirx * dist, 1.85, czm + dirz * dist);
+    target = new THREE.Vector3(cxm, Math.min(1.2, maxh * 0.55), czm);
+  } else {
+    camPos = new THREE.Vector3(built.center.x, 6, built.center.z + 8);
+    target = built.center;
+  }
+  cam.position.copy(camPos); cam.lookAt(target); cam.updateProjectionMatrix();
+
+  // Machines sans GLB -> billboard texturé (vraie photo de fiche), face à la caméra.
+  const loader = new THREE.TextureLoader(); loader.setCrossOrigin("anonymous");
+  const placeholders: THREE.Object3D[] = [];
+  scene.traverse((o) => { if (o.userData._equipmentPlaceholder) placeholders.push(o); });
+  for (const ph of placeholders) {
+    const eq = ph.userData._equipmentData as PlacedEquipment;
+    const url = catalog.find((c) => c.id === eq.equipmentId)?.images?.[0];
+    if (!url) continue; // pas de photo -> on garde la boîte colorée
+    let tex: THREE.Texture | null = null;
+    try { tex = await loader.loadAsync(url); tex.colorSpace = THREE.SRGBColorSpace; } catch { tex = null; }
+    if (!tex) continue;
+    const w = eq.width / 100, h = (eq.height || 120) / 100;
+    const px = eq.position.x / 100, pz = -eq.position.y / 100;
+    const plane = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, h),
+      new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }),
+    );
+    plane.position.set(px, h / 2, pz);
+    plane.rotation.y = Math.atan2(camPos.x - px, camPos.z - pz); // face caméra (yaw)
+    scene.remove(ph); scene.add(plane);
+  }
+
+  renderer.render(scene, cam);
+  const dataUrl = renderer.domElement.toDataURL("image/jpeg", 0.9);
+  renderer.dispose();
+  return { dataUrl, count: equipments.length };
 }

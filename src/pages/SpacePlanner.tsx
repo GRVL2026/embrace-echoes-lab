@@ -28,7 +28,7 @@ import {
 } from "@/lib/dossierPlanSync";
 import { PlannerBootstrapProvider } from "@/contexts/PlannerBootstrap";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { buildComposite } from "@/lib/planner/genererVue";
+import { renderPlannerScene } from "@/lib/render3DCaptures";
 
 function SpacePlannerInner() {
   const { dossierId } = useParams<{ dossierId?: string }>();
@@ -56,7 +56,7 @@ function SpacePlannerInner() {
     setGenOpen(true); setGenLoading(true);
     setGenResult(null); setGenErr(null); setGenComposite(null);
     try {
-      const { dataUrl, count } = await buildComposite(state.rooms, state.placedEquipments, catalog);
+      const { dataUrl, count } = await renderPlannerScene(state.rooms, state.doors, state.pillars, state.placedEquipments, state.circulationPath || [], catalog);
       setGenComposite(dataUrl);
       if (count === 0) { setGenErr("Place au moins une machine sur le plan."); setGenLoading(false); return; }
       const { data, error } = await supabase.functions.invoke("generer-vue", {
@@ -70,7 +70,7 @@ function SpacePlannerInner() {
     } finally {
       setGenLoading(false);
     }
-  }, [state.rooms, state.placedEquipments, catalog, dossierId]);
+  }, [state.rooms, state.doors, state.pillars, state.placedEquipments, state.circulationPath, catalog, dossierId]);
 
   // Autosave to localStorage (existing behavior).
   useAutoSave(state, catalog);

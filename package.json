@@ -10,7 +10,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:planner": "vitest run --config vitest.harness.config.ts",
+    "test:planner:viz": "PLANNER_DUMP=1 vitest run --config vitest.harness.config.ts && python3 scripts/planner_camera_viz.py"
   },
   "dependencies": {
     "@gltf-transform/core": "^4.4.0",

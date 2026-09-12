@@ -7,6 +7,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { Room, Door, Pillar, CirculationSegment, Point } from "@/types/editor";
 import type { PlacedEquipment, GameEquipment } from "@/types/equipment";
+import { buildSceneSpec, solvePlannerCamera } from "@/lib/plannerCamera";
 
 const WALL_HEIGHT = 2.8;
 const CANVAS_SIZE = 1200;
@@ -433,32 +434,17 @@ export async function renderPlannerScene(
     scene.add(ceil);
   }
 
-  // Caméra dérivée du plan : cadre toutes les machines (fit sphère englobante).
-  const cam = new THREE.PerspectiveCamera(50, W / H, 0.1, 500);
-  const P = eqs.map((e) => ({ x: e.position.x / 100, z: -e.position.y / 100, h: (e.height || 120) / 100 }));
-  let camPos: THREE.Vector3, target: THREE.Vector3;
-  if (P.length) {
-    const xs = P.map((p) => p.x), zs = P.map((p) => p.z);
-    const mnx = Math.min(...xs), mxx = Math.max(...xs), mnz = Math.min(...zs), mxz = Math.max(...zs);
-    const maxh = Math.max(...P.map((p) => p.h), 1.2);
-    const cxm = (mnx + mxx) / 2, czm = (mnz + mxz) / 2;
-    const R = 0.5 * Math.hypot(mxx - mnx, mxz - mnz, maxh) + 1.0;
-    const rcx = rp.reduce((s, p) => s + p.x, 0) / (rp.length || 1) / 100;
-    const rcz = rp.reduce((s, p) => s + -p.y, 0) / (rp.length || 1) / 100;
-    const dx = cxm - rcx, dz = czm - rcz, l = Math.hypot(dx, dz);
-    let dirx: number, dirz: number;
-    if (l > 0.5) { dirx = -dx / l; dirz = -dz / l; }             // caméra du côté libre, face aux machines
-    else if ((mxx - mnx) >= (mxz - mnz)) { dirx = 0; dirz = -1; } // machines centrées -> vue selon l'axe court
-    else { dirx = -1; dirz = 0; }
-    const fov = (50 * Math.PI) / 180;
-    const dist = Math.max(3, (R / Math.sin(fov / 2)) * 1.1);
-    camPos = new THREE.Vector3(cxm + dirx * dist, 1.85, czm + dirz * dist);
-    target = new THREE.Vector3(cxm, Math.min(1.2, maxh * 0.55), czm);
-  } else {
-    camPos = new THREE.Vector3(built.center.x, 6, built.center.z + 8);
-    target = built.center;
-  }
+  // Caméra : solveur contraint INTRA-MUROS (src/lib/plannerCamera.ts), couvert par le harnais
+  // de tests géométriques (npm run test:planner). La caméra reste toujours dans la salle et
+  // le champ s'élargit pour tout cadrer — l'ancienne formule reculait à travers les murs et
+  // filmait leur face extérieure (composite vide).
+  const spec = buildSceneSpec(rooms, eqs as any, pillars as any, W, H);
+  const sol = solvePlannerCamera(spec);
+  const cam = new THREE.PerspectiveCamera(sol.fov, W / H, sol.near, sol.far);
+  const camPos = new THREE.Vector3(sol.position.x, sol.position.y, sol.position.z);
+  const target = new THREE.Vector3(sol.target.x, sol.target.y, sol.target.z);
   cam.position.copy(camPos); cam.lookAt(target); cam.updateProjectionMatrix();
+  if (sol.degraded) console.warn("[planner] vue dégradée :", sol.reason);
 
   // Machines sans GLB -> billboard texturé (vraie photo de fiche), face à la caméra.
   const loader = new THREE.TextureLoader(); loader.setCrossOrigin("anonymous");

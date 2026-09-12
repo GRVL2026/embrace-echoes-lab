@@ -116,6 +116,18 @@ export default function CockpitProspection() {
   const dealsByStage = (key: string) => deals.filter((d) => d.etape_key === key);
   const curOrdre = openDeal ? (stages.find((s) => s.key === openDeal.etape_key)?.ordre ?? -1) : -1;
 
+  // Widgets € — dérivés en direct des affaires déjà chargées (pas de backend en plus).
+  const KEY_STAGES = [
+    { label: "En discussion", match: "discussion" },
+    { label: "Propositions", match: "proposition" },
+    { label: "Proformas", match: "proforma" },
+    { label: "Bons pour accord", match: "bon pour accord" },
+  ];
+  const kpis = KEY_STAGES.map((k) => {
+    const list = deals.filter((d) => (d.etape_key || "").includes(k.match));
+    return { label: k.label, count: list.length, value: list.reduce((a, d) => a + d.valeur, 0) };
+  });
+
   const TagChip = ({ t }: { t: string | null }) => {
     const st = tagStyle(t);
     if (!st) return null;
@@ -174,6 +186,24 @@ export default function CockpitProspection() {
             <span><b className="text-foreground">{data.total ?? 0}</b> affaires ouvertes · valeur{" "}
               <b className="text-foreground tabular-nums">{eur(data.valeur_totale ?? 0)}</b></span>
             {data.ownerForced && <span className="text-xs">· ton pipe uniquement</span>}
+          </div>
+        )}
+
+        {/* Widgets € par étape — section 1 */}
+        {!loading && data?.ok && stages.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {kpis.map((k) => (
+              <div key={k.label} className="rounded-xl border border-border bg-card/40 p-3">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{k.label}</div>
+                <div className="mt-1 font-display text-xl font-bold tabular-nums">{k.count}</div>
+                <div className="mt-0.5 font-display text-sm text-secondary tabular-nums">{eur(k.value)}</div>
+              </div>
+            ))}
+            <div className="rounded-xl border border-primary/40 bg-primary/5 p-3">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Valeur du pipe</div>
+              <div className="mt-1 font-display text-xl font-bold tabular-nums">{data.total ?? 0}</div>
+              <div className="mt-0.5 font-display text-sm text-secondary tabular-nums">{eur(data.valeur_totale ?? 0)}</div>
+            </div>
           </div>
         )}
 

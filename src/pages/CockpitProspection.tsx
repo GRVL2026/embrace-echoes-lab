@@ -6,6 +6,7 @@ import { DetailPageHeader } from "@/components/DetailPageHeader";
 import { UserMenu } from "@/components/UserMenu";
 import { MobileNav } from "@/components/MobileNav";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { CockpitNews } from "@/components/prospection/CockpitNews";
 import { Loader2, Target, RefreshCw, Sparkles, Building2, User, ArrowUpRight, MapPin } from "lucide-react";
 
 // Cockpit Prospection — 1re brique : le pipe JEUX + Flippers fusionné, en direct de Pipedrive.
@@ -255,15 +256,16 @@ export default function CockpitProspection() {
           </div>
         )}
 
-        {/* Carte du portefeuille */}
+        {/* Carte + News */}
         {!loading && data?.ok && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
             <Link to={mapHref} className="rounded-xl border border-border bg-card/40 p-4 transition-colors hover:border-primary/50">
               <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-primary" /><span className="text-[10px] uppercase tracking-wider text-muted-foreground">Carte du portefeuille</span></div>
               <div className="mt-2 font-display text-base font-bold">{isMgmt ? "Clients, prospects & tags propriétaire" : "Tes leads sur la carte"}</div>
               <div className="mt-1 text-xs text-muted-foreground">{isMgmt ? "Vue complète : chaque prospect affiche son commercial, + recherche copilote." : "Tes prospects et le parc installé autour de toi."}</div>
               <div className="mt-2 inline-flex items-center gap-1 text-xs text-primary">Ouvrir la carte <ArrowUpRight className="h-3.5 w-3.5" /></div>
             </Link>
+            <CockpitNews />
           </div>
         )}
 

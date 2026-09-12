@@ -316,6 +316,14 @@ export const SPACES: Space[] = [
         match: startsWith("/admin/pipedrive"),
       },
       {
+        key: "reglages.import3d",
+        label: "Import 3D",
+        to: "/admin/reconstruction-3d",
+        icon: Gamepad2Icon,
+        show: (c) => c.isAdmin || c.isDirection,
+        match: startsWith("/admin/reconstruction-3d"),
+      },
+      {
         key: "reglages.utilisateurs",
         label: "Utilisateurs & accès",
         to: "/admin",

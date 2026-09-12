@@ -51,25 +51,56 @@ export async function buildComposite(
   const LX = Math.max(100, maxX - minX), LY = Math.max(100, maxY - minY), LZ = 350;
 
   // Caméra dans un coin (hauteur des yeux 1,70 m), visant vers le fond à 1,35 m. HFOV 68°.
-  const CAM: V3 = [LX * 0.06, LY * 0.06, 170];
-  const TGT: V3 = [LX * 0.55, LY * 0.92, 135];
   const HFOV = (68 * Math.PI) / 180;
-  const fwd = norm(sub(TGT, CAM)), right = norm(cross(fwd, [0, 0, 1])), up = cross(right, fwd);
   const FPX = (W / 2) / Math.tan(HFOV / 2);
+
+  // Points des machines (coords monde, origine décalée) + hauteur réelle.
+  const pts = placed.map((e) => {
+    const cat = catalog.find((c) => c.id === e.equipmentId);
+    return { e, cat, wx: e.position.x - minX, wy: e.position.y - minY, hcm: e.height || cat?.height || 150 };
+  });
+
+  // Cadrage auto : caméra DEVANT les machines, centrée sur elles, reculée jusqu'à TOUT contenir.
+  let mnx = 0, mxx = LX, mny = 0, mxy = LY;
+  if (pts.length) {
+    mnx = Math.min(...pts.map((p) => p.wx)); mxx = Math.max(...pts.map((p) => p.wx));
+    mny = Math.min(...pts.map((p) => p.wy)); mxy = Math.max(...pts.map((p) => p.wy));
+  }
+  const cx = (mnx + mxx) / 2, cy = (mny + mxy) / 2;
+  const spanX = Math.max(200, mxx - mnx);
+
+  let CAM: V3 = [0, 0, 0], right: V3 = [1, 0, 0], up: V3 = [0, 0, 1], fwd: V3 = [0, 1, 0];
+  const setCam = (dist: number) => {
+    CAM = [cx - spanX * 0.15, mny - dist, 190];      // léger angle avant-gauche, un peu en hauteur
+    const TGT: V3 = [cx, cy, 110];
+    fwd = norm(sub(TGT, CAM)); right = norm(cross(fwd, [0, 0, 1])); up = cross(right, fwd);
+  };
   const project = (P: V3): { x: number; y: number } | null => {
     const v = sub(P, CAM); const zc = dot(v, fwd);
     if (zc <= 1) return null;
     return { x: W / 2 + FPX * dot(v, right) / zc, y: H / 2 - FPX * dot(v, up) / zc };
   };
+  // Recule progressivement jusqu'à ce que toutes les machines (base + sommet) tiennent dans le cadre.
+  let dist = spanX / (2 * Math.tan(HFOV / 2)) + 250;
+  for (let k = 0; k < 8; k++) {
+    setCam(dist);
+    const mx = W * 0.04, my = H * 0.04;
+    const ok = pts.every((p) => {
+      const b = project([p.wx, p.wy, 0]); const t = project([p.wx, p.wy, p.hcm]);
+      return b && t && b.x > mx && b.x < W - mx && t.y > my && b.y < H - my;
+    });
+    if (ok || pts.length === 0) break;
+    dist *= 1.15;
+  }
+  setCam(dist);
 
   // Machines triées du plus loin au plus proche (algorithme du peintre).
-  const items = placed
-    .map((e) => ({ e, wx: e.position.x - minX, wy: e.position.y - minY }))
+  const items = pts
     .map((o) => ({ ...o, d: Math.hypot(o.wx - CAM[0], o.wy - CAM[1]) }))
     .sort((a, b) => b.d - a.d);
 
   // Pré-chargement des images (une seule fois par URL).
-  const urls = Array.from(new Set(items.map((o) => catalog.find((c) => c.id === o.e.equipmentId)?.images?.[0]).filter(Boolean) as string[]));
+  const urls = Array.from(new Set(items.map((o) => o.cat?.images?.[0]).filter(Boolean) as string[]));
   const imgs = new Map<string, HTMLImageElement | null>();
   await Promise.all(urls.map(async (u) => imgs.set(u, await loadImage(u))));
 
@@ -84,9 +115,7 @@ export async function buildComposite(
       floor.forEach((p, i) => (i === 0 ? ctx.moveTo(p!.x, p!.y) : ctx.lineTo(p!.x, p!.y)));
       ctx.closePath(); ctx.fill();
     }
-    for (const { e, wx, wy } of items) {
-      const cat = catalog.find((c) => c.id === e.equipmentId);
-      const hcm = e.height || cat?.height || 150;
+    for (const { e, cat, wx, wy, hcm } of items) {
       const base = project([wx, wy, 0]); const top = project([wx, wy, hcm]);
       if (!base || !top) continue;
       const ph = base.y - top.y; if (ph <= 2) continue;

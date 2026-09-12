@@ -40,23 +40,6 @@ function b64ToBytes(s: string): Uint8Array {
   return out;
 }
 
-/** Cherche une URL d'image dans une réponse Krea de forme variable. */
-function trouverUrl(o: any): string | null {
-  if (!o) return null;
-  if (typeof o === "string" && /^https?:\/\//.test(o)) return o;
-  const cands = [o.image_url, o.url, o.output, o.result, o.images, o.output_url,
-    o?.data?.image_url, o?.data?.url, o?.output?.[0], o?.images?.[0], o?.result?.[0]];
-  for (const c of cands) {
-    if (typeof c === "string" && /^https?:\/\//.test(c)) return c;
-    if (Array.isArray(c) && typeof c[0] === "string" && /^https?:\/\//.test(c[0])) return c[0];
-    if (c && typeof c === "object") {
-      const u = c.url ?? c.image_url;
-      if (typeof u === "string" && /^https?:\/\//.test(u)) return u;
-    }
-  }
-  return null;
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -93,21 +76,25 @@ Deno.serve(async (req) => {
     const jobId = genData.job_id ?? genData.id;
     if (!jobId) return j({ ok: false, error: "Krea n'a pas renvoyé de job_id.", detail: genTxt.slice(0, 300) });
 
-    // 3) Polling (~3 s, max ~40 essais = 2 min ; nano-banana-pro ~30-45 s).
+    // 3) Polling — Krea /jobs renvoie { status, result:{ urls:[...] } }. Statut final "completed".
+    //    (backlogged/queued/scheduled/processing/sampling/intermediate-complete/completed/failed/cancelled)
     let resultUrl: string | null = null;
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 45; i++) {                 // ~45 × 3 s = 135 s (sous la limite de l'edge)
       await new Promise((r) => setTimeout(r, 3000));
       const st = await fetch(`${KREA_BASE}/jobs/${jobId}`, { headers: kh });
       const stTxt = await st.text();
       if (!st.ok) continue;
-      const stData = JSON.parse(stTxt || "{}");
-      const status = String(stData.status ?? stData.state ?? "").toLowerCase();
-      if (status.includes("fail") || status.includes("error")) {
-        return j({ ok: false, error: "Krea : génération échouée.", detail: stTxt.slice(0, 300) });
+      const stData = JSON.parse(stTxt || "{}") as { status?: string; result?: { urls?: unknown[] } };
+      const status = String(stData.status ?? "").toLowerCase();
+      if (status === "failed" || status === "cancelled") {
+        return j({ ok: false, error: "Krea : génération " + status + ".", detail: stTxt.slice(0, 300) });
       }
-      const u = trouverUrl(stData);
-      if (u && (status.includes("complet") || status.includes("succ") || status.includes("done") || status.includes("finish") || !status)) {
-        resultUrl = u; break;
+      if (status === "completed") {
+        const urls = (stData.result?.urls ?? [])
+          .map((u) => (typeof u === "string" ? u : ((u as { url?: string })?.url ?? "")))
+          .filter(Boolean);
+        if (urls.length) { resultUrl = urls[0] as string; break; }
+        return j({ ok: false, error: "Krea : job terminé mais aucune URL de résultat.", detail: stTxt.slice(0, 300) });
       }
     }
     if (!resultUrl) return j({ ok: false, error: "Krea : délai dépassé, la vue n'était pas prête." });

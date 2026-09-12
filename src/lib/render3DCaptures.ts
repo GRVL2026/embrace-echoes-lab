@@ -399,12 +399,25 @@ export async function renderPlannerScene(
   renderer.setSize(W, H); renderer.setPixelRatio(1);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
 
-  const built = buildScene(rooms, doors, pillars, equipments, circulation, { showWalls: true });
+  // Enrichit chaque machine avec le model3d/cotes du catalogue si le plan (ancien) ne les porte pas
+  // -> les GLB fraîchement reconstruits s'appliquent même aux plans déjà enregistrés.
+  const eqs = equipments.map((e) => {
+    const cat = catalog.find((c) => c.id === e.equipmentId);
+    return {
+      ...e,
+      model3d: e.model3d || cat?.model3d,
+      height: e.height || cat?.height,
+      width: e.width || cat?.width,
+      depth: e.depth || cat?.depth,
+    };
+  });
+
+  const built = buildScene(rooms, doors, pillars, eqs, circulation, { showWalls: true });
   const scene = built.scene;
   scene.background = new THREE.Color("#b8bcc2"); // gris neutre (Krea repeint la salle)
 
   // GLB pour les machines qui en ont un (position + rotation exactes).
-  await replaceWithGLBModels(new Map([["k", built]]), equipments);
+  await replaceWithGLBModels(new Map([["k", built]]), eqs);
 
   // Plafond gris : ferme la boîte pour que Krea rende une salle close.
   const rp = rooms.flatMap((r) => r.points);
@@ -422,7 +435,7 @@ export async function renderPlannerScene(
 
   // Caméra dérivée du plan : cadre toutes les machines (fit sphère englobante).
   const cam = new THREE.PerspectiveCamera(50, W / H, 0.1, 500);
-  const P = equipments.map((e) => ({ x: e.position.x / 100, z: -e.position.y / 100, h: (e.height || 120) / 100 }));
+  const P = eqs.map((e) => ({ x: e.position.x / 100, z: -e.position.y / 100, h: (e.height || 120) / 100 }));
   let camPos: THREE.Vector3, target: THREE.Vector3;
   if (P.length) {
     const xs = P.map((p) => p.x), zs = P.map((p) => p.z);

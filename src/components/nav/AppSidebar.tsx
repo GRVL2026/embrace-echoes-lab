@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils";
  * du user (aucun bouton mort visible sans accès).
  */
 export function AppSidebar() {
-  const { isAdmin, isDirection, canAccessGaia, canAccessDashboard, canMargeGlobale, copilotEnabled, canAccessSalle, canAccessProspection, canReactivation, salleOnly, menuAllowed } =
+  const { isAdmin, isDirection, isCommercial, canAccessGaia, canAccessDashboard, canMargeGlobale, copilotEnabled, canAccessSalle, canAccessProspection, canReactivation, salleOnly, menuAllowed } =
     useAuth();
   const { pathname, hash } = useLocation();
   const { state } = useSidebar();
@@ -38,6 +38,7 @@ export function AppSidebar() {
   const ctx: NavCtx = {
     isAdmin,
     isDirection,
+    isCommercial,
     canAccessGaia,
     canAccessDashboard,
     canMargeGlobale,

@@ -23,6 +23,7 @@ export function MobileNav() {
   const {
     isAdmin,
     isDirection,
+    isCommercial,
     canAccessGaia,
     canAccessDashboard,
     canMargeGlobale,
@@ -42,6 +43,7 @@ export function MobileNav() {
   const ctx: NavCtx = {
     isAdmin,
     isDirection,
+    isCommercial,
     canAccessGaia,
     canAccessDashboard,
     canMargeGlobale,

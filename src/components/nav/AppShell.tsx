@@ -40,6 +40,7 @@ function MenuGuard({ children }: { children: ReactNode }) {
   const ctx: NavCtx = {
     isAdmin: auth.isAdmin,
     isDirection: auth.isDirection,
+    isCommercial: auth.isCommercial,
     canAccessGaia: auth.canAccessGaia,
     canAccessDashboard: auth.canAccessDashboard,
     canMargeGlobale: auth.canMargeGlobale,

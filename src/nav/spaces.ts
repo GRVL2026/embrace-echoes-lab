@@ -43,6 +43,7 @@ export type SpaceKey =
 export type NavCtx = {
   isAdmin: boolean;
   isDirection: boolean;
+  isCommercial: boolean;
   canAccessGaia: boolean;
   canAccessDashboard: boolean;
   canMargeGlobale: boolean;
@@ -136,21 +137,24 @@ export const SPACES: Space[] = [
     label: "Prospection",
     icon: Target,
     colorToken: "--space-prospection",
-    show: (c) => c.canAccessProspection,
+    // Le management pilote tout ; les commerciaux (Romain, Valérie) accèdent au cockpit (leur pipe).
+    show: (c) => c.canAccessProspection || c.isCommercial,
     entries: [
       {
-        // Nouveau hub : cockpit unique, démarre par le pipe Pipedrive (JEUX).
+        // Hub unique : le cockpit. Visible aussi pour les commerciaux (vue restreinte à leurs deals).
         key: "prospection.cockpit",
-        label: "Cockpit (pipe Pipedrive)",
+        label: "Cockpit",
         to: "/prospection/cockpit",
         icon: Target,
         match: (p) => p === "/prospection/cockpit",
       },
       {
+        // Ancien Kanban — réservé au management (le cockpit le remplace côté commercial).
         key: "prospection.pipeline",
         label: "Pipeline prospects",
         to: "/prospection",
         icon: Target,
+        show: (c) => c.canAccessProspection,
         match: (p) => p === "/prospection",
       },
       {

@@ -71,26 +71,16 @@ Deno.serve(async (req) => {
     const projectId = (body?.project_id as string | undefined) ?? "plan";
     if (!image_base64) return j({ ok: false, error: "image_base64 (le composite) est requis." });
 
-    // 1) URL de dépôt présignée + dépôt du composite (multipart).
-    const up = await fetch(`${KREA_BASE}/get_upload_url`, {
-      method: "POST", headers: { ...kh, "Content-Type": "application/json" }, body: "{}",
-    });
-    const upTxt = await up.text();
-    if (!up.ok) return j({ ok: false, error: `Krea get_upload_url ${up.status}`, detail: upTxt.slice(0, 300) });
-    const upData = JSON.parse(upTxt || "{}");
-    const uploadUrl = upData.upload_url ?? upData.url ?? upData?.data?.upload_url;
-    if (!uploadUrl) return j({ ok: false, error: "Krea n'a pas renvoyé d'URL de dépôt.", detail: upTxt.slice(0, 300) });
-
+    // 1) Dépose le composite dans le bucket public — Krea lira son URL directement
+    //    (nano-banana-pro accepte des URL nues dans image_urls ; pas besoin d'upload Krea).
+    const admin = createClient(SUPABASE_URL, SERVICE_KEY);
     const mime = mimeOf(image_base64);
     const ext = mime.includes("jpeg") || mime.includes("jpg") ? "jpg" : "png";
-    const form = new FormData();
-    form.append("file", new Blob([b64ToBytes(image_base64)], { type: mime }), `composite.${ext}`);
-    const dep = await fetch(uploadUrl, { method: "POST", body: form });
-    const depTxt = await dep.text();
-    if (!dep.ok) return j({ ok: false, error: `Krea dépôt image ${dep.status}`, detail: depTxt.slice(0, 300) });
-    const depData = JSON.parse(depTxt || "{}");
-    const sourceUrl = depData.url ?? depData.file_url ?? depData?.data?.url ?? trouverUrl(depData);
-    if (!sourceUrl) return j({ ok: false, error: "Krea n'a pas renvoyé l'URL du fichier déposé.", detail: depTxt.slice(0, 300) });
+    const srcPath = `sources/${projectId}-${crypto.randomUUID()}.${ext}`;
+    const { error: srcErr } = await admin.storage.from("planner-media")
+      .upload(srcPath, b64ToBytes(image_base64), { contentType: mime, upsert: true });
+    if (srcErr) return j({ ok: false, error: "Dépôt du composite échoué : " + srcErr.message });
+    const sourceUrl = admin.storage.from("planner-media").getPublicUrl(srcPath).data.publicUrl;
 
     // 2) Soumission de la génération (asynchrone).
     const gen = await fetch(`${KREA_BASE}/generate/${MODELE}`, {
@@ -125,7 +115,6 @@ Deno.serve(async (req) => {
     // 4) Téléchargement du rendu + stockage dans le bucket (service_role).
     const img = await fetch(resultUrl);
     const bytes = new Uint8Array(await img.arrayBuffer());
-    const admin = createClient(SUPABASE_URL, SERVICE_KEY);
     const path = `vues/${projectId}-${crypto.randomUUID()}.png`;
     const { error: upErr } = await admin.storage.from("planner-media").upload(path, bytes, {
       contentType: "image/png", upsert: true,

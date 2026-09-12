@@ -9,7 +9,7 @@ import { CopilotPanel } from "@/components/copilot/CopilotPanel";
 import { useCopilotActions } from "@/hooks/useCopilotActions";
 import type { RoomContext } from "@/lib/copilotApi";
 import { SAFETY_ZONE_CM } from "@/types/editor";
-import { PanelRightClose, PanelRightOpen, Box, LayoutGrid, Sparkles, Check, Loader2, CircleDot, FolderKanban, ArrowLeft } from "lucide-react";
+import { PanelRightClose, PanelRightOpen, Box, LayoutGrid, Sparkles, Check, Loader2, CircleDot, FolderKanban, ArrowLeft, Camera, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fitToView } from "@/lib/fitToView";
@@ -27,6 +27,8 @@ import {
   type SelectedProduct,
 } from "@/lib/dossierPlanSync";
 import { PlannerBootstrapProvider } from "@/contexts/PlannerBootstrap";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { buildComposite } from "@/lib/planner/genererVue";
 
 function SpacePlannerInner() {
   const { dossierId } = useParams<{ dossierId?: string }>();
@@ -42,6 +44,33 @@ function SpacePlannerInner() {
   const [dirty, setDirty] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const { state, dispatch } = useEditor();
+
+  // Rendu photoréaliste de la vue (composite navigateur -> edge generer-vue -> Krea).
+  const [genOpen, setGenOpen] = useState(false);
+  const [genLoading, setGenLoading] = useState(false);
+  const [genComposite, setGenComposite] = useState<string | null>(null);
+  const [genResult, setGenResult] = useState<string | null>(null);
+  const [genErr, setGenErr] = useState<string | null>(null);
+
+  const genererVue = useCallback(async () => {
+    setGenOpen(true); setGenLoading(true);
+    setGenResult(null); setGenErr(null); setGenComposite(null);
+    try {
+      const { dataUrl, count } = await buildComposite(state.rooms, state.placedEquipments, catalog);
+      setGenComposite(dataUrl);
+      if (count === 0) { setGenErr("Place au moins une machine sur le plan."); setGenLoading(false); return; }
+      const { data, error } = await supabase.functions.invoke("generer-vue", {
+        body: { image_base64: dataUrl, project_id: dossierId ?? "plan" },
+      });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || "La génération a échoué.");
+      setGenResult(data.url as string);
+    } catch (e: any) {
+      setGenErr(e?.message || String(e));
+    } finally {
+      setGenLoading(false);
+    }
+  }, [state.rooms, state.placedEquipments, catalog, dossierId]);
 
   // Autosave to localStorage (existing behavior).
   useAutoSave(state, catalog);
@@ -317,6 +346,20 @@ function SpacePlannerInner() {
             <Tooltip delayDuration={200}>
               <TooltipTrigger asChild>
                 <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={genererVue}
+                  disabled={state.placedEquipments.length === 0}
+                >
+                  <Camera className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Générer la vue photoréaliste</TooltipContent>
+            </Tooltip>
+            <Tooltip delayDuration={200}>
+              <TooltipTrigger asChild>
+                <Button
                   variant={copilotOpen ? "default" : "ghost"}
                   size="icon"
                   className="h-8 w-8"
@@ -345,6 +388,50 @@ function SpacePlannerInner() {
             </Tooltip>
           </div>
         </div>
+
+        {/* Rendu photoréaliste — fenêtre de résultat */}
+        <Dialog open={genOpen} onOpenChange={setGenOpen}>
+          <DialogContent className="max-w-4xl">
+            <DialogHeader>
+              <DialogTitle>Vue photoréaliste de la salle</DialogTitle>
+            </DialogHeader>
+            {genErr && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-foreground/90">{genErr}</div>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">Composite (envoyé à l'IA)</div>
+                {genComposite ? (
+                  <img src={genComposite} alt="composite" className="w-full rounded-md border border-border" />
+                ) : (
+                  <div className="flex h-48 items-center justify-center rounded-md border border-dashed border-border text-xs text-muted-foreground">…</div>
+                )}
+              </div>
+              <div>
+                <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">Rendu photoréaliste</div>
+                {genLoading ? (
+                  <div className="flex h-48 items-center justify-center rounded-md border border-border text-muted-foreground">
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Génération… (~30-45 s)
+                  </div>
+                ) : genResult ? (
+                  <div className="space-y-2">
+                    <img src={genResult} alt="rendu" className="w-full rounded-md border border-border" />
+                    <a href={genResult} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                      <Download className="h-3.5 w-3.5" /> Ouvrir en grand
+                    </a>
+                  </div>
+                ) : (
+                  <div className="flex h-48 items-center justify-center rounded-md border border-dashed border-border text-xs text-muted-foreground">En attente…</div>
+                )}
+              </div>
+            </div>
+            {!genLoading && (
+              <div className="flex justify-end">
+                <Button variant="outline" size="sm" onClick={genererVue}>Regénérer</Button>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* Main planner area (fills remaining height) */}
         <div className="flex flex-1 min-h-0 w-full overflow-hidden">

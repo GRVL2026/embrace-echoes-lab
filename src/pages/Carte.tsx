@@ -53,6 +53,8 @@ type ProspectPt = {
   lng: number;
   statut: string | null;
   segment: string | null;
+  proprietaire?: string | null;
+  proprietaire_nom?: string | null;
 };
 
 // Deux univers distincts sur la carte : les clients (par ancienneté de commande) et les
@@ -244,13 +246,14 @@ function popupClientHtml(p: PopupClient, canReactivation: boolean): string {
 }
 
 /** Gabarit du popup prospect (contact hydraté à l'ouverture). */
-function popupProspectHtml(p: { id: string; nom: string | null; ville: string | null; statut: string | null; segment: string | null }): string {
+function popupProspectHtml(p: { id: string; nom: string | null; ville: string | null; statut: string | null; segment: string | null; proprietaire_nom?: string | null }): string {
   const id = escapeHtml(p.id);
   return `<div style="font-family:system-ui,sans-serif;min-width:220px">
     <div style="font-weight:600;margin-bottom:4px">${escapeHtml(p.nom || "—")}</div>
     <div style="color:#64748b;font-size:12px">${escapeHtml(p.ville || "")}</div>
     <div style="margin-top:6px;font-size:12px">Statut : <b>${escapeHtml(p.statut || "—")}</b></div>
     <div style="font-size:12px">Segment : ${escapeHtml(p.segment || "—")}</div>
+    ${p.proprietaire_nom ? `<div style="font-size:12px">Propriétaire : <b style="color:#9B5CFF">${escapeHtml(p.proprietaire_nom)}</b></div>` : `<div style="font-size:12px;color:#94a3b8">Non attribué</div>`}
     <div class="prospect-slot" data-id="${id}" style="margin-top:8px;padding-top:6px;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b">Chargement…</div>
     <button data-brief-prospect="${id}" style="margin-top:6px;width:100%;padding:5px 8px;background:#9B5CFF;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-weight:600">✦ Générer le brief</button>
     <button data-fiche-prospect="${id}" style="margin-top:4px;width:100%;padding:5px 8px;background:transparent;color:#9B5CFF;border:1px solid #9B5CFF;border-radius:4px;font-size:11px;cursor:pointer;font-weight:500">Ouvrir dans Prospection →</button>

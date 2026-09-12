@@ -1938,6 +1938,9 @@ export type Database = {
       gazette_signaux: {
         Row: {
           article_lu_at: string | null
+          assigne_a: string | null
+          assigne_le: string | null
+          assigne_par: string | null
           code_client: string | null
           commune: string | null
           contact_citation: string | null
@@ -1963,6 +1966,9 @@ export type Database = {
         }
         Insert: {
           article_lu_at?: string | null
+          assigne_a?: string | null
+          assigne_le?: string | null
+          assigne_par?: string | null
           code_client?: string | null
           commune?: string | null
           contact_citation?: string | null
@@ -1988,6 +1994,9 @@ export type Database = {
         }
         Update: {
           article_lu_at?: string | null
+          assigne_a?: string | null
+          assigne_le?: string | null
+          assigne_par?: string | null
           code_client?: string | null
           commune?: string | null
           contact_citation?: string | null
@@ -3728,6 +3737,10 @@ export type Database = {
         Returns: string
       }
       arcade_famille_fiable: { Args: { famille: string }; Returns: boolean }
+      assigner_signal: {
+        Args: { _commercial: string; _signal_id: string }
+        Returns: undefined
+      }
       can_access_dashboard: { Args: { _uid?: string }; Returns: boolean }
       can_access_prospection: { Args: { _uid?: string }; Returns: boolean }
       can_access_salle: { Args: { _uid?: string }; Returns: boolean }

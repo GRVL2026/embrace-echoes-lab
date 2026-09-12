@@ -107,7 +107,7 @@ export async function buildComposite(
         ctx.fillRect(base.x - pw / 2, base.y - ph, pw, ph);
       }
     }
-    return cv.toDataURL("image/png");
+    return cv.toDataURL("image/jpeg", 0.9); // JPEG : ~5× plus léger que le PNG pour l'envoi à l'edge
   };
 
   try {

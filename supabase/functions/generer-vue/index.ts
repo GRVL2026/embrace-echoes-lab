@@ -25,6 +25,12 @@ ONLY transform the empty room around them: raw exposed concrete walls, smooth po
 const j = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
+/** Type MIME depuis un préfixe data: (défaut image/png). */
+function mimeOf(s: string): string {
+  const m = /^data:([^;]+);/.exec(s);
+  return m ? m[1] : "image/png";
+}
+
 /** base64 (avec ou sans préfixe data:) -> octets. */
 function b64ToBytes(s: string): Uint8Array {
   const raw = s.includes(",") ? s.slice(s.indexOf(",") + 1) : s;
@@ -75,8 +81,10 @@ Deno.serve(async (req) => {
     const uploadUrl = upData.upload_url ?? upData.url ?? upData?.data?.upload_url;
     if (!uploadUrl) return j({ ok: false, error: "Krea n'a pas renvoyé d'URL de dépôt.", detail: upTxt.slice(0, 300) });
 
+    const mime = mimeOf(image_base64);
+    const ext = mime.includes("jpeg") || mime.includes("jpg") ? "jpg" : "png";
     const form = new FormData();
-    form.append("file", new Blob([b64ToBytes(image_base64)], { type: "image/png" }), "composite.png");
+    form.append("file", new Blob([b64ToBytes(image_base64)], { type: mime }), `composite.${ext}`);
     const dep = await fetch(uploadUrl, { method: "POST", body: form });
     const depTxt = await dep.text();
     if (!dep.ok) return j({ ok: false, error: `Krea dépôt image ${dep.status}`, detail: depTxt.slice(0, 300) });

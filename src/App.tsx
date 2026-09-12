@@ -33,6 +33,7 @@ import MatriceFamilles from "./pages/MatriceFamilles";
 import Salle from "./pages/Salle";
 import Prospection from "./pages/Prospection";
 import CockpitProspection from "./pages/CockpitProspection";
+import ImportReconstructions3D from "./pages/ImportReconstructions3D";
 import Reconquete from "./pages/Reconquete";
 
 import GaiaCarnet from "./pages/GaiaCarnet";
@@ -115,6 +116,7 @@ const App = () => (
             <Route path="/admin/gaia/revue/:id" element={<P><GaiaRevueView /></P>} />
             <Route path="/admin/notifications" element={<P><NotificationsSettings /></P>} />
             <Route path="/admin/pipedrive" element={<P><PipedriveConnexion /></P>} />
+            <Route path="/admin/reconstruction-3d" element={<P><ImportReconstructions3D /></P>} />
             <Route path="/admin/entreprises" element={<P><AdminEntreprises /></P>} />
             <Route path="/admin/matrice-clients" element={<P><MatriceClients /></P>} />
             <Route path="/matrice-familles" element={<P><MatriceFamilles /></P>} />

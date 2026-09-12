@@ -458,15 +458,28 @@ export async function renderPlannerScene(
     let tex: THREE.Texture | null = null;
     try { tex = await loader.loadAsync(url); tex.colorSpace = THREE.SRGBColorSpace; } catch { tex = null; }
     if (!tex) continue;
-    const w = eq.width / 100, h = (eq.height || 120) / 100;
+    // Boîte 3D aux cotes réelles : vrai volume + empreinte + occlusion ; la photo va sur
+    // la face qui regarde le plus la caméra (artwork toujours visible, jamais contre un mur),
+    // les autres faces en matériau neutre (côtés de borne). Krea relighte ensuite.
+    const w = eq.width / 100, h = (eq.height || 120) / 100, d = Math.max(0.25, eq.depth / 100);
     const px = eq.position.x / 100, pz = -eq.position.y / 100;
-    const plane = new THREE.Mesh(
-      new THREE.PlaneGeometry(w, h),
-      new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }),
-    );
-    plane.position.set(px, h / 2, pz);
-    plane.rotation.y = Math.atan2(camPos.x - px, camPos.z - pz); // face caméra (yaw)
-    scene.remove(ph); scene.add(plane);
+    const theta = -(eq.rotation * Math.PI) / 180;
+    const cdx = camPos.x - px, cdz = camPos.z - pz, cl = Math.hypot(cdx, cdz) || 1;
+    const faces = [{ i: 0, n: [1, 0] }, { i: 1, n: [-1, 0] }, { i: 4, n: [0, 1] }, { i: 5, n: [0, -1] }];
+    let bestI = 4, bestDot = -Infinity;
+    for (const f of faces) {
+      const wx = f.n[0] * Math.cos(theta) + f.n[1] * Math.sin(theta);
+      const wz = -f.n[0] * Math.sin(theta) + f.n[1] * Math.cos(theta);
+      const dp = (wx * cdx + wz * cdz) / cl;
+      if (dp > bestDot) { bestDot = dp; bestI = f.i; }
+    }
+    const neutral = new THREE.MeshStandardMaterial({ color: "#34363c", roughness: 0.85 });
+    const photoMat = new THREE.MeshBasicMaterial({ map: tex });
+    const mats = [0, 1, 2, 3, 4, 5].map((i) => (i === bestI ? photoMat : neutral));
+    const box = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mats);
+    box.position.set(px, h / 2, pz);
+    box.rotation.y = theta;
+    scene.remove(ph); scene.add(box);
   }
 
   renderer.render(scene, cam);

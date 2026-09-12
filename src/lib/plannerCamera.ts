@@ -421,9 +421,9 @@ export function solvePlannerCamera(spec: SceneSpec): CamSolution {
   const maxh = Math.max(...spec.machines.map((m) => m.h), 1.2);
   const target = { x: (mnx + mxx) / 2, y: Math.min(1.2, maxh * 0.6), z: (mnz + mxz) / 2 };
 
-  // grille de poses candidates strictement intra-muros
   const xs = poly.map((p) => p.x), zs = poly.map((p) => p.z);
   const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+  // grille de poses candidates strictement intra-muros
   const step = Math.max(0.2, Math.min(x1 - x0, z1 - z0) / 24);
   const spots: Vec2[] = [];
   for (let x = x0 + step / 2; x <= x1; x += step) for (let z = z0 + step / 2; z <= z1; z += step) {
@@ -435,6 +435,58 @@ export function solvePlannerCamera(spec: SceneSpec): CamSolution {
     spots.push(p);
   }
   if (!spots.length) spots.push(centroid);
+
+  // ---- PASSE 1 : VUE DE FACE (la plus simple à lire, demandée en priorité) ----
+  // On regarde la rangée perpendiculairement, depuis le mur opposé, centré sur elle :
+  // axe de vue aligné sur X ou Z, aucune obliquité. On ne bascule sur la recherche
+  // libre que si aucune pose frontale ne cadre tout.
+  {
+    const cx = (mnx + mxx) / 2, cz = (mnz + mxz) / 2;
+    const sides: { x: number; z: number; axis: "x" | "z" }[] = [];
+    // Centré sur la rangée, puis décalages le long du mur : si l'aplomb exact est
+    // occupé (îlot au milieu, poteau), on glisse latéralement plutôt que d'abandonner
+    // la vue de face. Les décalages sont testés du plus petit au plus grand.
+    const OFF = [0, 0.4, -0.4, 0.8, -0.8, 1.2, -1.2, 1.6, -1.6, 2.0, -2.0, 2.6, -2.6, 3.2, -3.2];
+    for (const o of OFF) {
+      sides.push({ x: cx + o, z: z0, axis: "z" });
+      sides.push({ x: cx + o, z: z1, axis: "z" });
+      sides.push({ x: x0, z: cz + o, axis: "x" });
+      sides.push({ x: x1, z: cz + o, axis: "x" });
+    }
+    const frontSpots: (Vec2 & { axis: "x" | "z" })[] = [];
+    for (const sp of sides) {
+      let p = { x: sp.x, z: sp.z };
+      // rentrer dans la salle avec la marge de mur, en reculant vers le centre
+      for (let k = 0; k < 40 && (!pointInPolygon(p, poly) || distToPolygon(p, poly) < CAM_WALL_MARGIN); k++) {
+        p = { x: p.x + (centroid.x - p.x) * 0.06, z: p.z + (centroid.z - p.z) * 0.06 };
+      }
+      if (!pointInPolygon(p, poly) || distToPolygon(p, poly) < CAM_WALL_MARGIN) continue;
+      if (spec.machines.some((m) => pointInPolygon(p, obbFootprint(m)) || Math.hypot(p.x - m.x, p.z - m.z) < Math.hypot(m.hw, m.hd) + 0.35)) continue;
+      if (spec.pillars.some((q) => Math.hypot(p.x - q.x, p.z - q.z) < q.r + 0.35)) continue;
+      frontSpots.push({ ...p, axis: sp.axis });
+    }
+    let bf: (CamSolution & { score: number }) | null = null;
+    for (const fov of FOV_LADDER) {
+      for (const spot of frontSpots) for (const eye of EYE_HEIGHTS) {
+        // visée STRICTEMENT perpendiculaire au mur : la salle se lit de face, sans biais
+        const tgt = spot.axis === "z"
+          ? { x: spot.x, y: target.y, z: cz }
+          : { x: cx, y: target.y, z: spot.z };
+        const cam: Camera = { position: { x: spot.x, y: eye, z: spot.z }, target: tgt, fov, aspect: spec.width / spec.height, near, far, W: spec.width, H: spec.height };
+        if (Math.hypot(cam.position.x - tgt.x, cam.position.z - tgt.z) < 0.5) continue;
+        let worst = 0, minDepth = Infinity;
+        for (const c of corners) { const pr = project(c, cam); worst = Math.max(worst, Math.abs(pr.ndc.x), Math.abs(pr.ndc.y)); minDepth = Math.min(minDepth, pr.depth); }
+        if (minDepth < MIN_DEPTH || worst > NDC_MARGIN) continue;
+        if (spec.machines.some((m) => crossesPolygon(spot, { x: m.x, z: m.z }, poly))) continue;
+        const score = readability(spec, cam);
+        if (!bf || score > bf.score) {
+          bf = { position: cam.position, target: tgt, fov, near, far, reason: `vue de face, fov ${fov}°, lisibilité ${score.toFixed(4)}`, degraded: false, score };
+        }
+      }
+      if (bf) break; // focale la plus longue qui marche de face
+    }
+    if (bf) { const { score: _s, ...sol } = bf; return sol; }
+  }
 
   let best: (CamSolution & { score: number }) | null = null;
   for (const fov of FOV_LADDER) {

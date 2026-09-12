@@ -463,14 +463,26 @@ export async function renderPlannerScene(
     const w = eq.width / 100, h = (eq.height || 120) / 100, d = Math.max(0.25, eq.depth / 100);
     const px = eq.position.x / 100, pz = -eq.position.y / 100;
     const theta = -(eq.rotation * Math.PI) / 180;
-    const cdx = camPos.x - px, cdz = camPos.z - pz, cl = Math.hypot(cdx, cdz) || 1;
-    const faces = [{ i: 0, n: [1, 0] }, { i: 1, n: [-1, 0] }, { i: 4, n: [0, 1] }, { i: 5, n: [0, -1] }];
-    let bestI = 4, bestDot = -Infinity;
-    for (const f of faces) {
-      const wx = f.n[0] * Math.cos(theta) + f.n[1] * Math.sin(theta);
-      const wz = -f.n[0] * Math.sin(theta) + f.n[1] * Math.cos(theta);
-      const dp = (wx * cdx + wz * cdz) / cl;
-      if (dp > bestDot) { bestDot = dp; bestI = f.i; }
+    // TABLE (palet, air hockey, billard, baby-foot…) : la photo produit montre le PLATEAU.
+    // La plaquer sur un flanc vertical donnait une « caisse avec une affiche sur le côté »,
+    // que la passe IA réinterprétait en billard. Sur une machine basse, la photo va donc
+    // sur la face DU DESSUS (index 2 de BoxGeometry), flancs sombres = piètement.
+    const isTable = h <= 1.25 && w >= 0.7 && d >= 0.7;
+    let bestI: number;
+    if (isTable) {
+      bestI = 2;
+      // le plateau est plus long que large : on aligne la photo (paysage) sur le grand axe
+      if (d > w) { tex.center.set(0.5, 0.5); tex.rotation = Math.PI / 2; }
+    } else {
+      const cdx = camPos.x - px, cdz = camPos.z - pz, cl = Math.hypot(cdx, cdz) || 1;
+      const faces = [{ i: 0, n: [1, 0] }, { i: 1, n: [-1, 0] }, { i: 4, n: [0, 1] }, { i: 5, n: [0, -1] }];
+      bestI = 4; let bestDot = -Infinity;
+      for (const f of faces) {
+        const wx = f.n[0] * Math.cos(theta) + f.n[1] * Math.sin(theta);
+        const wz = -f.n[0] * Math.sin(theta) + f.n[1] * Math.cos(theta);
+        const dp = (wx * cdx + wz * cdz) / cl;
+        if (dp > bestDot) { bestDot = dp; bestI = f.i; }
+      }
     }
     const neutral = new THREE.MeshStandardMaterial({ color: "#34363c", roughness: 0.85 });
     const photoMat = new THREE.MeshBasicMaterial({ map: tex });

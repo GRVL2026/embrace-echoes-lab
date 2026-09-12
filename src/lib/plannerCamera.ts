@@ -14,7 +14,7 @@
  * Tout ce fichier travaille dans le repère SCÈNE (mètres), pour coller au rendu.
  */
 
-export const WALL_HEIGHT = 2.8;
+export const WALL_HEIGHT = 3.5;
 /** Marge minimale entre la caméra et l'intérieur d'un mur (le mur fait 0,12 m d'épaisseur,
  *  centré sur l'arête : sa face intérieure est déjà 0,06 m en dedans). */
 export const CAM_WALL_MARGIN = 0.45;
@@ -358,9 +358,46 @@ export function convexHull(pts: Vec2[]): Vec2[] {
 /* ------------------------------------------------------------------ */
 
 const EYE_HEIGHTS = [1.55, 1.85, 2.2, 2.5];
-const FOV_LADDER = [45, 50, 55, 60, 65, 72];
+const FOV_LADDER = [45, 50, 55, 60, 65, 72, 80, 88];
 const MIN_DEPTH = 0.8;      // m : rien ne colle à l'objectif
 const NDC_MARGIN = 0.92;    // 4 % de marge sur chaque bord
+
+
+/** Boîte écran (NDC clippée) de chaque machine + fraction d'image occupée.
+ *  Sert au score de LISIBILITÉ : une machine vue en enfilade a une aire minuscule. */
+function machineBoxes(spec: SceneSpec, cam: Camera) {
+  return spec.machines.map((m) => {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const c of obbCorners(m)) {
+      const p = project(c, cam);
+      x0 = Math.min(x0, p.ndc.x); x1 = Math.max(x1, p.ndc.x);
+      y0 = Math.min(y0, p.ndc.y); y1 = Math.max(y1, p.ndc.y);
+    }
+    const cx0 = Math.max(-1, x0), cx1 = Math.min(1, x1);
+    const cy0 = Math.max(-1, y0), cy1 = Math.min(1, y1);
+    const w = Math.max(0, cx1 - cx0), h = Math.max(0, cy1 - cy0);
+    return { x0: cx0, y0: cy0, x1: cx1, y1: cy1, frac: (w * h) / 4 };
+  });
+}
+
+/** Score de lisibilité d'une pose : la PLUS PETITE machine doit rester lisible,
+ *  et les machines ne doivent pas se masquer entre elles. Remplace le score
+ *  « remplissage » qui collait la caméra dans un coin, rangée vue en enfilade. */
+function readability(spec: SceneSpec, cam: Camera): number {
+  const b = machineBoxes(spec, cam);
+  if (!b.length) return 0;
+  const minFrac = Math.min(...b.map((x) => x.frac));
+  const sum = b.reduce((s, x) => s + x.frac, 0) || 1e-9;
+  let inter = 0;
+  for (let i = 0; i < b.length; i++) for (let j = i + 1; j < b.length; j++) {
+    const w = Math.max(0, Math.min(b[i].x1, b[j].x1) - Math.max(b[i].x0, b[j].x0));
+    const h = Math.max(0, Math.min(b[i].y1, b[j].y1) - Math.max(b[i].y0, b[j].y0));
+    inter += (w * h) / 4;
+  }
+  const overlap = Math.min(1, inter / sum);
+  const fovPenalty = 1 - 0.15 * ((cam.fov - 45) / 43);   // léger bonus aux focales longues
+  return minFrac * (1 - 0.6 * overlap) * Math.max(0.5, fovPenalty);
+}
 
 export function solvePlannerCamera(spec: SceneSpec): CamSolution {
   const poly = spec.poly;
@@ -410,19 +447,18 @@ export function solvePlannerCamera(spec: SceneSpec): CamSolution {
       if (spec.machines.some((m) => crossesPolygon(spot, { x: m.x, z: m.z }, poly))) continue; // mur entre la caméra et une machine
       // score = remplissage du cadre (pire |NDC| le plus proche possible de la marge) ;
       // volontairement PAS la couverture rasterisée, trop coûteuse dans la boucle.
-      const score = worst;
+      const score = readability(spec, cam);
       if (!best || score > best.score) {
-        best = { position: cam.position, target, fov, near, far, reason: `fit fov ${fov}°, remplissage ${worst.toFixed(3)}`, degraded: false, score };
+        best = { position: cam.position, target, fov, near, far, reason: `fov ${fov}°, lisibilité ${score.toFixed(4)}`, degraded: false, score };
       }
     }
-    if (best) break; // premier fov qui marche = focale la plus longue possible
   }
   if (best) { const { score: _s, ...sol } = best; return sol; }
 
   // Dégradé : impossible de tout cadrer (salle trop petite / machines trop étalées).
   // On maximise le nombre de machines entièrement visibles au fov le plus large.
   const fov = FOV_LADDER[FOV_LADDER.length - 1];
-  let fallback: CamSolution | null = null, bestCount = -1;
+  let fallback: CamSolution | null = null, bestCount = -1, fbScore = -1;
   for (const spot of spots) for (const eye of EYE_HEIGHTS) {
     const cam: Camera = { position: { x: spot.x, y: eye, z: spot.z }, target, fov, aspect: spec.width / spec.height, near, far, W: spec.width, H: spec.height };
     if (Math.hypot(cam.position.x - target.x, cam.position.z - target.z) < 0.5) continue;
@@ -431,8 +467,9 @@ export function solvePlannerCamera(spec: SceneSpec): CamSolution {
       const ok = obbCorners(m).every((c) => { const p = project(c, cam); return p.depth > MIN_DEPTH && Math.abs(p.ndc.x) <= 1 && Math.abs(p.ndc.y) <= 1; });
       if (ok && !crossesPolygon(spot, { x: m.x, z: m.z }, poly)) n++;
     }
-    if (n > bestCount) {
-      bestCount = n;
+    const r = readability(spec, cam);
+    if (n > bestCount || (n === bestCount && r > fbScore)) {
+      bestCount = n; fbScore = r;
       fallback = { position: cam.position, target, fov, near, far, reason: `DÉGRADÉ : ${n}/${spec.machines.length} machines cadrées`, degraded: true };
     }
   }

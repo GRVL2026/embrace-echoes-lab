@@ -54,6 +54,20 @@ export const FIXTURES: Fixture[] = [
     expectAllFramed: true,
   },
   {
+    key: "leopaul-reel",
+    label: "PLAN REEL LEOPAUL : 10,96 x 8,04 m, 5 machines mur bas + palet ilot",
+    room: rect(1096, 804), isClosed: true,
+    equipments: [
+      eq("prize", "Emoji Prize Box", 44, 740, 84, 96.5, 190),
+      eq("hoops", "Emoji Hoops", 151, 676, 104, 241.5, 250),
+      eq("puck", "Emoji Power Puck Single", 554, 213, 234, 152.5, 90),
+      eq("mk1", "Mario Kart 3 GP DX", 646, 714, 104.2, 160.1, 239),
+      eq("mk2", "Mario Kart 3 GP DX", 752, 714, 104.2, 160.1, 239),
+      eq("apex", "Apex Rebel", 950, 714, 278, 154, 230),
+    ],
+    expectAllFramed: true,
+  },
+  {
     key: "island",
     label: "Îlot central : 12 × 12 m, 4 machines au milieu",
     room: rect(1200, 1200), isClosed: true,

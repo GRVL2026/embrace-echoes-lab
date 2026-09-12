@@ -139,8 +139,13 @@ export function checkPlannerCamera(spec: SceneSpec, sol: CamSolution): Check[] {
     }));
     let bad = 0;
     for (const a of rows) for (const b of rows) if (a.dist < b.dist - 0.5 && a.depth > b.depth) bad++;
-    add("I8-ordre-profondeur", bad === 0, true, `${bad} inversion(s)`,
-      "si une machine plus proche a une profondeur plus grande, la matrice de vue est fausse");
+    // NON bloquant : le rendu passe par un WebGLRenderer avec tampon de profondeur,
+    // l'occultation est donc exacte quel que soit l'ordre. Cet invariant datait du
+    // compositing « peintre » (images à plat empilées) où l'ordre de tri faisait tout.
+    // On le garde en INFORMATIF : une inversion signale seulement une machine dont le
+    // centre est plus proche en distance sol qu'en profondeur caméra (vue oblique).
+    add("I8-ordre-profondeur", bad === 0, false, `${bad} inversion(s)`,
+      "informatif : le z-buffer gère l'occultation ; seule une vue très oblique en produit");
   }
 
   /* I9 — plafond : il doit épouser le polygone, pas sa bounding box */

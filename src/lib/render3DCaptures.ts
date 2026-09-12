@@ -9,7 +9,7 @@ import type { Room, Door, Pillar, CirculationSegment, Point } from "@/types/edit
 import type { PlacedEquipment, GameEquipment } from "@/types/equipment";
 import { buildSceneSpec, solvePlannerCamera } from "@/lib/plannerCamera";
 
-const WALL_HEIGHT = 2.8;
+const WALL_HEIGHT = 3.5;
 const CANVAS_SIZE = 1200;
 
 export type CaptureView = "top" | "front" | "side" | "perspective" | "perspectiveOpen" | "perspectiveCorridor";

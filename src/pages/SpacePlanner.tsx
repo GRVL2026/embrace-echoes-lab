@@ -51,13 +51,14 @@ function SpacePlannerInner() {
   const [genComposite, setGenComposite] = useState<string | null>(null);
   const [genResult, setGenResult] = useState<string | null>(null);
   const [genErr, setGenErr] = useState<string | null>(null);
+  const [genManquants, setGenManquants] = useState<string[]>([]);
 
   const genererVue = useCallback(async () => {
     setGenOpen(true); setGenLoading(true);
-    setGenResult(null); setGenErr(null); setGenComposite(null);
+    setGenResult(null); setGenErr(null); setGenComposite(null); setGenManquants([]);
     try {
-      const { dataUrl, count } = await renderPlannerScene(state.rooms, state.doors, state.pillars, state.placedEquipments, state.circulationPath || [], catalog);
-      setGenComposite(dataUrl);
+      const { dataUrl, count, sansModele } = await renderPlannerScene(state.rooms, state.doors, state.pillars, state.placedEquipments, state.circulationPath || [], catalog);
+      setGenComposite(dataUrl); setGenManquants(sansModele);
       if (count === 0) { setGenErr("Place au moins une machine sur le plan."); setGenLoading(false); return; }
       const { data, error } = await supabase.functions.invoke("generer-vue", {
         body: { image_base64: dataUrl, project_id: dossierId ?? "plan" },
@@ -397,6 +398,12 @@ function SpacePlannerInner() {
             </DialogHeader>
             {genErr && (
               <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-foreground/90">{genErr}</div>
+            )}
+            {genManquants.length > 0 && (
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-foreground/90">
+                <b>{genManquants.length} machine(s) sans modèle 3D</b> — rendues en volume neutre, à leurs cotes réelles.
+                Elles ne seront fidèles qu'une fois leur modèle 3D reconstruit : {genManquants.join(", ")}
+              </div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>

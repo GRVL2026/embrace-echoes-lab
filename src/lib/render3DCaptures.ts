@@ -394,7 +394,7 @@ export async function renderPlannerScene(
   equipments: PlacedEquipment[],
   circulation: CirculationSegment[],
   catalog: GameEquipment[],
-): Promise<{ dataUrl: string; count: number }> {
+): Promise<{ dataUrl: string; count: number; sansModele: string[] }> {
   const W = 1600, H = 900;
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   renderer.setSize(W, H); renderer.setPixelRatio(1);
@@ -446,55 +446,22 @@ export async function renderPlannerScene(
   cam.position.copy(camPos); cam.lookAt(target); cam.updateProjectionMatrix();
   if (sol.degraded) console.warn("[planner] vue dégradée :", sol.reason);
 
-  // Machines sans GLB -> billboard texturé (vraie photo de fiche), face à la caméra.
-  const loader = new THREE.TextureLoader(); loader.setCrossOrigin("anonymous");
-  const placeholders: THREE.Object3D[] = [];
-  scene.traverse((o) => { if (o.userData._equipmentPlaceholder) placeholders.push(o); });
-  for (const ph of placeholders) {
-    const eq = ph.userData._equipmentData as PlacedEquipment;
-    const url = catalog.find((c) => c.id === eq.equipmentId)?.images?.[0];
-    if (!url) continue; // pas de photo -> on garde la boîte colorée
-    let tex: THREE.Texture | null = null;
-    try { tex = await loader.loadAsync(url); tex.colorSpace = THREE.SRGBColorSpace; } catch { tex = null; }
-    if (!tex) continue;
-    // Boîte 3D aux cotes réelles : vrai volume + empreinte + occlusion ; la photo va sur
-    // la face qui regarde le plus la caméra (artwork toujours visible, jamais contre un mur),
-    // les autres faces en matériau neutre (côtés de borne). Krea relighte ensuite.
-    const w = eq.width / 100, h = (eq.height || 120) / 100, d = Math.max(0.25, eq.depth / 100);
-    const px = eq.position.x / 100, pz = -eq.position.y / 100;
-    const theta = -(eq.rotation * Math.PI) / 180;
-    // TABLE (palet, air hockey, billard, baby-foot…) : la photo produit montre le PLATEAU.
-    // La plaquer sur un flanc vertical donnait une « caisse avec une affiche sur le côté »,
-    // que la passe IA réinterprétait en billard. Sur une machine basse, la photo va donc
-    // sur la face DU DESSUS (index 2 de BoxGeometry), flancs sombres = piètement.
-    const isTable = h <= 1.25 && w >= 0.7 && d >= 0.7;
-    let bestI: number;
-    if (isTable) {
-      bestI = 2;
-      // le plateau est plus long que large : on aligne la photo (paysage) sur le grand axe
-      if (d > w) { tex.center.set(0.5, 0.5); tex.rotation = Math.PI / 2; }
-    } else {
-      const cdx = camPos.x - px, cdz = camPos.z - pz, cl = Math.hypot(cdx, cdz) || 1;
-      const faces = [{ i: 0, n: [1, 0] }, { i: 1, n: [-1, 0] }, { i: 4, n: [0, 1] }, { i: 5, n: [0, -1] }];
-      bestI = 4; let bestDot = -Infinity;
-      for (const f of faces) {
-        const wx = f.n[0] * Math.cos(theta) + f.n[1] * Math.sin(theta);
-        const wz = -f.n[0] * Math.sin(theta) + f.n[1] * Math.cos(theta);
-        const dp = (wx * cdx + wz * cdz) / cl;
-        if (dp > bestDot) { bestDot = dp; bestI = f.i; }
-      }
+  // Machines SANS modèle 3D : on ne fabrique plus de fausse boîte texturée (la photo
+  // produit plaquée sur un pavé donnait des objets faux — table de palet devenue billard,
+  // basket devenu armoire plate). Elles restent un volume neutre à leurs cotes réelles et
+  // sont REMONTÉES à l'appelant : mieux vaut un manque signalé qu'un objet inventé.
+  const sansModele: string[] = [];
+  scene.traverse((o) => {
+    if (o.userData._equipmentPlaceholder) {
+      const eq = o.userData._equipmentData as PlacedEquipment;
+      sansModele.push(eq.name || eq.equipmentId);
+      const mesh = o as THREE.Mesh;
+      mesh.material = new THREE.MeshStandardMaterial({ color: "#9aa0a6", roughness: 0.9 });
     }
-    const neutral = new THREE.MeshStandardMaterial({ color: "#34363c", roughness: 0.85 });
-    const photoMat = new THREE.MeshBasicMaterial({ map: tex });
-    const mats = [0, 1, 2, 3, 4, 5].map((i) => (i === bestI ? photoMat : neutral));
-    const box = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mats);
-    box.position.set(px, h / 2, pz);
-    box.rotation.y = theta;
-    scene.remove(ph); scene.add(box);
-  }
+  });
 
   renderer.render(scene, cam);
   const dataUrl = renderer.domElement.toDataURL("image/jpeg", 0.9);
   renderer.dispose();
-  return { dataUrl, count: equipments.length };
+  return { dataUrl, count: equipments.length, sansModele };
 }

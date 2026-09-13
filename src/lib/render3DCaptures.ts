@@ -5,11 +5,23 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import type { Room, Door, Pillar, CirculationSegment, Point } from "@/types/editor";
 import type { PlacedEquipment, GameEquipment } from "@/types/equipment";
 import { buildSceneSpec, solvePlannerCamera } from "@/lib/plannerCamera";
 
 const WALL_HEIGHT = 3.5;
+
+/** Décodeur Draco partagé. SANS lui, tout GLB compressé échoue au chargement —
+ *  or les 64 modèles du parc SONT en Draco, comme les modèles reconstruits. */
+let dracoLoader: DRACOLoader | null = null;
+function getDraco() {
+  if (!dracoLoader) {
+    dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.6/");
+  }
+  return dracoLoader;
+}
 const CANVAS_SIZE = 1200;
 
 export type CaptureView = "top" | "front" | "side" | "perspective" | "perspectiveOpen" | "perspectiveCorridor";
@@ -214,6 +226,7 @@ function getCameraForView(
 /** Load a GLB model and fit it into the given dimensions */
 async function loadGLBModel(url: string, width: number, depth: number, height: number): Promise<THREE.Group | null> {
   const loader = new GLTFLoader();
+  loader.setDRACOLoader(getDraco());
   try {
     const gltf = await loader.loadAsync(url);
     const model = gltf.scene.clone(true);

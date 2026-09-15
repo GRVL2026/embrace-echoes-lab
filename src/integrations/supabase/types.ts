@@ -565,6 +565,48 @@ export type Database = {
         }
         Relationships: []
       }
+      catalogue_anomalies: {
+        Row: {
+          anomalie: string
+          detail: string | null
+          handle: string | null
+          hauteur_mm: number | null
+          largeur_mm: number | null
+          profondeur_mm: number | null
+          shopify_id: string
+          statut: string | null
+          titre: string
+          valeur_brute: string | null
+          vu_le: string
+        }
+        Insert: {
+          anomalie: string
+          detail?: string | null
+          handle?: string | null
+          hauteur_mm?: number | null
+          largeur_mm?: number | null
+          profondeur_mm?: number | null
+          shopify_id: string
+          statut?: string | null
+          titre: string
+          valeur_brute?: string | null
+          vu_le?: string
+        }
+        Update: {
+          anomalie?: string
+          detail?: string | null
+          handle?: string | null
+          hauteur_mm?: number | null
+          largeur_mm?: number | null
+          profondeur_mm?: number | null
+          shopify_id?: string
+          statut?: string | null
+          titre?: string
+          valeur_brute?: string | null
+          vu_le?: string
+        }
+        Relationships: []
+      }
       catalogue_erp: {
         Row: {
           code: string

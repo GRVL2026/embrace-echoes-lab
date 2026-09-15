@@ -51,6 +51,26 @@ Ouvrir une discussion par sujet plutôt que de tout mélanger.
 | `/acces-roles` | rôles, permissions de menu, policies RLS |
 | `/donnees-copilote` | dashboards, RPC gaia, copilotes, synchro ERP |
 
+
+## Les agents
+
+Quatre agents spécialisés dans `.claude/agents/`. Ils travaillent dans leur propre contexte, ne
+voient pas la conversation, et rendent un rapport. Plusieurs peuvent tourner **en parallèle** —
+c'est là qu'est le gain de temps.
+
+| agent | rôle |
+|---|---|
+| `verificateur-rendu` | inspecte une image de rendu **avec des yeux de client** et liste les défauts |
+| `lecteur-catalogue` | construit la fiche d'intégration d'un jeu depuis toutes ses photos Shopify |
+| `auditeur-supabase` | policies RLS, fonctions definer, cohérence menu ⇄ donnée |
+| `chasseur-leads` | recherche et qualifie des prospects, sans rien écrire ni envoyer |
+
+`verificateur-rendu` est à lancer **après chaque passe de rendu**, avant d'enchaîner : c'est lui
+qui rend la vérification systématique au lieu de dépendre de la vigilance.
+
+`lecteur-catalogue` se lance **en parallèle sur toutes les machines d'une salle** : les fiches se
+préparent en une fois au lieu d'une par une.
+
 ## Documentation durable
 
 - `docs/planner/descriptions-machines.md` — fiches d'intégration par jeu (à enrichir à chaque

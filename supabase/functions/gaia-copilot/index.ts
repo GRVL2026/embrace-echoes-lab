@@ -127,6 +127,34 @@ Schéma disponible (Postgres, schema public) :
     • 'Ouvert', 'Expédition en cours', 'Reliquat' = commandes signées en cours
     • 'Historique', 'Annulé' = À EXCLURE des analyses opérationnelles.
 
+- gaia_achats(id, type_cde, n_cde, inventory_id, statut, date_cde, date_liv, code_fourn, nom_fourn,
+    libelle_cde, vendor_ref, devise, societe, qte_cdee, qte_recue, qte_recue_stock, qte_restante,
+    qte_facturee, description, item_class, montant_facture, montant_ligne, montant_ouvert,
+    reste_a_facturer, pays_fourn, bateau, eta, etd, num_dossier, num_conteneur, taille_conteneur,
+    transitaire, taux_change, cout_revient, date_paiement, order_type, order_nbr, line_nbr, branch, class_id)
+  ACHATS FOURNISSEURS (flux Cegid BD-Achats, rechargé chaque nuit, ~39 000 lignes).
+  C'est LA source pour toute question sur les achats, les fournisseurs, les approvisionnements,
+  les coûts d'achat, les arrivages et les conteneurs. Une ligne = une ligne de commande d'achat.
+  Tu DOIS l'utiliser dès qu'une question porte sur ce que l'entreprise ACHÈTE (et non ce qu'elle vend).
+  • Montant acheté : SUM(montant_ligne). Montant déjà facturé par le fournisseur : SUM(montant_facture).
+  • Exercice fiscal sur date_cde : extract(year from date_cde + interval '4 months')::int
+  • Nom de l'article = description. ATTENTION : libelle_cde n'est PAS le nom du produit,
+    c'est le type de tarif (vaut souvent 'CLASSIQUE'). Affiche
+    coalesce(nullif(trim(description),''), nullif(trim(libelle_cde),'')). item_class = famille (ex. 'JEUX').
+  • ⚠️ PIÈGE MAJEUR — reste_a_facturer n'est JAMAIS remis à zéro à la clôture : il traîne sur les
+    lignes soldées. Une somme brute sur tout l'historique donne ~70 M€ de bruit (les lignes
+    'Clôturé' à elles seules). Le VRAI reste à facturer se calcule uniquement sur les statuts actifs :
+    statut IN ('Ouvert','En attente d''envoi','En attente d''impression','Réceptionné').
+    Exclure toujours 'Brouillon' (non engagé) et 'Annulé'.
+  • Statuts réels : 'Clôturé' (~38 600 lignes, l'essentiel), 'Brouillon', 'Réceptionné', 'Ouvert',
+    'Annulé', 'En attente d''envoi'.
+  • Arrivages / logistique : la clé de regroupement est num_dossier (dossier d'expédition).
+    num_conteneur peut en contenir plusieurs séparés par ' / '. bateau = navire, transitaire = NAXCO/LVO,
+    taille_conteneur = 20/40 PIEDS. ⚠️ eta est très souvent vide ou aberrante (année 2001) :
+    filtrer eta >= '2010-01-01' avant toute analyse de délai.
+  • code_fourn / nom_fourn = fournisseur. NE JAMAIS confondre un fournisseur avec un client :
+    un même nom peut exister des deux côtés. Les clients sont dans gaia_clients / v_gaia_lignes.
+
 OUTIL DOSSIERS COMMERCIAUX (activité de l'équipe) :
 - projects(id, client_name, status, owner_id, brand_id, offer, brief, selected_products, created_at, updated_at)
   Dossiers commerciaux créés par les commerciaux. status ∈ ('draft','sent','won','lost').
@@ -142,6 +170,70 @@ Vues d'analyse déjà disponibles :
   v_gaia_ca_mensuel, v_gaia_ca_client, v_gaia_ca_famille, v_gaia_ca_periode_egale,
   v_gaia_devis_a_relancer, v_gaia_clients_dormants, v_gaia_stock_dormant,
   v_gaia_marge_famille, v_gaia_marge_client (marge = taux de marque : (ca - cout) / ca).
+
+ACTIVITÉ MAGASIN (pièces détachées / comptoir) — famille à part entière, à ne pas confondre
+avec les ventes de machines. Utilise ces vues dès qu'une question porte sur le magasin,
+les pièces, les ruptures ou le stock comptoir :
+- v_gaia_magasin_mensuel(mois, annee, ca_ht, lignes, clients) — évolution mensuelle.
+- v_gaia_magasin_marge(annee, ca_ht, ca_avec_cout, marge_estimee, part_reelle) — marge par exercice.
+- v_gaia_magasin_top_articles(annee, code_article, description, quantite, ca_ht) — meilleures ventes.
+- v_gaia_magasin_top_clients(annee, client, code_client, ca_ht, lignes) — meilleurs acheteurs.
+- v_gaia_magasin_sous_familles(annee, sous_famille, refs, ca_ht) — répartition par sous-famille.
+- v_gaia_magasin_ruptures(code, description, sous_famille, qty_disponible, qte_vendue_6m, ca_6m)
+  articles en rupture (stock <= 0) qui ont pourtant généré du CA sur 6 mois = manque à gagner direct.
+- v_gaia_magasin_stock_valeur(refs, quantite, valeur_achat, valeur_vente) — valorisation du stock.
+- v_gaia_magasin_carnet(categorie, statut, nb, total_ht, sfa) — carnet magasin en cours.
+
+MARGE ET COÛTS À LA LIGNE :
+- v_gaia_lignes_marge(invoice_date, code_client, code_article, inventory_id, classe_article,
+    montant_ht, qty, cout_total, marge_ligne)
+  Identique à v_gaia_lignes mais AVEC le coût et la marge par ligne. À préférer à toute
+  reconstruction manuelle de la marge. Confidentiel : direction/admin uniquement.
+- v_gaia_cout_article(code, cout_unitaire, famille) — coût de revient unitaire par article.
+- v_gaia_article_famille(code, famille) — famille d'un article (jointure légère).
+
+PORTEFEUILLE CLIENT :
+- v_gaia_client_anciennete(client, premiere_facture, derniere_facture, premier_exercice,
+    dernier_exercice_actif, dernier_exercice_avant_courant)
+  Ancienneté et cycle de vie d'un client. Sert à distinguer un NOUVEAU client d'un client
+  historique, et à dater un décrochage.
+
+PARC ARCADE INSTALLÉ (salles de jeux recensées et leurs machines) :
+- v_arcade_salles_parc(id, slug, nom, ville, code_postal, departement, region, type_lieu,
+    prestations, lat, lng, site_web, facebook, fiche_url, fiche_lue_at, prospect_id, code_client,
+    rapprochement, nb_machines, parc_annee_min, parc_annee_moyenne, nb_flippers)
+  Une ligne par salle. code_client renseigné = c'est déjà un client ; prospect_id = fiche prospect liée.
+- v_arcade_parc_resume(salle_id, code_client, prospect_id, nom, type_lieu, nb_machines,
+    nb_flippers, nb_catalogue, annee_moyenne) — résumé du parc d'une salle.
+- v_arcade_modeles(slug, nom, categorie, type_jeu, editeur, annee, code_article, famille_aa,
+    correspondance, salles) — référentiel des modèles de jeux et leur correspondance au catalogue AA.
+
+PROSPECTION (vues agrégées — ⚠️ la table prospects fait plus de 9 000 lignes, ne JAMAIS la
+compter ligne à ligne, passer par ces vues) :
+- v_prospection_avancement(region, departement, segment, total, joignables, distribues,
+    en_reserve, injoignables) — couverture du vivier.
+- v_suivi_prospection(proprietaire, actifs, en_retard, sans_action, servis_semaine,
+    traites_semaine, a_rendre, dernier_service) — charge et retard par commercial.
+  ⚠️ Contexte à connaître : depuis la décision du 07/09/2026, la distribution des leads se fait
+  dans Pipedrive et non dans Arcade OS. Tous les prospects sont en etat='vivier', aucun en 'actif'.
+  Un tableau vide n'est donc PAS une anomalie : ne le présente jamais comme une panne.
+
+TA PROPRE MÉMOIRE (tu peux et dois t'en servir pour situer une question dans le temps) :
+- copilot_learnings(id, jour, resume, faits_marquants, sources, created_at)
+  Un enregistrement par jour : ce qui s'est passé dans l'entreprise et dans le système, avec la
+  source de chaque fait. Relis-le quand une question porte sur une évolution, un incident passé
+  ou un changement récent, plutôt que de répondre que tu n'en sais rien.
+- client_actions(...) — actions commerciales saisies sur une fiche client (appels, mails, visites).
+- copilote_feedback(question, reponse, requetes_sql, note, commentaire) — notes laissées par les
+  utilisateurs sur tes réponses.
+- gaia_equipe(contact_id, nom, login) — annuaire des collaborateurs côté ERP Cegid.
+- fiche_briefs(id, cible_type, cible_id, contenu, faits, empreinte, genere_le, genere_par)
+  briefs déjà générés sur un client ou un prospect.
+
+RÈGLE GÉNÉRALE D'HONNÊTETÉ : avant d'affirmer que tu n'as PAS accès à une donnée, relis ce
+schéma en entier. Si une table ou une vue y figure, tu y as accès : essaie une requête AVANT de
+dire que ce n'est pas disponible. Ne réponds « je n'ai pas cette donnée » que si tu as
+réellement tenté une requête et qu'elle a échoué — et dans ce cas, cite l'erreur exacte.
 
 Vue « Matrice CA × marge » (route /admin/matrice-clients, direction/admin uniquement) : nuage de points client par exercice fiscal, X = CA HT, Y = taux de marge, taille = marge €. Quatre quadrants : Piliers (CA élevé + marge élevée, à protéger), Pépites (CA faible + marge élevée, à développer), Volume (CA élevé + marge faible, à renégocier), Marginaux (CA faible + marge faible, à arbitrer). Seuils ajustables (défaut CA 200 000 €, marge = moyenne pondérée du portefeuille). Quand l'utilisateur demande « clients à gros CA et faible marge » / « à renégocier » / « pépites », renvoie vers cette matrice et liste les clients concernés depuis v_gaia_marge_client de l'exercice courant.
 
@@ -1184,7 +1276,24 @@ async function toolLoop(params: {
         let result: unknown;
         try {
           if (call?.name === 'executer_sql') {
-            result = await runGaiaQuery(admin, String(call?.input?.sql_query ?? ''), salleOnly);
+            const sqlQ = String(call?.input?.sql_query ?? '');
+            result = await runGaiaQuery(admin, sqlQ, salleOnly);
+            // Trace le RÉSULTAT (et pas seulement la requête) : sans ça, l'analyse
+            // quotidienne des conversations ne peut pas distinguer une requête qui a
+            // abouti d'une requête tombée sur une table absente ou un droit refusé.
+            try {
+              const err = (result as any)?.error;
+              const nb = Array.isArray(result)
+                ? result.length
+                : Array.isArray((result as any)?.rows)
+                  ? (result as any).rows.length
+                  : null;
+              onEvent?.('gaia_sql_resultat', {
+                query: sqlQ,
+                erreur: err ? String(err) : null,
+                lignes: nb,
+              });
+            } catch { /* la trace ne doit jamais faire échouer la réponse */ }
           } else if (call?.name === 'memoriser') {
             const scopeInput = String(call?.input?.scope ?? 'global').toLowerCase();
             const scope: 'global' | 'utilisateur' = scopeInput === 'utilisateur' ? 'utilisateur' : 'global';
@@ -1819,6 +1928,19 @@ Deno.serve(async (req) => {
                 summary: String((data as any).summary ?? 'Requête'),
                 query: String((data as any).query ?? ''),
               });
+            }
+            if (event === 'gaia_sql_resultat' && data && typeof data === 'object') {
+              const d = data as any;
+              const q = String(d.query ?? '');
+              // Le step a été poussé juste avant l'exécution : on retrouve le plus récent
+              // portant la même requête et on lui attache son issue.
+              for (let i = collectedSteps.length - 1; i >= 0; i--) {
+                if (collectedSteps[i]?.query === q) {
+                  collectedSteps[i].erreur = d.erreur ?? null;
+                  collectedSteps[i].lignes = d.lignes ?? null;
+                  break;
+                }
+              }
             }
           };
           send('gaia_start', { question, assistant_message_id: assistantMsgId });

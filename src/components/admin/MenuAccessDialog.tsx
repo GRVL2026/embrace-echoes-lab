@@ -210,7 +210,11 @@ export function MenuAccessDialog({
             SPACES.map((space) => {
               const spaceKey = space.key;
               const spaceVal = access[spaceKey];
-              const spaceOn = spaceVal !== false; // undefined ou true = ON (fallback show)
+              // L'interrupteur ne reflete QUE l'enregistrement explicite.
+              // undefined = herite du role : on l'affiche eteint avec un badge, sinon
+              // l'admin croit l'acces accorde alors que rien n'est enregistre.
+              const spaceOn = spaceVal === true;
+              const spaceInherited = spaceVal === undefined;
               const spaceLocked = isSelf && LOCKED_KEYS.has(spaceKey);
               const color = `hsl(var(${space.colorToken}))`;
               return (
@@ -229,6 +233,11 @@ export function MenuAccessDialog({
                         {spaceKey}
                       </div>
                     </div>
+                    {spaceInherited && !spaceLocked && (
+                      <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                        hérité du rôle
+                      </span>
+                    )}
                     {spaceLocked && (
                       <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
                         <Lock className="h-3 w-3" /> verrouillé
@@ -311,7 +320,8 @@ function EntryRow({
   locked: boolean;
   onChange: (v: boolean) => void;
 }) {
-  const on = value !== false;
+  const on = value === true;
+  const inherited = value === undefined;
   const Icon = entry.icon;
   return (
     <div className="flex items-center gap-3 rounded px-3 py-2 hover:bg-muted/40">
@@ -322,6 +332,11 @@ function EntryRow({
           {entry.key}
         </div>
       </div>
+      {inherited && !locked && (
+        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+          hérité du rôle
+        </span>
+      )}
       {locked && (
         <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
           <Lock className="h-3 w-3" /> verrouillé

@@ -360,19 +360,29 @@ export const SPACES: Space[] = [
 ];
 
 /** Vérifie si une clé de menu est autorisée pour ctx.
- *  Règle : admin/direction bypass. Sinon : override explicite user_menu_access
- *  gagne sur le show() ; en l'absence d'override, on retombe sur show()
- *  (backward-compat).
+ *
+ *  Trois états, et l'override DÉCIDE dans les deux sens :
+ *   - aucun enregistrement (undefined) -> on s'en remet au rôle, via show()
+ *   - enregistré à true                -> ACCORDÉ, même si le rôle ne le prévoit pas
+ *   - enregistré à false               -> REFUSÉ, même si le rôle le prévoit
+ *
+ *  Avant le 15/09/2026 le code faisait `override && fallback`, donc une case cochée
+ *  ne pouvait que RETIRER un accès, jamais en donner : impossible d'ouvrir la Gazette
+ *  ou la Carte à un chef des ventes. C'est corrigé ici.
+ *
+ *  Rappel : ceci ne gouverne que l'AFFICHAGE du menu. Les données restent protégées
+ *  par les policies RLS — accorder une entrée peut donner une page vide si la policy
+ *  correspondante ne suit pas.
  */
 export function isMenuKeyAllowed(
   ctx: NavCtx,
   key: string,
   fallback: boolean,
 ): boolean {
-  if (ctx.isAdmin || ctx.isDirection) return fallback;
+  if (ctx.isAdmin || ctx.isDirection) return true;
   const override = ctx.menuAllowed?.(key);
   if (override === undefined) return fallback;
-  return override && fallback;
+  return override;
 }
 
 /** Filtre les entrées visibles d'un espace pour un ctx donné (show + override). */
@@ -399,9 +409,9 @@ export function resolveActive(
   ctx: NavCtx,
 ): { space: Space | null; entry: NavEntry | null } {
   for (const space of SPACES) {
-    if (space.show && !space.show(ctx)) continue;
+    if (!isMenuKeyAllowed(ctx, space.key, space.show ? space.show(ctx) : true)) continue;
     for (const entry of space.entries) {
-      if (entry.show && !entry.show(ctx)) continue;
+      if (!isMenuKeyAllowed(ctx, entry.key, entry.show ? entry.show(ctx) : true)) continue;
       if (entry.match?.(pathname, hash)) return { space, entry };
     }
   }

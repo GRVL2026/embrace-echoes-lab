@@ -75,3 +75,43 @@ inventaire vérifié, orientation validée, historique des ratés.
 Salle en L à 5 jeux : bon rendu. Salle pentagone à 15 jeux : chaîne d'outils en place, méthode
 validée sur 3 machines, série complète encore imparfaite — reste à refaire la passe de la table
 (tour mal placée), réextraire les deux Asphalt, réassembler, et inspecter **chaque** passe à 100 %.
+
+## Acquis du 11/09 (document `docs/planner/passation-2026-09-11.md`, testé en réel)
+
+**Les deux vues doivent partir du MÊME côté de la salle.** Erreur commise le 11/09 : vue 1 dans le
+coin avant-gauche, vue 2 dans le coin avant-droit → la lecture s'inverse et Léopaul a cru que
+**les jeux avaient changé de place**. Deux points de vue voisins (large + rapproché), jamais deux
+murs opposés. ⚠️ Le découpage vue A / vue B du 15/09 violait cette règle.
+
+**Choisir la photo catalogue selon l'azimut caméra↔machine**, pas au hasard : utiliser une vue
+`LF` quand la caméra est à droite montre la machine du mauvais côté (d'où un « flipper qui rend
+bizarrement »).
+```python
+d = normalize(CAM[:2] - machine_xy)
+azimut = degrees(atan2(d.y, d.x)) - machine_rotation - 90   # 0° = de face
+```
+Exclure les angles arrière (135°–225°) : sur une reconstruction 3D, le dos est inventé et flou.
+
+**Ne jamais estimer les cotes.** Écarts mesurés jusqu'à **56 cm** sur 5 jeux
+(Super Blaster 2 : estimé 220×260×245, réel 169×204×301).
+
+**Le métachamp `custom.specs_dimensions` est saisi à la main : 12 variantes relevées** (signe `×`,
+`L`/`P` inversés, `H` manquant, centimètres sans unité, « Test de taille »…). Parseur validé :
+`tools/planner-render/parse_dims.py` — chercher **chaque axe par sa lettre** indépendamment, replier
+sur `NxNxN`, rejeter hors plage 20 cm–10 m. `catalog_products` renvoie 0 ligne au rôle
+`copilot_readonly` : la source est Shopify.
+
+**Les photos de fiche sont des PNG alpha déjà détourés**, en vue ¾ légèrement plongeante, mais de
+résolutions très inégales (2060 px pour un flipper, 540 px pour un Mario Kart) : les jeux basse
+résolution seront mous au premier plan.
+
+**64 GLB SEGA + UNIS déjà optimisés** existent dans `~/Downloads/GLB-optimises-planner/` — travail
+déjà payé, à réutiliser si on revient un jour à une chaîne 3D.
+
+**Piège Twin / DX / Multi** : la fiche Mario Kart 3 GP DX donne les cotes d'**une seule borne**
+(104 cm) alors que la photo en montre deux. À trancher : deux unités dans le Planner, ou un champ
+« nombre de postes ». Même famille de piège que l'Emoji Hoops.
+
+**Six fiches Shopify à corriger à la source** : Flipper Deadpool et Flipper Jurassic Park
+(`Test de taille`), T-rex Park (`L`/`P` inversés), Table Gameland et Table Magic (`H` manquant),
+Billard Winner (`H 800/850`, intervalle).

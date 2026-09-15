@@ -71,6 +71,11 @@ qui rend la vérification systématique au lieu de dépendre de la vigilance.
 `lecteur-catalogue` se lance **en parallèle sur toutes les machines d'une salle** : les fiches se
 préparent en une fois au lieu d'une par une.
 
+**Autorisation permanente (Léopaul, 15/09/2026) : lancer les agents de ma propre initiative, sans
+demander à chaque fois.** Contreparties : dire lequel je lance et pourquoi, rapporter ce qu'il a
+trouvé, et ne pas en mobiliser un pour une broutille. `chasseur-leads` reste en lecture seule :
+il propose, Léopaul et Tristan décident.
+
 ## Documentation durable
 
 - `docs/planner/descriptions-machines.md` — fiches d'intégration par jeu (à enrichir à chaque

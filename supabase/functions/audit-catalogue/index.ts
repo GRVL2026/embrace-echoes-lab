@@ -1,12 +1,30 @@
 // Audit d'hygiène du catalogue Shopify — champ `custom.specs_dimensions`.
 //
-// Ce champ est saisi à la main et douze formats différents ont été relevés en production.
-// Des cotes fausses ou illisibles se propagent partout : Arcade Planner, devis, dossiers
-// commerciaux. Cette fonction les détecte et les consigne dans `catalogue_anomalies`.
+// Ce champ est saisi à la main. Relevé sur les 350 produits actifs : treize écritures
+// différentes, dont le séparateur « × », le séparateur « * », des espaces manquants, des
+// axes sans libellé, des intervalles, et une notation centimètres nue pour les accessoires.
+// Des cotes fausses se propagent partout : Arcade Planner, devis, dossiers commerciaux.
+//
+// PRINCIPE DE CONCEPTION (appris en confrontant une première version au vrai catalogue) :
+// ne JAMAIS s'appuyer sur `productType` ni sur les `tags` pour décider qui doit avoir des
+// cotes. Shopify les type mal — « Bouton flipper », « Articulation à méplat » et
+// « Stern Street Sign » sont tous classés productType « Flippers ». Une première version
+// fondée sur un seuil unique produisait 148 lignes dont 145 fausses : le rapport serait
+// devenu illisible, donc ignoré, donc inutile.
+//
+// Deux mécanismes le remplacent, tous deux auto-cohérents :
+//   1. la NOTATION classe la fiche. Vérifié sur les 350 produits : la forme explicite
+//      « L … x P … x H … mm » n'est employée que par les machines et la monétique ; la forme
+//      nue « 72x26x28 » (centimètres) n'est employée que par les accessoires Stern. La bande
+//      de plausibilité découle donc de l'écriture, sans taxonomie à maintenir.
+//   2. une cote absente n'est signalée que si la fiche technique est COMMENCÉE, c'est-à-dire
+//      si un autre `custom.specs_*` est rempli. Un bouton de flipper n'a aucune spec : silence.
+//      « Angry Birds Fury Road » a capacité, tickets et liaison mais pas de cotes : signalé.
 //
 // Déclenchement : cron `pg_cron` (en-tête `x-cron-secret`) ou appel authentifié.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { analyser, GRAVITE, incoherencesVariantes } from "./analyse.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -19,9 +37,6 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const CRON_SECRET = Deno.env.get("CRON_SECRET") || "";
-
-const MIN_MM = 200;      // 20 cm — en dessous, ce n'est pas une machine
-const MAX_MM = 10000;    // 10 m  — au dessus non plus
 
 function j(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -42,74 +57,6 @@ async function autorise(req: Request): Promise<boolean> {
   return !error && !!data?.user;
 }
 
-type Analyse = {
-  largeur?: number; profondeur?: number; hauteur?: number;
-  anomalie: string | null;      // null = fiche saine
-  detail: string | null;
-};
-
-/** Parseur des 12 variantes relevées en production.
- *  Principe : chercher CHAQUE axe par sa lettre, indépendamment — l'ordre n'a alors plus
- *  d'importance et une inversion L/P dans l'écriture ne fausse rien. */
-export function analyser(brut: string | null | undefined): Analyse {
-  if (!brut || !brut.trim()) {
-    return { anomalie: "manquant", detail: "aucune valeur renseignée" };
-  }
-  const s = brut.replace(/×/g, "x").trim();   // × (U+00D7) -> x
-
-  if (!/\d/.test(s)) {
-    return { anomalie: "illisible", detail: `aucun chiffre : « ${brut.trim()} »` };
-  }
-
-  const axes: Record<string, number> = {};
-  let intervalle = false;
-  for (const [lettre, cle] of [["L", "largeur"], ["P", "profondeur"], ["H", "hauteur"]] as const) {
-    const m = s.match(new RegExp(`\\b${lettre}\\s*(\\d+(?:[.,]\\d+)?)(\\s*/\\s*(\\d+(?:[.,]\\d+)?))?`, "i"));
-    if (!m) continue;
-    const nombres = (m[0].match(/\d+(?:[.,]\d+)?/g) || []).map((v) => parseFloat(v.replace(",", ".")));
-    if (nombres.length > 1) intervalle = true;
-    axes[cle] = Math.max(...nombres);
-  }
-
-  // Repli : format nu « 72x26x28 », utilisé pour les accessoires — en CENTIMÈTRES.
-  if (Object.keys(axes).length === 0) {
-    const nu = s.match(/^\s*(\d+(?:[.,]\d+)?)\s*[xX]\s*(\d+(?:[.,]\d+)?)\s*[xX]\s*(\d+(?:[.,]\d+)?)\s*$/);
-    if (nu) {
-      const [a, b, c] = [nu[1], nu[2], nu[3]].map((v) => parseFloat(v.replace(",", ".")) * 10);
-      return {
-        largeur: a, profondeur: b, hauteur: c,
-        anomalie: "unite_implicite",
-        detail: "format nu sans libellé ni unité — interprété en centimètres (accessoire ?)",
-      };
-    }
-    return { anomalie: "illisible", detail: `format non reconnu : « ${brut.trim()} »` };
-  }
-
-  const manquants = (["largeur", "profondeur", "hauteur"] as const).filter((k) => axes[k] === undefined);
-  const hors = Object.entries(axes).filter(([, v]) => v < MIN_MM || v > MAX_MM);
-
-  const base = { largeur: axes.largeur, profondeur: axes.profondeur, hauteur: axes.hauteur };
-
-  if (manquants.length) {
-    return { ...base, anomalie: "axe_manquant", detail: `axe(s) sans libellé : ${manquants.join(", ")}` };
-  }
-  if (hors.length) {
-    return { ...base, anomalie: "hors_plage",
-      detail: hors.map(([k, v]) => `${k} = ${v} mm`).join(", ") + ` (attendu ${MIN_MM}–${MAX_MM} mm)` };
-  }
-  if (intervalle) {
-    return { ...base, anomalie: "intervalle",
-      detail: "une cote est donnée comme intervalle — la valeur haute est retenue, à confirmer" };
-  }
-  // Ordre d'écriture inhabituel : signalé pour vérification humaine, pas bloquant.
-  const iL = s.search(/\bL\s*\d/i), iP = s.search(/\bP\s*\d/i);
-  if (iL >= 0 && iP >= 0 && iP < iL) {
-    return { ...base, anomalie: "ordre_inhabituel",
-      detail: "« P » est écrit avant « L » : le parseur lit correctement, mais vérifier que les libellés ne sont pas intervertis" };
-  }
-  return { ...base, anomalie: null, detail: null };
-}
-
 const REQUETE = `
   query($cursor: String) {
     products(first: 100, after: $cursor, query: "status:active") {
@@ -117,7 +64,7 @@ const REQUETE = `
         cursor
         node {
           id title handle status
-          metafield(namespace: "custom", key: "specs_dimensions") { value }
+          metafields(namespace: "custom", first: 50) { nodes { key value } }
         }
       }
       pageInfo { hasNextPage endCursor }
@@ -149,22 +96,62 @@ serve(async (req) => {
       cursor = d.data.products.pageInfo.endCursor;
     }
 
-    const lignes = [];
+    const horodatage = new Date().toISOString();
+    const lignes: any[] = [];
+    const saines: { titre: string; largeur?: number; profondeur?: number }[] = [];
+    let notationCm = 0;
+
     for (const p of produits) {
-      const a = analyser(p.metafield?.value);
-      if (!a.anomalie) continue;
+      const champs: Record<string, string> = {};
+      for (const m of p.metafields?.nodes ?? []) champs[m.key] = m.value;
+      const brut = champs["specs_dimensions"] ?? null;
+      // « La fiche technique est-elle commencée ? » — un autre specs_* rempli suffit.
+      const specsVoisines = Object.entries(champs).some(
+        ([k, v]) => k.startsWith("specs_") && k !== "specs_dimensions" && v && v.trim() !== "",
+      );
+
+      const a = analyser(brut, specsVoisines);
+      if (a.notation === "cm") notationCm++;
+      if (!a.anomalie) {
+        saines.push({ titre: p.title, largeur: a.largeur, profondeur: a.profondeur });
+        continue;
+      }
       lignes.push({
         shopify_id: p.id,
         titre: p.title,
         handle: p.handle,
         statut: p.status,
-        valeur_brute: p.metafield?.value ?? null,
+        valeur_brute: brut,
+        notation: a.notation,
         anomalie: a.anomalie,
+        gravite: GRAVITE[a.anomalie] ?? "cosmetique",
         detail: a.detail,
         largeur_mm: a.largeur ?? null,
         profondeur_mm: a.profondeur ?? null,
         hauteur_mm: a.hauteur ?? null,
-        vu_le: new Date().toISOString(),
+        vu_le: horodatage,
+      });
+    }
+
+    // Cohérence des variantes : ne porte que sur les fiches par ailleurs saines, sinon on
+    // comparerait des cotes déjà connues comme fausses.
+    for (const inc of incoherencesVariantes(saines)) {
+      const p = produits.find((x) => x.title === inc.titre);
+      const f = saines.find((x) => x.titre === inc.titre)!;
+      lignes.push({
+        shopify_id: p?.id ?? inc.titre,
+        titre: inc.titre,
+        handle: p?.handle ?? null,
+        statut: p?.status ?? null,
+        valeur_brute: (p?.metafields?.nodes ?? []).find((m: any) => m.key === "specs_dimensions")?.value ?? null,
+        notation: "mm",
+        anomalie: "incoherence_variante",
+        gravite: GRAVITE.incoherence_variante,
+        detail: inc.detail,
+        largeur_mm: f.largeur ?? null,
+        profondeur_mm: f.profondeur ?? null,
+        hauteur_mm: null,
+        vu_le: horodatage,
       });
     }
 
@@ -184,7 +171,10 @@ serve(async (req) => {
       ok: true,
       produits_actifs: produits.length,
       anomalies: lignes.length,
+      bloquantes: lignes.filter((l) => l.gravite === "bloquant").length,
+      cosmetiques: lignes.filter((l) => l.gravite === "cosmetique").length,
       par_type: parType,
+      fiches_notation_centimetres: notationCm,
     });
   } catch (e) {
     console.error("audit-catalogue :", e);

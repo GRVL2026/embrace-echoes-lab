@@ -11,8 +11,10 @@ create table if not exists public.catalogue_anomalies (
   handle         text,
   statut         text,
   valeur_brute   text,
+  notation       text,            -- mm (notation machine) | cm (notation accessoire) | null
   anomalie       text not null,   -- manquant | illisible | axe_manquant | hors_plage
-                                  -- | intervalle | unite_implicite | ordre_inhabituel
+                                  -- | intervalle | ordre_inhabituel | incoherence_variante
+  gravite        text not null,   -- bloquant (cotes inexploitables) | cosmetique
   detail         text,
   largeur_mm     numeric,
   profondeur_mm  numeric,
@@ -23,8 +25,8 @@ create table if not exists public.catalogue_anomalies (
 comment on table public.catalogue_anomalies is
   'Fiches Shopify dont les cotes sont inexploitables. Rempli par l''edge function audit-catalogue.';
 
-create index if not exists catalogue_anomalies_anomalie_idx
-  on public.catalogue_anomalies (anomalie);
+create index if not exists catalogue_anomalies_gravite_idx
+  on public.catalogue_anomalies (gravite, anomalie);
 
 alter table public.catalogue_anomalies enable row level security;
 

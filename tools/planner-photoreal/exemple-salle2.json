@@ -1,0 +1,24 @@
+{
+  "nom": "Salle de test 15/09 — pentagone 15,8 x 11 m",
+  "plafond": 4.0,
+  "largeur": 1600, "hauteur": 900,
+  "polygone": [[0,2.46],[5.61,0],[15.22,1.52],[15.80,10.51],[6.23,11.07],[6.23,7.77],[0.11,8.79]],
+  "camera": { "x": 11.60, "y": 10.00, "cible_x": 11.0, "cible_y": 6.0, "hfov": 95, "oeil": 1.60, "z_cible": 1.30 },
+  "machines": [
+    {"nom":"Asphalt 9 DX","x":6.09,"y":1.48,"L":1.37,"P":2.16,"H":2.46,"rot":9,"mur":1},
+    {"nom":"Asphalt 9 DX","x":7.63,"y":1.48,"L":1.37,"P":2.16,"H":2.46,"rot":9,"mur":1},
+    {"nom":"Emoji Hoops","x":8.76,"y":1.90,"L":1.04,"P":2.415,"H":3.58,"rot":9,"mur":1},
+    {"nom":"Emoji Prize Box 1p LCD","x":9.87,"y":1.55,"L":0.80,"P":0.965,"H":2.235,"rot":9,"mur":1},
+    {"nom":"Emoji Prize Box 1p LCD","x":10.65,"y":1.51,"L":0.80,"P":0.965,"H":2.235,"rot":9,"mur":1},
+    {"nom":"Emoji Prize Box 1p LCD","x":11.43,"y":1.49,"L":0.80,"P":0.965,"H":2.235,"rot":9,"mur":1},
+    {"nom":"Bitronic 55\"","x":12.44,"y":1.46,"L":0.78,"P":0.50,"H":2.30,"rot":9,"mur":1},
+    {"nom":"Capsule Express 8P","x":13.99,"y":1.63,"L":2.16,"P":0.61,"H":1.905,"rot":9,"mur":1},
+    {"nom":"Emoji Power Puck Single","x":9.97,"y":5.37,"L":2.34,"P":1.525,"H":0.94,"rot":0,"mur":null},
+    {"nom":"Emoji Power Puck Multi","x":9.97,"y":7.02,"L":2.34,"P":1.525,"H":1.70,"rot":0,"mur":null},
+    {"nom":"Cyber Boxer","x":14.55,"y":5.14,"L":0.79,"P":1.25,"H":2.10,"rot":86,"mur":2},
+    {"nom":"Emoji Hoops","x":6.91,"y":9.71,"L":1.04,"P":2.415,"H":3.58,"rot":183,"mur":3},
+    {"nom":"Bullseyes Crack Shot","x":7.96,"y":9.85,"L":1.04,"P":1.89,"H":2.55,"rot":183,"mur":3},
+    {"nom":"Big Foot Crush","x":9.25,"y":9.89,"L":1.24,"P":1.528,"H":2.30,"rot":183,"mur":3},
+    {"nom":"Asphalt 9 DX","x":14.97,"y":9.36,"L":1.37,"P":2.16,"H":2.46,"rot":183,"mur":3}
+  ]
+}

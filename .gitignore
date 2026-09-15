@@ -25,3 +25,6 @@ dist-ssr
 
 # sorties du harnais caméra Planner
 artifacts/
+
+# artefacts locaux de la CLI Supabase
+supabase/.temp/

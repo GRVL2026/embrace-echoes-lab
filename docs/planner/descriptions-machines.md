@@ -12,6 +12,11 @@ passées au modèle → le nom du produit est une donnée.
 **Rappel transverse** : les cotes catalogue **n'incluent pas** les casquettes lumineuses, toppers
 et écrans hauts. Le CORPS remplit le repère, l'élément lumineux déborde — c'est correct.
 
+> **Ce n'est PAS universel — vérifier par machine.** Contre-exemple mesuré le 15/09 sur la
+> planche cotée du fabricant : **Bullseyes Crack Shot**, dont le H de 2550 mm **inclut** le
+> topper (corroboré par la variante 2 écrans, marquee plat, cotée plus bas à 2240 mm).
+> À l'inverse **Big Foot Crush** confirme la règle : casquette à 2448 mm pour une cote de 2300.
+
 ---
 
 ## Emoji Prize Box 1p LCD — L 800 × P 965 × H 2235 mm
@@ -151,3 +156,327 @@ bandes LED sur les montants, socle noir portant « DARTS » à la verticale.
 Simulateur **moto biplace** : deux selles côte à côte devant un bloc à **deux écrans**, dos au mur,
 écrans vers la salle. **Piège** : vu de trois quarts, le modèle étale la profondeur en largeur —
 les selles débordent du volume. Rappeler qu'elles sont DEVANT le bloc écrans, pas à côté.
+
+---
+
+## Bullseyes Crack Shot — L 1040 × P 1890 × H 2550 mm
+
+Fiche Shopify : `bullseyes-crack-shot` (id 15286857171319), vendor **Ace Amusement**, type « Tir ».
+Métachamps relevés : `specs_dimensions` = `L 1040 x P 1890 x H 2550 mm` (format nominal, **aucune
+anomalie** — pas de `×`, pas d'axe manquant, pas d'inversion `L`/`P`) ; `specs_power` = 1050 W ;
+`specs_capacity` = **2 joueurs** ; `specs_tickets` = Oui.
+
+**⚠️ Exception à la règle transverse : ici la cote H INCLUT la casquette lumineuse.** Vérifié sur la
+planche cotée du fabricant (photo `_2`, 3000 px) : le trait de cote 255 cm a son tiret supérieur à
+y = 65 px alors que le sommet du topper néon est à y = 59 px. La machine ne doit donc **pas**
+dépasser 2,55 m au total, topper compris — contrairement aux Emoji Hoops / Prize Box où le topper
+déborde de la cote. Sous un plafond de 3,5 m il reste 95 cm de dégagement.
+Les arcs de cote donnent aussi : 104 cm = largeur de la **console** au sol, 189 cm = profondeur
+**totale du bloc** (avant de la console → arrière de la tour). Les deux blocs entrent donc dans
+l'emprise de 1040 × 1890.
+
+**Une machine = deux blocs séparés, non jointifs** : une tour porte-écran + une console à deux
+pistolets posée devant elle, alignées sur le même axe, avec un intervalle libre au sol (intervalle
+**non mesuré** sur les photos — ne pas inventer de valeur, coller la console près du socle de la tour).
+
+---
+
+### Photos : 9 disponibles — mais **3 modèles différents dans la même fiche**
+
+| Fichier Shopify | Déf. | Ce qu'on y voit | Usage |
+|---|---|---|---|
+| `BULLSEYES_CRACK_SHOT_1.png` | 1000² | version fiche, vue depuis l'avant-**droite** joueur | **secondaire** (basse déf.) |
+| `BULLSEYES_CRACK_SHOT_2.png` | 3000² | même pose que la 1 + **cotes imprimées en noir** | **cotes seulement, jamais au modèle** |
+| `BULLSEYES_CRACK_SHOT_3.png` | 3000² | version fiche, vue depuis l'avant-**gauche** joueur, propre | **PRINCIPALE** |
+| `BULLSEYE_CRACK_SHOT_2E2P_1/2/3.png` | 390² / 800² / 658² | **autre modèle** : 2 écrans + **2 consoles** | **à écarter** |
+| `BULLSEYE_CRACK_SHOT_1E1P_1/2/3.png` | 3000² | **autre modèle** : 1 écran + 1 console **1 pistolet** | **à écarter** |
+
+**Les 2 à 3 photos à passer au modèle : `_3` (référence) et `_1` (côté opposé). Rien d'autre.**
+
+---
+
+### Inventaire, du haut vers le bas
+
+**A. Topper (bloc tour)**
+- **Casquette néon en forme de nuage**, montée sur mât au-dessus de la tour, **plus large que la
+  tour**, légèrement en surplomb vers l'avant.
+- Halo arrière : **3 à 4 tubes néon blanc-bleu glacé concentriques** épousant la silhouette en
+  nuage, ponctués de petits tirets lumineux.
+- Plaque centrale **ovale rouge dégradé (bordeaux → rouge vif)**, à bosses arrondies aux deux bouts.
+- Texte : **« BULLSEYE »** en grosses capitales blanches cernées de rouge, en relief, légèrement
+  arquées ; **« CRACK SHOT »** dessous, capitales blanches plus petites sur bandeau sombre.
+- **À l'extrémité DROITE de la plaque** : petit logo rouge **« Ace Amusement »** + micro-texte.
+- ⚠️ Le marquee dit **BULLSEYE** au singulier ; le titre Shopify dit « Bullseye**s** ». Demander
+  « BULLSEYE CRACK SHOT » au modèle.
+
+**B. Tour porte-écran**
+- **Écran LCD vertical (portrait)** dans un **cadre rouge vif** vissé, occupant presque toute la
+  hauteur du caisson. Contenu : jeu de tir vue subjective — score en haut, `COMBO`, chronomètre
+  `TIME` en bas, compteur `9/2` ou `7/2` en pastille bleue.
+- **Deux ailerons lumineux verticaux** débordant de part et d'autre du caisson, chacun cerné d'un
+  **tube LED blanc continu** en rectangle arrondi à encoche :
+  - **aile GAUCHE (côté joueur 1) = MAGENTA/ROSE**, texte **« PLAYER 1 »** à la verticale, lettres
+    blanches lues de bas en haut, plus des chevrons jaunes et blancs ;
+  - **aile DROITE (côté joueur 2) = BLEU/CYAN**, texte **« PLAYER 2 »** à la verticale, mêmes
+    chevrons jaunes.
+- Sous l'écran : **panneau large légèrement incliné**, grille perforée dense en **matrice de points
+  LED, magenta à gauche virant cyan à droite**, laissant voir **deux cônes de haut-parleur ronds**
+  sombres. Petits triangles lumineux aux deux bouts. **Aucun texte** sur ce panneau.
+- **Socle noir bas à empreinte hexagonale chanfreinée**, débordant vers l'avant, **liseré LED blanc**
+  sur son arête supérieure avant, étiquette blanche d'avertissement posée à plat sur le dessus.
+  Jupe pleine jusqu'au sol, **roulettes non visibles** sur cette version.
+
+**C. Console à pistolets (devant la tour, face au joueur)**
+- Bloc bas en **deux pods jumeaux jointifs**, chacun en coin/prisme à facettes, dessus bombé
+  brillant incliné vers le joueur.
+- **Bande verticale JAUNE-AMBRE** large et brillante **au milieu**, séparant les deux pods sur toute
+  la hauteur de la façade.
+- **Pod GAUCHE = magenta/violet/cramoisi**, tube LED **magenta** en contour ;
+  **pod DROIT = bleu/cyan**, tube LED **blanc-cyan** en contour.
+- Dessus de chaque pod : **graphismes de circuit imprimé en trait néon cyan-blanc** sur fond verni,
+  plus un **petit viseur jaune imprimé** entre les deux pistolets. **Aucun bouton poussoir** sur
+  cette version 2 joueurs.
+- **Deux pistolets**, un par pod : corps noir à **culasse colorée — ROUGE à gauche (joueur 1),
+  BLEUE à droite (joueur 2)**, marquage « ACE » à l'arrière de la culasse. Chacun pendu à une
+  **potence noire coulissant sur un rail horizontal droit** porté par deux montants noirs (le
+  « curseur mobile » annoncé dans la description produit). Les canons pointent vers l'écran.
+- **Flanc EXTÉRIEUR de chaque pod** : grand **viseur/cible jaune** (cercles concentriques + croix +
+  crochets d'angle) sur **panneau hexagonal rouge cramoisi**, cerné du tube LED de couleur du pod.
+- **Façade de chaque pod** (celle qui regarde le joueur) : porte sombre brun-noir à angles arrondis,
+  cernée du tube LED ; dessus **une plaque argentée en écusson** (lecteur / monnayeur) avec LED
+  rouge, et **une plaque argentée rectangulaire** à fente de pièces et levier de rendu ; petit
+  bouton LED rouge au-dessus. Pas de monnayeur à billets visible.
+- **Liseré LED** en bas de façade, petit logo **« Ace Amusement »** en bas du flanc gauche.
+- Jupe pleine jusqu'au sol, **pas de roulettes visibles**.
+
+---
+
+### Orientation validée
+
+- **Le dos, c'est l'arrière de la TOUR porte-écran** → c'est cette face qui va au mur.
+- La **console est côté salle**, ses pistolets pointant vers l'écran, ses monnayeurs et sa bande
+  jaune tournés vers le joueur, donc **vers la salle**.
+- L'axe long (189 cm) est perpendiculaire au mur d'appui. La largeur 104 cm court le long du mur.
+- **Joueur 1 = rouge/magenta = à GAUCHE quand on regarde l'écran** ; joueur 2 = bleu = à droite.
+  L'aile magenta « PLAYER 1 » et le pistolet rouge sont du même côté.
+- Prévoir du **recul devant la console** (le joueur se tient debout derrière elle) : ne pas la
+  coller à une autre machine côté salle.
+
+---
+
+### Pièges propres à ce jeu
+
+1. **La fiche mélange 3 modèles.** 6 photos sur 9 ne sont pas le produit coté.
+   - `_2E2P_*` = **2 écrans / 2 joueurs**, `L 1700 x P 1730 x H 2240 mm - 1300W` : un bandeau
+     marquee horizontal bleu, **deux** écrans portrait côte à côte, **deux consoles séparées à un
+     seul pistolet**, habillage violet à bandes roses. Donné au modèle → machine deux fois trop
+     large et **console dupliquée**.
+   - `_1E1P_*` = **1 joueur**, `L 860 x P 1730 x H 2320 mm - 1000W` : tour rouge et noire à motifs
+     de cible orange, marquee **« ACE SPORT »** sous l'écran, gros **œil rond lumineux vert-turquoise**,
+     halo de topper **violet**, **un seul pistolet bleu**, **roulettes blanches visibles**, bande
+     **rose** au centre de la console. Aucun aileron « PLAYER 1 / PLAYER 2 ». Donné au modèle → on
+     rend une autre borne.
+   - Les deux variantes ne sont **que** dans le texte de description, pas dans les variantes Shopify
+     (une seule variante « Default Title ») : le Planner ne peut pas les distinguer automatiquement.
+2. **`BULLSEYES_CRACK_SHOT_2.png` porte les cotes du fabricant en dur** : trois flèches noires et
+   les textes « 255cm (100.4") », « 189cm (74.4") », « 104cm (40.9") », qui **chevauchent le bas de
+   la machine** — impossible de les recadrer. Si on la passe au modèle, il recopie les flèches.
+   C'est la source des cotes, pas une référence de rendu.
+3. **La cote H = 2550 mm inclut le topper** (cf. plus haut). Ne pas rajouter 40 cm de casquette
+   « parce que la règle transverse le dit ».
+4. **Boîte alpha trompeuse sur la photo `_3`** : la bbox alpha fait 2824 px de haut (y 36 → 2860),
+   mais la verticale réelle de la machine (sommet du topper → contact au sol de la **tour**) ne fait
+   que ~2504 px. Le bas de la console, plus proche de l'objectif, descend 320 px plus bas dans le
+   cadre. **Caler le sprite sur la bbox brute sous-dimensionne la machine de ~13 %.**
+5. **Billboard = largeur faussée** (§5.4 de la passation) : en vue ¾ la silhouette contient les
+   104 cm de large **et** les 189 cm de profondeur — sur `_3` elle fait 2073 px, soit ~187 cm
+   apparents pour une machine de 104 cm de large. Mettre à l'échelle sur la **hauteur**, jamais sur
+   le ratio de l'image.
+6. **Artefact de détourage** : sur `_3`, une **frange noire en dents de scie** court le long du bord
+   droit du pod bleu. À nettoyer avant composite, sinon elle passe pour une fissure du meuble.
+7. **Orthographe** : marquee « BULLSEYE », titre catalogue « Bullseyes ». Ne pas compter une faute
+   au rendu s'il écrit BULLSEYE — c'est ce qui est sur la machine.
+8. **Les deux blocs ne se touchent pas.** Un rendu qui soude la console au socle de la tour, ou qui
+   la pose sur la plateforme, est faux. Inversement, un écart supérieur à ~50 cm ferait sortir
+   l'ensemble des 189 cm cotés.
+
+---
+
+### Points de contrôle pour `comparateur-fiche`
+
+Compter / vérifier sur la machine rendue :
+- **1** tour porte-écran, **1** console, **2** pistolets (pas 1, pas 4), **1** écran portrait.
+- Pistolet **rouge à gauche**, **bleu à droite** (vus depuis le joueur).
+- Aileron **magenta « PLAYER 1 » à gauche**, **bleu « PLAYER 2 » à droite** de l'écran.
+- **Bande verticale jaune-ambre** au centre de la console.
+- **Viseur jaune** sur le flanc extérieur de chaque pod.
+- Topper **nuage rouge + halo néon blanc-bleu**, texte **BULLSEYE / CRACK SHOT**, logo Ace à droite.
+- Panneau LED **magenta→cyan à deux haut-parleurs ronds** sous l'écran.
+- Hauteur totale **≤ 2,55 m topper compris**.
+- **Pas** de marquee horizontal bleu, **pas** de second écran, **pas** de gros disque vert, **pas**
+  de bande rose centrale, **pas** de « ACE SPORT » : ce sont les signatures des deux autres modèles.
+
+---
+
+**Historique** — 15/09/2026 : jeu **absent du rendu FINALE de la salle pentagone** — vérifié par projection : entièrement hors cadre avec la caméra du JSON. La fiche a été créée d'après la consigne erronée « rendu sans fiche » ; elle reste valable, mais rien n'a jamais été rendu à confronter. Fiche
+créée après coup depuis les 9 photos Shopify (planche de contact + 8 zooms pleine résolution sur
+`_2` et `_3`). Rien n'a encore été confronté à un rendu : l'inventaire ci-dessus est vérifié sur
+photo, l'orientation est déduite de la géométrie des photos (console côté monnayeurs = côté joueur),
+**pas encore validée par Léopaul sur une image générée**.
+
+---
+
+## Big Foot Crush — L 1240 × P 1528 × H 2300 mm
+
+**Produit retenu** : `big-foot-crush` (Shopify AA, id 15286855238007, vendor **Unis**, type « Jeux famille »).
+Le nom exact « Big Foot Crush » existe au catalogue — aucune interprétation nécessaire.
+**Ne pas confondre avec `big-foot-smash`** (« Big Foot Smash », 3 joueurs, L1780 x P 1860 x H 2440 mm),
+autre machine Unis de la même licence, avec une casquette très proche. Un troisième GLB local
+(`BigfootMyhem.glb`) n'a **pas** de fiche Shopify : il n'est pas au catalogue.
+
+**Caractéristiques de la fiche** : 2 joueurs · 2 écrans 32" · 300 W · 200 kg · distribution de
+tickets **oui** · linkabilité non.
+
+Photos : `BIG_FOOT_CRUSH_1..5.png` (**5 dispos**).
+- `_1` **632 × 925** — packshot studio complet, trois-quarts **avant-DROIT**, légèrement plongeant.
+  **C'est la photo à utiliser.** Seule vue entière exploitable.
+- `_2` **300 × 400** — même packshot en **miroir** (trois-quarts avant-GAUCHE). Trop petite pour
+  servir de référence ; utile seulement pour vérifier la symétrie des flancs.
+- `_3` 600 × 704 — gros plan volant + tableau de bord bleu + monnayeur, **en situation** (moquette
+  sombre).
+- `_4` 600 × 704 — les **deux baquets vus de la salle** (de dos), en situation.
+- `_5` 600 × 704 — gros plan du baquet bleu vu de la salle, en situation.
+
+À passer au modèle : `_1` en principale ; `_4` recadrée serrée si le rendu montre la machine
+depuis la salle ; `_3` recadrée serrée pour le poste de conduite. **`_3/_4/_5` ont un fond
+d'arcade sombre** — les recadrer serré, sinon le cadrage est recopié.
+
+### Inventaire, du haut vers le bas
+
+- **Casquette (topper) découpée**, plus haute que large, centrée sur le meuble : une **boule de feu
+  orange-rouge-jaune** en fond, devant laquelle **trois monster trucks bleus** — un de face au
+  centre, deux de trois quarts derrière lui à gauche et à droite — sortent d'une **gerbe de rayons
+  blancs**.
+- **Rampe de 5 lampes rondes** à cerclage chromé, alignées horizontalement sur une réglette blanche
+  festonnée, juste au-dessus du logo.
+- **« BIGFOOT »** en grandes capitales bâton sur plaque blanche découpée ; lettres en dégradé
+  **bleu en haut → blanc → doré en bas**, contour noir, petit **®** en bas à droite du T.
+- Sous le logo, **panneau rectangulaire noir** portant **« CRUSH » en jaune vif, pinceau, légèrement
+  montant vers la droite** ; logo **« UNIS »** en blanc en bas à droite de ce panneau noir.
+- **Deux gros pneus crantés noirs en relief** encadrent le panneau noir, un à chaque extrémité ;
+  leur moyeu est un **anneau LED RVB** (rose-magenta en haut, cyan-turquoise en bas sur la photo).
+- **Panneau vertical du meuble, partagé en deux moitiés dans le sens de la hauteur** : moitié
+  **GAUCHE rouge**, moitié **DROITE bleue**, toutes deux imprimées d'un **semis d'engrenages noirs**
+  (roues dentées de tailles variées).
+- **Deux écrans LCD verticaux (portrait) côte à côte**, un par joueur, sans encadrement apparent,
+  **32" chacun** (≈ 39 × 71 cm, de 0,75 m à 1,46 m du sol sur le modèle 3D). Image d'attraction
+  identique sur les deux : ciel bleu, logo BIGFOOT CRUSH avec pneus violets, monster truck rouge
+  dans le sable, bandeau **« PLEASE INSERT COIN (S) »** et **« (0/1) »**. Petite étiquette
+  d'avertissement à triangle jaune collée en bas à gauche de l'écran gauche.
+- **Sur chaque flanc du meuble haut** (gauche ET droit, symétriques) :
+  - **flanc imprimé** d'un monster truck bleu, gradins et flammes ;
+  - **un pot d'échappement chromé vertical** de monster truck : coude à 90° vers l'avant en bas,
+    fût vertical, **bouche coupée en biseau vers l'avant** en haut, tenu par **deux colliers noirs** ;
+  - **une rampe verticale d'une douzaine d'ampoules rondes blanches** collée le long du pot.
+  C'est **le pot qui donne la largeur réelle** — voir « Cotes » plus bas.
+- **Deux consoles de conduite moulées en capot de camion**, en saillie sous les écrans :
+  **ROUGE à gauche, BLEUE à droite**.
+  - Chacune porte un **cadran hexagonal** à fond bleu nuit (graphismes de cristaux) : **compteur de
+    vitesse rond à gauche** (« 97 km/h »), **rond de rapport engagée à droite** (gros « 3 »), petit
+    afficheur au centre.
+  - **Volant noir à trois branches**, jante épaisse, moyeu chromé boulonné, **deux boutons ronds
+    rouges** sur les branches hautes (un à gauche, un à droite).
+  - **Liseré LED** le long de l'arête extérieure de chaque capot (rose côté rouge, blanc-bleu côté
+    bleu).
+- **Socle noir du meuble**, imprimé du même semis d'engrenages rouge à gauche / bleu à droite ;
+  **un monnayeur chromé par joueur** (platine ronde à fente verticale + goulotte de rendu), monté
+  à hauteur de genoux ; barillets de serrure chromés à côté.
+- **Marchepied en tôle larmée chromée** devant chaque siège, sur une plinthe de ~9 cm, avec une
+  **pédale grise** posée dessus.
+- **Deux baquets « monster truck » indépendants, posés au sol devant le meuble** :
+  **ROUGE à gauche, BLEU à droite** (vus depuis la salle). Chacun est une caisse de camion de
+  ~52 cm de large, laquée brillante, et comporte **du haut vers le bas, sur sa face tournée vers
+  la salle** :
+  - **un gros pneu cranté noir dressé verticalement, centré, qui fait office de dossier**
+    (≈ 40 cm de diamètre), jante noire à branches, et **anneau LED blanc-violet allumé entre la
+    jante et le pneu** ;
+  - **assise noire plate**, basse (≈ 45 cm du sol), côté écran, devant le pneu-dossier ;
+  - **réglette chromée horizontale** sous le pneu, abritant un **ruban LED RVB** ;
+  - **plaque noire « BIGFOOT »** en lettres dorées cerclées de sombre, à ~20 cm du sol ;
+  - **quatre feux ronds alignés** (Ø ≈ 8,5 cm, pas de 12 cm), cerclés de chrome, verre teinté rouge,
+    **allumés en orange chaud** ;
+  - **bande de tôle larmée chromée** puis **socle noir** posé à même le sol ;
+  - sur le flanc du baquet, **un petit passage de roue avec une roue chromée** décorative.
+- **Sur chaque flanc bas, en avant du meuble** (gauche ET droit, symétriques) : **grand panneau plat
+  à angle avant-haut chanfreiné**, bordé sur tout son contour avant et haut par un **liseré LED**
+  (blanc / rose / bleu selon le cycle RVB), imprimé de l'**affiche du jeu** : monster truck bleu et
+  blanc bondissant, gros pneus noirs, jets de flammes rouge et jaune, gradins, faisceaux de
+  projecteurs ; **« BIGFOOT »** en capitales blanc-doré et, dessous, **« CRUSH » en ROUGE**, pinceau.
+  ⚠️ **Le « CRUSH » du flanc est ROUGE, celui de la casquette est JAUNE.** Petits logos Unis /
+  licence Bigfoot en bas à gauche du panneau.
+
+### Orientation
+
+- **Le dos = l'arrière du meuble haut** (celui qui porte les écrans et la casquette). Aucune photo
+  ne montre ce dos ; il est plaqué au mur.
+- **Les deux baquets monster truck sortent vers la salle** et sont la première chose que le client
+  voit : ce qu'on lit depuis la salle, ce sont les **deux pneus-dossiers illuminés**, les deux
+  plaques « BIGFOOT » et les **huit feux ronds orange** (4 + 4).
+- **Rouge à gauche, bleu à droite** pour qui se tient dans la salle face à la machine. Constant sur
+  les 5 photos.
+- Chaque joueur a **son écran juste au-dessus de son baquet** (écran rouge au-dessus du baquet
+  rouge, écran bleu au-dessus du baquet bleu) — ne pas les décaler.
+- Dans la salle pentagone (`exemple-salle2.json`) : x 9.25, y 9.89, **rot 183°, mur 3**, entre
+  **Bullseyes Crack Shot** (à ~15 cm seulement) et le reste du mur du fond. **Machine mitoyenne** :
+  la générer dans l'image qui contient déjà sa voisine, pas isolément.
+
+### Pièges propres à ce jeu
+
+- **⚠️ Piège n°1 — ce n'est PAS une machine en paire.** Les deux caisses de monster truck rouge et
+  bleue appartiennent à **UNE SEULE borne** : une casquette, un meuble, deux écrans, deux baquets.
+  `_4` et `_5` cadrent les baquets seuls et ressemblent à « deux machines » ; `_1` et `_2` montrent
+  bien l'ensemble unique. Ne jamais dupliquer la borne, ne jamais séparer les baquets.
+- **⚠️ Piège n°2 — « 2 joueurs » ≠ deux postes séparés.** Le champ « Capacité joueurs : 2 » et la
+  cote L 1240 décrivent bien **un seul meuble à deux places**, contrairement au piège
+  Twin / DX / Multi (Mario Kart 3 GP DX).
+- **⚠️ Piège n°3 — les cotes sous-estiment l'emprise réelle.** Mesuré au bounding box sur le modèle
+  3D Unis livré avec les assets (`~/Downloads/Big foot Crush.glb`, emprise 1448 × 1709 × 2448 mm) :
+  - **largeur** : la cote **1240 mm = le meuble sans les pots d'échappement** ; les deux pots
+    ajoutent ~10 cm de chaque côté → **1448 mm réels** ;
+  - **profondeur** : la cote **1528 mm exclut la saillie des pneus-dossiers** → **1710 mm réels** ;
+  - **hauteur** : haut du meuble **1916 mm**, sommet de la casquette **2448 mm** ; la cote 2300 ne
+    correspond ni à l'un ni à l'autre. **La casquette déborde du repère de ~50 cm : c'est correct.**
+  Pour le Planner, garder la cote catalogue (1,24 × 1,528 × 2,30 m, déjà en place dans
+  `exemple-salle2.json`), mais prévoir ~20 cm de dégagement latéral et ~18 cm devant.
+- **Le champ `custom.specs_dimensions` est propre** : `L 1240 x P 1528 x H 2300 mm` — trois axes,
+  unité présente, aucune des 12 variantes malformées. `parse_dims.py` le rend bien
+  `{width: 124.0, depth: 152.8, height: 230.0}` cm. **Rien à corriger à la source.**
+  (En revanche, la fiche voisine **Big Foot Smash** est saisie `L1780 x P 1860 x H 2440 mm`, sans
+  espace après le L — à signaler si on repasse sur les fiches à corriger.)
+- **Résolution faible** : la meilleure photo fait **632 × 925**, soit à peine mieux que le Mario Kart
+  (540 px) cité dans la passation. **Ne pas placer cette machine au tout premier plan** : la source
+  est molle, la casquette et les deux plaques « BIGFOOT » sortiront approximatives.
+- **Deux « CRUSH » de couleurs différentes** (jaune sur la casquette, rouge sur les flancs) : ne pas
+  uniformiser, et ne pas compter un écart quand le comparateur voit l'un ou l'autre.
+- **Les pots d'échappement chromés sont l'élément le plus facilement oublié** par le modèle (fins,
+  latéraux, sur fond imprimé). Les citer explicitement dans la consigne, sinon la machine perd sa
+  silhouette.
+- **Distribution de tickets = Oui** d'après la fiche, mais **aucune sortie de tickets n'est
+  identifiable sur les 5 photos** : ne rien inventer, et ne pas compter son absence comme un écart.
+
+### Historique
+
+- **15/09** — jeu **absent du rendu FINALE de la salle pentagone** — vérifié par projection : entièrement hors cadre avec la caméra du JSON. La fiche a été créée d'après la consigne erronée « rendu sans fiche » ; elle reste valable, mais rien n'a jamais été rendu à confronter ; fiche créée
+  a posteriori. Rien n'a encore été confronté au rendu existant.
+- **Méthode, ce coup-ci** : les outils MCP Shopify n'étaient **pas chargeables** via `ToolSearch`
+  dans cette session (aucun `graphql_query` disponible). Données récupérées sur la **vitrine
+  publique de la boutique** — `avranchesautomatic.com/products/big-foot-crush.json` pour les 5
+  médias, page produit rendue pour le bloc « Caractéristiques » (qui expose `specs_dimensions`).
+  Même source, autre porte d'entrée. À refaire via `graphql_query` si les outils reviennent.
+- **Géométrie tranchée en pleine résolution, pas en vignette** : sur la planche de contact le gros
+  pneu de chaque baquet ressemble à une roue de flanc ; à 100 % sur `_4` et `_5` c'est
+  **le dossier du siège**, face à la salle. C'est exactement le piège qui avait coûté deux erreurs
+  sur la tour de l'Emoji Power Puck.
+- **Symétrie des flancs établie et non supposée** : `_1` ne montre que le flanc droit, `_2` (miroir)
+  que le flanc gauche. Croisé avec les vues orthographiques gauche/droite du GLB Unis — **les deux
+  flancs sont identiques**, pot d'échappement et panneau d'affiche compris.

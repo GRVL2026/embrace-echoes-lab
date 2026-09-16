@@ -155,6 +155,25 @@ Schéma disponible (Postgres, schema public) :
   • code_fourn / nom_fourn = fournisseur. NE JAMAIS confondre un fournisseur avec un client :
     un même nom peut exister des deux côtés. Les clients sont dans gaia_clients / v_gaia_lignes.
 
+- catalogue_anomalies(shopify_id, titre, handle, statut, valeur_brute, notation, anomalie,
+    gravite, detail, largeur_mm, profondeur_mm, hauteur_mm, vu_le)
+  HYGIÈNE DU CATALOGUE SHOPIFY : fiches dont les cotes (métachamp custom.specs_dimensions)
+  sont illisibles, incomplètes ou aberrantes. Remplie par l'edge function audit-catalogue,
+  qui VIDE la table à chaque passage : une fiche corrigée en disparaît d'elle-même, donc
+  le contenu est toujours l'état du dernier audit (vu_le) et jamais un historique.
+  • gravite = 'bloquant' (cotes inexploitables) ou 'cosmetique' (simple écart de convention).
+    Pour une liste d'actions, filtre sur 'bloquant' : le reste est du bruit de présentation.
+  • notation = 'mm' (machine) ou 'cm' (accessoire). NE JAMAIS appliquer un seuil de plausibilité
+    unique aux deux : c'est ce qui avait produit 145 faux positifs sur 148 (les accessoires Stern,
+    shooter knob 12 cm ou dust cover 10 cm, étaient accusés d'être hors plage alors qu'ils sont justes).
+  • Enjeu : ces cotes alimentent l'Arcade Planner, les devis et les dossiers commerciaux.
+    Une valeur fausse se propage à tout l'aval — c'est un sujet de fiabilité, pas de cosmétique.
+
+- v_gaia_excluded_clients(code) — clients volontairement exclus des statistiques commerciales
+  (intra-groupe, comptes techniques). Quand un client attendu n'apparaît pas dans un calcul de
+  CA ou de marge, VÉRIFIE CETTE VUE avant de conclure à une absence de données : c'est presque
+  toujours l'explication. Mentionne l'exclusion dans ta réponse plutôt que de dire « aucune donnée ».
+
 OUTIL DOSSIERS COMMERCIAUX (activité de l'équipe) :
 - projects(id, client_name, status, owner_id, brand_id, offer, brief, selected_products, created_at, updated_at)
   Dossiers commerciaux créés par les commerciaux. status ∈ ('draft','sent','won','lost').

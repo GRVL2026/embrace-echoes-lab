@@ -34,7 +34,6 @@ const cors = {
 const SHOPIFY_STORE = "zhx0nb-11.myshopify.com";
 const API_VERSION = "2025-01";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const CRON_SECRET = Deno.env.get("CRON_SECRET") || "";
 
@@ -45,16 +44,32 @@ function j(status: number, body: unknown) {
   });
 }
 
+// Deux portes : le cron (x-cron-secret) ou un utilisateur du management.
+// Vérifier la seule existence d'un utilisateur ne suffit pas : la table alimentée est
+// en lecture réservée au management, et chaque passage consomme le quota Shopify
+// (350 produits, 4 appels GraphQL). On s'aligne donc sur importer-salles-arcade
+// et gazette-locale, qui contrôlent le rôle dans user_roles.
 async function autorise(req: Request): Promise<boolean> {
-  if (CRON_SECRET && req.headers.get("x-cron-secret") === CRON_SECRET) return true;
+  const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+
+  const cronHeader = req.headers.get("x-cron-secret") ?? "";
+  if (cronHeader) {
+    if (CRON_SECRET && cronHeader === CRON_SECRET) return true;
+    // Repli pour pg_cron, qui lit le secret dans gaia_config (cf. shopify-stats-refresh).
+    const { data: cfg } = await admin
+      .from("gaia_config").select("value").eq("key", "cron_secret").maybeSingle();
+    if (cfg?.value && cronHeader === cfg.value) return true;
+  }
+
   const auth = req.headers.get("Authorization") || "";
   if (!auth.startsWith("Bearer ")) return false;
-  const token = auth.slice(7);
-  const sb = createClient(SUPABASE_URL, ANON_KEY, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  });
-  const { data, error } = await sb.auth.getUser(token);
-  return !error && !!data?.user;
+  const { data: u } = await admin.auth.getUser(auth.slice(7));
+  if (!u?.user) return false;
+
+  const { data: roles } = await admin
+    .from("user_roles").select("role").eq("user_id", u.user.id);
+  return (roles || []).some((r: any) =>
+    r.role === "admin" || r.role === "direction" || r.role === "chef_ventes");
 }
 
 const REQUETE = `

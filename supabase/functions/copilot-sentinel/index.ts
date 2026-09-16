@@ -157,20 +157,50 @@ async function collectSignals(): Promise<Signal[]> {
     id: "marge_derive",
     titre: "Dérive de marge par famille vs N-1",
     visibilite: "direction",
-    note: "Familles dont le taux de marque brute a baissé de plus de 3 points vs N-1.",
+    note: "Familles dont le taux de marque brute a baissé de plus de 3 points vs N-1, à période égale et au-dessus de 20 k€ de CA sur les deux périodes.",
+    // L'exercice court du 1er septembre au 31 août. Comparer l'exercice en cours à
+    // l'exercice N-1 ENTIER met quelques jours face à douze mois : le 16/09/2026 ce
+    // détecteur annonçait « Changeurs -20 pts » sur un CA de -8 131 € (un avoir) et
+    // « Pièces & divers -20 pts » sur 308 €. On borne donc N-1 au même nombre de jours
+    // écoulés, et on exige un volume minimum sur les DEUX périodes.
     rows: await safeRpc("marge_derive", `
-      with tx as (
-        select annee, famille,
-               round((marge_estimee / nullif(ca_avec_cout,0) * 100)::numeric, 1) as tx_marque
-        from v_gaia_marge_famille
+      with bornes as (
+        select (extract(year from (current_date + interval '4 mons'))::int) as fy,
+               make_date(extract(year from (current_date + interval '4 mons'))::int - 1, 9, 1) as debut_n
       ),
-      derniere as (select max(annee) as an from tx)
-      select n.famille, n.tx_marque as tx_marque_n, p.tx_marque as tx_marque_n1,
-             round((n.tx_marque - p.tx_marque)::numeric, 1) as delta_pts
+      b2 as (
+        select fy, debut_n, (current_date - debut_n) as jours, make_date(fy-2,9,1) as debut_n1
+        from bornes
+      ),
+      base as (
+        select case when l.invoice_date >= b.debut_n then 'N' else 'N1' end as periode,
+               coalesce(c.famille,'Pièces & divers') as famille,
+               sum(l.montant_ht) filter (where l.marge_ligne is not null or c.cout_unitaire is not null) as ca_avec_cout,
+               sum(coalesce(l.marge_ligne, l.montant_ht - l.qty*c.cout_unitaire))
+                 filter (where l.marge_ligne is not null or c.cout_unitaire is not null) as marge
+        from v_gaia_lignes_marge l
+        left join v_gaia_cout_article c on c.code = btrim(l.code_article)
+        cross join b2 b
+        where l.invoice_date is not null
+          and l.code_article not in (select code from v_gaia_ecotax_codes)
+          and ( (l.invoice_date >= b.debut_n  and l.invoice_date <= current_date)
+             or (l.invoice_date >= b.debut_n1 and l.invoice_date <= b.debut_n1 + b.jours) )
+        group by 1,2
+      ),
+      tx as (
+        select periode, famille, ca_avec_cout,
+               round((marge/nullif(ca_avec_cout,0)*100)::numeric,1) as tx_marque
+        from base
+      )
+      select n.famille,
+             round(n.ca_avec_cout) as ca_n,  n.tx_marque as tx_marque_n,
+             round(p.ca_avec_cout) as ca_n1, p.tx_marque as tx_marque_n1,
+             round((n.tx_marque - p.tx_marque)::numeric,1) as delta_pts
       from tx n
-      join derniere d on d.an = n.annee
-      join tx p on p.famille = n.famille and p.annee = n.annee - 1
-      where p.tx_marque - n.tx_marque > 3
+      join tx p on p.famille = n.famille and p.periode = 'N1'
+      where n.periode = 'N'
+        and n.ca_avec_cout > 20000 and p.ca_avec_cout > 20000
+        and p.tx_marque - n.tx_marque > 3
       order by (p.tx_marque - n.tx_marque) desc
       limit 10
     `),
@@ -208,16 +238,39 @@ async function collectSignals(): Promise<Signal[]> {
     rows: veilleItemsHauts.slice(0, 12),
   });
 
-  // 8. Gonflement du carnet de reliquats
+  // 8. Gonflement du carnet de commandes (les « reliquats » au sens Cegid :
+  //    commandes enregistrées non encore livrées).
+  //    La version précédente filtrait `categorie = 'reliquat'`, valeur qui n'existe
+  //    pas dans v_gaia_carnet_documents (seules valeurs : devis, commande, reparation) :
+  //    le détecteur renvoyait 0 depuis toujours, silencieux ET faux. Il s'appuie
+  //    maintenant sur gaia_carnet_snapshot, qui garde une photo quotidienne du carnet.
   signals.push({
     id: "reliquats_gonflement",
-    titre: "Gonflement anormal du carnet de reliquats",
+    titre: "Gonflement anormal du carnet de commandes",
     visibilite: "copilot",
-    note: "Total reliquats vs il y a 1 mois : signaler si progression > 20%.",
+    note: "Carnet de commandes non livrées comparé à il y a ~30 jours : à signaler au-delà de +20 %.",
     rows: await safeRpc("reliquats_gonflement", `
-      select coalesce(sum(total_ht),0) as total_now, count(*)::int as nb_documents
-      from v_gaia_carnet_documents
-      where categorie = 'reliquat' and coalesce(sfa,false) = false
+      with refs as (
+        select max(snapshot_date) as jour_max,
+               (select max(snapshot_date) from gaia_carnet_snapshot
+                 where snapshot_date <= max(s.snapshot_date) - 30) as jour_ref
+        from gaia_carnet_snapshot s
+      ),
+      agg as (
+        select s.snapshot_date, sum(s.total_ht) as total, count(*)::int as nb
+        from gaia_carnet_snapshot s, refs r
+        where s.categorie = 'commande' and coalesce(s.sfa,false) = false
+          and s.snapshot_date in (r.jour_max, r.jour_ref)
+        group by 1
+      )
+      select (select jour_max from refs) as le_jour,
+             (select jour_ref from refs) as compare_a,
+             round(max(total) filter (where snapshot_date = (select jour_max from refs))) as total_now,
+             round(max(total) filter (where snapshot_date = (select jour_ref from refs))) as total_ref,
+             max(nb)    filter (where snapshot_date = (select jour_max from refs)) as nb_documents,
+             round(((max(total) filter (where snapshot_date = (select jour_max from refs))
+                   / nullif(max(total) filter (where snapshot_date = (select jour_ref from refs)),0) - 1) * 100)::numeric, 1) as variation_pct
+      from agg
     `),
   });
 

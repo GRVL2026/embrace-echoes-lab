@@ -569,9 +569,11 @@ export type Database = {
         Row: {
           anomalie: string
           detail: string | null
+          gravite: string
           handle: string | null
           hauteur_mm: number | null
           largeur_mm: number | null
+          notation: string | null
           profondeur_mm: number | null
           shopify_id: string
           statut: string | null
@@ -582,9 +584,11 @@ export type Database = {
         Insert: {
           anomalie: string
           detail?: string | null
+          gravite: string
           handle?: string | null
           hauteur_mm?: number | null
           largeur_mm?: number | null
+          notation?: string | null
           profondeur_mm?: number | null
           shopify_id: string
           statut?: string | null
@@ -595,9 +599,11 @@ export type Database = {
         Update: {
           anomalie?: string
           detail?: string | null
+          gravite?: string
           handle?: string | null
           hauteur_mm?: number | null
           largeur_mm?: number | null
+          notation?: string | null
           profondeur_mm?: number | null
           shopify_id?: string
           statut?: string | null

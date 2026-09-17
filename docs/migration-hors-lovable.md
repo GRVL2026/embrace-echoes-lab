@@ -148,6 +148,13 @@ de demander au chat Lovable de le faire « sans modifier une seule ligne », pui
 qu'il a obéi. Après migration, c'est une commande.
 
 ### Phase 5 — Les crons
+**Premier cron posé le 16/09 : `cegid-keepalive-hebdo`** (job 1, lundis 7h UTC). Il appelle
+`cegid-sync` en mode `discover` — 2 lignes lues, aucune écriture — pour réarmer le compteur
+de 60 jours de l'application Cegid. Vérifié en exécutant la commande du job : HTTP 200,
+`token_step.ok = true`. **À supprimer après la bascule**, la synchro nocturne suffira.
+
+Note : `gaia_config.cron_secret` a été aligné sur le CRON_SECRET du nouveau projet — la
+valeur restaurée était celle de l'instance Lovable.
 Recréer les 14 planifications en réécrivant l'URL du projet dans chaque commande.
 Reprendre le motif de `shopify-stats-refresh`, qui lit le secret dans `gaia_config` au lieu
 de l'écrire en dur. En profiter pour **faire la rotation du CRON_SECRET**, exposé le 15/09.

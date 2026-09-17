@@ -54,12 +54,35 @@ La bascule n'intervient qu'à la phase 8, et elle est réversible jusque-là.
 Créer le projet Supabase (plan Pro, région West EU Ireland), définir le mot de passe de la
 base **au moment de la création** et le consigner dans le gestionnaire de mots de passe.
 
-### Phase 2 — La base
-Export frais depuis Lovable le jour J (les données bougent chaque nuit), puis :
-schéma via la recette testée, données via `pg_restore --data-only`.
-Inclure cette fois les schémas `auth` (les 7 comptes avec leurs mots de passe hachés) et
-`cron`. Finir par un audit de sécurité complet — RLS, fonctions SECURITY DEFINER, droits
-`anon` — car c'est la couche où une erreur est silencieuse.
+### Phase 2 — La base — **FAITE le 16/09/2026** sur `dkoroqqvfyjmkaoidwzq`
+
+Résultat vérifié : 69 tables, 40 vues, 98 fonctions, 166 policies, RLS active sur les 69
+tables, 750 autorisations rejouées sans erreur, 91 relations lisibles par
+`copilot_readonly`, et les **7 comptes utilisateurs avec leurs mots de passe**.
+
+**L'ordre EXACT, chaque écart ayant coûté un échec :**
+
+1. Extensions d'abord : `pg_trgm`, `unaccent`, `pg_net` **dans public**, puis `pg_cron`.
+   Elles expliquent l'écart 98 → 63 fonctions si on les oublie.
+2. **Les DEUX rôles** : `copilot_readonly` ET **`sandbox_exec`**. Ce second rôle n'apparaît
+   nulle part dans l'analyse du schéma mais porte **120 autorisations** : sans lui, elles
+   disparaissent en silence. pg_dump n'exporte jamais les rôles.
+3. `pg_restore --schema-only --schema=public --no-owner` — **surtout PAS
+   `--no-privileges`**, sinon tous les GRANT à `copilot_readonly` sont perdus.
+4. **`auth.users` AVANT les données de `public`** : sinon 55 tables échouent sur leurs clés
+   étrangères. Puis `auth.identities` APRÈS `auth.users` (l'ordre du dump est inverse).
+5. `pg_restore --data-only --schema=public --no-owner`. **Ne pas utiliser
+   `--disable-triggers`** : il exige des droits superutilisateur que Supabase n'accorde pas.
+6. Rejouer les tables restées vides pour cause de clé étrangère (`dossier_vues`,
+   `client_actions`), puis `refresh materialized view` sur les deux vues `mv_gaia_*`,
+   puis `analyze`.
+
+**Écarts de comptage attendus** : la production vit pendant l'opération. `gaia_achats` peut
+même avoir MOINS de lignes en production qu'au moment du dump, car `cegid-sync` remplace ce
+flux à chaque passage. D'où la règle : **export frais juste avant la bascule**.
+
+Reste à faire sur cette phase : un audit de sécurité complet sur la cible — RLS, fonctions
+SECURITY DEFINER, droits `anon` — car c'est la couche où une erreur est silencieuse.
 
 ### Phase 3 — Les secrets
 Réémettre les 29 secrets. Les identifiants **Cegid** sont les plus sensibles : sans eux, la

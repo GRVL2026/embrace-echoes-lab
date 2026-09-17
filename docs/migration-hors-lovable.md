@@ -184,11 +184,22 @@ visibilité d'origine — `models-3d`, `brand-slides`, `planner-media` en public
 le dump. Attention : elles ne sont PAS créées par la restauration du schéma `public`, il faut
 les extraire avec `pg_restore --schema=storage`.
 
-Restent les **211 fichiers** (~1 Go), qui ne sont pas dans le dump. Tous les buckets non
-vides étant publics, ils sont téléchargeables sans authentification depuis
-`.../storage/v1/object/public/<bucket>/<chemin>` puis re-téléversables avec la clé
-`service_role` du nouveau projet. `shipment-docs` est vide, donc son caractère privé ne pose
-aucun problème de transfert.
+**FICHIERS TRANSFÉRÉS le 16/09 : 211 sur 211, zéro échec.** Volume réel **271 Mo**
+(models-3d 214,6 Mo / brand-slides 15,7 Mo / planner-media 40,9 Mo) — et non ~1 Go comme
+l'estimation par échantillon le laissait croire, un fichier de 34 Mo l'ayant biaisée.
+
+Méthode : les buckets non vides étant tous publics, les fichiers se téléchargent sans
+authentification depuis `.../storage/v1/object/public/<bucket>/<chemin>`, puis se
+re-téléversent en `POST .../storage/v1/object/<bucket>/<chemin>` avec la clé `service_role`
+du nouveau projet, en-tête `x-upsert: true` et le `content-type` d'origine (récupéré par un
+`HEAD` sur la source — sans lui, Supabase range tout en `application/octet-stream` et les
+images ne s'affichent plus).
+
+Vérifié sur la cible : 211 objets, répartition identique à la production, et un fichier
+servi publiquement répond HTTP 200.
+
+**À refaire le jour J** pour les fichiers ajoutés entre-temps (`x-upsert: true` rend
+l'opération rejouable sans risque). `shipment-docs` est vide.
 
 ### Phase 7 — Le front
 Déployer sur Vercel depuis GitHub. **Valeurs exactes à renseigner** (la clé publishable est

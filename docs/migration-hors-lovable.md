@@ -100,6 +100,13 @@ répond HTTP 401, donc vivante et protégée. **Docker n'est pas requis** : l'av
 
 La CLI s'utilise sans installation via `npx --yes supabase@latest <commande>`.
 
+**PHASE FAITE le 16/09 : les 47 fonctions sont déployées sur `dkoroqqvfyjmkaoidwzq`**, toutes
+`ACTIVE`, par une seule commande `supabase functions deploy --project-ref <ref>` (sans
+argument : déploie tout). Vérifié en anonyme : `gaia-copilot` 401, `cegid-sync` 403,
+`copilot-sentinel` 401, `audit-catalogue` 401 — protections intactes.
+`lgm-webhook` répond 500 faute de `LGM_WEBHOOK_SECRET` : **à revérifier après la phase 3**,
+on attend « invalid token » (fail-closed) et non une erreur serveur.
+
 C'est le bénéfice central de la migration : aujourd'hui, déployer une edge function exige
 de demander au chat Lovable de le faire « sans modifier une seule ligne », puis de vérifier
 qu'il a obéi. Après migration, c'est une commande.

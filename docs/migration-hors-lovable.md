@@ -100,9 +100,25 @@ après 60 jours sans connexion** : la bascule doit donc intervenir **avant la mi
 Validé le 16/09 : `client_id` et `client_secret` acceptés par
 `.../identity/connect/token` (l'erreur est passée de `invalid_client` à
 `invalid_username_or_password`, ce qui prouve que l'application est reconnue).
-Restent à obtenir le `username` et le `password` du compte utilisateur associé —
-le flux Cegid est « Resource Owner Password », il exige un utilisateur en plus de
-l'application.
+**RÉSOLU le 16/09** : le compte utilisateur est `rfioriti` (format Cegid = initiale du
+prénom + nom, PAS l'adresse e-mail ni le login d'interface web). Vérifié de bout en bout :
+jeton obtenu, puis **les 7 flux OData répondent HTTP 200**, et `cegid-sync` exécutée sur le
+nouveau projet renvoie `token_step.ok = true`.
+
+Piège qui a coûté 25 essais : ni `lpoblin`, ni les adresses e-mail, ni les variantes avec
+suffixe `@AVRANCHES` ne fonctionnent. Le format est **initiale + nom, en minuscules, sans
+suffixe**.
+
+⚠️ **Deux dettes à traiter après la bascule** :
+- le compte utilisé est le compte **nominatif de Romain**. Si son mot de passe change ou si
+  son compte est désactivé, la synchronisation s'arrête. Demander un compte de service dédié.
+- son mot de passe est `mdp1234!` — trivial, pour un accès en lecture à l'intégralité des
+  données commerciales. À changer indépendamment de la migration.
+
+**Leçon plus large** : le compte qui fait tourner la synchronisation en production depuis
+juillet reste inconnu — son mot de passe n'existe que dans les secrets Lovable, qui ne les
+communique pas. Si ce compte avait été désactivé, la synchronisation se serait arrêtée sans
+aucun moyen de la relancer.
 
 **À faire après la bascule** : demander à Romain de régénérer le secret de
 `dashboardleo2` (il a transité en clair lors de la mise en place), et de supprimer

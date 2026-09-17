@@ -85,8 +85,28 @@ Reste à faire sur cette phase : un audit de sécurité complet sur la cible —
 SECURITY DEFINER, droits `anon` — car c'est la couche où une erreur est silencieuse.
 
 ### Phase 3 — Les secrets
-Réémettre les 29 secrets. Les identifiants **Cegid** sont les plus sensibles : sans eux, la
-synchronisation nocturne s'arrête. S'assurer de les avoir AVANT de basculer.
+Réémettre les secrets. Décompte réel : 32 référencés, dont 3 fournis automatiquement par
+Supabase (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) et 3 à
+supprimer avec les fonctions mortes (`LOVABLE_API_KEY`, `SKETCHFAB_API_TOKEN`,
+`FIRECRAWL_API_KEY`) — soit **26 à poser**, dont 4 générables localement (`CRON_SECRET`
+et les trois `VAPID_*`).
+
+**Cegid — ⏰ CONTRAINTE DE DÉLAI.** Une application connectée dédiée (`dashboardleo2`) a été
+créée par Romain le 16/09/2026, en parallèle de l'existante (`dashboardleo`) qui continue
+d'alimenter la production. Son secret n'expire qu'en 2099, **mais l'application est révoquée
+après 60 jours sans connexion** : la bascule doit donc intervenir **avant la mi-novembre
+2026**, sinon il faut repasser par Romain.
+
+Validé le 16/09 : `client_id` et `client_secret` acceptés par
+`.../identity/connect/token` (l'erreur est passée de `invalid_client` à
+`invalid_username_or_password`, ce qui prouve que l'application est reconnue).
+Restent à obtenir le `username` et le `password` du compte utilisateur associé —
+le flux Cegid est « Resource Owner Password », il exige un utilisateur en plus de
+l'application.
+
+**À faire après la bascule** : demander à Romain de régénérer le secret de
+`dashboardleo2` (il a transité en clair lors de la mise en place), et de supprimer
+l'application `dashboardleo`.
 
 ### Phase 4 — Les edge functions — **VALIDÉ le 16/09/2026**
 `supabase functions deploy` pour les 48 (moins celles qu'on supprime).

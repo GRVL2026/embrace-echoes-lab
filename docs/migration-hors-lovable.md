@@ -191,7 +191,24 @@ vides étant publics, ils sont téléchargeables sans authentification depuis
 aucun problème de transfert.
 
 ### Phase 7 — Le front
-Déployer sur Vercel depuis GitHub, avec les 4 variables Vite pointant sur le nouveau projet.
+Déployer sur Vercel depuis GitHub. **Valeurs exactes à renseigner** (la clé publishable est
+publique par nature — elle est déjà embarquée dans le bundle servi au navigateur) :
+
+```
+VITE_SUPABASE_PROJECT_ID=dkoroqqvfyjmkaoidwzq
+VITE_SUPABASE_URL=https://dkoroqqvfyjmkaoidwzq.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRrb3JvcXF2ZnlqbWthb2lkd3pxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2MjkyODMsImV4cCI6MjEwNTIwNTI4M30.oCep9jPCYWddBD98nYGUEtUcI8wkmNETP06Q-IHkFj0
+VITE_DOSSIER_SHARE_ORIGIN=https://dossiers.avranchesautomatic.workers.dev
+```
+
+⚠️ Le fichier `.env` est **commité dans le dépôt** et poussé sur GitHub. Sans danger pour
+ces trois variables, mais à corriger : ajouter `.env` au `.gitignore` et passer par les
+variables d'environnement de Vercel, sinon la première variable sensible ajoutée par
+mégarde partira en public.
+
+`VITE_DOSSIER_SHARE_ORIGIN` n'est pas dans le `.env` actuel : le code retombe sur une
+valeur par défaut (cf. `src/components/dossier/DossierPreview.tsx:84`). À expliciter au
+moment du déploiement.
 
 ### Phase 8 — La bascule
 Fenêtre calme, hors activité commerciale. Repointer le Worker Cloudflare, le webhook LGM

@@ -81,8 +81,26 @@ tables, 750 autorisations rejouées sans erreur, 91 relations lisibles par
 même avoir MOINS de lignes en production qu'au moment du dump, car `cegid-sync` remplace ce
 flux à chaque passage. D'où la règle : **export frais juste avant la bascule**.
 
-Reste à faire sur cette phase : un audit de sécurité complet sur la cible — RLS, fonctions
-SECURITY DEFINER, droits `anon` — car c'est la couche où une erreur est silencieuse.
+**AUDIT DE SÉCURITÉ FAIT le 16/09 — et il a trouvé une régression majeure.**
+
+À la restauration, la cible présentait **41 fonctions SECURITY DEFINER exécutables par
+`anon`**, contre 0 en production. Cause : le dump date de 9h49, soit AVANT l'application des
+`REVOKE` du matin ; et toute fonction créée par Lovable naît avec `EXECUTE` accordé à
+`PUBLIC`. **Une migration qui se serait arrêtée à « les comptes correspondent » aurait mis en
+ligne une base ouverte.**
+
+Correctif appliqué : `REVOKE EXECUTE ... FROM public, anon` sur les 41, puis `GRANT` à
+`authenticated` sur les 27 qui l'ont en production. Puis 14 `REVOKE` supplémentaires, la
+cible étant plus permissive que la production sur des fonctions internes (triggers, tâches
+de maintenance, routines appelées en `service_role`).
+
+État final vérifié, **identique à la production** : 41 SECDEF, 0 pour `anon`, 27 pour
+`authenticated`. Sondes anonymes avec la clé publique : `gaia_ventes`, `gaia_clients`,
+`gaia_achats` renvoient `permission denied` ; `prospects`, `profiles`, `user_roles`
+renvoient `[]` ; les RPC sensibles sont fermées. Aucune fuite.
+
+**Règle à retenir : ne jamais supposer que la sécurité se transporte avec les données.**
+Rejouer cet audit après CHAQUE restauration, y compris celle du jour de la bascule.
 
 ### Phase 3 — Les secrets
 Réémettre les secrets. Décompte réel : 32 référencés, dont 3 fournis automatiquement par
@@ -160,8 +178,17 @@ Reprendre le motif de `shopify-stats-refresh`, qui lit le secret dans `gaia_conf
 de l'écrire en dur. En profiter pour **faire la rotation du CRON_SECRET**, exposé le 15/09.
 
 ### Phase 6 — Le storage
-Télécharger puis re-téléverser les 3 buckets. Conserver la lecture publique sur
-`models-3d` (les dossiers partagés sont consultés hors session).
+**Structure FAITE le 16/09** : les **4** buckets (et non 3) sont créés sur la cible avec leur
+visibilité d'origine — `models-3d`, `brand-slides`, `planner-media` en public,
+`shipment-docs` en privé — et les **8 policies** de `storage.objects` sont restaurées depuis
+le dump. Attention : elles ne sont PAS créées par la restauration du schéma `public`, il faut
+les extraire avec `pg_restore --schema=storage`.
+
+Restent les **211 fichiers** (~1 Go), qui ne sont pas dans le dump. Tous les buckets non
+vides étant publics, ils sont téléchargeables sans authentification depuis
+`.../storage/v1/object/public/<bucket>/<chemin>` puis re-téléversables avec la clé
+`service_role` du nouveau projet. `shipment-docs` est vide, donc son caractère privé ne pose
+aucun problème de transfert.
 
 ### Phase 7 — Le front
 Déployer sur Vercel depuis GitHub, avec les 4 variables Vite pointant sur le nouveau projet.

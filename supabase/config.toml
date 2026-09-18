@@ -61,3 +61,87 @@ verify_jwt = false
 verify_jwt = false
 [functions.enrichir-prospect]
 verify_jwt = false
+
+# Complété le 16/09/2026 : la production Lovable a verify_jwt=false sur les 47
+# fonctions (mesuré par sondage anonyme), mais seules 21 étaient déclarées ici.
+# Sans ces entrées, la passerelle Supabase rejette les appels des crons avec
+# UNAUTHORIZED_NO_AUTH_HEADER avant même d'atteindre le code de la fonction.
+# La sécurité reste assurée par le code applicatif (401/403 vérifiés sur chacune).
+
+[functions.admin-invite-user]
+verify_jwt = false
+
+[functions.audit-catalogue]
+verify_jwt = false
+
+[functions.brief-fiche]
+verify_jwt = false
+
+[functions.copilot-sentinel]
+verify_jwt = false
+
+[functions.enrichir-contacts-google]
+verify_jwt = false
+
+[functions.enrichir-contacts-osm]
+verify_jwt = false
+
+[functions.enrichir-prospects-osm]
+verify_jwt = false
+
+[functions.envoyer-relance-client]
+verify_jwt = false
+
+[functions.envoyer-vers-lgm]
+verify_jwt = false
+
+[functions.extraire-emails-sites]
+verify_jwt = false
+
+[functions.gaia-copilot]
+verify_jwt = false
+
+[functions.gazette-locale]
+verify_jwt = false
+
+[functions.generer-accroche-prospect]
+verify_jwt = false
+
+[functions.generer-relance-client]
+verify_jwt = false
+
+[functions.generer-vue]
+verify_jwt = false
+
+[functions.importer-cabines-photo]
+verify_jwt = false
+
+[functions.importer-glb]
+verify_jwt = false
+
+[functions.importer-prospects-naf]
+verify_jwt = false
+
+[functions.importer-salles-arcade]
+verify_jwt = false
+
+[functions.mcp]
+verify_jwt = false
+
+[functions.pipedrive-deals]
+verify_jwt = false
+
+[functions.pipedrive-explore]
+verify_jwt = false
+
+[functions.rapprocher-arcade]
+verify_jwt = false
+
+[functions.rapprocher-cabines]
+verify_jwt = false
+
+[functions.shopify-stock-sync]
+verify_jwt = false
+
+[functions.veille-marche]
+verify_jwt = false

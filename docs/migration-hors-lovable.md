@@ -67,6 +67,24 @@ tables, 750 autorisations rejouées sans erreur, 91 relations lisibles par
 2. **Les DEUX rôles** : `copilot_readonly` ET **`sandbox_exec`**. Ce second rôle n'apparaît
    nulle part dans l'analyse du schéma mais porte **120 autorisations** : sans lui, elles
    disparaissent en silence. pg_dump n'exporte jamais les rôles.
+
+2 bis. **Les APPARTENANCES de rôles — le piège le plus subtil.** pg_dump n'exporte pas non
+   plus qui est membre de quoi. À rejouer impérativement :
+   ```sql
+   grant copilot_readonly to authenticated;
+   grant copilot_readonly to service_role;
+   grant sandbox_exec   to postgres;
+   ```
+   Sans elles, `gaia_query` échoue sur `permission denied to set role "copilot_readonly"`
+   (elle fait `SET LOCAL ROLE`), et **les 7 détecteurs de la Sentinelle tombent d'un coup** —
+   alors que le rôle existe, que les GRANT de tables sont posés et que tout paraît correct.
+   Requête de contrôle, à comparer avec la production :
+   ```sql
+   select r.rolname, g.rolname from pg_auth_members m
+     join pg_roles r on r.oid=m.member join pg_roles g on g.oid=m.roleid
+    where g.rolname in ('copilot_readonly','sandbox_exec');
+   ```
+   Vérifié après correction : Sentinelle `ok=true`, **9 signaux, 0 détecteur en échec**.
 3. `pg_restore --schema-only --schema=public --no-owner` — **surtout PAS
    `--no-privileges`**, sinon tous les GRANT à `copilot_readonly` sont perdus.
 4. **`auth.users` AVANT les données de `public`** : sinon 55 tables échouent sur leurs clés

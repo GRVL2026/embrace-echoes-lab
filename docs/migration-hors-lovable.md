@@ -219,8 +219,32 @@ servi publiquement répond HTTP 200.
 **À refaire le jour J** pour les fichiers ajoutés entre-temps (`x-upsert: true` rend
 l'opération rejouable sans risque). `shipment-docs` est vide.
 
-### Phase 7 — Le front
-Déployer sur Vercel depuis GitHub. **Valeurs exactes à renseigner** (la clé publishable est
+### Phase 7 — Le front — **DÉPLOYÉ le 16/09 sur `arcade-os.pages.dev`**
+
+**Hébergeur : Cloudflare Pages, pas Vercel.** Le plan gratuit de Vercel interdit l'usage
+commercial : il aurait fallu le plan Pro à 20 $/mois/utilisateur. Cloudflare Pages est
+gratuit sans cette restriction, et le compte existait déjà (Worker `dossiers`).
+
+Configuration : projet `arcade-os`, branche `main`, build `npm run build` (PAS `bun run
+build` : bun n'est pas installé et Cloudflare le propose en détectant `bun.lockb`),
+sortie `dist`, plus les 4 variables Vite.
+
+Vérifié sur le site déployé : **9 références au nouveau projet, 0 à l'ancien**.
+
+**Pièges rencontrés :**
+- *« Retry deployment » rejoue le commit précédent*, il ne récupère pas les nouveaux. Après
+  un correctif, il faut **Create deployment**, pas *Retry*.
+- Les paramètres de build saisis à la création peuvent ne pas être enregistrés : vérifier
+  dans le log l'absence de `No build command specified. Skipping build step.`
+- **Cloudflare Pages refuse tout fichier de plus de 25 Mio.** `public/models/` en contenait
+  trois (Monster_Kart 82,7 / dinostorm 35,9 / bowlingchamp 25,2). Deux étaient DÉJÀ dans le
+  bucket `models-3d` en double ; le troisième y a été téléversé, et les 8 références de
+  `src/lib/shopifyApi.ts` pointent désormais vers le bucket. `public/` : 178 Mo → 34 Mo.
+  ⚠️ Ces URL sont en dur sur le nouveau projet : la production Lovable charge donc ces trois
+  modèles depuis le nouveau bucket jusqu'à la bascule.
+
+Reste à faire : le domaine `arcade-os.avranchesautomatic.com` (CNAME à créer chez **OVH**,
+qui gère le DNS — le domaine principal pointe vers Shopify, ne pas y toucher). **Valeurs exactes à renseigner** (la clé publishable est
 publique par nature — elle est déjà embarquée dans le bundle servi au navigateur) :
 
 ```

@@ -3,19 +3,25 @@ import type { GameEquipment } from "@/types/equipment";
 import { DEFAULT_SAFETY_ZONE } from "@/types/equipment";
 
 
+// Trois modèles dépassent la limite de 25 Mio par fichier de Cloudflare Pages
+// (Monster_Kart 82,7 Mio, dinostorm 35,9 Mio, bowlingchamp 25,2 Mio) : ils sont
+// servis depuis le bucket public models-3d au lieu d'être embarqués dans le build.
+// Les six autres restent dans public/models, sous la limite.
+const MODELS_3D_CDN = "https://dkoroqqvfyjmkaoidwzq.supabase.co/storage/v1/object/public/models-3d";
+
 // 3D model mapping: product handle/title keyword → .glb file path
 const MODEL_3D_MAP: Record<string, string> = {
-  "monster-kart": "/models/Monster_Kart.glb",
-  "monster kart": "/models/Monster_Kart.glb",
+  "monster-kart": `${MODELS_3D_CDN}/monster-kart/1784212042380-MonsterKart.glb`,
+  "monster kart": `${MODELS_3D_CDN}/monster-kart/1784212042380-MonsterKart.glb`,
   "galaxy-ranger": "/models/galaxyranger.glb",
   "galaxy ranger": "/models/galaxyranger.glb",
   "galaxyranger": "/models/galaxyranger.glb",
-  "bowling-champ": "/models/bowlingchamp.glb",
-  "bowling champ": "/models/bowlingchamp.glb",
-  "bowlingchamp": "/models/bowlingchamp.glb",
-  "dino-storm": "/models/dinostorm.glb",
-  "dino storm": "/models/dinostorm.glb",
-  "dinostorm": "/models/dinostorm.glb",
+  "bowling-champ": `${MODELS_3D_CDN}/bowling-champ/bowlingchamp.glb`,
+  "bowling champ": `${MODELS_3D_CDN}/bowling-champ/bowlingchamp.glb`,
+  "bowlingchamp": `${MODELS_3D_CDN}/bowling-champ/bowlingchamp.glb`,
+  "dino-storm": `${MODELS_3D_CDN}/dino-storm/1784212028681-DinoStorm.glb`,
+  "dino storm": `${MODELS_3D_CDN}/dino-storm/1784212028681-DinoStorm.glb`,
+  "dinostorm": `${MODELS_3D_CDN}/dino-storm/1784212028681-DinoStorm.glb`,
   "big-foot-crush": "/models/bigfootcrush.glb",
   "big foot crush": "/models/bigfootcrush.glb",
   "bigfoot crush": "/models/bigfootcrush.glb",

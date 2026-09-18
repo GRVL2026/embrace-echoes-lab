@@ -28,3 +28,8 @@ artifacts/
 
 # artefacts locaux de la CLI Supabase
 supabase/.temp/
+
+# Modèles 3D > 25 Mio : servis depuis le bucket Supabase models-3d
+public/models/Monster_Kart.glb
+public/models/dinostorm.glb
+public/models/bowlingchamp.glb

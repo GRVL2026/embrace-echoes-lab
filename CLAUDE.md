@@ -8,8 +8,28 @@
 dossiers clients, catalogue, et l'**Arcade Planner** (plan 2D d'une salle d'arcade + rendu
 photoréaliste pour que le client se projette).
 
-Stack : React / TypeScript / Vite, Supabase (Postgres + RLS + Edge Functions Deno), hébergé et
-publié via Lovable.
+Stack : React / TypeScript / Vite, Supabase (Postgres + RLS + Edge Functions Deno).
+
+## ⚠️ MIGRATION EN COURS — DEUX INSTANCES COEXISTENT (depuis le 17/09/2026)
+
+**À lire avant toute intervention sur la base, les edge functions ou les secrets.**
+
+| | Instance Lovable (ancienne) | Instance propre (cible) |
+|---|---|---|
+| Projet Supabase | `yhfghipueqfkgysaulvl` | **`dkoroqqvfyjmkaoidwzq`** |
+| Front | embrace-echoes-lab.lovable.app | **arcade-os.pages.dev** |
+| Statut | **en production**, utilisée par l'équipe | complète, en validation |
+| Accès de Claude | lecture seule (`run_sql`) | **complet** (psql + CLI Supabase) |
+
+**Tant que la bascule n'a pas eu lieu, l'instance Lovable reste celle que l'équipe utilise :
+ne rien y casser.** Mais toute construction nouvelle (secret, cron, edge function, correctif
+SQL) se fait sur **`dkoroqqvfyjmkaoidwzq`**, où Claude peut agir seul — sur l'ancienne, le SQL
+d'écriture doit être collé à la main par Léopaul et les edge functions redéployées par le chat
+Lovable.
+
+Plan, procédure de bascule et pièges rencontrés : `docs/migration-hors-lovable.md`.
+Échéance : l'application Cegid `dashboardleo2` est révoquée après 60 jours sans connexion
+(créée le 16/09/2026) — basculer avant la mi-novembre 2026.
 
 ## Règles de travail
 

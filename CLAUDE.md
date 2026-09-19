@@ -19,13 +19,20 @@ Stack : React / TypeScript / Vite, Supabase (Postgres + RLS + Edge Functions Den
 | Projet Supabase | `yhfghipueqfkgysaulvl` | **`dkoroqqvfyjmkaoidwzq`** |
 | Front | embrace-echoes-lab.lovable.app | **arcade-os.pages.dev** |
 | Statut | **en production**, utilisée par l'équipe | complète, en validation |
-| Accès de Claude | lecture seule (`run_sql`) | **complet** (psql + CLI Supabase) |
+| Accès de Claude | lecture seule (`run_sql`) | psql + CLI Supabase (voir ci-dessous) |
 
 **Tant que la bascule n'a pas eu lieu, l'instance Lovable reste celle que l'équipe utilise :
 ne rien y casser.** Mais toute construction nouvelle (secret, cron, edge function, correctif
 SQL) se fait sur **`dkoroqqvfyjmkaoidwzq`**, où Claude peut agir seul — sur l'ancienne, le SQL
 d'écriture doit être collé à la main par Léopaul et les edge functions redéployées par le chat
 Lovable.
+
+⚠️ **L'accès étendu au nouveau projet dépend des permissions de la session.** Les fichiers
+de secrets locaux (`~/.arcade-prod-pwd`, `~/.arcade-cron-secret`) ne sont pas lisibles par
+toutes les sessions — le classifieur les refuse. Si c'est ton cas : demande les valeurs à
+Léopaul, ou fais exécuter l'opération par la session qui a mené la migration. Ne cherche pas
+à contourner. La CLI Supabase (`npx --yes supabase@latest`) est, elle, authentifiée et
+disponible partout.
 
 Plan, procédure de bascule et pièges rencontrés : `docs/migration-hors-lovable.md`.
 Échéance : l'application Cegid `dashboardleo2` est révoquée après 60 jours sans connexion

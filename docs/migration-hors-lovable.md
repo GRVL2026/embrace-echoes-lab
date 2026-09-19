@@ -263,7 +263,48 @@ mégarde partira en public.
 valeur par défaut (cf. `src/components/dossier/DossierPreview.tsx:84`). À expliciter au
 moment du déploiement.
 
-### Phase 8 — La bascule
+### Phase 8 — La bascule — PROCÉDURE DÉTAILLÉE
+
+À faire sur une fenêtre calme (samedi matin idéalement), jamais un jour de forte activité
+commerciale. Compter 2 à 3 heures. Chaque étape est vérifiable ; ne pas enchaîner sans
+avoir vu le résultat attendu.
+
+**Avant (la veille)**
+1. Prévenir les 7 utilisateurs : nouvelle adresse, et surtout **changer leur marque-page**.
+   Leurs identifiants ne changent pas (comptes et mots de passe migrés).
+2. Vérifier que les 26 secrets sont posés :
+   `npx supabase@latest secrets list --project-ref dkoroqqvfyjmkaoidwzq`
+3. Auth → URL Configuration : Site URL et Redirect URLs sur le domaine définitif.
+
+**Le jour J**
+4. **Export frais depuis Lovable** (les données bougent chaque nuit). Celui du 16/09 ne sert
+   que de référence de structure.
+5. Recharger **les données seules** (le schéma est déjà en place) :
+   `pg_restore --data-only --schema=public --no-owner` — et `auth.users` AVANT `public`.
+   Puis `refresh materialized view` sur les deux vues `mv_gaia_*`, puis `analyze`.
+6. Re-transférer les fichiers storage ajoutés depuis (script avec `x-upsert: true`,
+   rejouable sans risque).
+7. **Activer les 14 crons** (ils sont créés mais désactivés) :
+   `update cron.job set active = true where jobname <> 'cegid-keepalive-hebdo';`
+   puis **supprimer** `cegid-keepalive-hebdo`, devenu inutile.
+8. Repointer les intégrations externes vers les nouvelles URL de fonctions :
+   - le **Worker Cloudflare** `dossiers.avranchesautomatic.workers.dev` (appelle `dossier-og`)
+   - le **webhook LGM**
+   - les **URL de redirection OAuth Google**
+
+**Vérifier avant de déclarer la bascule faite**
+9. Connexion d'un utilisateur réel, dashboards chiffrés, copilote qui répond.
+10. Le lendemain matin : briefing reçu par e-mail, `copilot_briefings` du jour avec
+    `detecteurs_en_echec` vide, et `gaia_sync_log` montrant les 7 flux Cegid en succès.
+
+**Après**
+11. **Ne rien supprimer chez Lovable avant deux semaines** de fonctionnement nominal.
+12. Puis : fermer l'instance Lovable (sinon deux versions coexistent sur deux bases —
+    l'application est une PWA, les anciens marque-pages continueraient de fonctionner sans
+    que personne s'en aperçoive), révoquer l'ancienne clé Anthropic, demander à Romain de
+    régénérer le secret Cegid et de supprimer l'application `dashboardleo`.
+13. Supprimer le projet Cloudflare Pages `embrace-echoes-lab` (essai raté) et le projet
+    Supabase de test `jlsecjnozhaloxgbckhj`, ainsi que son organisation `arcade-os-test`.
 Fenêtre calme, hors activité commerciale. Repointer le Worker Cloudflare, le webhook LGM
 et les URL de redirection OAuth. Vérifier avec les 7 utilisateurs qu'ils se connectent.
 

@@ -159,15 +159,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const hasSalesRole = isAdmin || isDirection || isChefVentes || isCommercial;
   const canMargeClient = hasSalesRole;
   const canMargeGlobale = isAdmin || isDirection || isChefVentes;
-  const canAccessGaia = isAdmin || isDirection;
+  // `chef_ventes` (directeur commercial) a la même portée que la direction sur les données
+  // commerciales : chiffres Gaia, prospection, réactivation. Il en était exclu par omission —
+  // `canMargeGlobale` et `SuiviProspection` l'incluaient déjà, ces trois-ci avaient été oubliés.
+  const canAccessGaia = isAdmin || isDirection || isChefVentes;
   const isProspection = roles.includes("prospection");
-  const canAccessProspection = isAdmin || isDirection || isProspection;
+  const canAccessProspection = isAdmin || isDirection || isProspection || isChefVentes;
   const REACTIVATION_EMAILS = new Set([
     "romain.lirola@avranchesautomatic.com",
     "valerie@avranchesautomatic.com",
   ]);
   const userEmail = (user?.email ?? "").toLowerCase();
-  const canReactivation = isAdmin || isDirection || REACTIVATION_EMAILS.has(userEmail);
+  const canReactivation = isAdmin || isDirection || isChefVentes || REACTIVATION_EMAILS.has(userEmail);
   const salleEnabledOnly = !!user && !hasSalesRole && !dashboardEnabled && salleEnabled;
   const canAccessDashboard = !salleEnabledOnly && (hasSalesRole || dashboardEnabled);
   const canAccessSalle = canAccessGaia || salleEnabled;

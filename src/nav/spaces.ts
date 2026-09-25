@@ -164,7 +164,7 @@ export const SPACES: Space[] = [
         label: "Gazette",
         to: "/gazette",
         icon: NewspaperIcon,
-        show: (c) => c.isAdmin || c.isDirection,
+        show: (c) => c.canAccessProspection,
         match: startsWith("/gazette"),
       },
       {
@@ -174,7 +174,7 @@ export const SPACES: Space[] = [
         label: "Parc installé",
         to: "/parc-arcade",
         icon: Gamepad2Icon,
-        show: (c) => c.isAdmin || c.isDirection,
+        show: (c) => c.canAccessProspection,
         match: startsWith("/parc-arcade"),
       },
       {
@@ -182,7 +182,7 @@ export const SPACES: Space[] = [
         label: "Carte",
         to: "/carte?vue=prospection",
         icon: MapIcon,
-        show: (c) => c.isAdmin || c.isDirection,
+        show: (c) => c.canAccessProspection,
         match: (p, _h) => p === "/carte",
       },
     ],

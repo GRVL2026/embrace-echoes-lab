@@ -922,7 +922,7 @@ export default function Carte() {
   if (!authorized) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-        Accès réservé à l'administration et à la direction.
+        Accès réservé à la direction et à la direction commerciale.
       </div>
     );
   }

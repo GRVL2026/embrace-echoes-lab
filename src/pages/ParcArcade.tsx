@@ -127,10 +127,10 @@ function LigneClassement({
 }
 
 export default function ParcArcade() {
-  const { isAdmin, isDirection, isLoading } = useAuth();
+  const { isAdmin, isDirection, isChefVentes, isLoading } = useAuth();
   const [recherche, setRecherche] = useState("");
   const [detail, setDetail] = useState<Detail | null>(null);
-  const autorise = isAdmin || isDirection;
+  const autorise = isAdmin || isDirection || isChefVentes;
 
   const { data: modeles } = useQuery({
     queryKey: ["arcade-modeles"],

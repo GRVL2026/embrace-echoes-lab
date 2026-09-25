@@ -135,7 +135,7 @@ function fraicheur(d: string): string {
 }
 
 export default function Gazette() {
-  const { isAdmin, isDirection, isLoading } = useAuth();
+  const { isAdmin, isDirection, isChefVentes, isLoading } = useAuth();
   const qc = useQueryClient();
   // L'ordre de lecture : les plus récentes d'abord par défaut, un bouton inverse.
   const [ordre, setOrdre] = useState<"recent" | "ancien">("recent");
@@ -156,7 +156,7 @@ export default function Gazette() {
     setBrouillon({ nom: s.contact_nom ?? "", role: s.contact_role ?? "" });
   }
 
-  const autorise = isAdmin || isDirection;
+  const autorise = isAdmin || isDirection || isChefVentes;
 
   const { data, isFetching, refetch } = useQuery({
     queryKey: ["gazette-signaux"],

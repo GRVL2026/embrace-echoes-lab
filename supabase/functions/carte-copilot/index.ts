@@ -270,8 +270,11 @@ Deno.serve(async (req) => {
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
     const uid = userData.user.id;
     const { data: roles } = await admin.from('user_roles').select('role').eq('user_id', uid);
-    const isAdminOrDirection = (roles ?? []).some((r: any) => r.role === 'admin' || r.role === 'direction');
-    if (!isAdminOrDirection) return jsonErr(403, 'Accès réservé à la direction');
+    // Le directeur commercial (chef_ventes) a la même portée que la direction sur la carte :
+    // il en était exclu par omission, comme la Gazette et le parc installé (25/09/2026).
+    const estManagement = (roles ?? []).some((r: any) =>
+      r.role === 'admin' || r.role === 'direction' || r.role === 'chef_ventes');
+    if (!estManagement) return jsonErr(403, 'Accès réservé à la direction');
 
 
     const body = await req.json().catch(() => ({}));
